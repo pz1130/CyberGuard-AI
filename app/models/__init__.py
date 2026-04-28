@@ -6,6 +6,7 @@ from app.models.knowledge import KnowledgeBase, Document
 from app.models.audit import AuditLog
 from app.models.mcp import MCPServer, MCPTool
 from app.models.envvar import EnvVar
+from app.models.provider import Provider
 
 __all__ = [
     "User", "RoleModel",
@@ -15,4 +16,5 @@ __all__ = [
     "AuditLog",
     "MCPServer", "MCPTool",
     "EnvVar",
+    "Provider",
 ]

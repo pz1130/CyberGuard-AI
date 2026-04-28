@@ -36,8 +36,9 @@ class ProviderResponse(BaseModel):
     id: int
     name: str
     provider_type: str
-    base_url: Optional[str]
-    api_version: Optional[str]
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    api_version: Optional[str] = None
     models: List[str]
     is_active: bool
     metadata_json: Optional[Dict[str, Any]]

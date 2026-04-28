@@ -41,6 +41,13 @@ async def lifespan(app: FastAPI):
                     print("[CyberGuard] Default admin user created: admin / admin123")
         except Exception as e:
             print(f"[CyberGuard] User seed skipped: {e}")
+        # Seed preset providers
+        try:
+            from app.routers.providers import seed_providers_on_startup
+            await seed_providers_on_startup()
+            print("[CyberGuard] Preset providers seeded")
+        except Exception as e:
+            print(f"[CyberGuard] Provider seed skipped: {e}")
     yield
     # Shutdown
     await engine.dispose()
