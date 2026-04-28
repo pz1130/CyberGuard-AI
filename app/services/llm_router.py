@@ -155,6 +155,37 @@ For task_execution, identify which sub-agents are needed based on keywords:
 
         return response.choices[0].message.content
 
+    async def embed(
+        self,
+        texts: List[str],
+        model: Optional[str] = None,
+        provider_id: Optional[int] = None,
+    ) -> List[List[float]]:
+        """
+        Generate embeddings for a list of texts via OpenAI-compatible /embeddings.
+
+        Args:
+            texts: list of strings to embed
+            model: embedding model name (e.g. "text-embedding-3-small")
+            provider_id: which configured provider to use
+
+        Returns:
+            list of embedding vectors, same order as input.
+        """
+        if not texts:
+            return []
+
+        client = self.get_client(provider_id=provider_id)
+        embedding_model = model or "text-embedding-3-small"
+
+        response = await client.embeddings.create(
+            model=embedding_model,
+            input=texts,
+        )
+        # response.data is sorted by index per OpenAI spec
+        ordered = sorted(response.data, key=lambda d: d.index)
+        return [item.embedding for item in ordered]
+
 
 # Singleton instance
 _llm_router: Optional[LLMRouter] = None

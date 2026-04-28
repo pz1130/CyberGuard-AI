@@ -39,6 +39,10 @@ export const api = {
   createProvider: (body: any) => request('/providers', { method: 'POST', body: JSON.stringify(body) }),
   updateProvider: (id: string, body: any) => request(`/providers/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteProvider: (id: string) => request(`/providers/${id}`, { method: 'DELETE' }),
+  testProvider: (id: number) => request(`/providers/test`, {
+    method: 'POST',
+    body: JSON.stringify({ provider_id: id }),
+  }),
 
   // Agents
   getAgents: () => request('/agents'),
@@ -53,14 +57,39 @@ export const api = {
   updateSkill: (id: string, body: any) => request(`/skills/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteSkill: (id: string) => request(`/skills/${id}`, { method: 'DELETE' }),
 
-  // Knowledge
+  // Knowledge — knowledge bases
   getKnowledgeBases: () => request('/knowledge/bases'),
+  getKnowledgeBase: (id: number) => request(`/knowledge/bases/${id}`),
   createKnowledgeBase: (body: any) => request('/knowledge/bases', { method: 'POST', body: JSON.stringify(body) }),
-  queryKnowledge: (body: { query: string; top_k?: number }) =>
+  updateKnowledgeBase: (id: number, body: any) => request(`/knowledge/bases/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteKnowledgeBase: (id: number) => request(`/knowledge/bases/${id}`, { method: 'DELETE' }),
+
+  // Knowledge — documents
+  getDocuments: (kbId: number) => request(`/knowledge/bases/${kbId}/documents`),
+  ingestText: (kbId: number, body: { filename: string; content: string; mime_type?: string; provider_id?: number }) =>
+    request(`/knowledge/bases/${kbId}/documents/text`, { method: 'POST', body: JSON.stringify(body) }),
+  uploadDocument: async (kbId: number, file: File, providerId?: number) => {
+    const token = localStorage.getItem('token')
+    const fd = new FormData()
+    fd.append('file', file)
+    if (providerId != null) fd.append('provider_id', String(providerId))
+    const res = await fetch(`${BASE}/knowledge/bases/${kbId}/documents/upload`, {
+      method: 'POST',
+      body: fd,
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error(await res.text())
+    return res.json()
+  },
+  deleteDocument: (kbId: number, docId: number) =>
+    request(`/knowledge/bases/${kbId}/documents/${docId}`, { method: 'DELETE' }),
+
+  // Knowledge — query
+  queryKnowledge: (body: { kb_id: number; query: string; top_k?: number; similarity_threshold?: number; provider_id?: number }) =>
     request('/knowledge/query', { method: 'POST', body: JSON.stringify(body) }),
 
   // Chat
-  chat: (body: { message: string; agent_id?: string }) =>
+  chat: (body: { message: string; agent_id?: string; provider_id?: number; model?: string }) =>
     request('/chat', { method: 'POST', body: JSON.stringify(body) }),
 
   // Tasks

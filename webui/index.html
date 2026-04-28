@@ -297,7 +297,7 @@
             providers: () => renderProviders(),
             agents: () => renderAgents(),
             skills: () => renderSkills(),
-            knowledge: renderPlaceholder,
+            knowledge: renderKnowledge,
             groupchat: renderPlaceholder,
             schedule: renderPlaceholder,
             mcp: renderPlaceholder,
@@ -910,6 +910,318 @@
             }
         }
     })();
+
+    // ===================================================================
+    // PAGE: KNOWLEDGE
+    // ===================================================================
+    let _kbList = [];
+    let _selectedKb = null;
+    let _docList = [];
+    let _queryResults = [];
+    let _providersCache = [];
+
+    async function renderKnowledge() {
+        document.getElementById('main-content').innerHTML = `
+            <div class="flex items-center justify-between mb-6">
+                <h1 class="text-2xl font-semibold">知识库</h1>
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-400">Embedding:</span>
+                        <select id="kb-provider-select" class="bg-gray-800 border border-gray-700 text-white text-xs rounded-lg px-2 py-1.5">
+                            <option value="">未配置</option>
+                        </select>
+                    </div>
+                    <button onclick="showKbForm()" class="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm">
+                        <i class="fa-solid fa-plus"></i> 新增知识库
+                    </button>
+                </div>
+            </div>
+            <div id="kb-form-container"></div>
+            <div id="kb-content" class="grid grid-cols-12 gap-4">
+                <div class="col-span-3"><div id="kb-list" class="text-gray-400 text-sm"><i class="fa-solid fa-spinner spinner mr-2"></i>加载中...</div></div>
+                <div class="col-span-9"><div id="kb-detail-placeholder" class="bg-gray-800/50 rounded-xl p-12 text-center">
+                    <div class="text-5xl mb-4 opacity-20">📚</div>
+                    <p class="text-gray-400">请从左侧选择或创建一个知识库</p>
+                </div></div>
+            </div>`;
+
+        loadKbList();
+        loadKbProviders();
+    }
+
+    async function loadKbProviders() {
+        try {
+            const data = await apiGet('/providers');
+            _providersCache = data.providers || [];
+            const sel = document.getElementById('kb-provider-select');
+            if (!sel) return;
+            sel.innerHTML = '<option value="">未配置</option>' +
+                _providersCache.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+        } catch { _providersCache = []; }
+    }
+
+    async function loadKbList() {
+        try {
+            const data = await apiGet('/knowledge/bases');
+            _kbList = data.knowledge_bases || [];
+            renderKbList();
+        } catch { _kbList = []; renderKbList(); }
+    }
+
+    function renderKbList() {
+        const el = document.getElementById('kb-list');
+        if (!el) return;
+        if (!_kbList.length) {
+            el.innerHTML = '<p class="text-gray-500 text-sm">暂无知识库</p>';
+            return;
+        }
+        el.innerHTML = '<h3 class="text-xs font-semibold text-gray-400 uppercase mb-2">知识库列表</h3><div class="space-y-1">' +
+            _kbList.map(kb => `
+                <div onclick="selectKb(${kb.id})" class="group flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${_selectedKb && _selectedKb.id === kb.id ? 'bg-emerald-500/20 border border-emerald-500/40' : 'bg-gray-800 hover:bg-gray-700'}">
+                    <div class="flex items-center gap-2 min-w-0 flex-1">
+                        <i class="fa-solid fa-database text-xs ${_selectedKb && _selectedKb.id === kb.id ? 'text-emerald-400' : 'text-gray-400'}"></i>
+                        <div class="min-w-0">
+                            <p class="text-sm text-white truncate">${escapeHtml(kb.name)}</p>
+                            ${kb.embedding_model ? `<p class="text-xs text-gray-500 truncate">${escapeHtml(kb.embedding_model)}</p>` : ''}
+                        </div>
+                    </div>
+                    <button onclick="event.stopPropagation(); deleteKb(${kb.id})" class="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-400">
+                        <i class="fa-solid fa-trash text-xs"></i>
+                    </button>
+                </div>`).join('') + '</div>';
+    }
+
+    async function selectKb(id) {
+        _selectedKb = _kbList.find(k => k.id === id) || null;
+        renderKbList();
+        renderKbDetail();
+    }
+
+    async function renderKbDetail() {
+        const placeholder = document.getElementById('kb-detail-placeholder');
+        const content = document.getElementById('kb-content');
+        if (!placeholder || !content) return;
+        if (!_selectedKb) {
+            content.innerHTML = '<div class="col-span-3"></div><div class="col-span-9"><div id="kb-detail-placeholder" class="bg-gray-800/50 rounded-xl p-12 text-center"><div class="text-5xl mb-4 opacity-20">📚</div><p class="text-gray-400">请从左侧选择或创建一个知识库</p></div></div>';
+            return;
+        }
+        content.innerHTML = `
+            <div class="col-span-3"></div>
+            <div class="col-span-9 space-y-4">
+                <div class="bg-gray-800 rounded-xl p-4 flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-white">${escapeHtml(_selectedKb.name)}</h3>
+                        ${_selectedKb.description ? `<p class="text-sm text-gray-400">${escapeHtml(_selectedKb.description)}</p>` : ''}
+                    </div>
+                    <span id="doc-count-badge" class="text-xs text-gray-400 bg-gray-700 px-3 py-1 rounded-full">0 个文档</span>
+                </div>
+                <div class="bg-gray-800 rounded-xl p-4">
+                    <h3 class="text-sm font-medium mb-3 text-gray-300 flex items-center gap-2"><i class="fa-solid fa-magnifying-glass text-xs"></i> 语义检索</h3>
+                    <div class="flex gap-2 mb-3">
+                        <input id="kb-query-input" onkeydown="if(event.key==='Enter')kbSearch()" class="flex-1 bg-gray-700 rounded-lg px-3 py-2 text-sm text-white" placeholder="输入要检索的内容..." />
+                        <input id="kb-topk-input" type="number" min="1" max="20" value="5" class="w-20 bg-gray-700 rounded-lg px-3 py-2 text-sm text-white" title="返回数量" />
+                        <button onclick="kbSearch()" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm flex items-center gap-1">
+                            <i class="fa-solid fa-search text-xs"></i> 检索
+                        </button>
+                    </div>
+                    <div id="kb-query-results"></div>
+                </div>
+                <div class="bg-gray-800 rounded-xl p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-medium text-gray-300 flex items-center gap-2"><i class="fa-solid fa-file-lines text-xs"></i> 文档</h3>
+                        <div class="flex items-center gap-2">
+                            <input id="kb-file-input" type="file" accept=".txt,.md,.csv,.json,text/*" onchange="kbUploadFile(this.files[0])" class="hidden" />
+                            <button onclick="document.getElementById('kb-file-input').click()" class="flex items-center gap-1 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-xs">
+                                <i class="fa-solid fa-upload text-xs"></i> 上传文件
+                            </button>
+                            <button onclick="toggleKbTextForm()" class="flex items-center gap-1 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs">
+                                <i class="fa-solid fa-plus text-xs"></i> 粘贴文本
+                            </button>
+                        </div>
+                    </div>
+                    <div id="kb-text-form" class="hidden bg-gray-700 rounded-lg p-3 mb-3 space-y-2">
+                        <input id="kb-text-filename" placeholder="文档名（如 incident-response.md）" class="w-full bg-gray-800 rounded px-3 py-2 text-sm text-white" />
+                        <textarea id="kb-text-content" placeholder="粘贴文本内容..." rows="6" class="w-full bg-gray-800 rounded px-3 py-2 text-sm text-white font-mono"></textarea>
+                        <div class="flex justify-end gap-2">
+                            <button onclick="toggleKbTextForm()" class="px-3 py-1.5 bg-gray-600 text-white rounded text-xs">取消</button>
+                            <button onclick="kbIngestText()" class="px-3 py-1.5 bg-emerald-500 text-white rounded text-xs">导入</button>
+                        </div>
+                    </div>
+                    <div id="kb-docs-list" class="space-y-2"></div>
+                </div>
+            </div>`;
+        loadDocsForKb();
+    }
+
+    async function loadDocsForKb() {
+        if (!_selectedKb) return;
+        try {
+            const data = await apiGet(`/knowledge/bases/${_selectedKb.id}/documents`);
+            _docList = data.documents || [];
+        } catch { _docList = []; }
+        renderDocList();
+    }
+
+    function renderDocList() {
+        const badge = document.getElementById('doc-count-badge');
+        const list = document.getElementById('kb-docs-list');
+        if (badge) badge.textContent = `${_docList.length} 个文档`;
+        if (!list) return;
+        if (!_docList.length) {
+            list.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">暂无文档，请上传或粘贴内容</p>';
+            return;
+        }
+        list.innerHTML = _docList.map(d => `
+            <div class="flex items-center justify-between bg-gray-700 rounded-lg px-3 py-2">
+                <div class="flex items-center gap-2 min-w-0">
+                    <i class="fa-solid fa-file-lines text-xs text-gray-400 flex-shrink-0"></i>
+                    <div class="min-w-0">
+                        <p class="text-sm text-white truncate">${escapeHtml(d.filename)}</p>
+                        <p class="text-xs text-gray-400">
+                            ${d.metadata_json && d.metadata_json.chunk_count ? d.metadata_json.chunk_count + ' 块' : ''}
+                            ${d.file_size != null ? (d.file_size / 1024).toFixed(1) + ' KB' : ''}
+                        </p>
+                    </div>
+                </div>
+                <button onclick="deleteDoc(${d.id})" class="p-1.5 text-gray-400 hover:text-red-400">
+                    <i class="fa-solid fa-trash text-xs"></i>
+                </button>
+            </div>`).join('');
+    }
+
+    function toggleKbTextForm() {
+        const el = document.getElementById('kb-text-form');
+        if (el) el.classList.toggle('hidden');
+    }
+
+    async function kbIngestText() {
+        if (!_selectedKb) return;
+        const filename = document.getElementById('kb-text-filename')?.value?.trim();
+        const content = document.getElementById('kb-text-content')?.value?.trim();
+        if (!filename || !content) { showToast('请填写文件名和内容', 'warning'); return; }
+        const providerId = document.getElementById('kb-provider-select')?.value;
+        try {
+            await apiPost(`/knowledge/bases/${_selectedKb.id}/documents/text`, {
+                filename, content,
+                provider_id: providerId ? parseInt(providerId) : undefined
+            });
+            showToast('导入成功', 'success');
+            toggleKbTextForm();
+            document.getElementById('kb-text-filename').value = '';
+            document.getElementById('kb-text-content').value = '';
+            loadDocsForKb();
+        } catch (e) { showToast('导入失败: ' + e.message, 'error'); }
+    }
+
+    async function kbUploadFile(file) {
+        if (!file || !_selectedKb) return;
+        const providerId = document.getElementById('kb-provider-select')?.value;
+        const formData = new FormData();
+        formData.append('file', file);
+        if (providerId) formData.append('provider_id', providerId);
+        try {
+            const res = await fetch(`${API_BASE}/knowledge/bases/${_selectedKb.id}/documents/upload`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${accessToken}` },
+                body: formData
+            });
+            if (!res.ok) { const err = await res.json(); throw new Error(err.detail || 'Upload failed'); }
+            showToast('上传成功', 'success');
+            loadDocsForKb();
+        } catch (e) { showToast('上传失败: ' + e.message, 'error'); }
+        document.getElementById('kb-file-input').value = '';
+    }
+
+    async function kbSearch() {
+        if (!_selectedKb) return;
+        const query = document.getElementById('kb-query-input')?.value?.trim();
+        const topK = parseInt(document.getElementById('kb-topk-input')?.value || '5');
+        const providerId = document.getElementById('kb-provider-select')?.value;
+        if (!query) { showToast('请输入检索内容', 'warning'); return; }
+        const resultsEl = document.getElementById('kb-query-results');
+        if (resultsEl) resultsEl.innerHTML = '<p class="text-gray-400 text-sm"><i class="fa-solid fa-spinner spinner mr-2"></i>检索中...</p>';
+        try {
+            const data = await apiPost('/knowledge/query', {
+                kb_id: _selectedKb.id, query, top_k: topK,
+                provider_id: providerId ? parseInt(providerId) : undefined
+            });
+            _queryResults = data.results || [];
+            if (resultsEl) {
+                if (!_queryResults.length) {
+                    resultsEl.innerHTML = '<p class="text-gray-500 text-sm text-center py-2">无匹配结果</p>';
+                } else {
+                    resultsEl.innerHTML = '<div class="space-y-2">' + _queryResults.map(r => `
+                        <div class="bg-gray-700 rounded-lg p-3 border-l-2 border-emerald-500">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-xs text-gray-400">${escapeHtml(r.filename || '')} · 块 #${r.chunk_index}</span>
+                                <span class="text-xs px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded">${((r.score || 0) * 100).toFixed(1)}%</span>
+                            </div>
+                            <p class="text-sm text-gray-200 whitespace-pre-wrap">${escapeHtml(r.text || '')}</p>
+                        </div>`).join('') + '</div>';
+                }
+            }
+            if (data.message) showToast(data.message, 'info');
+        } catch (e) { if (resultsEl) resultsEl.innerHTML = `<p class="text-red-400 text-sm">检索失败: ${escapeHtml(e.message)}</p>`; }
+    }
+
+    async function deleteDoc(docId) {
+        if (!_selectedKb) return;
+        if (!confirm('确认删除此文档？')) return;
+        try {
+            await apiDel(`/knowledge/bases/${_selectedKb.id}/documents/${docId}`);
+            showToast('删除成功', 'success');
+            loadDocsForKb();
+        } catch (e) { showToast('删除失败: ' + e.message, 'error'); }
+    }
+
+    async function deleteKb(id) {
+        const kb = _kbList.find(k => k.id === id);
+        if (!confirm(`确认删除知识库 "${kb?.name}"？此操作会删除其中所有文档`)) return;
+        try {
+            await apiDel(`/knowledge/bases/${id}`);
+            showToast('删除成功', 'success');
+            if (_selectedKb && _selectedKb.id === id) _selectedKb = null;
+            loadKbList();
+            renderKbDetail();
+        } catch (e) { showToast('删除失败: ' + e.message, 'error'); }
+    }
+
+    function showKbForm() {
+        openModal(`
+            <h3 class="text-xl font-semibold mb-6">创建知识库</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-xs text-gray-400 mb-1 block">名称 *</label>
+                    <input id="kbf-name" type="text" class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400" placeholder="威胁情报库" />
+                </div>
+                <div>
+                    <label class="text-xs text-gray-400 mb-1 block">Embedding 模型</label>
+                    <input id="kbf-embedding" type="text" class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400" placeholder="text-embedding-3-small" value="text-embedding-3-small" />
+                </div>
+                <div>
+                    <label class="text-xs text-gray-400 mb-1 block">描述</label>
+                    <input id="kbf-desc" type="text" class="w-full bg-gray-900 border border-gray-600 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400" placeholder="简要描述..." />
+                </div>
+            </div>
+            <div class="flex gap-3 mt-8">
+                <button onclick="closeModal()" class="flex-1 py-3.5 rounded-xl border border-gray-600 hover:bg-white/5 transition-colors text-sm">取消</button>
+                <button onclick="submitKbForm()" class="flex-1 py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 transition-colors text-sm font-medium">创建</button>
+            </div>`);
+    }
+
+    async function submitKbForm() {
+        const name = document.getElementById('kbf-name')?.value?.trim();
+        const embedding_model = document.getElementById('kbf-embedding')?.value?.trim();
+        const description = document.getElementById('kbf-desc')?.value?.trim();
+        if (!name) { showToast('请输入知识库名称', 'warning'); return; }
+        try {
+            await apiPost('/knowledge/bases', { name, embedding_model: embedding_model || 'text-embedding-3-small', description });
+            closeModal();
+            showToast('知识库创建成功', 'success');
+            loadKbList();
+        } catch (e) { showToast('创建失败: ' + e.message, 'error'); }
+    }
+
     </script>
 </body>
 </html>

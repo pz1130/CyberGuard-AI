@@ -4,13 +4,39 @@ import ReactMarkdown from 'react-markdown'
 
 interface Message { role: 'user'|'assistant'; content: string }
 
+interface ProviderOption {
+  id: number
+  name: string
+  provider_type: string
+  base_url?: string
+  models: string[]
+}
+
 export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
+  // Provider / model selectors
+  const [providers, setProviders] = useState<ProviderOption[]>([])
+  const [selectedProvider, setSelectedProvider] = useState<number | null>(null)
+  const [selectedModel, setSelectedModel] = useState<string>('')
+
+  useEffect(() => {
+    api.getProviders().then((data: any) => {
+      const list: ProviderOption[] = data?.providers || []
+      setProviders(list)
+      if (list.length > 0 && !selectedProvider) {
+        setSelectedProvider(list[0].id)
+        setSelectedModel(list[0].models?.[0] || '')
+      }
+    }).catch(() => {})
+  }, [])
+
   useEffect(() => { bottomRef.current?.scrollIntoView() }, [messages])
+
+  const currentProvider = providers.find(p => p.id === selectedProvider)
 
   const send = async () => {
     if (!input.trim() || loading) return
@@ -19,9 +45,17 @@ export default function Chat() {
     setInput('')
     setLoading(true)
     try {
-      const res = await api.chat({ message: input }) as { message?: string; response?: string; reply?: string; result?: string }
-      const text = res.message || res.response || res.reply || res.result || JSON.stringify(res)
-      setMessages(m => [...m, { role: 'assistant', content: text }])
+      const res = await api.chat({
+        message: input,
+        provider_id: selectedProvider ?? undefined,
+        model: selectedModel || undefined,
+      }) as { message?: string; response?: string; reply?: string; result?: string; error?: string }
+      if (res.error) {
+        setMessages(m => [...m, { role: 'assistant', content: `错误: ${res.error}` }])
+      } else {
+        const text = res.message || res.response || res.reply || res.result || JSON.stringify(res)
+        setMessages(m => [...m, { role: 'assistant', content: text }])
+      }
     } catch (e: any) {
       setMessages(m => [...m, { role: 'assistant', content: `错误: ${e.message}` }])
     } finally {
@@ -31,6 +65,55 @@ export default function Chat() {
 
   return (
     <div className="flex flex-col h-full max-w-4xl mx-auto">
+      {/* Provider & Model Selector */}
+      <div className="flex gap-3 mb-4 items-center">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400">Provider:</span>
+          <select
+            value={selectedProvider ?? ''}
+            onChange={e => {
+              const pid = Number(e.target.value)
+              setSelectedProvider(pid)
+              const p = providers.find(p => p.id === pid)
+              setSelectedModel(p?.models?.[0] || '')
+            }}
+            className="bg-gray-800 border border-gray-700 text-white text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-emerald-500"
+          >
+            {providers.length === 0 && <option value="">无可用 Provider</option>}
+            {providers.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400">模型:</span>
+          <select
+            value={selectedModel}
+            onChange={e => setSelectedModel(e.target.value)}
+            disabled={!currentProvider?.models?.length}
+            className="bg-gray-800 border border-gray-700 text-white text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+          >
+            {(currentProvider?.models || []).map(m => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        </div>
+        <button
+          onClick={() => {
+            setSelectedProvider(null)
+            setSelectedModel('')
+          }}
+          className="text-xs text-gray-500 hover:text-gray-300 underline"
+        >
+          重置
+        </button>
+        {providers.length === 0 && (
+          <a href="#/providers" className="text-xs text-emerald-400 hover:text-emerald-300 underline ml-auto">
+            去配置 AI Provider →
+          </a>
+        )}
+      </div>
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto space-y-4 mb-4">
         {messages.length === 0 && (
