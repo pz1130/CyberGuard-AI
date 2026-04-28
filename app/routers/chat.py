@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_db, require_permission
 from app.core.rbac import Permission
+from app.core.auth import AuthenticatedUser
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.schemas.task import TaskRead, TaskStatus
 from app.models.agent import AgentExecution
@@ -17,7 +18,7 @@ router = APIRouter()
 async def chat(
     body: ChatRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_permission(Permission.TASK_EXECUTE)),
+    current_user: AuthenticatedUser = Depends(require_permission(Permission.TASK_EXECUTE)),
 ):
     """
     Submit a task to the Master Agent.
@@ -25,7 +26,7 @@ async def chat(
     The Master Agent will parse intent, route to sub-agents, and return results.
     """
     master_agent = get_master_agent()
-    user_id = int(current_user["sub"])
+    user_id = current_user.user_id
 
     # Create execution record
     execution_id = str(uuid.uuid4())
