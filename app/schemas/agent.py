@@ -62,6 +62,13 @@ class AgentExecutionBase(BaseModel):
     input_data: Optional[Dict[str, Any]] = None
 
 
+
+class AgentConfigListResponse(BaseModel):
+    """Paginated list of agent configurations."""
+    total: int
+    agents: list[AgentConfigResponse]
+
+
 class AgentExecutionCreate(AgentExecutionBase):
     """Agent execution creation schema."""
     task: str
@@ -105,6 +112,5 @@ class AgentExecuteResponse(BaseModel):
 # Aliases for router compatibility
 AgentConfigRead = AgentConfigResponse
 AgentExecutionRead = AgentExecutionResponse
-AgentConfigListResponse = list[AgentConfigResponse]
 AgentTestRequest = AgentExecuteRequest
 AgentTestResponse = AgentExecuteResponse

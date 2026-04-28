@@ -40,7 +40,7 @@ async def create_agent(
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Agent name already exists")
 
-    agent = AgentConfig(**body.model_dump())
+    agent = AgentConfig(**body.model_dump(exclude={'env_vars'}))
     db.add(agent)
     await db.commit()
     await db.refresh(agent)

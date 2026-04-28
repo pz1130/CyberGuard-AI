@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Sidebar, { type Tab } from './components/Sidebar'
 import Header from './components/Header'
 import Chat from './pages/Chat'
@@ -15,6 +15,7 @@ import TokenUsage from './pages/TokenUsage'
 import Backup from './pages/Backup'
 import AuditLogs from './pages/AuditLogs'
 import Users from './pages/Users'
+import Login from './pages/Login'
 
 const PAGES: Record<Tab, { component: React.ReactNode }> = {
   chat: { component: <Chat /> },
@@ -37,8 +38,43 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('chat')
   const [dark, setDark] = useState(true)
   const [lang, setLang] = useState<'zh' | 'en'>('zh')
+  const [authed, setAuthed] = useState(false)
+  const [checking, setChecking] = useState(true)
+
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    if (!token) {
+      setChecking(false)
+      return
+    }
+    fetch('/api/v1/auth/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then(r => {
+      if (r.ok) {
+        setAuthed(true)
+      } else {
+        localStorage.removeItem('token')
+      }
+    }).catch(() => {
+      localStorage.removeItem('token')
+    }).finally(() => {
+      setChecking(false)
+    })
+  }, [])
 
   document.documentElement.classList.toggle('dark', dark)
+
+  if (checking) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-950 text-white">
+        <p className="text-gray-400">检查登录状态...</p>
+      </div>
+    )
+  }
+
+  if (!authed) {
+    return <Login />
+  }
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">

@@ -3,6 +3,7 @@ from typing import Optional, AsyncGenerator
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 
 from app.core.database import get_db_session
 from app.core.auth import decode_access_token, AuthenticatedUser
@@ -38,12 +39,13 @@ async def get_current_user(
     token = credentials.credentials
     payload = decode_access_token(token)
     
-    user_id = payload.get("user_id")
-    if not user_id:
+    user_id_str = payload.get("user_id") or payload.get("sub")
+    if not user_id_str:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token payload",
         )
+    user_id = int(user_id_str)
     
     # Fetch user from database
     from app.core.database import get_db_context

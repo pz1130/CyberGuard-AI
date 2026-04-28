@@ -8,6 +8,7 @@ async function request(path: string, options: RequestInit = {}) {
   }
   if (token) headers['Authorization'] = `Bearer ${token}`
 
+  // Use relative URL so Vite proxy handles /api → localhost:8000
   const res = await fetch(`${BASE}${path}`, { ...options, headers })
   if (res.status === 401) {
     localStorage.removeItem('token')

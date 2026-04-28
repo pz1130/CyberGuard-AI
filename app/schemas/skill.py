@@ -106,4 +106,7 @@ class ToolResponse(BaseModel):
 # Aliases
 SkillRead = SkillResponse
 ToolRead = ToolResponse
-ToolListResponse = list[ToolResponse]
+class ToolListResponse(BaseModel):
+    """Paginated tool list response."""
+    total: int
+    tools: list[ToolResponse]

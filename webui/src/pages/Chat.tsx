@@ -19,8 +19,8 @@ export default function Chat() {
     setInput('')
     setLoading(true)
     try {
-      const res = await api.chat({ message: input }) as { response?: string; reply?: string; result?: string }
-      const text = res.response || res.reply || res.result || JSON.stringify(res)
+      const res = await api.chat({ message: input }) as { message?: string; response?: string; reply?: string; result?: string }
+      const text = res.message || res.response || res.reply || res.result || JSON.stringify(res)
       setMessages(m => [...m, { role: 'assistant', content: text }])
     } catch (e: any) {
       setMessages(m => [...m, { role: 'assistant', content: `错误: ${e.message}` }])

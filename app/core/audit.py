@@ -49,7 +49,7 @@ async def log_audit(
     }
 
     # Store in Redis for real-time access
-    redis = get_redis()
+    redis = await get_redis()
     if redis:
         await redis.lpush("audit:log", json.dumps(entry))
 
@@ -100,7 +100,7 @@ async def get_audit_logs(
     offset: int = 0,
 ) -> list:
     """Retrieve audit logs from Redis."""
-    redis = get_redis()
+    redis = await get_redis()
     if not redis:
         return []
 

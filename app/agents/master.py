@@ -268,27 +268,47 @@ class MasterAgent:
         sub_results = state.get("sub_results", {})
         group_chat_messages = state.get("group_chat_messages", [])
 
-        # Build summary from results
         if sub_results:
-            summary_parts = []
-            for agent_id, result in sub_results.items():
-                summary_parts.append(f"Agent {agent_id}: {result.get('output', 'No output')}")
-            state["final_summary"] = "\n\n".join(summary_parts)
+            if self.llm_router:
+                try:
+                    results_list = [
+                        {"agent_name": str(k), "output": v.get("output")}
+                        for k, v in sub_results.items()
+                    ]
+                    state["final_summary"] = await self.llm_router.generate_summary(
+                        results_list, provider_id=state.get("provider_id")
+                    )
+                except Exception:
+                    state["final_summary"] = "\n\n".join(
+                        f"Agent {k}: {v.get('output', 'No output')}"
+                        for k, v in sub_results.items()
+                    )
+            else:
+                state["final_summary"] = "\n\n".join(
+                    f"Agent {k}: {v.get('output', 'No output')}"
+                    for k, v in sub_results.items()
+                )
         elif group_chat_messages:
-            # Summarize group chat
-            state["final_summary"] = "\n".join([
+            state["final_summary"] = "\n".join(
                 f"{m['role']}: {m['content']}"
-                for m in group_chat_messages[-5:]  # Last 5 messages
-            ])
+                for m in group_chat_messages[-5:]
+            )
+        elif self.llm_router:
+            # No sub-agents involved — respond directly via LLM
+            user_input = state.get("user_input", "")
+            try:
+                state["final_summary"] = await self.llm_router.chat(
+                    messages=[{"role": "user", "content": user_input}],
+                    provider_id=state.get("provider_id"),
+                    model=state.get("model"),
+                )
+            except Exception as e:
+                state["final_summary"] = f"无法处理您的请求，请检查 AI Provider 配置。错误: {e}"
+        else:
+            state["final_summary"] = "暂无 AI Provider 可用，请先在「AI Provider 配置」页面中添加一个 Provider。"
 
-        # Calculate risk score (simplified)
-        state["risk_score"] = 0.5  # Default medium risk
-
-        state["action_items"] = [
-            "Review agent outputs",
-            "Validate findings",
-        ]
-
+        state["risk_score"] = 0.5
+        state["action_items"] = ["Review agent outputs", "Validate findings"]
         state["current_state"] = AgentState.END
         return state
 
@@ -328,5 +348,6 @@ def get_master_agent() -> MasterAgent:
     """Get or create master agent singleton."""
     global _master_agent
     if _master_agent is None:
-        _master_agent = MasterAgent()
+        from app.services.llm_router import get_llm_router
+        _master_agent = MasterAgent(llm_router=get_llm_router())
     return _master_agent

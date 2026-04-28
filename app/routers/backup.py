@@ -48,3 +48,14 @@ async def create_backup(
 async def list_backups(_=Depends(require_role(Role.ADMIN))):
     """List all backups."""
     return {"backups": _backup_manifest}
+
+
+@router.post("/backup/{backup_id}/restore")
+async def restore_backup(backup_id: str, _=Depends(require_role(Role.ADMIN))):
+    """Restore from a backup. Currently returns a stub response."""
+    manifest = next((b for b in _backup_manifest if b["id"] == backup_id), None)
+    if not manifest:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Backup not found")
+    # TODO: Implement actual pg_dump restore + AES decrypt
+    return {"message": f"Restore initiated for backup {backup_id}", "status": "pending", "backup": manifest}

@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.core.database import engine, Base
-from app.core.audit import log_audit, audit_middleware
+from app.core.audit import log_audit
 
 
 # ---------------------------------------------------------------------------
@@ -19,6 +19,28 @@ async def lifespan(app: FastAPI):
     if settings.ENVIRONMENT == "development":
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+        # Seed default admin user
+        from app.core.database import get_db_context
+        from app.models.user import User
+        import bcrypt
+        from sqlalchemy import select
+        try:
+            async with get_db_context() as session:
+                result = await session.execute(select(User).where(User.username == "admin"))
+                if not result.scalar_one_or_none():
+                    admin = User(
+                        username="admin",
+                        email="admin@cyberguard.local",
+                        hashed_password=bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode(),
+                        role="admin",
+                        full_name="Administrator",
+                        is_active=True,
+                    )
+                    session.add(admin)
+                    await session.commit()
+                    print("[CyberGuard] Default admin user created: admin / admin123")
+        except Exception as e:
+            print(f"[CyberGuard] User seed skipped: {e}")
     yield
     # Shutdown
     await engine.dispose()
@@ -50,13 +72,15 @@ app.add_middleware(
 async def audit_middleware(request: Request, call_next):
     """Log all HTTP requests to audit trail."""
     if request.url.path not in ["/health", "/docs", "/openapi.json"]:
-        await log_audit(
+        # Defer audit logging to avoid async Redis in sync middleware path
+        import asyncio
+        asyncio.create_task(log_audit(
             user_id=None,
             agent_id=None,
             action=f"{request.method} {request.url.path}",
             input_data={"method": request.method, "path": str(request.url.path)},
             output_data=None,
-        )
+        ))
     response = await call_next(request)
     return response
 
@@ -82,13 +106,15 @@ app.include_router(skills.router, prefix="/api/v1", tags=["Skills & Tools"])
 app.include_router(knowledge.router, prefix="/api/v1", tags=["Knowledge Base"])
 app.include_router(chat.router, prefix="/api/v1", tags=["Chat"])
 app.include_router(tasks.router, prefix="/api/v1", tags=["Tasks"])
-app.include_router(groupchat.router, prefix="/api/v1", tags=["Group Chat"])
 app.include_router(schedule.router, prefix="/api/v1", tags=["Scheduled Tasks"])
 app.include_router(audit.router, prefix="/api/v1", tags=["Audit"])
 app.include_router(backup.router, prefix="/api/v1", tags=["Backup"])
 app.include_router(config.router, prefix="/api/v1", tags=["Configuration"])
 app.include_router(providers.router, prefix="/api/v1", tags=["AI Providers"])
 app.include_router(mcp.router, prefix="/api/v1", tags=["MCP"])
+
+# WebSocket routes under /ws (proxied by Vite: /ws → ws://localhost:8000/ws)
+app.include_router(groupchat.router, prefix="/ws", tags=["Group Chat WS"])
 
 
 # ---------------------------------------------------------------------------

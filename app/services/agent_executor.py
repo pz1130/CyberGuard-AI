@@ -168,28 +168,29 @@ class AgentExecutor:
         # Fetch agent config from database
         from app.core.database import get_db_context
         from app.models.agent import AgentConfig
+        from sqlalchemy import select
         import json
 
         async with get_db_context() as session:
             result = await session.execute(
-                f"SELECT * FROM agent_configs WHERE id = {agent_id}"
+                select(AgentConfig).where(AgentConfig.id == agent_id)
             )
-            config_row = result.fetchone()
+            agent_obj = result.scalar_one_or_none()
 
-            if not config_row:
+            if not agent_obj:
                 return {
                     "status": "error",
                     "output": None,
                     "error": f"Agent {agent_id} not found",
                 }
 
-            # Convert row to dict (handling potential JSON columns)
             config_dict = {
-                "id": config_row[0],
-                "agent_name": config_row[1],
-                "backend_type": config_row[2],
-                "endpoint_url": config_row[4],
-                "env_vars_encrypted": config_row[6],
+                "id": agent_obj.id,
+                "agent_name": agent_obj.agent_name,
+                "backend_type": agent_obj.backend_type,
+                "endpoint_url": agent_obj.endpoint_url,
+                "env_vars_encrypted": agent_obj.env_vars_encrypted,
+                "permission_level": getattr(agent_obj, "permission_level", "medium"),
             }
 
         wrapper = SubAgentWrapper(config_dict)
