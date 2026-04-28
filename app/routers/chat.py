@@ -33,7 +33,7 @@ async def chat(
         execution_id=execution_id,
         agent_id=None,  # Master agent execution
         status="pending",
-        input_data={"user_input": body.message, "mode": body.mode},
+        input_data={"user_input": body.message, "mode": body.mode, "provider_id": body.provider_id, "model": body.model},
     )
     db.add(execution)
     await db.commit()
@@ -44,6 +44,8 @@ async def chat(
             user_input=body.message,
             user_id=user_id,
             mode=body.mode or "normal",
+            provider_id=body.provider_id,
+            model=body.model,
         )
 
         # Update execution with result
