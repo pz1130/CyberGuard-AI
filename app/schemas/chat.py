@@ -76,7 +76,7 @@ class GroupChatRoundResponse(BaseModel):
 
 class AgentChatRequest(BaseModel):
     """Direct agent chat request schema."""
-    agent_id: int
+    agent_id: Optional[int] = Field(default=None, description="指定 Sub-Agent ID，null 表示 Master Agent")
     message: str
     context: Optional[Dict[str, Any]] = None
     provider_id: Optional[int] = Field(default=None, description="指定 AI Provider ID，不指定则用默认")
@@ -84,11 +84,16 @@ class AgentChatRequest(BaseModel):
 
 
 class AgentChatResponse(BaseModel):
-    """Direct agent chat response schema."""
-    agent_id: int
-    agent_name: str
-    response: str
+    """Chat / Master Agent response schema."""
+    task_id: str
     status: str
+    message: Optional[str] = None
+    intent: Optional[str] = None
+    risk_score: Optional[float] = None
+    action_items: Optional[list] = None
+    agent_id: Optional[int] = None
+    agent_name: Optional[str] = None
+    response: Optional[str] = None
 
 # Aliases
 ChatRequest = AgentChatRequest
