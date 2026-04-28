@@ -1,0 +1,156 @@
+"""Audit logging middleware and utilities."""
+import hashlib
+import json
+from datetime import datetime
+from typing import Optional, Any
+from app.core.redis_client import get_redis
+from app.models.audit import AuditLog
+from app.core.database import get_db_session
+
+# In-memory buffer for audit logs (flushed to DB periodically)
+_audit_buffer: list = []
+_buffer_size = 100
+
+
+def _hash_data(data: Any) -> str:
+    """Create SHA256 hash of data."""
+    json_str = json.dumps(data, sort_keys=True, default=str)
+    return hashlib.sha256(json_str.encode()).hexdigest()
+
+
+async def log_audit(
+    user_id: Optional[int],
+    agent_id: Optional[str],
+    action: str,
+    input_data: Any,
+    output_data: Any,
+    request_id: Optional[str] = None,
+) -> dict:
+    """
+    Log an audit event.
+
+    Args:
+        user_id: ID of the user performing the action
+        agent_id: ID of the agent involved (if any)
+        action: Description of the action
+        input_data: Input data (will be hashed)
+        output_data: Output data (will be hashed)
+        request_id: Optional request tracking ID
+    """
+    timestamp = datetime.utcnow()
+    entry = {
+        "user_id": user_id,
+        "agent_id": agent_id,
+        "action": action,
+        "input_hash": _hash_data(input_data),
+        "output_hash": _hash_data(output_data),
+        "timestamp": timestamp.isoformat(),
+        "request_id": request_id or _generate_request_id(),
+    }
+
+    # Store in Redis for real-time access
+    redis = get_redis()
+    if redis:
+        await redis.lpush("audit:log", json.dumps(entry))
+
+    # Buffer for DB writes
+    _audit_buffer.append(entry)
+    if len(_audit_buffer) >= _buffer_size:
+        await _flush_audit_buffer()
+
+    return entry
+
+
+async def _flush_audit_buffer():
+    """Flush buffered audit logs to database."""
+    global _audit_buffer
+    if not _audit_buffer:
+        return
+
+    # Import here to avoid circular import
+    from app.core.database import get_db_session
+
+    logs_to_write = _audit_buffer[:]
+    _audit_buffer = []
+
+    async with get_db_session() as session:
+        for entry in logs_to_write:
+            log = AuditLog(
+                user_id=entry["user_id"],
+                agent_id=entry["agent_id"],
+                action=entry["action"],
+                input_hash=entry["input_hash"],
+                output_hash=entry["output_hash"],
+                request_id=entry.get("request_id"),
+            )
+            session.add(log)
+        await session.commit()
+
+
+def _generate_request_id() -> str:
+    """Generate unique request ID."""
+    import uuid
+    return str(uuid.uuid4())
+
+
+async def get_audit_logs(
+    user_id: Optional[int] = None,
+    agent_id: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list:
+    """Retrieve audit logs from Redis."""
+    redis = get_redis()
+    if not redis:
+        return []
+
+    # Get all logs (newest first)
+    logs = await redis.lrange("audit:log", 0, limit - 1)
+    parsed_logs = [json.loads(log) for log in logs]
+
+    # Filter if needed
+    if user_id:
+        parsed_logs = [l for l in parsed_logs if l.get("user_id") == user_id]
+    if agent_id:
+        parsed_logs = [l for l in parsed_logs if l.get("agent_id") == agent_id]
+
+    return parsed_logs[offset:offset + limit]
+
+
+def audit_middleware():
+    """Create audit middleware for FastAPI."""
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.requests import Request
+
+    class AuditMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            # Generate request ID
+            import uuid
+            request_id = str(uuid.uuid4())
+            request.state.request_id = request_id
+
+            # Log request
+            await log_audit(
+                user_id=getattr(request.state, 'user_id', None),
+                agent_id=None,
+                action=f"{request.method} {request.url.path}",
+                input_data={"method": request.method, "path": request.url.path},
+                output_data={"status": "processing"},
+                request_id=request_id,
+            )
+
+            response = await call_next(request)
+
+            # Log response
+            await log_audit(
+                user_id=getattr(request.state, 'user_id', None),
+                agent_id=None,
+                action=f"{request.method} {request.url.path}",
+                input_data={"method": request.method, "path": request.url.path},
+                output_data={"status": response.status_code},
+                request_id=request_id,
+            )
+
+            return response
+
+    return AuditMiddleware()
