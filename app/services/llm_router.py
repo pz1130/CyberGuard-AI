@@ -75,14 +75,14 @@ class LLMRouter:
         provider = self.providers[0]
         return AsyncOpenAI(api_key=provider["api_key"], base_url=provider["base_url"])
 
-    async def parse_intent(self, user_input: str) -> Dict[str, Any]:
+    async def parse_intent(self, user_input: str, provider_id: Optional[int] = None) -> Dict[str, Any]:
         """
         Parse user intent and create task plan.
 
         Uses the master agent model to understand user requirements
         and decompose into sub-agent tasks.
         """
-        client = self.get_client()
+        client = self.get_client(provider_id=provider_id)
 
         system_prompt = """You are CyberGuard's intent parser. Analyze user input and create a task plan.
 

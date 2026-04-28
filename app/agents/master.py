@@ -123,7 +123,7 @@ class MasterAgent:
         # Use LLM to parse intent if available
         if self.llm_router and user_input:
             try:
-                parsed = await self.llm_router.parse_intent(user_input)
+                parsed = await self.llm_router.parse_intent(user_input, provider_id=state.get("provider_id"))
                 state["intent"] = parsed.get("intent")
                 state["task_plan"] = parsed.get("task_plan", [])
             except Exception as e:

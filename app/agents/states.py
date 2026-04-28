@@ -66,6 +66,10 @@ class MasterAgentState(TypedDict, total=False):
 
     # Metadata
     request_id: str
+
+    # LLM provider selection
+    provider_id: Optional[int]
+    model: Optional[str]
     timestamp: str
 
 
