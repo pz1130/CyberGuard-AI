@@ -79,6 +79,8 @@ class AgentChatRequest(BaseModel):
     agent_id: int
     message: str
     context: Optional[Dict[str, Any]] = None
+    provider_id: Optional[int] = Field(default=None, description="指定 AI Provider ID，不指定则用默认")
+    model: Optional[str] = Field(default=None, description="指定模型名称，不指定则用 Provider 默认")
 
 
 class AgentChatResponse(BaseModel):
