@@ -6,6 +6,12 @@ from openai import AsyncOpenAI
 from app.config import settings
 
 
+def _get_providers_store():
+    """Lazy import to avoid circular dependency."""
+    from app.routers.providers import _providers as store
+    return store
+
+
 class LLMRouter:
     """
     LLM model router supporting multiple providers.
@@ -37,18 +43,37 @@ class LLMRouter:
                 "models": ["gpt-4o"],
             }]
 
-    def get_client(self, provider_name: Optional[str] = None) -> AsyncOpenAI:
-        """Get OpenAI client for a specific provider."""
-        provider = None
+    def get_provider_config(self, provider_id: Optional[int] = None) -> Dict[str, Any]:
+        """Get provider config by ID (from runtime providers store) or name."""
+        if provider_id:
+            store = _get_providers_store()
+            provider_data = store.get(provider_id)
+            if provider_data:
+                return {
+                    "name": provider_data.get("name"),
+                    "api_key": provider_data.get("api_key", ""),
+                    "base_url": provider_data.get("base_url", "https://api.openai.com/v1"),
+                    "models": provider_data.get("models", []),
+                }
+        return None
+
+    def get_client(self, provider_id: Optional[int] = None, provider_name: Optional[str] = None) -> AsyncOpenAI:
+        """Get OpenAI client for a specific provider (by ID or name)."""
+        # 1. Try by provider_id (runtime store)
+        if provider_id:
+            config = self.get_provider_config(provider_id)
+            if config:
+                return AsyncOpenAI(api_key=config["api_key"], base_url=config["base_url"])
+
+        # 2. Try by provider_name
         if provider_name:
             provider = next((p for p in self.providers if p["name"] == provider_name), None)
-        if not provider:
-            provider = self.providers[0]
+            if provider:
+                return AsyncOpenAI(api_key=provider["api_key"], base_url=provider["base_url"])
 
-        return AsyncOpenAI(
-            api_key=provider["api_key"],
-            base_url=provider["base_url"],
-        )
+        # 3. Fall back to first configured provider
+        provider = self.providers[0]
+        return AsyncOpenAI(api_key=provider["api_key"], base_url=provider["base_url"])
 
     async def parse_intent(self, user_input: str) -> Dict[str, Any]:
         """
@@ -93,9 +118,9 @@ For task_execution, identify which sub-agents are needed based on keywords:
                 "reasoning": "Fallback parsing due to JSON error",
             }
 
-    async def generate_summary(self, results: List[Dict[str, Any]]) -> str:
+    async def generate_summary(self, results: List[Dict[str, Any]], provider_id: Optional[int] = None) -> str:
         """Generate summary from sub-agent results."""
-        client = self.get_client()
+        client = self.get_client(provider_id=provider_id)
 
         results_text = "\n".join([
             f"Agent {r.get('agent_name', 'unknown')}: {r.get('output', 'No output')}"
@@ -113,9 +138,14 @@ For task_execution, identify which sub-agents are needed based on keywords:
 
         return response.choices[0].message.content
 
-    async def chat(self, messages: List[Dict[str, str]], model: Optional[str] = None) -> str:
+    async def chat(
+        self,
+        messages: List[Dict[str, str]],
+        model: Optional[str] = None,
+        provider_id: Optional[int] = None,
+    ) -> str:
         """General chat completion."""
-        client = self.get_client()
+        client = self.get_client(provider_id=provider_id)
 
         response = await client.chat.completions.create(
             model=model or settings.MASTER_AGENT_MODEL,
