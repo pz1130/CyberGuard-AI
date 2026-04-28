@@ -14,13 +14,13 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # Security
-    ENCRYPTION_KEY: str = "change-me-32-bytes"
-    SECRET_KEY: str = "change-me"
+    ENCRYPTION_KEY: str = "72afad1417e44d63d11975fd873f86e2dcf7e262a4c461ea4a0c43939868f5e4"
+    SECRET_KEY: str = "72afad1417e44d63d11975fd873f86e2dcf7e262a4c461ea4a0c43939868f5e4"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
 
     # LLM Providers
-    LITELLM_CONFIG: str = "{}"
+    LITELLM_CONFIG: str = '{"providers": []}'
 
     # WebUI
     WEBUI_URL: str = "http://localhost:3000"
@@ -36,6 +36,9 @@ class Settings(BaseSettings):
 
     # Environment
     ENVIRONMENT: str = "development"
+
+    # Mock mode (for demo without real LLM API keys) — defaults True in code for safety
+    MOCK_MODE: bool = True
 
     @property
     def litellm_providers(self) -> list:

@@ -66,8 +66,11 @@ export default function App() {
 
   if (checking) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-950 text-white">
-        <p className="text-gray-400">检查登录状态...</p>
+      <div className="flex items-center justify-center h-screen bg-slate-950">
+        <div className="flex flex-col items-center gap-3 text-slate-400">
+          <div className="h-6 w-6 rounded-full border-2 border-slate-700 border-t-violet-500 animate-spin" />
+          <p className="text-sm">检查登录状态…</p>
+        </div>
       </div>
     )
   }
@@ -77,11 +80,11 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
+    <div className="flex h-screen bg-slate-950 text-slate-100">
       <Sidebar tab={tab} setTab={setTab} />
       <div className="flex flex-col flex-1 min-w-0">
         <Header dark={dark} toggleDark={() => setDark(d => !d)} lang={lang} toggleLang={() => setLang(l => l === 'zh' ? 'en' : 'zh')} />
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto px-8 py-7">
           {PAGES[tab].component}
         </main>
       </div>

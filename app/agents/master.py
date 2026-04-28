@@ -121,7 +121,7 @@ class MasterAgent:
         user_id = state.get("user_id")
 
         # Use LLM to parse intent if available
-        if self.llm_router and user_input:
+        if self.llm_router:
             try:
                 parsed = await self.llm_router.parse_intent(user_input, provider_id=state.get("provider_id"))
                 state["intent"] = parsed.get("intent")
@@ -154,50 +154,123 @@ class MasterAgent:
         task_plan = state.get("task_plan", [])
         if task_plan:
             # Mark which agents need to be called
-            state["pending_agents"] = [t["agent_id"] for t in task_plan]
+            state["pending_agents"] = [t.get("agent_id") for t in task_plan]
 
         return state
 
     async def _sub_agent_executor_node(self, state: MasterAgentState) -> MasterAgentState:
-        """Execute tasks on sub-agents."""
+        """Execute tasks on sub-agents (remote if available, local fallback)."""
+        import asyncio
+        import time
+
         state["current_state"] = AgentState.WAIT_FOR_SUB_RESULTS
 
         task_plan = state.get("task_plan", [])
         user_id = state.get("user_id")
         request_id = state.get("request_id")
+        provider_id = state.get("provider_id")
 
-        results = dict(state.get("sub_results", {}))
+        if not task_plan:
+            state["current_state"] = AgentState.VALIDATE_RESULTS
+            return state
 
-        for task in task_plan:
-            agent_id = task["agent_id"]
-            task_description = task["task"]
+        # Fetch registered remote agents (by type) from DB
+        from app.core.database import get_db_context
+        from app.models.agent import AgentConfig
+        from sqlalchemy import select
 
-            # Execute sub-agent
-            result = await self.executor.execute(
-                agent_id=agent_id,
-                task=task_description,
+        remote_agents: Dict[str, Dict] = {}
+        try:
+            async with get_db_context() as session:
+                result = await session.execute(select(AgentConfig).where(AgentConfig.is_active == True))
+                for agent_obj in result.scalars().all():
+                    backend = getattr(agent_obj, "backend_type", "general")
+                    if backend not in remote_agents:
+                        remote_agents[backend] = {
+                            "id": agent_obj.id,
+                            "agent_name": agent_obj.agent_name,
+                            "backend_type": backend,
+                            "endpoint_url": agent_obj.endpoint_url,
+                        }
+        except Exception:
+            pass  # No DB agents — will use local executor for all tasks
+
+        # Build execution coroutines
+        async def run_task(task: Dict[str, Any]) -> tuple[str, Dict[str, Any]]:
+            agent_type = task.get("agent_type", "general")
+            task_desc = task.get("task", "")
+            agent_id = task.get("agent_id")  # explicit ID override
+
+            # Try remote if registered
+            if agent_id:
+                result = await self.executor.execute(
+                    agent_id=agent_id,
+                    task=task_desc,
+                    user_id=user_id,
+                )
+                return str(agent_id), result
+
+            if agent_type in remote_agents:
+                agent = remote_agents[agent_type]
+                result = await self.executor.execute(
+                    agent_id=agent["id"],
+                    task=task_desc,
+                    user_id=user_id,
+                )
+                return agent_type, result
+
+            # Fallback: local LLM executor
+            local_exec = self._get_local_executor()
+            result = await local_exec.execute(
+                task=task_desc,
+                agent_type=agent_type,
                 user_id=user_id,
+                context=state.get("context"),
+                provider_id=provider_id,
             )
+            return agent_type, result
 
-            results[agent_id] = result
+        start = time.monotonic()
+        tasks = [run_task(t) for t in task_plan]
+        results_list = await asyncio.gather(*tasks, return_exceptions=True)
 
-            # Log audit
+        results: Dict[str, Any] = {}
+        for i, r in enumerate(results_list):
+            agent_type = task_plan[i].get("agent_type", "general")
+            if isinstance(r, Exception):
+                results[agent_type] = {
+                    "status": "failed",
+                    "output": None,
+                    "error": str(r),
+                    "execution_time": time.monotonic() - start,
+                }
+            else:
+                key, result = r
+                results[key] = result
+
+            # Log audit per task
             await log_audit(
                 user_id=user_id,
-                agent_id=str(agent_id),
+                agent_id=str(results[key].get("agent_id", "")),
                 action="sub_agent_execute",
-                input_data={"task": task_description},
-                output_data=result,
+                input_data={"task": task_plan[i].get("task")},
+                output_data=results[key],
                 request_id=request_id,
             )
 
-            # Check for approval requirement
-            if result.get("status") == "needs_approval":
+            if results[key].get("status") == "needs_approval":
                 state["approval_required"] = True
 
         state["sub_results"] = results
         state["current_state"] = AgentState.VALIDATE_RESULTS
         return state
+
+    def _get_local_executor(self):
+        """Lazy-load local executor."""
+        if not hasattr(self, "_local_executor"):
+            from app.services.local_executor import get_local_executor
+            self._local_executor = get_local_executor()
+        return self._local_executor
 
     async def _group_chat_moderator_node(self, state: MasterAgentState) -> MasterAgentState:
         """Moderate group chat among agents."""
@@ -296,15 +369,19 @@ class MasterAgent:
         elif self.llm_router:
             # No sub-agents involved — respond directly via LLM
             user_input = state.get("user_input", "")
+            print(f"[DEBUG _summarizer_node] llm_router exists, calling chat()...")
             try:
                 state["final_summary"] = await self.llm_router.chat(
                     messages=[{"role": "user", "content": user_input}],
                     provider_id=state.get("provider_id"),
                     model=state.get("model"),
                 )
+                print(f"[DEBUG _summarizer_node] chat() returned: {state['final_summary'][:100]}")
             except Exception as e:
+                print(f"[DEBUG _summarizer_node] chat() EXCEPTION: {e}")
                 state["final_summary"] = f"无法处理您的请求，请检查 AI Provider 配置。错误: {e}"
         else:
+            print("[DEBUG _summarizer_node] llm_router is None!")
             state["final_summary"] = "暂无 AI Provider 可用，请先在「AI Provider 配置」页面中添加一个 Provider。"
 
         state["risk_score"] = 0.5

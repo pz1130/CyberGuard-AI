@@ -97,7 +97,7 @@ async def health_check():
 # ---------------------------------------------------------------------------
 # Routers (imported here to avoid circular imports)
 # ---------------------------------------------------------------------------
-from app.routers import auth, users, agents, skills, knowledge, chat, tasks, groupchat, schedule, audit, backup, config, providers, mcp
+from app.routers import auth, users, agents, skills, knowledge, chat, tasks, groupchat, schedule, audit, backup, config, providers, mcp, envvars
 
 app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
 app.include_router(users.router, prefix="/api/v1", tags=["Users"])
@@ -112,6 +112,7 @@ app.include_router(backup.router, prefix="/api/v1", tags=["Backup"])
 app.include_router(config.router, prefix="/api/v1", tags=["Configuration"])
 app.include_router(providers.router, prefix="/api/v1", tags=["AI Providers"])
 app.include_router(mcp.router, prefix="/api/v1", tags=["MCP"])
+app.include_router(envvars.router, prefix="/api/v1", tags=["Environment Variables"])
 
 # WebSocket routes under /ws (proxied by Vite: /ws → ws://localhost:8000/ws)
 app.include_router(groupchat.router, prefix="/ws", tags=["Group Chat WS"])

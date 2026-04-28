@@ -178,11 +178,11 @@ export default function Knowledge() {
         <h2 className="text-xl font-semibold">知识库</h2>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400">Embedding Provider:</span>
+            <span className="text-xs text-slate-400">Embedding Provider:</span>
             <select
               value={providerId ?? ''}
               onChange={e => setProviderId(Number(e.target.value) || null)}
-              className="bg-gray-800 border border-gray-700 text-white text-xs rounded-lg px-2 py-1.5"
+              className="bg-slate-900 border border-slate-800 text-white text-xs rounded-lg px-2 py-1.5"
             >
               {providers.length === 0 && <option value="">未配置</option>}
               {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -190,7 +190,7 @@ export default function Knowledge() {
           </div>
           <button
             onClick={() => setShowKBForm(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm"
+            className="flex items-center gap-2 px-4 py-2 bg-violet-500 hover:bg-violet-600 text-white rounded-lg text-sm"
           >
             <Plus size={16} /> 新增知识库
           </button>
@@ -199,31 +199,31 @@ export default function Knowledge() {
 
       {/* New KB form */}
       {showKBForm && (
-        <div className="bg-gray-800 rounded-xl p-6 mb-6 space-y-4">
+        <div className="bg-slate-900 rounded-xl p-6 mb-6 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-gray-300">创建知识库</h3>
-            <button onClick={() => setShowKBForm(false)}><X size={16} className="text-gray-400" /></button>
+            <h3 className="text-sm font-medium text-slate-300">创建知识库</h3>
+            <button onClick={() => setShowKBForm(false)}><X size={16} className="text-slate-400" /></button>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">名称 *</label>
+              <label className="text-xs text-slate-400 mb-1 block">名称 *</label>
               <input value={kbForm.name || ''} onChange={e => setKBForm(f => ({ ...f, name: e.target.value }))}
-                className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm text-white" placeholder="威胁情报库" />
+                className="w-full bg-slate-800 rounded-lg px-3 py-2 text-sm text-white" placeholder="威胁情报库" />
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Embedding 模型</label>
+              <label className="text-xs text-slate-400 mb-1 block">Embedding 模型</label>
               <input value={kbForm.embedding_model || ''} onChange={e => setKBForm(f => ({ ...f, embedding_model: e.target.value }))}
-                className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm text-white" placeholder="text-embedding-3-small" />
+                className="w-full bg-slate-800 rounded-lg px-3 py-2 text-sm text-white" placeholder="text-embedding-3-small" />
             </div>
             <div className="col-span-2">
-              <label className="text-xs text-gray-400 mb-1 block">描述</label>
+              <label className="text-xs text-slate-400 mb-1 block">描述</label>
               <input value={kbForm.description || ''} onChange={e => setKBForm(f => ({ ...f, description: e.target.value }))}
-                className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm text-white" />
+                className="w-full bg-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
             </div>
           </div>
           <div className="flex justify-end gap-2">
-            <button onClick={() => setShowKBForm(false)} className="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm">取消</button>
-            <button onClick={submitKB} className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-sm">创建</button>
+            <button onClick={() => setShowKBForm(false)} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm">取消</button>
+            <button onClick={submitKB} className="px-4 py-2 bg-violet-500 text-white rounded-lg text-sm">创建</button>
           </div>
         </div>
       )}
@@ -231,25 +231,25 @@ export default function Knowledge() {
       <div className="grid grid-cols-12 gap-4">
         {/* Sidebar: KB list */}
         <div className="col-span-3">
-          <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">知识库列表</h3>
-          {loadingKB ? <p className="text-gray-400 text-sm">加载中...</p>
-            : bases.length === 0 ? <p className="text-gray-500 text-sm">暂无知识库</p>
+          <h3 className="text-xs font-semibold text-slate-400 uppercase mb-2">知识库列表</h3>
+          {loadingKB ? <p className="text-slate-400 text-sm">加载中...</p>
+            : bases.length === 0 ? <p className="text-slate-500 text-sm">暂无知识库</p>
             : (
               <div className="space-y-1">
                 {bases.map(k => (
                   <div key={k.id}
-                    className={`group flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${selected?.id === k.id ? 'bg-emerald-500/20 border border-emerald-500/40' : 'bg-gray-800 hover:bg-gray-700'}`}
+                    className={`group flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${selected?.id === k.id ? 'bg-violet-500/20 border border-violet-500/40' : 'bg-slate-900 hover:bg-slate-800'}`}
                     onClick={() => setSelected(k)}>
                     <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <Database size={14} className={selected?.id === k.id ? 'text-emerald-400' : 'text-gray-400'} />
+                      <Database size={14} className={selected?.id === k.id ? 'text-violet-400' : 'text-slate-400'} />
                       <div className="min-w-0">
                         <p className="text-sm text-white truncate">{k.name}</p>
-                        {k.embedding_model && <p className="text-xs text-gray-500 truncate">{k.embedding_model}</p>}
+                        {k.embedding_model && <p className="text-xs text-slate-500 truncate">{k.embedding_model}</p>}
                       </div>
                     </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); deleteKB(k) }}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-400"
+                      className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-400"
                     >
                       <Trash2 size={12} />
                     </button>
@@ -262,64 +262,64 @@ export default function Knowledge() {
         {/* Main: docs + query */}
         <div className="col-span-9 space-y-4">
           {!selected ? (
-            <div className="bg-gray-800 rounded-xl p-12 text-center">
-              <Database size={32} className="mx-auto text-gray-500 mb-3" />
-              <p className="text-gray-400">请从左侧选择或创建一个知识库</p>
+            <div className="bg-slate-900 rounded-xl p-12 text-center">
+              <Database size={32} className="mx-auto text-slate-500 mb-3" />
+              <p className="text-slate-400">请从左侧选择或创建一个知识库</p>
             </div>
           ) : (
             <>
               {/* Header */}
-              <div className="bg-gray-800 rounded-xl p-4">
+              <div className="bg-slate-900 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-1">
                   <h3 className="text-lg font-semibold text-white">{selected.name}</h3>
-                  <span className="text-xs text-gray-400">{docs.length} 个文档</span>
+                  <span className="text-xs text-slate-400">{docs.length} 个文档</span>
                 </div>
-                {selected.description && <p className="text-sm text-gray-400">{selected.description}</p>}
+                {selected.description && <p className="text-sm text-slate-400">{selected.description}</p>}
               </div>
 
               {/* Query */}
-              <div className="bg-gray-800 rounded-xl p-4">
-                <h3 className="text-sm font-medium mb-3 text-gray-300 flex items-center gap-2">
+              <div className="bg-slate-900 rounded-xl p-4">
+                <h3 className="text-sm font-medium mb-3 text-slate-300 flex items-center gap-2">
                   <Search size={14} /> 语义检索
                 </h3>
                 <div className="flex gap-2 mb-3">
                   <input value={query} onChange={e => setQuery(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && search()}
-                    className="flex-1 bg-gray-700 rounded-lg px-3 py-2 text-sm text-white"
+                    className="flex-1 bg-slate-800 rounded-lg px-3 py-2 text-sm text-white"
                     placeholder="输入要检索的内容..." />
                   <input type="number" min={1} max={20} value={topK}
                     onChange={e => setTopK(Number(e.target.value))}
-                    className="w-20 bg-gray-700 rounded-lg px-3 py-2 text-sm text-white"
+                    className="w-20 bg-slate-800 rounded-lg px-3 py-2 text-sm text-white"
                     title="返回结果数量" />
                   <button onClick={search} disabled={querying || docs.length === 0}
-                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white rounded-lg text-sm flex items-center gap-1">
+                    className="px-4 py-2 bg-violet-500 hover:bg-violet-600 disabled:opacity-50 text-white rounded-lg text-sm flex items-center gap-1">
                     <Search size={14} /> {querying ? '检索中' : '检索'}
                   </button>
                 </div>
                 {results.length > 0 && (
                   <div className="space-y-2">
                     {results.map((r, i) => (
-                      <div key={i} className="bg-gray-700 rounded-lg p-3 border-l-2 border-emerald-500">
+                      <div key={i} className="bg-slate-800 rounded-lg p-3 border-l-2 border-violet-500">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs text-gray-400">{r.filename} · 块 #{r.chunk_index}</span>
-                          <span className="text-xs px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded">
+                          <span className="text-xs text-slate-400">{r.filename} · 块 #{r.chunk_index}</span>
+                          <span className="text-xs px-2 py-0.5 bg-violet-500/20 text-violet-400 rounded">
                             {(r.score * 100).toFixed(1)}%
                           </span>
                         </div>
-                        <p className="text-sm text-gray-200 whitespace-pre-wrap">{r.text}</p>
+                        <p className="text-sm text-slate-200 whitespace-pre-wrap">{r.text}</p>
                       </div>
                     ))}
                   </div>
                 )}
                 {docs.length === 0 && (
-                  <p className="text-xs text-gray-500 text-center py-2">先在下方上传文档后再检索</p>
+                  <p className="text-xs text-slate-500 text-center py-2">先在下方上传文档后再检索</p>
                 )}
               </div>
 
               {/* Docs */}
-              <div className="bg-gray-800 rounded-xl p-4">
+              <div className="bg-slate-900 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                  <h3 className="text-sm font-medium text-slate-300 flex items-center gap-2">
                     <FileText size={14} /> 文档
                   </h3>
                   <div className="flex items-center gap-2">
@@ -336,13 +336,13 @@ export default function Knowledge() {
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       disabled={ingesting}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white rounded-lg text-xs"
+                      className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-600 disabled:opacity-50 text-white rounded-lg text-xs"
                     >
                       <Upload size={12} /> 上传文件
                     </button>
                     <button
                       onClick={() => setShowTextForm(s => !s)}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs"
+                      className="flex items-center gap-1 px-3 py-1.5 bg-violet-500 hover:bg-violet-600 text-white rounded-lg text-xs"
                     >
                       <Plus size={12} /> 粘贴文本
                     </button>
@@ -350,47 +350,47 @@ export default function Knowledge() {
                 </div>
 
                 {showTextForm && (
-                  <div className="bg-gray-700 rounded-lg p-3 mb-3 space-y-2">
+                  <div className="bg-slate-800 rounded-lg p-3 mb-3 space-y-2">
                     <input
                       value={textForm.filename}
                       onChange={e => setTextForm(f => ({ ...f, filename: e.target.value }))}
                       placeholder="文档名（如 incident-response.md）"
-                      className="w-full bg-gray-800 rounded px-3 py-2 text-sm text-white"
+                      className="w-full bg-slate-900 rounded px-3 py-2 text-sm text-white"
                     />
                     <textarea
                       value={textForm.content}
                       onChange={e => setTextForm(f => ({ ...f, content: e.target.value }))}
                       placeholder="粘贴文本内容..."
                       rows={6}
-                      className="w-full bg-gray-800 rounded px-3 py-2 text-sm text-white font-mono"
+                      className="w-full bg-slate-900 rounded px-3 py-2 text-sm text-white font-mono"
                     />
                     <div className="flex justify-end gap-2">
-                      <button onClick={() => setShowTextForm(false)} className="px-3 py-1.5 bg-gray-600 text-white rounded text-xs">取消</button>
-                      <button onClick={ingestText} disabled={ingesting} className="px-3 py-1.5 bg-emerald-500 disabled:opacity-50 text-white rounded text-xs">
+                      <button onClick={() => setShowTextForm(false)} className="px-3 py-1.5 bg-slate-600 text-white rounded text-xs">取消</button>
+                      <button onClick={ingestText} disabled={ingesting} className="px-3 py-1.5 bg-violet-500 disabled:opacity-50 text-white rounded text-xs">
                         {ingesting ? '导入中...' : '导入'}
                       </button>
                     </div>
                   </div>
                 )}
 
-                {loadingDocs ? <p className="text-gray-400 text-sm">加载中...</p>
-                  : docs.length === 0 ? <p className="text-gray-500 text-sm text-center py-4">暂无文档，请上传或粘贴内容</p>
+                {loadingDocs ? <p className="text-slate-400 text-sm">加载中...</p>
+                  : docs.length === 0 ? <p className="text-slate-500 text-sm text-center py-4">暂无文档，请上传或粘贴内容</p>
                   : (
                     <div className="space-y-2">
                       {docs.map(d => (
-                        <div key={d.id} className="flex items-center justify-between bg-gray-700 rounded-lg px-3 py-2">
+                        <div key={d.id} className="flex items-center justify-between bg-slate-800 rounded-lg px-3 py-2">
                           <div className="flex items-center gap-2 min-w-0">
-                            <FileText size={14} className="text-gray-400 flex-shrink-0" />
+                            <FileText size={14} className="text-slate-400 flex-shrink-0" />
                             <div className="min-w-0">
                               <p className="text-sm text-white truncate">{d.filename}</p>
-                              <p className="text-xs text-gray-400">
+                              <p className="text-xs text-slate-400">
                                 {d.metadata_json?.chunk_count ?? 0} 块
                                 {d.file_size != null && ` · ${(d.file_size / 1024).toFixed(1)} KB`}
                                 {d.mime_type && ` · ${d.mime_type}`}
                               </p>
                             </div>
                           </div>
-                          <button onClick={() => deleteDoc(d)} className="p-1.5 text-gray-400 hover:text-red-400">
+                          <button onClick={() => deleteDoc(d)} className="p-1.5 text-slate-400 hover:text-red-400">
                             <Trash2 size={12} />
                           </button>
                         </div>

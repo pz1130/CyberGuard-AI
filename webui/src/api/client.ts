@@ -8,7 +8,6 @@ async function request(path: string, options: RequestInit = {}) {
   }
   if (token) headers['Authorization'] = `Bearer ${token}`
 
-  // Use relative URL so Vite proxy handles /api → localhost:8000
   const res = await fetch(`${BASE}${path}`, { ...options, headers })
   if (res.status === 401) {
     localStorage.removeItem('token')
@@ -114,7 +113,7 @@ export const api = {
     return request(`/audit/logs${qs ? '?' + qs : ''}`)
   },
   exportAuditLogs: (params?: any) =>
-    request(`/audit/export?${new URLSearchParams(params || {})}`),
+    request(`/audit/export?${new URLSearchParams(params || {})} `),
 
   // Backup
   listBackups: () => request('/backup'),
@@ -125,10 +124,30 @@ export const api = {
   exportConfig: () => request('/config/export'),
   importConfig: (body: any) => request('/config/import', { method: 'POST', body: JSON.stringify(body) }),
 
-  // MCP
-  getMCPServers: () => request('/mcp'),
-  createMCPServer: (body: any) => request('/mcp', { method: 'POST', body: JSON.stringify(body) }),
-  deleteMCPServer: (name: string) => request(`/mcp/${name}`, { method: 'DELETE' }),
+  // ---- MCP Servers ----
+  getMCPServers: () => request('/mcp/servers'),
+  createMCPServer: (body: any) => request('/mcp/servers', { method: 'POST', body: JSON.stringify(body) }),
+  updateMCPServer: (id: number, body: any) => request(`/mcp/servers/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteMCPServer: (id: number) => request(`/mcp/servers/${id}`, { method: 'DELETE' }),
+  startMCPServer: (id: number) => request(`/mcp/servers/${id}/start`, { method: 'POST' }),
+  stopMCPServer: (id: number) => request(`/mcp/servers/${id}/stop`, { method: 'POST' }),
+  getMCPServerTools: (serverId: number) => request(`/mcp/servers/${serverId}/tools`),
+
+  // MCP Tools
+  createMCPTool: (body: any) => request('/mcp/tools', { method: 'POST', body: JSON.stringify(body) }),
+  updateMCPTool: (id: number, body: any) => request(`/mcp/tools/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteMCPTool: (id: number) => request(`/mcp/tools/${id}`, { method: 'DELETE' }),
+  executeMCPTool: (body: { tool_id: number; arguments: Record<string, unknown> }) =>
+    request('/mcp/tools/execute', { method: 'POST', body: JSON.stringify(body) }),
+
+  // ---- Environment Variables ----
+  getEnvVars: () => request('/envvars'),
+  createEnvVar: (body: { key: string; value: string; value_type: string; description?: string }) =>
+    request('/envvars', { method: 'POST', body: JSON.stringify(body) }),
+  updateEnvVar: (id: number, body: { value?: string; value_type?: string; description?: string; is_active?: boolean }) =>
+    request(`/envvars/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteEnvVar: (id: number) => request(`/envvars/${id}`, { method: 'DELETE' }),
+  decryptEnvVar: (id: number) => request(`/envvars/decrypt/${id}`),
 }
 
 export const wsBase = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`

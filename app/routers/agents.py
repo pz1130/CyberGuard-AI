@@ -41,6 +41,11 @@ async def create_agent(
         raise HTTPException(status_code=400, detail="Agent name already exists")
 
     agent = AgentConfig(**body.model_dump(exclude={'env_vars'}))
+    # Encrypt env_vars before storing
+    if body.env_vars:
+        from app.core.security import encrypt_data
+        import json
+        agent.env_vars_encrypted = encrypt_data(json.dumps(body.env_vars))
     db.add(agent)
     await db.commit()
     await db.refresh(agent)
@@ -75,7 +80,12 @@ async def update_agent(
         raise HTTPException(status_code=404, detail="Agent not found")
 
     for key, value in body.model_dump(exclude_unset=True).items():
-        setattr(agent, key, value)
+        if key == "env_vars" and value:
+            from app.core.security import encrypt_data
+            import json
+            setattr(agent, "env_vars_encrypted", encrypt_data(json.dumps(value)))
+        else:
+            setattr(agent, key, value)
 
     await db.commit()
     await db.refresh(agent)

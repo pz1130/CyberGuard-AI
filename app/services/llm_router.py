@@ -82,21 +82,44 @@ class LLMRouter:
         Uses the master agent model to understand user requirements
         and decompose into sub-agent tasks.
         """
+        # Mock mode — return a simple general task plan without calling LLM
+        if settings.MOCK_MODE:
+            from app.services.local_executor import match_agent_type
+            agent_type = match_agent_type(user_input) or "general"
+            return {
+                "intent": "task_execution",
+                "task_plan": [{"agent_type": agent_type, "task": user_input, "requires_approval": False}],
+                "reasoning": "Mock mode — intent parsed via keyword matching",
+            }
+
         client = self.get_client(provider_id=provider_id)
 
         system_prompt = """You are CyberGuard's intent parser. Analyze user input and create a task plan.
 
 Output JSON with:
 - intent: one of [task_execution, group_chat, knowledge_query, admin_action]
-- task_plan: array of {"agent_id": null, "task": "description", "requires_approval": bool}
+- task_plan: array of {"agent_type": str, "task": "description", "requires_approval": bool}
 - reasoning: brief explanation
 
-For task_execution, identify which sub-agents are needed based on keywords:
-- threat/cve/ioc -> Threat Intelligence Agent
-- log/anomaly -> Log Anomaly Agent
-- vuln/scan -> Vulnerability Scanner
-- fix/remediate -> Remediation Advisor
-- compliance/policy -> Compliance Checker
+Task decomposition rules:
+- Split compound requests into multiple tasks
+- Each task maps to one agent_type
+- Do NOT use agent_id — use agent_type only
+
+agent_type options:
+- threat_intel: threat IOC analysis, CVE lookup, malware analysis, APT tracking
+- log_anomaly: log parsing, anomaly detection, SIEM alerts
+- vuln_scanner: vulnerability scanning, CVE assessment, exploit analysis
+- remediation: fix/remediate/mute/isolate/quarantine actions
+- compliance: policy audit, framework compliance (ISO27001, GDPR, PCI-DSS)
+- osint: open-source intelligence, recon, footprinting
+- general: anything not matching above categories
+
+Examples:
+- "scan 192.168.1.0/24 for vulns" → agent_type: vuln_scanner
+- "check if this IP is malicious" → agent_type: threat_intel
+- "analyze firewall logs for anomalies" → agent_type: log_anomaly
+- "block this domain" → agent_type: remediation
 """
 
         response = await client.chat.completions.create(
@@ -112,14 +135,22 @@ For task_execution, identify which sub-agents are needed based on keywords:
         try:
             return json.loads(response.choices[0].message.content)
         except json.JSONDecodeError:
+            # Fallback: match by keyword → single general task
+            from app.services.local_executor import match_agent_type
+            agent_type = match_agent_type(user_input) or "general"
             return {
                 "intent": "task_execution",
-                "task_plan": [{"agent_id": None, "task": user_input, "requires_approval": False}],
+                "task_plan": [{"agent_type": agent_type, "task": user_input, "requires_approval": False}],
                 "reasoning": "Fallback parsing due to JSON error",
             }
 
     async def generate_summary(self, results: List[Dict[str, Any]], provider_id: Optional[int] = None) -> str:
         """Generate summary from sub-agent results."""
+        # Mock mode — return a simple text summary
+        if settings.MOCK_MODE:
+            lines = [f"**{r.get('agent_name', 'Agent')}**:\n{r.get('output', 'No output')}" for r in results]
+            return "📊 **CyberGuard 分析报告**\n\n" + "\n\n".join(lines) + "\n\n_此结果为 Mock 模式输出，配置真实 AI Provider 后可获得更智能的分析。_"
+
         client = self.get_client(provider_id=provider_id)
 
         results_text = "\n".join([
@@ -145,6 +176,11 @@ For task_execution, identify which sub-agents are needed based on keywords:
         provider_id: Optional[int] = None,
     ) -> str:
         """General chat completion."""
+        # Mock mode — return a simple acknowledgment
+        if settings.MOCK_MODE:
+            last_msg = messages[-1]["content"] if messages else ""
+            return f"🛡️ **CyberGuard (Mock Mode)**\n\n已收到您的消息：\"{last_msg[:100]}\"\n\n当前运行在 Mock 模式下，请配置真实的 AI Provider（Providers 页面）以获得实际的安全分析能力。"
+
         client = self.get_client(provider_id=provider_id)
 
         response = await client.chat.completions.create(

@@ -45,61 +45,61 @@ export default function Skills() {
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-semibold">Skill Pool</h2>
         <button onClick={() => { setShowForm(true); setEditing(null); setForm({ name: '', type: 'tool', description: '' }); setConfigText('') }}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm">
+          className="flex items-center gap-2 px-4 py-2 bg-violet-500 hover:bg-violet-600 text-white rounded-lg text-sm">
           <Plus size={16} /> 新增 Skill
         </button>
       </div>
 
       {showForm && (
-        <div className="bg-gray-800 rounded-xl p-6 mb-6 space-y-4">
+        <div className="bg-slate-900 rounded-xl p-6 mb-6 space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">名称</label>
+              <label className="text-xs text-slate-400 mb-1 block">名称</label>
               <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm text-white" />
+                className="w-full bg-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">类型</label>
+              <label className="text-xs text-slate-400 mb-1 block">类型</label>
               <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
-                className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm text-white">
+                className="w-full bg-slate-800 rounded-lg px-3 py-2 text-sm text-white">
                 <option value="tool">Tool</option>
                 <option value="skill">Skill</option>
                 <option value="workflow">Workflow</option>
               </select>
             </div>
             <div className="col-span-2">
-              <label className="text-xs text-gray-400 mb-1 block">描述</label>
+              <label className="text-xs text-slate-400 mb-1 block">描述</label>
               <input value={form.description || ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm text-white" />
+                className="w-full bg-slate-800 rounded-lg px-3 py-2 text-sm text-white" />
             </div>
             <div className="col-span-2">
-              <label className="text-xs text-gray-400 mb-1 block">配置 (JSON)</label>
+              <label className="text-xs text-slate-400 mb-1 block">配置 (JSON)</label>
               <textarea value={configText} onChange={e => setConfigText(e.target.value)}
-                rows={4} className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono" placeholder="{}" />
+                rows={4} className="w-full bg-slate-800 rounded-lg px-3 py-2 text-sm text-white font-mono" placeholder="{}" />
             </div>
           </div>
           <div className="flex gap-2 justify-end">
-            <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm">取消</button>
-            <button onClick={submit} className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-sm">{editing ? '保存' : '创建'}</button>
+            <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm">取消</button>
+            <button onClick={submit} className="px-4 py-2 bg-violet-500 text-white rounded-lg text-sm">{editing ? '保存' : '创建'}</button>
           </div>
         </div>
       )}
 
-      {loading ? <p className="text-gray-400">加载中...</p> : items.length === 0 ? <p className="text-gray-500">暂无 Skill</p> : (
+      {loading ? <p className="text-slate-400">加载中...</p> : items.length === 0 ? <p className="text-slate-500">暂无 Skill</p> : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {items.map(s => (
-            <div key={s.id} className="bg-gray-800 rounded-xl p-4">
+            <div key={s.id} className="bg-slate-900 rounded-xl p-4">
               <div className="flex items-start justify-between mb-2">
                 <div>
                   <span className="font-medium text-white">{s.name}</span>
                   <span className="ml-2 text-xs bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded">{s.type}</span>
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={() => { setEditing(s.id!); setForm({ ...s }); setShowForm(true) }} className="p-1.5 text-gray-400 hover:text-white"><Edit2 size={14} /></button>
-                  <button onClick={() => del(s.id!)} className="p-1.5 text-gray-400 hover:text-red-400"><Trash2 size={14} /></button>
+                  <button onClick={() => { setEditing(s.id!); setForm({ ...s }); setShowForm(true) }} className="p-1.5 text-slate-400 hover:text-white"><Edit2 size={14} /></button>
+                  <button onClick={() => del(s.id!)} className="p-1.5 text-slate-400 hover:text-red-400"><Trash2 size={14} /></button>
                 </div>
               </div>
-              <p className="text-xs text-gray-400">{s.description || '—'}</p>
+              <p className="text-xs text-slate-400">{s.description || '—'}</p>
             </div>
           ))}
         </div>

@@ -30,7 +30,7 @@ async def chat(
 
     # Create execution record
     execution_id = str(uuid.uuid4())
-    agent_id_for_exec = 0  # 0 = Master Agent sentinel (no real agent row)
+    agent_id_for_exec = None  # Master Agent has no agent_configs row
     execution = AgentExecution(
         execution_id=execution_id,
         agent_id=agent_id_for_exec,

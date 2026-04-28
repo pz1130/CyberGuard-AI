@@ -35,7 +35,7 @@ class MasterAgentState(TypedDict, total=False):
 
     # Parsed intent
     intent: Optional[str]
-    task_plan: Optional[List[Dict[str, Any]]]  # [{"agent_id": 1, "task": "..."}]
+    task_plan: Optional[List[Dict[str, Any]]]  # [{"agent_type": "threat_intel", "task": "...", "requires_approval": false}]
 
     # Sub-agent results
     sub_results: Dict[int, Any]  # agent_id -> result

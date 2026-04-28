@@ -36,7 +36,7 @@ class AgentExecution(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     execution_id = Column(String(36), unique=True, nullable=False, index=True)  # UUID
-    agent_id = Column(Integer, ForeignKey("agent_configs.id"), nullable=False)
+    agent_id = Column(Integer, ForeignKey("agent_configs.id"), nullable=True)  # nullable: Master Agent has no agent_configs row
     status = Column(String(20), nullable=False)  # pending, running, completed, failed
     input_data = Column(JSON, nullable=True)
     output_data = Column(JSON, nullable=True)
