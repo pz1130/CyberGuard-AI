@@ -40,3 +40,4 @@ build/
 # Local
 *.bak
 *.tmp
+.worktrees/
