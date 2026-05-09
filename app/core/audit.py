@@ -1,4 +1,5 @@
 """Audit logging middleware and utilities."""
+import asyncio
 import hashlib
 import json
 from datetime import datetime
@@ -9,7 +10,8 @@ from app.core.database import get_db_session
 
 # In-memory buffer for audit logs (flushed to DB periodically)
 _audit_buffer: list = []
-_buffer_size = 100
+_buffer_lock: asyncio.Lock = asyncio.Lock()
+_buffer_size = 10
 
 
 def _hash_data(data: Any) -> str:
@@ -49,31 +51,34 @@ async def log_audit(
     }
 
     # Store in Redis for real-time access
-    redis = get_redis()
+    redis = await get_redis()
     if redis:
         await redis.lpush("audit:log", json.dumps(entry))
 
-    # Buffer for DB writes
-    _audit_buffer.append(entry)
-    if len(_audit_buffer) >= _buffer_size:
-        await _flush_audit_buffer()
+    # Buffer for DB writes (thread-safe swap)
+    async with _buffer_lock:
+        _audit_buffer.append(entry)
+        should_flush = len(_audit_buffer) >= _buffer_size
+
+    if should_flush:
+        asyncio.create_task(_flush_audit_buffer())
 
     return entry
 
 
 async def _flush_audit_buffer():
     """Flush buffered audit logs to database."""
-    global _audit_buffer
-    if not _audit_buffer:
-        return
+    # Atomically swap out the buffer under lock
+    async with _buffer_lock:
+        if not _audit_buffer:
+            return
+        logs_to_write = _audit_buffer[:]
+        _audit_buffer.clear()
 
     # Import here to avoid circular import
-    from app.core.database import get_db_session
+    from app.core.database import get_db_context
 
-    logs_to_write = _audit_buffer[:]
-    _audit_buffer = []
-
-    async with get_db_session() as session:
+    async with get_db_context() as session:
         for entry in logs_to_write:
             log = AuditLog(
                 user_id=entry["user_id"],
@@ -100,7 +105,7 @@ async def get_audit_logs(
     offset: int = 0,
 ) -> list:
     """Retrieve audit logs from Redis."""
-    redis = get_redis()
+    redis = await get_redis()
     if not redis:
         return []
 
@@ -115,6 +120,11 @@ async def get_audit_logs(
         parsed_logs = [l for l in parsed_logs if l.get("agent_id") == agent_id]
 
     return parsed_logs[offset:offset + limit]
+
+
+async def flush_audit_buffer():
+    """Public interface for shutdown-time flushing (e.g. lifespan event)."""
+    await _flush_audit_buffer()
 
 
 def audit_middleware():

@@ -1,0 +1,47 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cyberguard-ingress
+  namespace: cyberguard
+  annotations:
+    # AWS ALB / Nginx Ingress annotations — adjust for your ingress controller
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    # WebSocket support
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$request_uri"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  rules:
+    - host: api.cyberguard.example.com
+      http:
+        paths:
+          # API
+          - path: /api/
+            pathType: Prefix
+            backend:
+              service:
+                name: cyberguard-api-svc
+                port:
+                  number: 8000
+          # WebSocket (groupchat)
+          - path: /ws/
+            pathType: Prefix
+            backend:
+              service:
+                name: cyberguard-api-svc
+                port:
+                  number: 8000
+          # Health checks — bypass auth
+          - path: /health
+            pathType: Exact
+            backend:
+              service:
+                name: cyberguard-api-svc
+                port:
+                  number: 8000
+  tls:
+    - hosts:
+        - api.cyberguard.example.com
+      secretName: cyberguard-tls

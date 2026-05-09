@@ -1,7 +1,13 @@
 """Pydantic schemas for LLM provider management."""
-from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
+
+
+class ModelInfo(BaseModel):
+    """Model info with type classification."""
+    name: str
+    model_type: Literal["chat", "embedding", "rerank"] = "chat"
 
 
 class ProviderBase(BaseModel):
@@ -15,20 +21,40 @@ class ProviderCreate(ProviderBase):
     api_key: Optional[str] = None
     base_url: Optional[str] = None
     api_version: Optional[str] = None
-    models: List[str] = Field(default_factory=lambda: ["gpt-4o"])
+    models: List[ModelInfo] = Field(default_factory=lambda: [ModelInfo(name="gpt-4o", model_type="chat")])
     is_active: bool = True
     metadata_json: Optional[Dict[str, Any]] = None
+
+    @field_validator("models", mode="before")
+    @classmethod
+    def convert_legacy_models(cls, v):
+        """Accept both legacy ["gpt-4o"] and new [{"name": "gpt-4o", "model_type": "chat"}] formats."""
+        if not v:
+            return [ModelInfo(name="gpt-4o", model_type="chat")]
+        if isinstance(v, list) and v and isinstance(v[0], str):
+            return [ModelInfo(name=m, model_type="chat") for m in v]
+        return v
 
 
 class ProviderUpdate(BaseModel):
     """Provider update schema."""
     name: Optional[str] = None
+    provider_type: Optional[str] = None
     api_key: Optional[str] = None
     base_url: Optional[str] = None
     api_version: Optional[str] = None
-    models: Optional[List[str]] = None
+    models: Optional[List[ModelInfo]] = None
     is_active: Optional[bool] = None
     metadata_json: Optional[Dict[str, Any]] = None
+
+    @field_validator("models", mode="before")
+    @classmethod
+    def convert_legacy_models(cls, v):
+        if not v:
+            return None
+        if isinstance(v, list) and v and isinstance(v[0], str):
+            return [ModelInfo(name=m, model_type="chat") for m in v]
+        return v
 
 
 class ProviderResponse(BaseModel):
@@ -36,9 +62,10 @@ class ProviderResponse(BaseModel):
     id: int
     name: str
     provider_type: str
-    base_url: Optional[str]
-    api_version: Optional[str]
-    models: List[str]
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    api_version: Optional[str] = None
+    models: List[ModelInfo]
     is_active: bool
     metadata_json: Optional[Dict[str, Any]]
     created_at: datetime
@@ -46,6 +73,15 @@ class ProviderResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @field_validator("models", mode="before")
+    @classmethod
+    def convert_legacy_models(cls, v):
+        if not v:
+            return []
+        if isinstance(v, list) and v and isinstance(v[0], str):
+            return [ModelInfo(name=m, model_type="chat") for m in v]
+        return v
 
 
 class ProviderListResponse(BaseModel):

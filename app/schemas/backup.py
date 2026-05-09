@@ -70,6 +70,10 @@ class RestoreRequest(BaseModel):
     backup_id: str
     target_path: Optional[str] = None
     overwrite: bool = False
+    confirm: bool = Field(
+        default=False,
+        description="Must be True to acknowledge that restore will overwrite the current database state"
+    )
 
 
 class RestoreResponse(BaseModel):
@@ -91,3 +95,20 @@ class BackupListResponse(BaseModel):
 # Aliases
 BackupRequest = BackupConfigCreate
 BackupResponse = BackupExecutionResponse
+
+
+class BackupRecord(BaseModel):
+    """Backup record schema for reading from DB."""
+    id: str
+    created_at: datetime
+    size_bytes: int
+    format: str = "pg_dump.custom.aes"
+    local_path: Optional[str] = None
+    remote_url: Optional[str] = None
+    s3_bucket: Optional[str] = None
+    status: str = "pending"
+    error: Optional[str] = None
+    retention_days: int = 30
+
+    class Config:
+        from_attributes = True

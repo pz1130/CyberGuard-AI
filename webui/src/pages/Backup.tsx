@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api/client'
-import { Database, Download, Trash2, Plus, RefreshCw } from 'lucide-react'
+import { Database, Download, Trash2, Plus, RefreshCw, Loader2 } from 'lucide-react'
 
 interface Backup {
   id?: string
@@ -33,11 +33,11 @@ export default function Backup() {
   }
 
   const restore = async (id: string) => {
-    if (!confirm('确认恢复此备份？当前数据将被覆盖。')) return
+    if (!confirm('CONFIRM RESTORE? CURRENT DATA WILL BE OVERWRITTEN.')) return
     setRestoring(id)
     try {
       await api.restoreBackup(id)
-      alert('恢复成功')
+      alert('RESTORE SUCCESS')
     } catch (e: any) { alert(e.message) } finally { setRestoring(null) }
   }
 
@@ -54,52 +54,118 @@ export default function Backup() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <h2 className="text-xl font-semibold flex items-center gap-2"><Database size={20} /> 备份</h2>
-          <p className="text-xs text-gray-500 mt-1">本地备份与配置导出</p>
+          <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>DATA RESILIENCE</div>
+          <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>BACKUP & RESTORE</h1>
         </div>
-        <div className="flex gap-2">
+        <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={exportConfig}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm">
-            <Download size={16} /> 导出配置
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '0 14px', height: 36,
+              border: '1px solid var(--border-bright)', background: 'transparent',
+              color: 'var(--text-muted)', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer',
+              fontFamily: 'var(--font-mono)',
+            }}>
+            <Download size={11} /> EXPORT CONFIG
           </button>
           <button onClick={create} disabled={creating}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white rounded-lg text-sm">
-            <Plus size={16} /> {creating ? '创建中...' : '创建备份'}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '0 16px', height: 36,
+              background: creating ? 'var(--bg-elevated)' : 'var(--accent)',
+              border: '1px solid var(--accent-border)',
+              color: creating ? 'var(--text-dim)' : '#000',
+              fontWeight: 700, fontSize: 11, letterSpacing: '0.15em', cursor: creating ? 'not-allowed' : 'pointer',
+              fontFamily: 'var(--font-mono)',
+            }}>
+            {creating ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Plus size={11} />}
+            {creating ? 'CREATING...' : 'CREATE BACKUP'}
           </button>
         </div>
       </div>
 
-      <div className="bg-gray-800 rounded-xl p-4 mb-6">
-        <p className="text-sm text-gray-400">支持将数据库和配置导出为 JSON，可用于环境迁移或灾备恢复。</p>
+      {/* Info Banner */}
+      <div style={{
+        padding: '12px 16px', marginBottom: 24,
+        background: 'var(--cyan-dim)', border: '1px solid rgba(0,245,255,0.1)',
+        fontSize: 10, color: 'var(--cyan)', letterSpacing: '0.05em', lineHeight: 1.8,
+      }}>
+        PG_DUMP + AES-256 ENCRYPTION · S3/OSS UPLOAD OPTIONAL · CONFIGURE S3_ENDPOINT AND S3_ACCESS_KEY TO ENABLE REMOTE BACKUP
       </div>
 
-      {loading ? <p className="text-gray-400">加载中...</p> : items.length === 0 ? (
-        <div className="text-center py-16 bg-gray-800 rounded-xl">
-          <Database size={40} className="mx-auto text-gray-600 mb-3" />
-          <p className="text-gray-500">暂无备份</p>
-          <button onClick={create} className="mt-3 text-sm text-emerald-400 hover:underline">立即创建第一个备份</button>
+      {/* Loading */}
+      {loading && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 0', gap: 12 }}>
+          <Loader2 size={18} style={{ color: 'var(--accent)', animation: 'spin 1s linear infinite' }} />
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>LOADING...</span>
         </div>
-      ) : (
-        <div className="space-y-3">
+      )}
+
+      {/* Empty State */}
+      {!loading && items.length === 0 && (
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 0',
+          background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', gap: 12,
+        }}>
+          <Database size={28} style={{ color: 'var(--text-dim)' }} />
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>NO BACKUPS AVAILABLE</div>
+          <button onClick={create} style={{ fontSize: 10, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', letterSpacing: '0.1em' }}>
+            + CREATE FIRST BACKUP
+          </button>
+        </div>
+      )}
+
+      {/* Backup List */}
+      {!loading && items.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {items.map(b => (
-            <div key={b.id} className="bg-gray-800 rounded-xl p-4 flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-white">{b.name}</span>
-                  <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded">{b.type || 'full'}</span>
+            <div key={b.id} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div style={{
+                  width: 38, height: 38, border: '1px solid var(--border-bright)',
+                  background: 'var(--bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: 'var(--cyan)',
+                }}>
+                  <Database size={14} />
                 </div>
-                {b.size && <p className="text-xs text-gray-400 mt-1">{b.size}</p>}
-                {b.created_at && <p className="text-xs text-gray-500 mt-0.5">{b.created_at}</p>}
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>{b.name}</span>
+                    <span style={{
+                      padding: '2px 6px', border: '1px solid var(--border)',
+                      color: 'var(--cyan)', fontSize: 8, letterSpacing: '0.15em', background: 'var(--bg-base)',
+                    }}>
+                      {(b.type || 'FULL').toUpperCase()}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    {b.size && <span style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>{b.size}</span>}
+                    {b.created_at && <span style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>{b.created_at}</span>}
+                  </div>
+                </div>
               </div>
-              <div className="flex gap-2">
+              <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => restore(b.id!)} disabled={restoring === b.id}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-xs">
-                  <RefreshCw size={12} className={restoring === b.id ? 'animate-spin' : ''} />
-                  {restoring === b.id ? '恢复中...' : '恢复'}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '0 12px', height: 32,
+                    border: '1px solid var(--border-bright)', background: 'transparent',
+                    color: restoring === b.id ? 'var(--text-dim)' : 'var(--text-muted)',
+                    fontSize: 10, letterSpacing: '0.1em', cursor: restoring === b.id ? 'not-allowed' : 'pointer',
+                    fontFamily: 'var(--font-mono)',
+                  }}>
+                  <RefreshCw size={10} style={restoring === b.id ? { animation: 'spin 1s linear infinite' } : {}} />
+                  {restoring === b.id ? 'RESTORING...' : 'RESTORE'}
                 </button>
-                <button className="p-2 text-gray-400 hover:text-red-400"><Trash2 size={14} /></button>
+                <button style={{ padding: 6, color: 'var(--red)', cursor: 'pointer', background: 'none', border: '1px solid rgba(255,59,48,0.2)' }}>
+                  <Trash2 size={11} />
+                </button>
               </div>
             </div>
           ))}

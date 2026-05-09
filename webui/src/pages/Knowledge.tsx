@@ -1,116 +1,527 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api } from '../api/client'
-import { Plus, Search } from 'lucide-react'
+import { Plus, Search, Trash2, Upload, FileText, Database, X, Loader2 } from 'lucide-react'
 
 interface KB {
-  id?: string
+  id: number
   name: string
   description?: string
   embedding_model?: string
+  rerank_model?: string
+  is_active?: boolean
+}
+
+interface Doc {
+  id: number
+  kb_id: number
+  filename: string
+  file_size?: number
+  metadata_json?: { chunk_count?: number }
+  created_at?: string
+}
+
+interface QueryResult {
+  document_id: number
+  filename: string
+  chunk_index: number
+  text: string
+  score: number
+}
+
+interface ModelInfo {
+  name: string
+  model_type: 'chat' | 'embedding' | 'rerank'
+}
+
+interface ProviderOption {
+  id: number
+  name: string
+  models: ModelInfo[]
 }
 
 export default function Knowledge() {
   const [bases, setBases] = useState<KB[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState<KB>({ name: '', description: '' })
+  const [selected, setSelected] = useState<KB | null>(null)
+  const [loadingKB, setLoadingKB] = useState(true)
+  const [showKBForm, setShowKBForm] = useState(false)
+  const [kbForm, setKBForm] = useState<Partial<KB>>({ name: '', description: '', embedding_model: 'text-embedding-3-small' })
+  const [docs, setDocs] = useState<Doc[]>([])
+  const [loadingDocs, setLoadingDocs] = useState(false)
+  const [textForm, setTextForm] = useState({ filename: '', content: '' })
+  const [showTextForm, setShowTextForm] = useState(false)
+  const [ingesting, setIngesting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<any[]>([])
+  const [topK, setTopK] = useState(5)
+  const [results, setResults] = useState<QueryResult[]>([])
   const [querying, setQuerying] = useState(false)
+  const [providers, setProviders] = useState<ProviderOption[]>([])
+  const [providerId, setProviderId] = useState<number | null>(null)
 
-  const load = async () => {
+  const loadKBs = async () => {
+    setLoadingKB(true)
     try {
-      const data = await api.getKnowledgeBases() as KB[] | { bases?: KB[] }
-      setBases(Array.isArray(data) ? data : data?.bases || [])
-    } catch { setBases([]) } finally { setLoading(false) }
+      const data = await api.getKnowledgeBases() as { knowledge_bases?: KB[] }
+      const list = data?.knowledge_bases || []
+      setBases(list)
+      if (list.length > 0 && !selected) setSelected(list[0])
+    } catch { setBases([]) } finally { setLoadingKB(false) }
   }
-  useEffect(() => { load() }, [])
 
-  const submit = async () => {
-    if (!form.name) return
+  const loadDocs = async (kbId: number) => {
+    setLoadingDocs(true)
     try {
-      await api.createKnowledgeBase(form)
-      setShowForm(false); setForm({ name: '', description: '' }); load()
+      const data = await api.getDocuments(kbId) as { documents?: Doc[] }
+      setDocs(data?.documents || [])
+    } catch { setDocs([]) } finally { setLoadingDocs(false) }
+  }
+
+  const loadProviders = async () => {
+    try {
+      const data = await api.getProviders() as { providers?: ProviderOption[] }
+      setProviders(data?.providers || [])
+    } catch {}
+  }
+
+  useEffect(() => { loadKBs(); loadProviders() }, [])
+  useEffect(() => { if (selected) { loadDocs(selected.id); setResults([]) } }, [selected?.id])
+
+  const submitKB = async () => {
+    if (!kbForm.name) return alert('NAME REQUIRED')
+    try {
+      await api.createKnowledgeBase(kbForm)
+      setShowKBForm(false)
+      setKBForm({ name: '', description: '', embedding_model: 'text-embedding-3-small' })
+      loadKBs()
+    } catch (e: any) { alert(e.message) }
+  }
+
+  const deleteKB = async (kb: KB) => {
+    if (!confirm(`DELETE "${kb.name}" AND ALL ITS DOCUMENTS?`)) return
+    try {
+      await api.deleteKnowledgeBase(kb.id)
+      if (selected?.id === kb.id) setSelected(null)
+      loadKBs()
+    } catch (e: any) { alert(e.message) }
+  }
+
+  const ingestText = async () => {
+    if (!selected || !textForm.filename || !textForm.content) return alert('FILL ALL FIELDS')
+    setIngesting(true)
+    try {
+      await api.ingestText(selected.id, { filename: textForm.filename, content: textForm.content, provider_id: providerId ?? undefined })
+      setTextForm({ filename: '', content: '' })
+      setShowTextForm(false)
+      loadDocs(selected.id)
+    } catch (e: any) { alert(`INGEST FAILED: ${e.message}`) } finally { setIngesting(false) }
+  }
+
+  const uploadFile = async (file: File) => {
+    if (!selected) return
+    setIngesting(true)
+    try {
+      await api.uploadDocument(selected.id, file, providerId ?? undefined)
+      loadDocs(selected.id)
+    } catch (e: any) { alert(`UPLOAD FAILED: ${e.message}`) } finally {
+      setIngesting(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const deleteDoc = async (doc: Doc) => {
+    if (!selected) return
+    if (!confirm(`DELETE "${doc.filename}"?`)) return
+    try {
+      await api.deleteDocument(selected.id, doc.id)
+      loadDocs(selected.id)
     } catch (e: any) { alert(e.message) }
   }
 
   const search = async () => {
+    if (!selected) return alert('SELECT A KNOWLEDGE BASE FIRST')
     if (!query.trim()) return
     setQuerying(true)
     try {
-      const res = await api.queryKnowledge({ query, top_k: 5 }) as any
-      setResults(res.results || res || [])
-    } catch (e: any) { alert(e.message) }
-    finally { setQuerying(false) }
+      const res = await api.queryKnowledge({ kb_id: selected.id, query, top_k: topK, provider_id: providerId ?? undefined }) as { results: QueryResult[] }
+      setResults(res.results || [])
+    } catch (e: any) { alert(e.message) } finally { setQuerying(false) }
   }
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold">知识库</h2>
-        <button onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm">
-          <Plus size={16} /> 新增知识库
-        </button>
-      </div>
-
-      {/* Search */}
-      <div className="bg-gray-800 rounded-xl p-4 mb-6">
-        <h3 className="text-sm font-medium mb-3 text-gray-300">知识检索</h3>
-        <div className="flex gap-2">
-          <input value={query} onChange={e => setQuery(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && search()}
-            className="flex-1 bg-gray-700 rounded-lg px-3 py-2 text-sm text-white" placeholder="输入查询内容..." />
-          <button onClick={search} disabled={querying}
-            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white rounded-lg text-sm">
-            <Search size={16} />
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <div>
+          <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>SEMANTIC SEARCH</div>
+          <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>KNOWLEDGE BASE</h1>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 9, letterSpacing: '0.15em', color: 'var(--text-dim)' }}>EMBEDDING</span>
+            <select
+              value={providerId ?? ''}
+              onChange={e => setProviderId(Number(e.target.value) || null)}
+              style={{
+                height: 30, padding: '0 8px',
+                background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+                color: 'var(--text-primary)', fontSize: 10, fontFamily: 'var(--font-mono)',
+              }}>
+              {providers.length === 0 && <option value="">NOT CONFIGURED</option>}
+              {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <button
+            onClick={() => setShowKBForm(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '0 16px', height: 36,
+              background: 'var(--accent)', border: '1px solid var(--accent-border)',
+              color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.15em',
+              cursor: 'pointer', fontFamily: 'var(--font-mono)',
+              boxShadow: '0 0 16px rgba(0,255,65,0.15)',
+            }}>
+            <Plus size={13} /> NEW KB
           </button>
         </div>
-        {results.length > 0 && (
-          <div className="mt-3 space-y-2">
-            {results.map((r, i) => (
-              <div key={i} className="bg-gray-700 rounded-lg p-3">
-                <p className="text-sm text-gray-200">{typeof r === 'string' ? r : r.content || r.text || JSON.stringify(r)}</p>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
-      {showForm && (
-        <div className="bg-gray-800 rounded-xl p-6 mb-6 space-y-4">
-          <div>
-            <label className="text-xs text-gray-400 mb-1 block">名称</label>
-            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm text-white" />
+      {/* New KB form */}
+      {showKBForm && (
+        <div style={{
+          marginBottom: 24, padding: 24,
+          background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>NEW KNOWLEDGE BASE</h3>
+            <button onClick={() => setShowKBForm(false)} style={{ color: 'var(--text-muted)', cursor: 'pointer', background: 'none', border: 'none', padding: 4 }}>
+              <X size={14} />
+            </button>
           </div>
-          <div>
-            <label className="text-xs text-gray-400 mb-1 block">描述</label>
-            <input value={form.description || ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-              className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm text-white" />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>NAME *</label>
+              <input value={kbForm.name || ''} onChange={e => setKBForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="e.g. Threat Intel DB"
+                style={{
+                  width: '100%', height: 38, padding: '0 12px',
+                  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+                  color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
+                  fontFamily: 'var(--font-mono)',
+                }} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>EMBEDDING MODEL</label>
+              <select value={kbForm.embedding_model || ''} onChange={e => setKBForm(f => ({ ...f, embedding_model: e.target.value }))}
+                style={{
+                  width: '100%', height: 38, padding: '0 12px',
+                  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+                  color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
+                  fontFamily: 'var(--font-mono)',
+                }}>
+                <option value="">— None —</option>
+                {providers.flatMap(p => p.models || []).filter((m: ModelInfo) => m.model_type === 'embedding').map((m: ModelInfo) => (
+                  <option key={m.name} value={m.name}>{m.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>RERANK MODEL</label>
+              <select value={kbForm.rerank_model || ''} onChange={e => setKBForm(f => ({ ...f, rerank_model: e.target.value }))}
+                style={{
+                  width: '100%', height: 38, padding: '0 12px',
+                  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+                  color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
+                  fontFamily: 'var(--font-mono)',
+                }}>
+                <option value="">— None —</option>
+                {providers.flatMap(p => p.models || []).filter((m: ModelInfo) => m.model_type === 'rerank').map((m: ModelInfo) => (
+                  <option key={m.name} value={m.name}>{m.name}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>DESCRIPTION</label>
+              <input value={kbForm.description || ''} onChange={e => setKBForm(f => ({ ...f, description: e.target.value }))}
+                style={{
+                  width: '100%', height: 38, padding: '0 12px',
+                  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+                  color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
+                  fontFamily: 'var(--font-mono)',
+                }} />
+            </div>
           </div>
-          <div className="flex gap-2 justify-end">
-            <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm">取消</button>
-            <button onClick={submit} className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-sm">创建</button>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 20 }}>
+            <button onClick={() => setShowKBForm(false)}
+              style={{
+                padding: '0 16px', height: 36,
+                border: '1px solid var(--border-bright)', background: 'transparent',
+                color: 'var(--text-muted)', fontSize: 11, letterSpacing: '0.15em', cursor: 'pointer',
+                fontFamily: 'var(--font-mono)',
+              }}>
+              CANCEL
+            </button>
+            <button onClick={submitKB}
+              style={{
+                padding: '0 16px', height: 36,
+                border: '1px solid var(--accent-border)', background: 'var(--accent)',
+                color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.15em', cursor: 'pointer',
+                fontFamily: 'var(--font-mono)',
+              }}>
+              CREATE
+            </button>
           </div>
         </div>
       )}
 
-      {loading ? <p className="text-gray-400">加载中...</p> : bases.length === 0 ? <p className="text-gray-500">暂无知识库</p> : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {bases.map(k => (
-            <div key={k.id} className="bg-gray-800 rounded-xl p-4">
-              <div className="flex items-start justify-between">
-                <div>
-                  <span className="font-medium text-white">{k.name}</span>
-                  <p className="text-xs text-gray-400 mt-1">{k.description || '—'}</p>
-                  {k.embedding_model && <p className="text-xs text-gray-500 mt-1">模型: {k.embedding_model}</p>}
+      <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 16 }}>
+        {/* Sidebar: KB list */}
+        <div>
+          <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>KNOWLEDGE BASES</div>
+          {loadingKB ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '20px 0' }}>
+              <Loader2 size={14} style={{ color: 'var(--accent)', animation: 'spin 1s linear infinite' }} />
+            </div>
+          ) : bases.length === 0 ? (
+            <div style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>NO BASES DEFINED</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {bases.map(k => (
+                <div
+                  key={k.id}
+                  onClick={() => setSelected(k)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '10px 12px', cursor: 'pointer',
+                    background: selected?.id === k.id ? 'var(--accent-dim)' : 'var(--bg-surface)',
+                    borderLeft: selected?.id === k.id ? '2px solid var(--accent)' : '2px solid transparent',
+                    borderBottom: '1px solid var(--border)',
+                    transition: 'all 0.15s',
+                  }}>
+                  <Database size={12} style={{ color: selected?.id === k.id ? 'var(--accent)' : 'var(--text-muted)', flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 11, color: selected?.id === k.id ? 'var(--accent)' : 'var(--text-primary)', letterSpacing: '0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k.name}</div>
+                    {k.embedding_model && <div style={{ fontSize: 9, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k.embedding_model}</div>}
+                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); deleteKB(k) }}
+                    style={{ padding: 2, color: 'var(--red)', cursor: 'pointer', background: 'none', border: 'none', flexShrink: 0 }}>
+                    <Trash2 size={10} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Main */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {!selected ? (
+            <div style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              padding: 48, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
+              gap: 12,
+            }}>
+              <Database size={28} style={{ color: 'var(--text-dim)' }} />
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>SELECT OR CREATE A KNOWLEDGE BASE</div>
+            </div>
+          ) : (
+            <>
+              {/* KB Header */}
+              <div style={{ padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em', marginBottom: 4 }}>{selected.name}</div>
+                    {selected.description && <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>{selected.description}</div>}
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>{docs.length} DOCS</div>
                 </div>
               </div>
-            </div>
-          ))}
+
+              {/* Query */}
+              <div style={{ padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <Search size={13} style={{ color: 'var(--accent)' }} />
+                  <span style={{ fontSize: 11, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>SEMANTIC SEARCH</span>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  <input value={query} onChange={e => setQuery(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && search()}
+                    placeholder="ENTER QUERY..."
+                    style={{
+                      flex: 1, height: 36, padding: '0 12px',
+                      background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+                      color: 'var(--text-primary)', fontSize: 11, letterSpacing: '0.05em',
+                      fontFamily: 'var(--font-mono)',
+                    }} />
+                  <input type="number" min={1} max={20} value={topK}
+                    onChange={e => setTopK(Number(e.target.value))}
+                    title="TOP K"
+                    style={{
+                      width: 60, height: 36, padding: '0 8px',
+                      background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+                      color: 'var(--text-primary)', fontSize: 11, textAlign: 'center',
+                      fontFamily: 'var(--font-mono)',
+                    }} />
+                  <button onClick={search} disabled={querying || docs.length === 0}
+                    style={{
+                      padding: '0 14px', height: 36,
+                      background: querying ? 'var(--bg-elevated)' : 'var(--accent)',
+                      border: '1px solid var(--accent-border)',
+                      color: querying ? 'var(--text-dim)' : '#000',
+                      fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', cursor: querying ? 'not-allowed' : 'pointer',
+                      fontFamily: 'var(--font-mono)',
+                    }}>
+                    {querying ? 'SEARCHING...' : 'SEARCH'}
+                  </button>
+                </div>
+                {results.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {results.map((r, i) => (
+                      <div key={i} style={{
+                        padding: 12,
+                        background: 'var(--bg-base)', border: '1px solid var(--border)',
+                        borderLeft: '2px solid var(--accent)',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                          <span style={{ fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>{r.filename} · CHUNK #{r.chunk_index}</span>
+                          <span style={{
+                            display: 'inline-block', padding: '1px 6px',
+                            background: 'var(--accent-dim)', border: '1px solid var(--accent-border)',
+                            color: 'var(--accent)', fontSize: 9, letterSpacing: '0.1em',
+                          }}>
+                            {(r.score * 100).toFixed(1)}%
+                          </span>
+                        </div>
+                        <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{r.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {docs.length === 0 && (
+                  <div style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.1em', textAlign: 'center', padding: '8px 0' }}>
+                    UPLOAD DOCUMENTS BEFORE SEARCHING
+                  </div>
+                )}
+              </div>
+
+              {/* Docs */}
+              <div style={{ padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <FileText size={13} style={{ color: 'var(--accent)' }} />
+                    <span style={{ fontSize: 11, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>DOCUMENTS</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".txt,.md,.csv,.json,text/*"
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f) }}
+                      style={{ display: 'none' }}
+                    />
+                    <button onClick={() => fileInputRef.current?.click()} disabled={ingesting}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '0 10px', height: 30,
+                        border: '1px solid var(--border-bright)', background: 'transparent',
+                        color: 'var(--text-muted)', fontSize: 10, letterSpacing: '0.1em', cursor: ingesting ? 'not-allowed' : 'pointer',
+                        fontFamily: 'var(--font-mono)',
+                      }}>
+                      <Upload size={10} /> UPLOAD FILE
+                    </button>
+                    <button onClick={() => setShowTextForm(s => !s)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '0 10px', height: 30,
+                        background: 'var(--accent)', border: '1px solid var(--accent-border)',
+                        color: '#000', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', cursor: 'pointer',
+                        fontFamily: 'var(--font-mono)',
+                      }}>
+                      <Plus size={10} /> PASTE TEXT
+                    </button>
+                  </div>
+                </div>
+
+                {showTextForm && (
+                  <div style={{ padding: 12, background: 'var(--bg-base)', border: '1px solid var(--border)', marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <input
+                      value={textForm.filename}
+                      onChange={e => setTextForm(f => ({ ...f, filename: e.target.value }))}
+                      placeholder="FILENAME (e.g. incident-response.md)"
+                      style={{
+                        width: '100%', height: 34, padding: '0 10px',
+                        background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+                        color: 'var(--text-primary)', fontSize: 11, letterSpacing: '0.05em',
+                        fontFamily: 'var(--font-mono)',
+                      }} />
+                    <textarea
+                      value={textForm.content}
+                      onChange={e => setTextForm(f => ({ ...f, content: e.target.value }))}
+                      placeholder="PASTE TEXT CONTENT..."
+                      rows={6}
+                      style={{
+                        width: '100%', padding: '8px 10px',
+                        background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+                        color: 'var(--text-primary)', fontSize: 11, letterSpacing: '0.05em',
+                        fontFamily: 'var(--font-mono)', resize: 'none',
+                      }} />
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                      <button onClick={() => setShowTextForm(false)}
+                        style={{
+                          padding: '0 12px', height: 30,
+                          border: '1px solid var(--border-bright)', background: 'transparent',
+                          color: 'var(--text-muted)', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer',
+                          fontFamily: 'var(--font-mono)',
+                        }}>
+                        CANCEL
+                      </button>
+                      <button onClick={ingestText} disabled={ingesting}
+                        style={{
+                          padding: '0 12px', height: 30,
+                          background: 'var(--accent)', border: '1px solid var(--accent-border)',
+                          color: '#000', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', cursor: ingesting ? 'not-allowed' : 'pointer',
+                          fontFamily: 'var(--font-mono)',
+                        }}>
+                        {ingesting ? 'IMPORTING...' : 'IMPORT'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {loadingDocs ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '20px 0' }}>
+                    <Loader2 size={14} style={{ color: 'var(--accent)', animation: 'spin 1s linear infinite' }} />
+                  </div>
+                ) : docs.length === 0 ? (
+                  <div style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.1em', textAlign: 'center', padding: '20px 0' }}>NO DOCUMENTS — UPLOAD OR PASTE CONTENT</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {docs.map(d => (
+                      <div key={d.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '10px 12px',
+                        background: 'var(--bg-base)', border: '1px solid var(--border)',
+                      }}>
+                        <FileText size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-primary)', letterSpacing: '0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.filename}</div>
+                          <div style={{ fontSize: 9, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+                            {d.metadata_json?.chunk_count ?? 0} CHUNKS
+                            {d.file_size != null && ` · ${(d.file_size / 1024).toFixed(1)} KB`}
+                          </div>
+                        </div>
+                        <button onClick={() => deleteDoc(d)} style={{ padding: 4, color: 'var(--red)', cursor: 'pointer', background: 'none', border: 'none' }}>
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }

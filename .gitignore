@@ -40,3 +40,7 @@ build/
 # Local
 *.bak
 *.tmp
+.worktrees/
+
+# Claude Code
+.claude/

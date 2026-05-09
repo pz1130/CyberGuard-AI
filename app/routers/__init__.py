@@ -14,6 +14,11 @@ from app.routers import (
     config,
     providers,
     mcp,
+    envvars,
+    approval,
+    master_config,
+    conversations,
+    n8n,
 )
 
 __all__ = [
@@ -31,4 +36,9 @@ __all__ = [
     "config",
     "providers",
     "mcp",
+    "envvars",
+    "approval",
+    "master_config",
+    "conversations",
+    "n8n",
 ]

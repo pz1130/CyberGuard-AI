@@ -1,19 +1,24 @@
 """Knowledge base and document management router."""
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+
 from app.core.dependencies import get_db, require_permission
 from app.core.rbac import Permission
 from app.schemas.knowledge import (
     KnowledgeBaseCreate, KnowledgeBaseRead, KnowledgeBaseUpdate, KnowledgeBaseListResponse,
-    DocumentRead, DocumentListResponse,
+    DocumentRead, DocumentListResponse, DocumentTextIngestRequest, DocumentUploadResponse,
     KnowledgeQueryRequest, KnowledgeQueryResponse,
 )
 from app.models.knowledge import KnowledgeBase, Document
-from sqlalchemy import select, func
+from app.services.knowledge_service import get_knowledge_service
 
 router = APIRouter()
 
 
+# ---------------------------------------------------------------------------
+# Knowledge Base CRUD
+# ---------------------------------------------------------------------------
 @router.get("/knowledge/bases", response_model=KnowledgeBaseListResponse)
 async def list_knowledge_bases(skip: int = 0, limit: int = 50, db: AsyncSession = Depends(get_db), _=Depends(require_permission(Permission.KNOWLEDGE_READ))):
     total_result = await db.execute(select(func.count(KnowledgeBase.id)))
@@ -37,8 +42,7 @@ async def create_knowledge_base(body: KnowledgeBaseCreate, db: AsyncSession = De
 
 @router.get("/knowledge/bases/{kb_id}", response_model=KnowledgeBaseRead)
 async def get_knowledge_base(kb_id: int, db: AsyncSession = Depends(get_db), _=Depends(require_permission(Permission.KNOWLEDGE_READ))):
-    result = await db.execute(select(KnowledgeBase).where(KnowledgeBase.id == kb_id))
-    kb = result.scalar_one_or_none()
+    kb = await db.get(KnowledgeBase, kb_id)
     if not kb:
         raise HTTPException(status_code=404, detail="Knowledge base not found")
     return KnowledgeBaseRead.model_validate(kb)
@@ -46,8 +50,7 @@ async def get_knowledge_base(kb_id: int, db: AsyncSession = Depends(get_db), _=D
 
 @router.put("/knowledge/bases/{kb_id}", response_model=KnowledgeBaseRead)
 async def update_knowledge_base(kb_id: int, body: KnowledgeBaseUpdate, db: AsyncSession = Depends(get_db), _=Depends(require_permission(Permission.KNOWLEDGE_WRITE))):
-    result = await db.execute(select(KnowledgeBase).where(KnowledgeBase.id == kb_id))
-    kb = result.scalar_one_or_none()
+    kb = await db.get(KnowledgeBase, kb_id)
     if not kb:
         raise HTTPException(status_code=404, detail="Knowledge base not found")
     for key, value in body.model_dump(exclude_unset=True).items():
@@ -59,35 +62,172 @@ async def update_knowledge_base(kb_id: int, body: KnowledgeBaseUpdate, db: Async
 
 @router.delete("/knowledge/bases/{kb_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_knowledge_base(kb_id: int, db: AsyncSession = Depends(get_db), _=Depends(require_permission(Permission.KNOWLEDGE_WRITE))):
-    result = await db.execute(select(KnowledgeBase).where(KnowledgeBase.id == kb_id))
-    kb = result.scalar_one_or_none()
+    kb = await db.get(KnowledgeBase, kb_id)
     if not kb:
         raise HTTPException(status_code=404, detail="Knowledge base not found")
     await db.delete(kb)
     await db.commit()
 
 
+# ---------------------------------------------------------------------------
+# Documents
+# ---------------------------------------------------------------------------
 @router.get("/knowledge/bases/{kb_id}/documents", response_model=DocumentListResponse)
 async def list_documents(kb_id: int, skip: int = 0, limit: int = 50, db: AsyncSession = Depends(get_db), _=Depends(require_permission(Permission.KNOWLEDGE_READ))):
     total_result = await db.execute(select(func.count(Document.id)).where(Document.kb_id == kb_id))
     total = total_result.scalar()
-    result = await db.execute(select(Document).where(Document.kb_id == kb_id).offset(skip).limit(limit))
+    result = await db.execute(
+        select(Document).where(Document.kb_id == kb_id).offset(skip).limit(limit).order_by(Document.created_at.desc())
+    )
     docs = result.scalars().all()
     return DocumentListResponse(total=total, documents=[DocumentRead.model_validate(d) for d in docs])
 
 
+@router.post(
+    "/knowledge/bases/{kb_id}/documents/text",
+    response_model=DocumentUploadResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def ingest_text_document(
+    kb_id: int,
+    body: DocumentTextIngestRequest,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_permission(Permission.KNOWLEDGE_WRITE)),
+):
+    """Ingest plain text as a new document (chunk + embed + store)."""
+    service = get_knowledge_service()
+    try:
+        doc = await service.ingest_document(
+            db=db,
+            kb_id=kb_id,
+            filename=body.filename,
+            content=body.content,
+            mime_type=body.mime_type,
+            provider_id=body.provider_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ingest failed: {e}")
+
+    chunk_count = (doc.metadata_json or {}).get("chunk_count", 0)
+    return DocumentUploadResponse(
+        document_id=doc.id,
+        filename=doc.filename,
+        file_hash=doc.file_hash or "",
+        status="ingested",
+        chunks_count=chunk_count,
+    )
+
+
+@router.post(
+    "/knowledge/bases/{kb_id}/documents/upload",
+    response_model=DocumentUploadResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_document(
+    kb_id: int,
+    file: UploadFile = File(...),
+    provider_id: int | None = Form(default=None),
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_permission(Permission.KNOWLEDGE_WRITE)),
+):
+    """
+    Upload a text-based document file (txt / md / csv / json).
+    Binary formats (PDF, docx) are not supported in MVP.
+    """
+    raw = await file.read()
+    try:
+        content = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=400,
+            detail="Only UTF-8 text files are supported (txt/md/csv/json). Use /text endpoint for raw text.",
+        )
+
+    service = get_knowledge_service()
+    try:
+        doc = await service.ingest_document(
+            db=db,
+            kb_id=kb_id,
+            filename=file.filename,
+            content=content,
+            mime_type=file.content_type,
+            provider_id=provider_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ingest failed: {e}")
+
+    chunk_count = (doc.metadata_json or {}).get("chunk_count", 0)
+    return DocumentUploadResponse(
+        document_id=doc.id,
+        filename=doc.filename,
+        file_hash=doc.file_hash or "",
+        status="ingested",
+        chunks_count=chunk_count,
+    )
+
+
+@router.delete(
+    "/knowledge/bases/{kb_id}/documents/{doc_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_document(
+    kb_id: int,
+    doc_id: int,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_permission(Permission.KNOWLEDGE_WRITE)),
+):
+    """Delete a document from the knowledge base."""
+    result = await db.execute(
+        select(Document).where(Document.id == doc_id, Document.kb_id == kb_id)
+    )
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    await db.delete(doc)
+    await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Query
+# ---------------------------------------------------------------------------
 @router.post("/knowledge/query", response_model=KnowledgeQueryResponse)
-async def query_knowledge(body: KnowledgeQueryRequest, db: AsyncSession = Depends(get_db), _=Depends(require_permission(Permission.KNOWLEDGE_READ))):
+async def query_knowledge(
+    body: KnowledgeQueryRequest,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_permission(Permission.KNOWLEDGE_READ)),
+):
     """
-    Query knowledge base using embedding + rerank.
-    For MVP, returns a stub response. Full implementation routes to
-    the configured third-party embedding/rerank API.
+    Embed the query and return the top-k most similar chunks
+    from the specified knowledge base.
     """
-    # TODO: Integrate with user-configured embedding API (configured via /providers)
-    # For now, return a stub indicating the query was received
+    service = get_knowledge_service()
+    try:
+        results = await service.query(
+            db=db,
+            kb_id=body.kb_id,
+            query=body.query,
+            top_k=body.top_k,
+            similarity_threshold=body.similarity_threshold,
+            provider_id=body.provider_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        return KnowledgeQueryResponse(
+            kb_id=body.kb_id,
+            query=body.query,
+            total=0,
+            results=[],
+            message=f"Query failed: {e}. Check that an AI Provider with embedding support is configured.",
+        )
+
     return KnowledgeQueryResponse(
+        kb_id=body.kb_id,
         query=body.query,
-        results=[],
-        total=0,
-        message="Embedding API not yet configured. Please configure a provider in AI Provider Config.",
+        total=len(results),
+        results=results,
     )

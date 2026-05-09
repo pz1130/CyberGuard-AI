@@ -99,16 +99,33 @@ class KnowledgeQueryRequest(BaseModel):
     kb_id: int
     query: str = Field(..., min_length=1)
     top_k: int = Field(default=5, ge=1, le=100)
-    similarity_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    similarity_threshold: float = Field(default=0.0, ge=0.0, le=1.0)
+    provider_id: Optional[int] = None
 
 
 class KnowledgeQueryResponse(BaseModel):
     """Knowledge base query response schema."""
-    results: List[Dict[str, Any]]
-    query: str
     kb_id: int
+    query: str
+    total: int
+    results: List[Dict[str, Any]]
+    message: Optional[str] = None
+
+
+class DocumentTextIngestRequest(BaseModel):
+    """Ingest plain text content as a document."""
+    filename: str = Field(..., min_length=1, max_length=255)
+    content: str = Field(..., min_length=1)
+    mime_type: Optional[str] = "text/plain"
+    provider_id: Optional[int] = None
+
 
 # Aliases
 KnowledgeBaseRead = KnowledgeBaseResponse
 DocumentRead = DocumentResponse
-DocumentListResponse = list[DocumentResponse]
+
+
+class DocumentListResponse(BaseModel):
+    """Paginated document list response."""
+    total: int
+    documents: list[DocumentResponse]

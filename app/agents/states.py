@@ -35,7 +35,7 @@ class MasterAgentState(TypedDict, total=False):
 
     # Parsed intent
     intent: Optional[str]
-    task_plan: Optional[List[Dict[str, Any]]]  # [{"agent_id": 1, "task": "..."}]
+    task_plan: Optional[List[Dict[str, Any]]]  # [{"agent_type": "threat_intel", "task": "...", "requires_approval": false}]
 
     # Sub-agent results
     sub_results: Dict[int, Any]  # agent_id -> result
@@ -66,7 +66,22 @@ class MasterAgentState(TypedDict, total=False):
 
     # Metadata
     request_id: str
+
+    # LLM provider selection
+    provider_id: Optional[int]
+    model: Optional[str]
     timestamp: str
+
+    # Conversation history (list of {"role": "user"/"assistant", "content": str})
+    # Injected from the conversations table so the LLM has multi-turn memory
+    conversation_history: Optional[List[Dict[str, Any]]]
+
+    # Per-conversation config overrides
+    system_prompt_override: Optional[str]
+    intent_parser_prompt_override: Optional[str]
+    summarizer_prompt_override: Optional[str]
+    model_override: Optional[str]
+    temperature_override: Optional[float]
 
 
 class SubAgentResult(TypedDict):

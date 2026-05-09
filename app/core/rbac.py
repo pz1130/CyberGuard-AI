@@ -44,6 +44,10 @@ class Permission(str, Enum):
     # Audit
     AUDIT_READ = "audit:read"
 
+    # Settings (env vars, system config)
+    SETTINGS_READ = "settings:read"
+    SETTINGS_WRITE = "settings:write"
+
     # Admin (encryption key management)
     ADMIN_ALL = "admin:all"
 
@@ -56,7 +60,9 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.SKILL_READ, Permission.SKILL_WRITE,
         Permission.KNOWLEDGE_READ, Permission.KNOWLEDGE_WRITE,
         Permission.TASK_READ, Permission.TASK_WRITE, Permission.TASK_EXECUTE,
-        Permission.AUDIT_READ, Permission.ADMIN_ALL,
+        Permission.AUDIT_READ,
+        Permission.SETTINGS_READ, Permission.SETTINGS_WRITE,
+        Permission.ADMIN_ALL,
     },
     Role.OPERATOR: {
         Permission.AGENT_READ, Permission.AGENT_EXECUTE,

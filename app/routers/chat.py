@@ -3,12 +3,14 @@ import uuid
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.dependencies import get_db, require_permission
+
+from app.core.dependencies import get_db, rate_limit, require_permission
 from app.core.rbac import Permission
+from app.core.auth import AuthenticatedUser
+from app.core.guardrails import check_prompt_sync, GuardrailResult
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.schemas.task import TaskRead, TaskStatus
 from app.models.agent import AgentExecution
-from app.agents.master import get_master_agent
 
 router = APIRouter()
 
@@ -17,53 +19,64 @@ router = APIRouter()
 async def chat(
     body: ChatRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_permission(Permission.TASK_EXECUTE)),
+    current_user: AuthenticatedUser = Depends(
+        rate_limit(requests_per_minute=30, requests_per_hour=500, burst_limit=5)(
+            require_permission(Permission.TASK_EXECUTE)
+        )
+    ),
 ):
     """
-    Submit a task to the Master Agent.
-    Returns a task_id for polling the result.
+    Submit a task to the Master Agent via Celery worker.
+    Returns a task_id (execution_id) for polling the result.
     The Master Agent will parse intent, route to sub-agents, and return results.
     """
-    master_agent = get_master_agent()
-    user_id = int(current_user["sub"])
+    user_id = current_user.user_id
+
+    # P1-4: Prompt injection guardrail (synchronous, no LLM classifier in REST path)
+    guardrail_result: GuardrailResult = check_prompt_sync(body.message)
+    if guardrail_result.blocked:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Input blocked by security filter: {guardrail_result.message} "
+                f"(risk={guardrail_result.risk_level}, score={guardrail_result.score})"
+            ),
+        )
+    # Log medium/high risk (non-blocking) for audit
+    if guardrail_result.risk_level in ("high", "critical"):
+        import logging
+        logging.getLogger(__name__).warning(
+            f"[guardrail] user_id={user_id} risk={guardrail_result.risk_level} "
+            f"score={guardrail_result.score} flags={guardrail_result.flags} "
+            f"message={guardrail_result.message}"
+        )
 
     # Create execution record
     execution_id = str(uuid.uuid4())
+    agent_id_for_exec = None  # Master Agent has no agent_configs row
     execution = AgentExecution(
         execution_id=execution_id,
-        agent_id=None,  # Master agent execution
+        agent_id=agent_id_for_exec,
         status="pending",
-        input_data={"user_input": body.message, "mode": body.mode},
+        input_data={"user_input": body.message, "mode": body.mode, "provider_id": body.provider_id, "model": body.model},
     )
     db.add(execution)
     await db.commit()
 
-    # Run master agent (async, fire-and-forget for MVP; use task queue in production)
-    try:
-        result = await master_agent.run(
-            user_input=body.message,
-            user_id=user_id,
-            mode=body.mode or "normal",
-        )
+    # Dispatch to Celery worker — returns immediately with 202
+    from app.workers.tasks import run_master_agent_task
+    run_master_agent_task.apply_async(
+        args=[execution_id, body.message, user_id],
+        kwargs={
+            "mode": body.mode or "normal",
+            "provider_id": body.provider_id,
+            "model": body.model,
+            "conversation_id": body.conversation_id,
+        },
+    )
 
-        # Update execution with result
-        execution.status = "completed"
-        execution.output_data = result
-        execution.completed_at = datetime.utcnow()
-        await db.commit()
-
-        return ChatResponse(
-            task_id=execution_id,
-            status="completed",
-            message=result.get("final_summary", ""),
-            intent=result.get("intent"),
-            risk_score=result.get("risk_score"),
-            action_items=result.get("action_items", []),
-        )
-
-    except Exception as e:
-        execution.status = "failed"
-        execution.error_message = str(e)
-        execution.completed_at = datetime.utcnow()
-        await db.commit()
-        raise HTTPException(status_code=500, detail=f"Master agent execution failed: {e}")
+    return ChatResponse(
+        task_id=execution_id,
+        status="pending",
+        message="Task dispatched to worker",
+    )

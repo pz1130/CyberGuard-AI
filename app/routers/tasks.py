@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_db, require_permission
 from app.core.rbac import Permission
-from app.schemas.task import TaskRead, TaskListResponse
+from app.schemas.task import ExecutionRead, TaskListResponse
 from app.models.agent import AgentExecution
 from sqlalchemy import select, func
 
@@ -26,10 +26,10 @@ async def list_tasks(
         .offset(skip).limit(limit)
     )
     tasks = result.scalars().all()
-    return TaskListResponse(total=total, tasks=[TaskRead.model_validate(t) for t in tasks])
+    return TaskListResponse(total=total, tasks=[ExecutionRead.model_validate(t) for t in tasks])
 
 
-@router.get("/tasks/{task_id}", response_model=TaskRead)
+@router.get("/tasks/{task_id}", response_model=ExecutionRead)
 async def get_task(
     task_id: str,
     db: AsyncSession = Depends(get_db),
@@ -42,4 +42,4 @@ async def get_task(
     task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    return TaskRead.model_validate(task)
+    return ExecutionRead.model_validate(task)

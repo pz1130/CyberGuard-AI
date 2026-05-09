@@ -2,15 +2,20 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from passlib.context import CryptContext
+import bcrypt
 
-from app.core.dependencies import get_db, require_role
+from app.core.dependencies import get_db, get_current_user, require_role
+from app.core.auth import AuthenticatedUser
 from app.core.rbac import Role
 from app.schemas.user import UserCreate, UserRead, UserUpdate, UserListResponse
 from app.models.user import User
+from sqlalchemy import select
 
 router = APIRouter()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 @router.get("/users", response_model=UserListResponse, dependencies=[Depends(require_role(Role.ADMIN))])
@@ -48,7 +53,7 @@ async def create_user(
         if existing_email.scalar_one_or_none():
             raise HTTPException(status_code=400, detail="Email already exists")
 
-    hashed = pwd_context.hash(body.password)
+    hashed = hash_password(body.password)
     user = User(
         username=body.username,
         email=body.email,
@@ -65,10 +70,10 @@ async def create_user(
 @router.get("/users/me", response_model=UserRead)
 async def get_me(
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_role(Role.VIEWER)),
+    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     """Get current authenticated user."""
-    result = await db.execute(select(User).where(User.id == int(current_user["sub"])))
+    result = await db.execute(select(User).where(User.id == current_user.user_id))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -111,7 +116,7 @@ async def update_user(
     if body.is_active is not None:
         user.is_active = body.is_active
     if body.password:
-        user.hashed_password = pwd_context.hash(body.password)
+        user.hashed_password = hash_password(body.password)
 
     await db.commit()
     await db.refresh(user)

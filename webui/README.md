@@ -1,73 +1,55 @@
-# React + TypeScript + Vite
+# CyberGuard AI - WebUI
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + TypeScript + Vite SPA for the CyberGuard AI Agent Platform.
 
-Currently, two official plugins are available:
+## Quick Start
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+### Development
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Open **http://localhost:3000**
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Default admin credentials are printed to the console on first backend start (randomly generated password).
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Production Build
+
+```bash
+npm run build
+npm run preview
 ```
+
+The production build is served by the Docker container on port 8080 (proxied to 3000 in docker-compose).
+
+## Architecture
+
+- `src/App.tsx` — Root component with tab-based routing
+- `src/pages/` — One React component per page/tab
+- `src/components/` — Shared components (Sidebar, Header)
+- `src/api/client.ts` — API client (fetch wrappers for all endpoints)
+- `src/i18n/` — i18next translations (Chinese / English)
+- `vite.config.ts` — Vite config with API proxy to FastAPI backend
+
+The Vite dev server proxies `/api/*` → `http://localhost:8000/api/v1/*` and `/ws/*` → `ws://localhost:8000/ws/*`.
+
+## Pages
+
+| Page | Description |
+|------|-------------|
+| Chat | Master Agent conversation interface |
+| AI Provider 管理 | Configure LLM providers (OpenAI, Anthropic, custom) |
+| Sub-Agent 管理 | Register and manage remote sub-agents |
+| Skill / Tool Pool | Manage available skills and tools as MD files |
+| Knowledge Base | Upload and query documents with embeddings |
+| 群聊室 | Real-time multi-agent group chat via WebSocket |
+| 定时任务 | Schedule tasks with cron expressions |
+| MCP | Model Context Protocol servers and tools |
+| 环境变量 | Encrypted environment variables for agents |
+| 安全 | RBAC, encryption status, security settings |
+| Token 消耗 | Track API token usage per user/provider |
+| 备份 | pg_dump + AES-256 backup/restore |
+| 审计日志 | Full audit trail of all operations |
+| 用户管理 | RBAC user and role management |

@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api/client'
-import { Trash2, Plus, Edit2 } from 'lucide-react'
+import { Trash2, Plus, Edit2, Clock, X, Loader2 } from 'lucide-react'
 
 interface Task {
-  id?: string
+  id?: number
+  task_id?: string
   name: string
   task_type: string
-  cron?: string
-  agent_id?: string
-  payload?: any
-  is_active?: boolean
-  next_run?: string
+  description?: string
+  cron_expression?: string
+  agent_id?: number
+  task_config?: any
+  is_active: boolean
+  next_run_at?: string
 }
 
 export default function Schedule() {
@@ -18,89 +20,208 @@ export default function Schedule() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<string | null>(null)
-  const [form, setForm] = useState<Task>({ name: '', task_type: 'scheduled', cron: '' })
+  const [form, setForm] = useState<Task>({
+    name: '',
+    task_type: 'agent_execution',
+    cron_expression: '',
+    is_active: true,
+    task_config: {},
+  })
 
   const load = async () => {
     try {
-      const data = await api.getScheduledTasks() as Task[] | { tasks?: Task[] }
-      setItems(Array.isArray(data) ? data : data?.tasks || [])
+      const data = await api.getScheduledTasks() as Task[] | { tasks?: Task[]; schedules?: Task[] }
+      const raw = Array.isArray(data) ? data : (data?.tasks || data?.schedules || [])
+      setItems(raw)
     } catch { setItems([]) } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [])
 
   const submit = async () => {
-    if (!form.name) return
+    if (!form.name || !form.cron_expression) return
+    const body = {
+      name: form.name,
+      description: form.description || null,
+      cron_expression: form.cron_expression,
+      task_type: form.task_type,
+      agent_id: form.agent_id ?? null,
+      task_config: form.task_config || {},
+      is_active: form.is_active,
+    }
     try {
-      if (editing) await api.updateScheduledTask(editing, form)
-      else await api.createScheduledTask(form)
+      if (editing) await api.updateScheduledTask(editing, body)
+      else await api.createScheduledTask(body)
       setShowForm(false); setEditing(null)
-      setForm({ name: '', task_type: 'scheduled', cron: '' }); load()
+      setForm({
+        name: '',
+        task_type: 'agent_execution',
+        cron_expression: '',
+        is_active: true,
+        task_config: {},
+      }); load()
     } catch (e: any) { alert(e.message) }
   }
 
-  const del = async (id: string) => { if (confirm('确认删除？')) { await api.deleteScheduledTask(id); load() } }
+  const del = async (id: string) => { if (confirm('CONFIRM DELETION?')) { await api.deleteScheduledTask(id); load() } }
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold">定时任务</h2>
-        <button onClick={() => { setShowForm(true); setEditing(null); setForm({ name: '', task_type: 'scheduled', cron: '' }) }}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm">
-          <Plus size={16} /> 新增任务
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <div>
+          <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>AUTOMATION</div>
+          <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>SCHEDULED TASKS</h1>
+        </div>
+        <button
+          onClick={() => { setShowForm(true); setEditing(null); setForm({ name: '', task_type: 'agent_execution', cron_expression: '', is_active: true, task_config: {} }) }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '0 16px', height: 36,
+            background: 'var(--accent)', border: '1px solid var(--accent-border)',
+            color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.15em',
+            cursor: 'pointer', fontFamily: 'var(--font-mono)',
+            boxShadow: '0 0 16px rgba(0,255,65,0.15)',
+          }}>
+          <Plus size={13} /> NEW TASK
         </button>
       </div>
 
+      {/* Form */}
       {showForm && (
-        <div className="bg-gray-800 rounded-xl p-6 mb-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+        <div style={{
+          marginBottom: 24, padding: 24,
+          background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>{editing ? 'EDIT TASK' : 'NEW TASK'}</h3>
+            <button onClick={() => { setShowForm(false); setEditing(null) }}
+              style={{ color: 'var(--text-muted)', cursor: 'pointer', background: 'none', border: 'none', padding: 4 }}>
+              <X size={14} />
+            </button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">任务名称</label>
+              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>TASK NAME</label>
               <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm text-white" />
+                placeholder="e.g. Log Analysis"
+                style={{
+                  width: '100%', height: 38, padding: '0 12px',
+                  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+                  color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
+                  fontFamily: 'var(--font-mono)',
+                }} />
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">类型</label>
+              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>TYPE</label>
               <select value={form.task_type} onChange={e => setForm(f => ({ ...f, task_type: e.target.value }))}
-                className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm text-white">
-                <option value="scheduled">定时执行</option>
-                <option value="periodic">周期执行</option>
-                <option value="on_demand">手动触发</option>
+                style={{
+                  width: '100%', height: 38, padding: '0 12px',
+                  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+                  color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)',
+                }}>
+                <option value="agent_execution">AGENT EXECUTION</option>
+                <option value="backup">BACKUP</option>
+                <option value="report_generation">REPORT GENERATION</option>
               </select>
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Cron 表达式</label>
-              <input value={form.cron || ''} onChange={e => setForm(f => ({ ...f, cron: e.target.value }))}
-                className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm text-white" placeholder="0 * * * * (每整点)" />
+              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>CRON EXPRESSION</label>
+              <input value={form.cron_expression || ''} onChange={e => setForm(f => ({ ...f, cron_expression: e.target.value }))}
+                placeholder="0 * * * * (every hour)"
+                style={{
+                  width: '100%', height: 38, padding: '0 12px',
+                  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+                  color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
+                  fontFamily: 'var(--font-mono)',
+                }} />
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Agent ID</label>
-              <input value={form.agent_id || ''} onChange={e => setForm(f => ({ ...f, agent_id: e.target.value }))}
-                className="w-full bg-gray-700 rounded-lg px-3 py-2 text-sm text-white" placeholder="可选" />
+              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>AGENT ID</label>
+              <input value={form.agent_id ?? ''} onChange={e => setForm(f => ({ ...f, agent_id: e.target.value ? Number(e.target.value) : undefined }))}
+                placeholder="optional"
+                style={{
+                  width: '100%', height: 38, padding: '0 12px',
+                  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+                  color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
+                  fontFamily: 'var(--font-mono)',
+                }} />
             </div>
           </div>
-          <div className="flex gap-2 justify-end">
-            <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm">取消</button>
-            <button onClick={submit} className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-sm">{editing ? '保存' : '创建'}</button>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 20 }}>
+            <button onClick={() => { setShowForm(false); setEditing(null) }}
+              style={{
+                padding: '0 16px', height: 36,
+                border: '1px solid var(--border-bright)', background: 'transparent',
+                color: 'var(--text-muted)', fontSize: 11, letterSpacing: '0.15em', cursor: 'pointer',
+                fontFamily: 'var(--font-mono)',
+              }}>
+              CANCEL
+            </button>
+            <button onClick={submit}
+              style={{
+                padding: '0 16px', height: 36,
+                border: '1px solid var(--accent-border)', background: 'var(--accent)',
+                color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.15em', cursor: 'pointer',
+                fontFamily: 'var(--font-mono)',
+              }}>
+              {editing ? 'SAVE CHANGES' : 'CREATE TASK'}
+            </button>
           </div>
         </div>
       )}
 
-      {loading ? <p className="text-gray-400">加载中...</p> : items.length === 0 ? <p className="text-gray-500">暂无定时任务</p> : (
-        <div className="space-y-3">
+      {loading && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 0', gap: 12 }}>
+          <Loader2 size={18} style={{ color: 'var(--accent)', animation: 'spin 1s linear infinite' }} />
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>LOADING...</span>
+        </div>
+      )}
+
+      {!loading && items.length === 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 0', gap: 12 }}>
+          <div style={{ width: 48, height: 48, border: '1px solid var(--border-bright)', background: 'var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Clock size={18} style={{ color: 'var(--text-dim)' }} />
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>NO SCHEDULED TASKS</div>
+        </div>
+      )}
+
+      {!loading && items.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {items.map(t => (
-            <div key={t.id} className="bg-gray-800 rounded-xl p-4 flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-white">{t.name}</span>
-                  <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded">{t.task_type}</span>
-                  {t.is_active ? <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded">启用</span> : <span className="text-xs bg-gray-700 text-gray-400 px-2 py-0.5 rounded">停用</span>}
+            <div key={t.task_id || t.id} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div style={{ width: 36, height: 36, border: '1px solid var(--border-bright)', background: 'var(--bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
+                  <Clock size={14} />
                 </div>
-                {t.cron && <p className="text-xs text-gray-400 mt-1 font-mono">{t.cron}</p>}
-                {t.next_run && <p className="text-xs text-gray-500 mt-0.5">下次执行: {t.next_run}</p>}
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>{t.name}</span>
+                    <span style={{ display: 'inline-block', padding: '2px 6px', border: '1px solid var(--border)', color: 'var(--cyan)', fontSize: 8, letterSpacing: '0.15em', background: 'var(--bg-base)' }}>{t.task_type.toUpperCase()}</span>
+                    {t.is_active ? (
+                      <span style={{ display: 'inline-block', padding: '2px 6px', border: '1px solid var(--green)', color: 'var(--green)', fontSize: 8, letterSpacing: '0.15em', background: 'rgba(0,255,65,0.05)' }}>ACTIVE</span>
+                    ) : (
+                      <span style={{ display: 'inline-block', padding: '2px 6px', border: '1px solid var(--border)', color: 'var(--text-dim)', fontSize: 8, letterSpacing: '0.15em', background: 'var(--bg-base)' }}>INACTIVE</span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    {t.cron_expression && <span style={{ fontSize: 10, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em' }}>{t.cron_expression}</span>}
+                    {t.next_run_at && <span style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>NEXT: {t.next_run_at}</span>}
+                  </div>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <button onClick={() => { setEditing(t.id!); setForm({ ...t }); setShowForm(true) }} className="p-2 text-gray-400 hover:text-white"><Edit2 size={14} /></button>
-                <button onClick={() => del(t.id!)} className="p-2 text-gray-400 hover:text-red-400"><Trash2 size={14} /></button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => { setEditing(t.task_id!); setForm({ ...t }); setShowForm(true) }}
+                  style={{ padding: 6, color: 'var(--text-muted)', cursor: 'pointer', background: 'none', border: '1px solid var(--border-bright)' }}>
+                  <Edit2 size={12} />
+                </button>
+                <button onClick={() => t.task_id && del(t.task_id)}
+                  style={{ padding: 6, color: 'var(--red)', cursor: 'pointer', background: 'none', border: '1px solid rgba(255,59,48,0.2)' }}>
+                  <Trash2 size={12} />
+                </button>
               </div>
             </div>
           ))}
