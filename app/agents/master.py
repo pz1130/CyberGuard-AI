@@ -390,11 +390,14 @@ class MasterAgent:
             user_input = state.get("user_input", "")
             logger.debug(f"_summarizer_node: llm_router exists, calling chat()...")
             try:
-                # Build messages with optional system prompt override
+                # Build messages: optional system prompt + conversation history + current turn
                 system_prompt = state.get("system_prompt_override")
-                messages = [{"role": "user", "content": user_input}]
+                history = state.get("conversation_history") or []
+                messages: List[Dict[str, str]] = []
                 if system_prompt:
-                    messages.insert(0, {"role": "system", "content": system_prompt})
+                    messages.append({"role": "system", "content": system_prompt})
+                messages.extend(history)
+                messages.append({"role": "user", "content": user_input})
                 state["final_summary"] = await self.llm_router.chat(
                     messages=messages,
                     provider_id=state.get("provider_id"),

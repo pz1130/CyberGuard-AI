@@ -24,10 +24,19 @@ logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
-    """Manage WebSocket connections per room."""
+    """Manage WebSocket connections per room.
+
+    Per-user message rate limit: max 60 messages per 60 seconds.
+    Exceeding the limit closes the connection with code 4029.
+    """
+
+    _MSG_WINDOW = 60      # seconds
+    _MSG_LIMIT = 60       # messages per window
 
     def __init__(self):
         self._rooms: Dict[str, List[WebSocket]] = {}
+        # rate-limit counters: {user_id: [timestamp, ...]}
+        self._msg_times: Dict[int, List[float]] = {}
 
     async def connect(self, websocket: WebSocket, room_id: str):
         await websocket.accept()
@@ -37,6 +46,20 @@ class ConnectionManager:
         room = self._rooms.get(room_id, [])
         if websocket in room:
             room.remove(websocket)
+
+    def is_rate_limited(self, user_id: int) -> bool:
+        """Return True if the user has exceeded the message rate limit."""
+        import time
+        now = time.monotonic()
+        window_start = now - self._MSG_WINDOW
+        times = self._msg_times.get(user_id, [])
+        times = [t for t in times if t > window_start]
+        self._msg_times[user_id] = times
+        if len(times) >= self._MSG_LIMIT:
+            return True
+        times.append(now)
+        self._msg_times[user_id] = times
+        return False
 
     async def broadcast(self, room_id: str, message: dict):
         for ws in list(self._rooms.get(room_id, [])):
@@ -97,6 +120,11 @@ async def groupchat_websocket(
 
             content = message.get("content", "")
             if not content:
+                continue
+
+            # Per-user rate limiting (60 messages / 60 seconds)
+            if user_id and manager.is_rate_limited(user_id):
+                await websocket.send_json({"error": "rate_limit", "detail": "Too many messages. Slow down."})
                 continue
 
             # Persist to DB (own session per message, fire-and-forget on error)
@@ -210,6 +238,7 @@ async def get_chat_history(
 async def create_group_chat_session(
     body: GroupChatCreateRequest,
     db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_role(Role.ADMIN)),
 ):
     """
     Create a new multi-agent group chat session.
@@ -217,16 +246,11 @@ async def create_group_chat_session(
     Selects agents and sends an initial message to kick off the discussion.
     """
     from app.services.group_chat import get_group_chat_service
-    from app.core.dependencies import get_current_user
-    from fastapi import Request
 
-    # Get user from auth - use a simplified approach
     service = get_group_chat_service()
 
-    # Create session with user_id=0 (system) since we don't have full auth context here
-    # In production, extract from the request
     session_id = await service.create_session(
-        user_id=0,
+        user_id=current_user.user_id,
         agent_ids=body.agent_ids,
         initial_message=body.initial_message,
         max_rounds=body.max_rounds,

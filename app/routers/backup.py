@@ -37,42 +37,47 @@ def _ensure_backup_dir():
 async def _run_pg_dump() -> bytes:
     """Run pg_dump and return compressed output."""
     db_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
-    result = await subprocess.run(
-        ["pg_dump", "--dbname", db_url, "--format=custom", "--compress=6"],
-        capture_output=True,
-        timeout=300,
+    proc = await asyncio.create_subprocess_exec(
+        "pg_dump", "--dbname", db_url, "--format=custom", "--compress=6",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
-    if result.returncode != 0:
-        raise RuntimeError(f"pg_dump failed: {result.stderr.decode()}")
-    return result.stdout
+    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
+    if proc.returncode != 0:
+        raise RuntimeError(f"pg_dump failed: {stderr.decode()}")
+    return stdout
 
 
 async def _run_psql_restore(dump_path: str):
     """Restore database from pg_dump custom format."""
     db_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
     with open(dump_path, "rb") as f:
-        result = await subprocess.run(
-            ["pg_restore", "--dbname", db_url, "--clean", "--if-exists"],
-            stdin=f,
-            capture_output=True,
-            timeout=600,
-        )
-    if result.returncode != 0:
-        raise RuntimeError(f"pg_restore failed: {result.stderr.decode()}")
+        data = f.read()
+    proc = await asyncio.create_subprocess_exec(
+        "pg_restore", "--dbname", db_url, "--clean", "--if-exists",
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr = await asyncio.wait_for(proc.communicate(input=data), timeout=600)
+    if proc.returncode != 0:
+        raise RuntimeError(f"pg_restore failed: {stderr.decode()}")
 
 
 def _encrypt_dump(data: bytes) -> bytes:
-    """Encrypt dump with AES-256."""
-    from app.core.security import get_cipher
-    cipher = get_cipher()
-    return cipher.encrypt(data.decode("latin-1")).encode("latin-1")
+    """Encrypt binary dump with AES-256 (base64-encode first for text cipher compatibility)."""
+    import base64
+    from app.core.security import encrypt_data
+    encoded = base64.b64encode(data).decode("ascii")
+    return encrypt_data(encoded).encode("utf-8")
 
 
 def _decrypt_dump(data: bytes) -> bytes:
-    """Decrypt AES-256 encrypted dump."""
-    from app.core.security import get_cipher
-    cipher = get_cipher()
-    return cipher.decrypt(data.decode("latin-1")).encode("latin-1")
+    """Decrypt AES-256 encrypted dump back to original binary."""
+    import base64
+    from app.core.security import decrypt_data
+    encoded = decrypt_data(data.decode("utf-8"))
+    return base64.b64decode(encoded)
 
 
 async def asyncio_write_file(path: str, data: bytes):

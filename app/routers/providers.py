@@ -370,6 +370,11 @@ async def update_provider(
 
     await db.commit()
     await db.refresh(provider)
+
+    # Evict stale cached client so the next request picks up new credentials
+    from app.services.llm_router import get_llm_router
+    get_llm_router().invalidate_provider_cache(provider_id)
+
     return _provider_to_read_schema(provider)
 
 
@@ -386,6 +391,9 @@ async def delete_provider(
         raise HTTPException(status_code=404, detail="Provider not found")
     await db.delete(provider)
     await db.commit()
+
+    from app.services.llm_router import get_llm_router
+    get_llm_router().invalidate_provider_cache(provider_id)
 
 
 async def seed_providers_on_startup():

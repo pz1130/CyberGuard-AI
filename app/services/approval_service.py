@@ -1,5 +1,11 @@
-"""Approval service — shared between LangGraph nodes and the REST API."""
+"""Approval service — shared between LangGraph nodes and the REST API.
+
+Cross-process signalling uses Redis pub/sub on channel `approval:{request_id}`.
+This works correctly when the Master Agent runs in a Celery worker process and
+the admin calls POST /approvals/{id}/decide in the FastAPI process.
+"""
 import asyncio
+import json
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
@@ -8,23 +14,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
 from app.models.approval import ApprovalRequest
-from app.schemas.approval import ApprovalRequestCreate
 
 logger = logging.getLogger(__name__)
 
-# In-memory set of pending request_ids waiting for WebSocket push
-# Key = request_id, Value = asyncio.Event for cancellation
-_pending_events: dict[str, asyncio.Event] = {}
+_APPROVAL_CHANNEL_PREFIX = "approval:"
+_POLL_INTERVAL = 2.0  # seconds between DB poll fallback
 
 
 class ApprovalService:
-    """Service for managing human-in-the-loop approval requests.
-
-    Used by:
-    1. MasterAgent._approval_node  — to create a request and WAIT
-    2. approval router             — to list/decide requests
-    3. WebSocket SSE               — to push notifications to admin dashboard
-    """
+    """Service for managing human-in-the-loop approval requests."""
 
     @staticmethod
     async def create_request(
@@ -40,7 +38,7 @@ class ApprovalService:
         urgency: str = "normal",
         expires_in_minutes: Optional[int] = 60,
     ) -> ApprovalRequest:
-        """Write a pending approval request to DB and signal WebSocket listeners."""
+        """Write a pending approval request to DB and publish to Redis channel."""
         expires_at = None
         if expires_in_minutes:
             expires_at = datetime.utcnow() + timedelta(minutes=expires_in_minutes)
@@ -63,9 +61,8 @@ class ApprovalService:
             await session.commit()
             await session.refresh(record)
 
-        # Signal any waiting SSE/WebSocket listeners
-        if request_id in _pending_events:
-            _pending_events[request_id].set()
+        # Notify any listener processes via Redis
+        await ApprovalService._publish(request_id, "created")
 
         logger.info(
             f"[approval] Created request {record.id} for request_id={request_id} "
@@ -74,64 +71,97 @@ class ApprovalService:
         return record
 
     @staticmethod
+    async def _publish(request_id: str, event: str) -> None:
+        """Publish an event to the Redis approval channel (best-effort)."""
+        try:
+            from app.core.redis_client import get_redis
+            r = await get_redis()
+            channel = f"{_APPROVAL_CHANNEL_PREFIX}{request_id}"
+            await r.publish(channel, json.dumps({"event": event, "request_id": request_id}))
+        except Exception as e:
+            logger.warning(f"[approval] Redis publish failed for {request_id}: {e}")
+
+    @staticmethod
     async def wait_for_decision(
         request_id: str,
         timeout_seconds: int = 3600,
     ) -> tuple[str, Optional[str]]:
         """Wait for a human to approve or reject a request.
 
-        Called by MasterAgent._approval_node to suspend graph execution
-        until a decision arrives.
+        Uses Redis pub/sub for cross-process notification, with a DB-poll
+        fallback every _POLL_INTERVAL seconds in case the pub/sub message
+        is missed (e.g. network blip or Redis restart).
 
-        Returns (status, approver_comment) where status is "approved" or "rejected".
+        Returns (status, approver_comment).
         Raises asyncio.TimeoutError if timeout reached.
-
-        If settings.AUTO_APPROVE is True, auto-approves immediately.
         """
         from app.config import settings
 
-        # Auto-approve mode — skip human-in-the-loop
         if settings.AUTO_APPROVE:
-            logger.info(f"[approval] AUTO_APPROVE enabled — auto-approving request_id={request_id}")
+            logger.info(f"[approval] AUTO_APPROVE — auto-approving request_id={request_id}")
             await ApprovalService.decide(request_id, "approved", approver_id=0, comment="Auto-approved by system")
             return "approved", "Auto-approved by system"
 
-        event = asyncio.Event()
-        _pending_events[request_id] = event
+        deadline = asyncio.get_event_loop().time() + timeout_seconds
+        channel = f"{_APPROVAL_CHANNEL_PREFIX}{request_id}"
 
         try:
-            try:
-                await asyncio.wait_for(
-                    event.wait(),
-                    timeout=timeout_seconds,
-                )
-            except asyncio.TimeoutError:
-                return "expired", None
+            from app.core.redis_client import get_redis
+            r = await get_redis()
+            pubsub = r.pubsub()
+            await pubsub.subscribe(channel)
+        except Exception as e:
+            logger.warning(f"[approval] Redis subscribe failed, falling back to DB-poll only: {e}")
+            pubsub = None
 
-            # Re-fetch the record to get the decision
-            async with AsyncSessionLocal() as session:
-                result = await session.execute(
-                    select(ApprovalRequest).where(
-                        ApprovalRequest.request_id == request_id
+        try:
+            while True:
+                remaining = deadline - asyncio.get_event_loop().time()
+                if remaining <= 0:
+                    return "expired", None
+
+                # DB poll — authoritative source of truth
+                async with AsyncSessionLocal() as session:
+                    result = await session.execute(
+                        select(ApprovalRequest).where(
+                            ApprovalRequest.request_id == request_id
+                        )
                     )
-                )
-                record = result.scalar_one_or_none()
+                    record = result.scalar_one_or_none()
 
-            if record:
-                return record.status, record.approver_comment
-            return "expired", None
+                if record and record.status in ("approved", "rejected"):
+                    return record.status, record.approver_comment
+
+                # Wait for pub/sub message or poll interval (whichever comes first)
+                wait_secs = min(_POLL_INTERVAL, remaining)
+                if pubsub:
+                    try:
+                        msg = await asyncio.wait_for(
+                            pubsub.get_message(ignore_subscribe_messages=True, timeout=wait_secs),
+                            timeout=wait_secs + 0.5,
+                        )
+                        # Any message means the decision is ready — loop back to DB poll
+                    except (asyncio.TimeoutError, Exception):
+                        pass
+                else:
+                    await asyncio.sleep(wait_secs)
 
         finally:
-            _pending_events.pop(request_id, None)
+            if pubsub:
+                try:
+                    await pubsub.unsubscribe(channel)
+                    await pubsub.close()
+                except Exception:
+                    pass
 
     @staticmethod
     async def decide(
         request_id: str,
-        decision: str,  # "approved" or "rejected"
+        decision: str,
         approver_id: int,
         comment: Optional[str] = None,
     ) -> ApprovalRequest:
-        """Record an approval/rejection decision and wake the waiting graph node."""
+        """Record an approval/rejection decision and notify waiting workers via Redis."""
         async with AsyncSessionLocal() as session:
             result = await session.execute(
                 select(ApprovalRequest).where(
@@ -155,9 +185,8 @@ class ApprovalService:
             await session.commit()
             await session.refresh(record)
 
-        # Wake the waiting graph node (if still waiting)
-        if request_id in _pending_events:
-            _pending_events[request_id].set()
+        # Publish decision to Redis so all waiting workers wake up immediately
+        await ApprovalService._publish(request_id, decision)
 
         logger.info(f"[approval] Request {request_id} {decision} by approver_id={approver_id}")
         return record

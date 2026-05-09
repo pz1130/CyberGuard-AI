@@ -179,38 +179,35 @@ def _update_execution_with_result_sync(execution_id: str, status: str, result_da
 
 
 def _query_knowledge_base_sync(kb_id: int, query: str, top_k: int = 5) -> str:
-    """Query knowledge base and return formatted context string (sync version for Celery)."""
-    try:
-        from app.core.database import get_sync_session
-        from app.models.knowledge import Document
-        from sqlalchemy import select
-        import json
-
-        SessionLocal = get_sync_session()
-        with SessionLocal() as session:
-            result = session.execute(
-                select(Document)
-                .where(Document.kb_id == kb_id)
-                .limit(top_k * 2)
+    """Query knowledge base via pgvector ANN and return formatted context (sync wrapper for Celery)."""
+    async def _async_query():
+        from app.services.knowledge_service import get_knowledge_service
+        from app.core.database import get_db_context
+        async with get_db_context() as session:
+            results = await get_knowledge_service().query(
+                db=session,
+                kb_id=kb_id,
+                query=query,
+                top_k=top_k,
+                similarity_threshold=0.0,
             )
-            docs = result.scalars().all()
+        return results
 
-        if not docs:
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            results = loop.run_until_complete(_async_query())
+        finally:
+            loop.close()
+
+        if not results:
             return ""
-
-        # Return content_chunks_json from recent docs as context
-        contexts = []
-        for doc in docs[:top_k]:
-            try:
-                chunks = json.loads(doc.content_chunks_json or "[]")
-                for chunk in chunks[:3]:  # Up to 3 chunks per doc
-                    text = chunk.get("text", "") if isinstance(chunk, dict) else str(chunk)
-                    if text:
-                        contexts.append(text[:400])
-            except:
-                pass
-
-        return "\n\n---\n\n".join(contexts) if contexts else ""
+        contexts = [
+            f"[{r['filename']} chunk {r['chunk_index']}]\n{r['content'][:400]}"
+            for r in results
+        ]
+        return "\n\n---\n\n".join(contexts)
     except Exception as e:
         logger.warning(f"[KB query] Failed to query KB {kb_id}: {e}")
         return ""
@@ -275,27 +272,36 @@ def _run_async_master_agent(execution_id: str, user_input: str, user_id: int, **
         )
         return {"error": "blocked", "guardrail": guardrail_result.message}
 
-    # Load per-conversation config and query knowledge base if configured
+    # Load per-conversation config, history, and knowledge base context
     conversation_id = kwargs.get("conversation_id")
     rag_context = ""
     conv_overrides = {}
+    conversation_history: list[dict] = []
+
     if conversation_id:
         from app.core.database import get_sync_session
         from app.models.conversation import Conversation
         from sqlalchemy import select
+        import json as _json
+
         SessionLocal = get_sync_session()
         with SessionLocal() as session:
             result = session.execute(
                 select(Conversation).where(Conversation.id == conversation_id)
             )
             conv = result.scalar_one_or_none()
+
         if conv:
+            # RAG: query knowledge base for relevant context
             if conv.knowledge_base_id:
-                # Query knowledge base for relevant context
                 rag_context = _query_knowledge_base_sync(conv.knowledge_base_id, user_input)
                 if rag_context:
-                    logger.info(f"[run_master_agent_task] KB/{conv.knowledge_base_id} retrieved {len(rag_context)} chars of context")
-            # Collect per-conversation prompt overrides
+                    logger.info(
+                        f"[run_master_agent_task] KB/{conv.knowledge_base_id} "
+                        f"retrieved {len(rag_context)} chars of context"
+                    )
+
+            # Per-conversation prompt / model overrides
             if conv.system_prompt_override:
                 conv_overrides["system_prompt_override"] = conv.system_prompt_override
             if conv.intent_parser_prompt_override:
@@ -307,6 +313,18 @@ def _run_async_master_agent(execution_id: str, user_input: str, user_id: int, **
             if conv.temperature_override is not None:
                 conv_overrides["temperature_override"] = conv.temperature_override
 
+            # Conversation history: pass last N turns so the LLM has memory
+            try:
+                all_messages = _json.loads(conv.messages_json or "[]")
+                # Keep at most 20 messages (10 turns) to avoid blowing context window
+                conversation_history = [
+                    {"role": m["role"], "content": m["content"]}
+                    for m in all_messages[-20:]
+                    if m.get("role") in ("user", "assistant") and m.get("content")
+                ]
+            except Exception:
+                conversation_history = []
+
     # Prepend RAG context to user input if retrieved
     if rag_context:
         user_input = f"[知识库检索结果]\n{rag_context}\n\n[用户问题]\n{user_input}"
@@ -316,6 +334,7 @@ def _run_async_master_agent(execution_id: str, user_input: str, user_id: int, **
         return await master_agent.run(
             user_input=user_input,
             user_id=user_id,
+            conversation_history=conversation_history,
             **{**kwargs, **conv_overrides},
         )
 

@@ -43,7 +43,7 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       SECRET_KEY: ${SECRET_KEY}
       MOCK_MODE: ${MOCK_MODE:-false}
-      AUTO_APPROVE: ${AUTO_APPROVE:-true}
+      AUTO_APPROVE: ${AUTO_APPROVE:-false}
     depends_on:
       postgres:
         condition: service_healthy
@@ -63,7 +63,7 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       SECRET_KEY: ${SECRET_KEY}
       MOCK_MODE: ${MOCK_MODE:-false}
-      AUTO_APPROVE: ${AUTO_APPROVE:-true}
+      AUTO_APPROVE: ${AUTO_APPROVE:-false}
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,6 +71,27 @@ services:
         condition: service_healthy
     volumes:
       - ./app:/app/app
+
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A app.workers.celery_app beat --loglevel=info --scheduler celery.beat:PersistentScheduler
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/cyberguard
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      SECRET_KEY: ${SECRET_KEY}
+      MOCK_MODE: ${MOCK_MODE:-false}
+      AUTO_APPROVE: ${AUTO_APPROVE:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app
+      - celerybeat_data:/var/run/celerybeat
 
   flower:
     build:
@@ -101,3 +122,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  celerybeat_data:

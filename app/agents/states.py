@@ -72,6 +72,10 @@ class MasterAgentState(TypedDict, total=False):
     model: Optional[str]
     timestamp: str
 
+    # Conversation history (list of {"role": "user"/"assistant", "content": str})
+    # Injected from the conversations table so the LLM has multi-turn memory
+    conversation_history: Optional[List[Dict[str, Any]]]
+
     # Per-conversation config overrides
     system_prompt_override: Optional[str]
     intent_parser_prompt_override: Optional[str]

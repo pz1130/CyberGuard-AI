@@ -65,6 +65,21 @@ class LLMRouter:
         """Invalidate cached master config (call after updates)."""
         self._master_config = None
 
+    def invalidate_provider_cache(self, provider_id: Optional[int] = None):
+        """Invalidate cached OpenAI client(s).
+
+        Call after a provider's API key or base_url is updated so the next
+        request picks up the new credentials.
+
+        Args:
+            provider_id: invalidate only this provider's entry; if None,
+                         clears the entire client cache.
+        """
+        if provider_id is None:
+            self._client_cache.clear()
+        else:
+            self._client_cache.pop(provider_id, None)
+
     @staticmethod
     def _strip_think_blocks(text: str) -> str:
         """Remove provider-specific reasoning tags from visible output."""
