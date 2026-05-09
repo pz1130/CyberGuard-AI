@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { api } from '../api/client'
-import { Plus, Loader2, Plug, ArrowRight, Pencil, Trash, X } from 'lucide-react'
+import { Plus, Loader2, Search, X, RefreshCw, Zap, Settings2, Database } from 'lucide-react'
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface ModelInfo {
   name: string
@@ -8,544 +10,679 @@ interface ModelInfo {
 }
 
 interface Provider {
-  id?: number
+  id: number
   name: string
   provider_type: string
-  base_url?: string
-  api_key?: string
+  base_url: string
+  api_key?: string        // masked '******' from server, or empty
   models: ModelInfo[]
-  is_active?: boolean
+  is_active: boolean
   metadata_json?: Record<string, any>
+  // derived
+  _status?: 'ready' | 'partial' | 'unconfigured'
 }
 
-const TYPE_COLORS: Record<string, string> = {
-  openai: 'var(--green)',
-  anthropic: 'var(--amber)',
-  azure: '#636f1f',
-  groq: 'var(--cyan)',
-  openrouter: 'var(--purple)',
-  ollama: 'var(--green)',
-  custom: 'var(--text-muted)',
+// ── Preset catalog (shown even before they're configured in DB) ───────────────
+
+interface Preset {
+  name: string
+  provider_type: string
+  base_url: string
+  default_models: string[]
+  key_placeholder: string
+  color: string
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  openai: 'OPENAI COMPAT',
-  anthropic: 'ANTHROPIC COMPAT',
-  azure: 'AZURE OPENAI',
-  groq: 'GROQ',
-  openrouter: 'OPENROUTER',
-  ollama: 'OLLAMA (LOCAL)',
-  custom: 'CUSTOM PROVIDER',
+const PRESETS: Preset[] = [
+  { name: 'OpenAI',         provider_type: 'openai',     base_url: 'https://api.openai.com/v1',          default_models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],       key_placeholder: 'sk-...', color: '#10a37f' },
+  { name: 'Anthropic',      provider_type: 'anthropic',  base_url: 'https://api.anthropic.com/v1',        default_models: ['claude-opus-4-7-2025', 'claude-sonnet-4-6'],   key_placeholder: 'sk-ant-...', color: '#d97706' },
+  { name: 'Groq',           provider_type: 'openai',     base_url: 'https://api.groq.com/openai/v1',      default_models: ['llama-3.3-70b-versatile', 'mixtral-8x7b-32768'], key_placeholder: 'gsk_...', color: '#f97316' },
+  { name: 'OpenRouter',     provider_type: 'openai',     base_url: 'https://openrouter.ai/api/v1',        default_models: ['openai/gpt-4o', 'google/gemini-2.0-flash'],    key_placeholder: 'sk-or-...', color: '#8b5cf6' },
+  { name: 'SiliconFlow',    provider_type: 'openai',     base_url: 'https://api.siliconflow.cn/v1',       default_models: ['Qwen/Qwen2.5-72B-Instruct', 'deepseek-ai/DeepSeek-V2.5'], key_placeholder: 'sk-...', color: '#06b6d4' },
+  { name: 'Zhipu AI',       provider_type: 'openai',     base_url: 'https://open.bigmodel.cn/api/paas/v4', default_models: ['glm-4-plus', 'glm-4-flash'],                  key_placeholder: '...', color: '#3b82f6' },
+  { name: 'Azure OpenAI',   provider_type: 'azure',      base_url: '',                                    default_models: ['gpt-4o', 'gpt-4o-mini'],                      key_placeholder: 'Azure API Key', color: '#0078d4' },
+  { name: 'Ollama',         provider_type: 'openai',     base_url: 'http://localhost:11434/v1',           default_models: ['llama3.2', 'qwen2.5', 'deepseek-r1'],         key_placeholder: 'ollama', color: '#22c55e' },
+  { name: 'LM Studio',      provider_type: 'openai',     base_url: 'http://localhost:1234/v1',            default_models: ['local-model'],                                key_placeholder: 'lm-studio', color: '#a855f7' },
+]
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function providerStatus(p: Provider): 'ready' | 'partial' | 'unconfigured' {
+  const hasKey = !!(p.api_key && p.api_key !== '******' && p.api_key.length > 0) || !!(p.metadata_json?.has_key)
+  // api_key from server is '******' when set — treat that as configured
+  const keyConfigured = !!(p.api_key)
+  const hasModels = p.models && p.models.length > 0
+  if (keyConfigured && hasModels) return 'ready'
+  if (keyConfigured) return 'partial'
+  return 'unconfigured'
 }
+
+const STATUS_COLOR = { ready: 'var(--accent)', partial: '#f59e0b', unconfigured: 'var(--text-dim)' }
+const STATUS_LABEL = { ready: 'READY', partial: 'NO MODELS', unconfigured: 'NOT CONFIGURED' }
+
+function Avatar({ name, color }: { name: string; color?: string }) {
+  const letter = name.charAt(0).toUpperCase()
+  const bg = color || '#374151'
+  return (
+    <div style={{
+      width: 40, height: 40, borderRadius: 4, flexShrink: 0,
+      background: `${bg}22`,
+      border: `1.5px solid ${bg}66`,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: 16, fontWeight: 800, color: bg,
+      fontFamily: 'var(--font-mono)',
+    }}>
+      {letter}
+    </div>
+  )
+}
+
+function StatusDot({ status }: { status: 'ready' | 'partial' | 'unconfigured' }) {
+  const c = STATUS_COLOR[status]
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      fontSize: 9, letterSpacing: '0.12em', color: c,
+    }}>
+      <span style={{
+        width: 6, height: 6, borderRadius: '50%', background: c,
+        boxShadow: status === 'ready' ? `0 0 6px ${c}` : 'none',
+      }} />
+      {STATUS_LABEL[status]}
+    </span>
+  )
+}
+
+const inp: React.CSSProperties = {
+  width: '100%', height: 38, padding: '0 12px',
+  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+  color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.04em',
+  fontFamily: 'var(--font-mono)', boxSizing: 'border-box',
+}
+const lbl = (text: string, sub?: string) => (
+  <div style={{ marginBottom: 6 }}>
+    <label style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)' }}>{text}</label>
+    {sub && <span style={{ fontSize: 9, color: 'var(--text-dim)', marginLeft: 8 }}>{sub}</span>}
+  </div>
+)
+
+// ── Settings Modal — API Key + Base URL ───────────────────────────────────────
+
+function SettingsModal({
+  provider, preset, onClose, onSaved,
+}: {
+  provider?: Provider
+  preset?: Preset
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const isNew = !provider
+  const [name, setName] = useState(provider?.name || preset?.name || '')
+  const [type, setType] = useState(provider?.provider_type || preset?.provider_type || 'openai')
+  const [baseUrl, setBaseUrl] = useState(provider?.base_url || preset?.base_url || '')
+  const [apiKey, setApiKey] = useState('')
+  const [preserveThink, setPreserveThink] = useState(!!provider?.metadata_json?.preserve_think)
+  const [testing, setTesting] = useState(false)
+  const [testMsg, setTestMsg] = useState<{ ok: boolean; msg: string } | null>(null)
+  const [saving, setSaving] = useState(false)
+  const keyPlaceholder = preset?.key_placeholder || 'sk-...'
+
+  const testConn = async () => {
+    setTesting(true); setTestMsg(null)
+    try {
+      if (provider?.id) {
+        const r = await api.testProvider(provider.id) as any
+        setTestMsg({ ok: r.success, msg: r.error || (r.latency_ms ? `${r.latency_ms}ms` : 'Connected') })
+      } else {
+        // Live test before saving — directly hit the API
+        const base = baseUrl.replace(/\/$/, '')
+        const t0 = Date.now()
+        try {
+          const resp = await fetch(`${base}/models`, {
+            headers: { Authorization: `Bearer ${apiKey}` },
+          })
+          const ms = Date.now() - t0
+          setTestMsg({ ok: resp.ok, msg: resp.ok ? `Connected · ${ms}ms` : `HTTP ${resp.status}` })
+        } catch (e: any) {
+          setTestMsg({ ok: false, msg: e.message })
+        }
+      }
+    } finally { setTesting(false) }
+  }
+
+  const save = async () => {
+    if (!name) return
+    setSaving(true)
+    try {
+      const payload: any = {
+        name, provider_type: type, base_url: baseUrl,
+        metadata_json: { preserve_think: preserveThink },
+      }
+      if (apiKey && apiKey !== '******') payload.api_key = apiKey
+      if (provider?.id) {
+        await api.updateProvider(String(provider.id), payload)
+      } else {
+        // New provider: pre-fill default models from preset
+        payload.models = preset?.default_models?.map(m => ({ name: m, model_type: 'chat' })) || []
+        await api.createProvider(payload)
+      }
+      onSaved()
+    } catch (e: any) { alert(e.message) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <Overlay onClose={onClose}>
+      <div style={{ width: 460 }}>
+        <ModalHeader
+          icon={<Settings2 size={14} />}
+          title={isNew ? (preset ? `ADD ${preset.name.toUpperCase()}` : 'NEW PROVIDER') : `SETTINGS · ${provider!.name.toUpperCase()}`}
+          sub={isNew ? 'Configure API credentials' : 'Update provider credentials'}
+          onClose={onClose}
+        />
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {isNew && !preset && (
+            <>
+              {lbl('PROVIDER NAME')}
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="My Provider" style={inp} />
+              {lbl('PROTOCOL TYPE')}
+              <select value={type} onChange={e => setType(e.target.value)} style={{ ...inp, height: 38 }}>
+                <option value="openai">OpenAI-Compatible</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="azure">Azure OpenAI</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="custom">Custom</option>
+              </select>
+            </>
+          )}
+          {lbl('BASE URL', type === 'ollama' ? '本地 Ollama 服务地址' : '')}
+          <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)}
+            placeholder={preset?.base_url || 'https://api.example.com/v1'} style={inp} />
+
+          {lbl('API KEY', provider?.api_key ? '已配置（输入新值以更新）' : '')}
+          <input
+            type="password"
+            value={apiKey}
+            onChange={e => setApiKey(e.target.value)}
+            placeholder={provider?.api_key ? '留空保持不变' : keyPlaceholder}
+            style={inp}
+          />
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: '1px solid var(--border-bright)', background: 'var(--bg-base)' }}>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>保留 &lt;think&gt; 标签</div>
+              <div style={{ fontSize: 9, color: 'var(--text-dim)', marginTop: 2 }}>适用于 DeepSeek-R1 / QwQ 等思维链模型</div>
+            </div>
+            <input type="checkbox" checked={preserveThink} onChange={e => setPreserveThink(e.target.checked)}
+              style={{ width: 16, height: 16, accentColor: 'var(--accent)' }} />
+          </div>
+
+          {testMsg && (
+            <div style={{
+              padding: '8px 12px', border: `1px solid ${testMsg.ok ? 'var(--accent-border)' : 'rgba(248,113,113,0.3)'}`,
+              background: 'var(--bg-base)', fontSize: 10,
+              color: testMsg.ok ? 'var(--accent)' : '#f87171', fontFamily: 'var(--font-mono)',
+            }}>
+              {testMsg.ok ? '✓ ' : '✗ '}{testMsg.msg}
+            </div>
+          )}
+        </div>
+        <ModalFooter>
+          <button onClick={testConn} disabled={testing || (!baseUrl && !provider)}
+            style={{ padding: '0 14px', height: 38, border: '1px solid var(--border-bright)', background: 'transparent', color: testing ? 'var(--text-dim)' : 'var(--text-muted)', fontSize: 10, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+            {testing ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : 'TEST'}
+          </button>
+          <Spacer />
+          <button onClick={onClose} style={{ padding: '0 14px', height: 38, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 10, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+            CANCEL
+          </button>
+          <button onClick={save} disabled={saving || !name}
+            style={{ padding: '0 20px', height: 38, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 10, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+            {saving ? '...' : 'SAVE'}
+          </button>
+        </ModalFooter>
+      </div>
+    </Overlay>
+  )
+}
+
+// ── Models Modal — manage per-provider models ─────────────────────────────────
+
+function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClose: () => void; onSaved: () => void }) {
+  const [models, setModels] = useState<ModelInfo[]>(() => {
+    if (!provider.models?.length) return []
+    return provider.models.map(m => typeof m === 'string' ? { name: m, model_type: 'chat' as const } : m)
+  })
+  const [newName, setNewName] = useState('')
+  const [newType, setNewType] = useState<'chat' | 'embedding' | 'rerank'>('chat')
+  const [fetching, setFetching] = useState(false)
+  const [fetchErr, setFetchErr] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState<string | null>(null)
+  const [testRes, setTestRes] = useState<Record<string, { ok: boolean; ms: number }>>({})
+
+  const discover = async () => {
+    if (!provider.base_url) { setFetchErr('No base URL configured'); return }
+    setFetching(true); setFetchErr('')
+    try {
+      const base = provider.base_url.replace(/\/$/, '')
+      const resp = await fetch(`${base}/models`, {
+        headers: provider.api_key ? { Authorization: `Bearer ${provider.api_key}` } : {},
+      })
+      if (!resp.ok) { setFetchErr(`HTTP ${resp.status}`); return }
+      const data = await resp.json()
+      let ids: string[] = []
+      if (Array.isArray(data.data)) ids = data.data.map((m: any) => m.id).filter(Boolean)
+      else if (Array.isArray(data.models)) ids = data.models.map((m: any) => m.name || m.id).filter(Boolean)
+      if (!ids.length) { setFetchErr('No models returned by provider'); return }
+      const discovered = ids.map(name => ({ name, model_type: 'chat' as const }))
+      // Merge: keep existing type tags, add new ones
+      const existing = Object.fromEntries(models.map(m => [m.name, m.model_type]))
+      setModels(discovered.map(m => ({ name: m.name, model_type: existing[m.name] || 'chat' })))
+    } catch (e: any) { setFetchErr(e.message) }
+    finally { setFetching(false) }
+  }
+
+  const add = () => {
+    if (!newName.trim() || models.some(m => m.name === newName.trim())) return
+    setModels(prev => [...prev, { name: newName.trim(), model_type: newType }])
+    setNewName('')
+  }
+
+  const remove = (name: string) => setModels(prev => prev.filter(m => m.name !== name))
+
+  const testModel = async (name: string) => {
+    setTesting(name)
+    const base = (provider.base_url || '').replace(/\/$/, '')
+    const t0 = Date.now()
+    try {
+      const resp = await fetch(`${base}/chat/completions`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${provider.api_key || ''}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: name, messages: [{ role: 'user', content: 'hi' }], max_tokens: 5 }),
+      })
+      setTestRes(r => ({ ...r, [name]: { ok: resp.ok, ms: Date.now() - t0 } }))
+    } catch {
+      setTestRes(r => ({ ...r, [name]: { ok: false, ms: Date.now() - t0 } }))
+    } finally { setTesting(null) }
+  }
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      await api.updateProvider(String(provider.id), { ...provider, models, api_key: undefined })
+      onSaved()
+    } catch (e: any) { alert(e.message) }
+    finally { setSaving(false) }
+  }
+
+  const typeColor = { chat: 'var(--accent)', embedding: '#06b6d4', rerank: '#f59e0b' }
+
+  return (
+    <Overlay onClose={onClose}>
+      <div style={{ width: 520 }}>
+        <ModalHeader
+          icon={<Database size={14} />}
+          title={`MODELS · ${provider.name.toUpperCase()}`}
+          sub={`${models.length} model${models.length !== 1 ? 's' : ''} configured`}
+          onClose={onClose}
+        />
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Discover button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button onClick={discover} disabled={fetching}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', height: 34, border: '1px solid var(--accent-border)', background: 'var(--accent-dim)', color: fetching ? 'var(--text-dim)' : 'var(--accent)', fontSize: 10, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+              {fetching ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Zap size={11} />}
+              {fetching ? 'FETCHING...' : '自动发现模型'}
+            </button>
+            <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>从 /v1/models 接口拉取列表</span>
+          </div>
+          {fetchErr && <div style={{ fontSize: 9, color: '#f87171' }}>{fetchErr}</div>}
+
+          {/* Model list */}
+          <div style={{ border: '1px solid var(--border-bright)', overflow: 'hidden' }}>
+            {models.length === 0 ? (
+              <div style={{ padding: '24px 0', textAlign: 'center', fontSize: 10, color: 'var(--text-dim)' }}>
+                暂无模型 — 点击"自动发现"或手动添加
+              </div>
+            ) : (
+              models.map(m => {
+                const r = testRes[m.name]
+                return (
+                  <div key={m.name} style={{ display: 'flex', alignItems: 'center', padding: '9px 14px', borderBottom: '1px solid var(--border)', gap: 10 }}>
+                    {/* Type badge */}
+                    <span style={{ fontSize: 8, padding: '2px 5px', border: `1px solid ${typeColor[m.model_type]}`, color: typeColor[m.model_type], fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      {m.model_type.toUpperCase()}
+                    </span>
+                    {/* Model name */}
+                    <span style={{ flex: 1, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {m.name}
+                    </span>
+                    {/* Test result */}
+                    {r && (
+                      <span style={{ fontSize: 9, color: r.ok ? 'var(--accent)' : '#f87171', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
+                        {r.ok ? `✓ ${r.ms}ms` : '✗ FAILED'}
+                      </span>
+                    )}
+                    {/* Type selector */}
+                    <select
+                      value={m.model_type}
+                      onChange={e => setModels(prev => prev.map(x => x.name === m.name ? { ...x, model_type: e.target.value as any } : x))}
+                      style={{ height: 24, padding: '0 4px', background: 'var(--bg-base)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 9, fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
+                      <option value="chat">chat</option>
+                      <option value="embedding">embed</option>
+                      <option value="rerank">rerank</option>
+                    </select>
+                    {/* Test button */}
+                    <button onClick={() => testModel(m.name)} disabled={testing === m.name}
+                      style={{ fontSize: 9, letterSpacing: '0.1em', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-mono)', padding: '0 4px', flexShrink: 0 }}>
+                      {testing === m.name ? '…' : 'TEST'}
+                    </button>
+                    {/* Remove */}
+                    <button onClick={() => remove(m.name)} style={{ color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', flexShrink: 0 }}>
+                      <X size={11} />
+                    </button>
+                  </div>
+                )
+              })
+            )}
+          </div>
+
+          {/* Add model row */}
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input
+              value={newName} onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && add()}
+              placeholder="模型名称，如 gpt-4o"
+              style={{ flex: 1, height: 34, padding: '0 10px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 11, fontFamily: 'var(--font-mono)' }}
+            />
+            <select value={newType} onChange={e => setNewType(e.target.value as any)}
+              style={{ width: 90, height: 34, padding: '0 6px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 10, fontFamily: 'var(--font-mono)' }}>
+              <option value="chat">chat</option>
+              <option value="embedding">embed</option>
+              <option value="rerank">rerank</option>
+            </select>
+            <button onClick={add} style={{ padding: '0 14px', height: 34, border: '1px solid var(--accent-border)', background: 'var(--accent-dim)', color: 'var(--accent)', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+              + 添加
+            </button>
+          </div>
+        </div>
+        <ModalFooter>
+          <button onClick={onClose} style={{ padding: '0 14px', height: 38, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 10, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>CANCEL</button>
+          <button onClick={save} disabled={saving}
+            style={{ padding: '0 20px', height: 38, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 10, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+            {saving ? '...' : 'SAVE MODELS'}
+          </button>
+        </ModalFooter>
+      </div>
+    </Overlay>
+  )
+}
+
+// ── Provider Card ─────────────────────────────────────────────────────────────
+
+function ProviderCard({
+  provider,
+  onSettings,
+  onModels,
+  onDelete,
+}: {
+  provider: Provider
+  onSettings: () => void
+  onModels: () => void
+  onDelete: () => void
+}) {
+  const status = providerStatus(provider)
+  const sc = STATUS_COLOR[status]
+  const preset = PRESETS.find(p => p.name.toLowerCase() === provider.name.toLowerCase() || p.provider_type === provider.provider_type)
+  const color = preset?.color || '#6b7280'
+  const modelCount = provider.models?.length || 0
+
+  return (
+    <div style={{
+      padding: 18, background: 'var(--bg-surface)',
+      border: '1px solid var(--border-bright)',
+      borderLeft: `3px solid ${sc}`,
+      display: 'flex', flexDirection: 'column', gap: 12,
+    }}>
+      {/* Top row: avatar + name + status */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <Avatar name={provider.name} color={color} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.06em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {provider.name}
+          </div>
+          <div style={{ marginTop: 3 }}>
+            <StatusDot status={status} />
+          </div>
+        </div>
+      </div>
+
+      {/* Meta row */}
+      <div style={{ display: 'flex', gap: 12, fontSize: 9, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+        <span style={{ color: sc }}>{modelCount} MODEL{modelCount !== 1 ? 'S' : ''}</span>
+        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {provider.base_url || '(default endpoint)'}
+        </span>
+      </div>
+
+      {/* Action buttons */}
+      <div style={{ display: 'flex', gap: 8, marginTop: 'auto' }}>
+        <button onClick={onSettings}
+          style={{ flex: 1, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+          <Settings2 size={11} /> SETTINGS
+        </button>
+        <button onClick={onModels}
+          style={{ flex: 1, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, border: `1px solid ${status === 'unconfigured' ? 'var(--border)' : 'var(--accent-border)'}`, background: status === 'unconfigured' ? 'transparent' : 'var(--accent-dim)', color: status === 'unconfigured' ? 'var(--text-dim)' : 'var(--accent)', fontSize: 10, letterSpacing: '0.1em', cursor: status === 'unconfigured' ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)' }}
+          disabled={status === 'unconfigured'} title={status === 'unconfigured' ? '请先配置 API Key' : ''}>
+          <Database size={11} /> MODELS
+        </button>
+        <button onClick={onDelete} style={{ width: 32, height: 32, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-dim)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <X size={11} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Unconfigured preset card ───────────────────────────────────────────────────
+
+function PresetCard({ preset, onAdd }: { preset: Preset; onAdd: () => void }) {
+  return (
+    <div style={{
+      padding: 18, background: 'var(--bg-surface)',
+      border: '1px solid var(--border)',
+      borderLeft: '3px solid var(--border)',
+      display: 'flex', flexDirection: 'column', gap: 12,
+      opacity: 0.7,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <Avatar name={preset.name} color={preset.color} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>{preset.name}</div>
+          <div style={{ marginTop: 3 }}><StatusDot status="unconfigured" /></div>
+        </div>
+      </div>
+      <div style={{ fontSize: 9, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {preset.base_url || 'Custom endpoint'}
+      </div>
+      <button onClick={onAdd}
+        style={{ height: 32, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+        + 配置
+      </button>
+    </div>
+  )
+}
+
+// ── Modal shell components ────────────────────────────────────────────────────
+
+function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div onClick={e => e.target === e.currentTarget && onClose()} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20 }}>
+      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', width: '100%', maxWidth: 540, maxHeight: '90vh', overflow: 'auto' }}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function ModalHeader({ icon, title, sub, onClose }: { icon: React.ReactNode; title: string; sub: string; onClose: () => void }) {
+  return (
+    <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+      <span style={{ color: 'var(--accent)' }}>{icon}</span>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{title}</div>
+        <div style={{ fontSize: 9, color: 'var(--text-dim)', marginTop: 2 }}>{sub}</div>
+      </div>
+      <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-dim)', padding: 4 }}>
+        <X size={14} />
+      </button>
+    </div>
+  )
+}
+
+function ModalFooter({ children }: { children: React.ReactNode }) {
+  return <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center' }}>{children}</div>
+}
+
+function Spacer() { return <div style={{ flex: 1 }} /> }
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function Providers() {
-  const [items, setItems] = useState<Provider[]>([])
+  const [providers, setProviders] = useState<Provider[]>([])
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [editing, setEditing] = useState<number | null>(null)
-  const [form, setForm] = useState<Provider>({
-    name: '', provider_type: 'openai', base_url: '', api_key: '', models: [], metadata_json: { preserve_think: false },
-  })
-  // formModels is a list of ModelInfo for the model list editor
-  const [formModels, setFormModels] = useState<ModelInfo[]>([])
-  const [newModelName, setNewModelName] = useState('')
-  const [newModelType, setNewModelType] = useState<'chat' | 'embedding' | 'rerank'>('chat')
-  const [testingModelId, setTestingModelId] = useState<string | null>(null)
-  const [modelTestResults, setModelTestResults] = useState<Record<string, { success: boolean; latency_ms?: number; error?: string }>>({})
-  const [fetchingModels, setFetchingModels] = useState(false)
-  const [modelsError, setModelsError] = useState('')
-  const [testResult, setTestResult] = useState<Record<number, { success: boolean; latency_ms?: number; error?: string }>>({})
-  const [testingProviderId, setTestingProviderId] = useState<number | null>(null)
+  const [search, setSearch] = useState('')
+  const [settingsTarget, setSettingsTarget] = useState<{ provider?: Provider; preset?: Preset } | null>(null)
+  const [modelsTarget, setModelsTarget] = useState<Provider | null>(null)
 
   const load = async () => {
     try {
-      const data = await api.getProviders() as { total: number; providers: Provider[] }
-      setItems(data?.providers || [])
-    } catch { setItems([]) } finally { setLoading(false) }
+      const data = await api.getProviders() as any
+      const list: any[] = data?.providers || data || []
+      setProviders(list.map(p => ({
+        ...p,
+        models: (p.models || []).map((m: any) => typeof m === 'string' ? { name: m, model_type: 'chat' } : m),
+      })))
+    } catch { setProviders([]) } finally { setLoading(false) }
   }
+
   useEffect(() => { load() }, [])
 
-  const submit = async () => {
-    if (!form.name) return
-    try {
-      const payload = { ...form, models: formModels }
-      if (editing) await api.updateProvider(String(editing), payload)
-      else await api.createProvider(payload)
-      setShowForm(false); setEditing(null)
-      setForm({ name: '', provider_type: 'openai', base_url: '', api_key: '', models: [], metadata_json: { preserve_think: false } })
-      setFormModels([])
-      setNewModelName('')
-      setNewModelType('chat')
-      load()
-    } catch (e: any) { alert(e.message) }
+  const del = async (p: Provider) => {
+    if (!confirm(`删除 "${p.name}"？`)) return
+    try { await api.deleteProvider(String(p.id)); load() } catch (e: any) { alert(e.message) }
   }
 
-  const addModel = () => {
-    if (!newModelName.trim()) return
-    if (formModels.some(m => m.name === newModelName.trim())) {
-      setModelsError('Model already added')
-      return
-    }
-    setFormModels(prev => [...prev, { name: newModelName.trim(), model_type: newModelType }])
-    setNewModelName('')
-    setModelsError('')
-  }
+  // Presets not yet in DB
+  const configuredNames = new Set(providers.map(p => p.name.toLowerCase()))
+  const unconfiguredPresets = PRESETS.filter(p => !configuredNames.has(p.name.toLowerCase()))
 
-  const removeModel = (name: string) => {
-    setFormModels(prev => prev.filter(m => m.name !== name))
-  }
+  // Sort configured: ready > partial > unconfigured, then filter by search
+  const sortedProviders = useMemo(() => {
+    const order = { ready: 0, partial: 1, unconfigured: 2 }
+    return [...providers]
+      .map(p => ({ ...p, _status: providerStatus(p) as 'ready' | 'partial' | 'unconfigured' }))
+      .sort((a, b) => order[a._status!] - order[b._status!])
+      .filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()))
+  }, [providers, search])
 
-  const convertLegacyModels = (models: any[]): ModelInfo[] => {
-    if (!models || !models.length) return []
-    if (typeof models[0] === 'string') {
-      return (models as string[]).map(name => ({ name, model_type: 'chat' as const }))
-    }
-    return models as ModelInfo[]
-  }
-
-  const testConnection = async (id: number) => {
-    setTestingProviderId(id)
-    setTestResult(r => ({ ...r, [id]: { success: false } }))
-    try {
-      const result = await api.testProvider(id) as { success: boolean; latency_ms?: number; error?: string }
-      setTestResult(r => ({ ...r, [id]: result }))
-    } catch (e: any) {
-      setTestResult(r => ({ ...r, [id]: { success: false, error: e.message } }))
-    } finally { setTestingProviderId(null) }
-  }
-
-  const fetchModels = async (p: Provider) => {
-    if (!p.base_url) {
-      setModelsError('BASE URL is required to fetch models')
-      return
-    }
-    setFetchingModels(true)
-    setModelsError('')
-    try {
-      const base = p.base_url.replace(/\/$/, '')
-      // Ollama: api_key can be empty or "ollama"
-      const headers = p.api_key ? { 'Authorization': `Bearer ${p.api_key}` } : { 'Authorization': '' }
-      // Try OpenAI-compatible /models endpoint first
-      let modelIds: string[] = []
-      try {
-        const resp = await fetch(`${base}/models`, { headers })
-        if (resp.ok) {
-          const data = await resp.json()
-          // OpenAI format: { data: [{ id: "gpt-4o" }, ...] }
-          if (Array.isArray(data.data)) {
-            modelIds = data.data.map((m: any) => m.id).filter(Boolean)
-          }
-          // Ollama format: { models: [{ name: "llama3.2:latest" }, ...] }
-          else if (Array.isArray(data.models)) {
-            modelIds = data.models.map((m: any) => m.name).filter(Boolean)
-          }
-        }
-      } catch { /* try next */ }
-      if (modelIds.length === 0) {
-        setModelsError('No models found or request failed — is the provider running?')
-      } else {
-        const newModels: ModelInfo[] = modelIds.map(name => ({ name, model_type: 'chat' }))
-        setFormModels(newModels)
-        setForm(f => ({ ...f, models: newModels }))
-        setModelsError('')
-      }
-    } catch (e: any) {
-      setModelsError(e.message)
-    } finally { setFetchingModels(false) }
-  }
-
-  const testModel = async (p: Provider, modelName: string) => {
-    const key = `${p.id}:${modelName}`
-    setTestingModelId(key)
-    setModelTestResults(r => ({ ...r, [key]: { success: false } }))
-    try {
-      const base = (p.base_url || '').replace(/\/$/, '')
-      const start = Date.now()
-      const headers = {
-        'Authorization': `Bearer ${p.api_key}`,
-        'Content-Type': 'application/json',
-      }
-      let ok = false
-      try {
-        const resp = await fetch(`${base}/chat/completions`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            model: modelName,
-            messages: [{ role: 'user', content: 'hi' }],
-            max_tokens: 5,
-          }),
-        })
-        ok = resp.ok
-      } catch { ok = false }
-      setModelTestResults(r => ({
-        ...r,
-        [key]: {
-          success: ok,
-          latency_ms: Date.now() - start,
-          error: ok ? undefined : 'REQUEST FAILED',
-        },
-      }))
-    } catch (e: any) {
-      setModelTestResults(r => ({ ...r, [key]: { success: false, error: e.message } }))
-    } finally { setTestingModelId(null) }
-  }
+  const filteredPresets = unconfiguredPresets.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()))
 
   return (
     <div>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
           <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>AI INFRASTRUCTURE</div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>PROVIDER CONFIG</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>AI PROVIDERS</h1>
         </div>
-        <button
-          onClick={() => { setShowForm(true); setEditing(null); setForm({ name: '', provider_type: 'openai', base_url: '', api_key: '', models: [], metadata_json: { preserve_think: false } }); setFormModels([]); setNewModelName(''); setNewModelType('chat'); setModelsError('') }}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '0 16px', height: 36,
-            background: 'var(--accent)', border: '1px solid var(--accent-border)',
-            color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.15em',
-            cursor: 'pointer', fontFamily: 'var(--font-mono)',
-            boxShadow: '0 0 16px rgba(0,255,65,0.15)',
-          }}>
-          <Plus size={13} /> NEW PROVIDER
-        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={load} title="刷新" style={{ width: 36, height: 36, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <RefreshCw size={13} />
+          </button>
+          <button onClick={() => setSettingsTarget({})}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 36, background: 'var(--accent)', border: '1px solid var(--accent-border)', color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.15em', cursor: 'pointer', fontFamily: 'var(--font-mono)', boxShadow: '0 0 16px rgba(0,255,65,0.15)' }}>
+            <Plus size={13} /> 自定义 PROVIDER
+          </button>
+        </div>
       </div>
 
-      {/* Provider Cards Grid */}
+      {/* Search */}
+      <div style={{ position: 'relative', marginBottom: 20 }}>
+        <Search size={13} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
+        <input
+          value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="搜索 Provider…"
+          style={{ width: '100%', height: 38, paddingLeft: 36, paddingRight: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)', boxSizing: 'border-box' }}
+        />
+      </div>
+
       {loading ? (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 0' }}>
           <Loader2 size={20} style={{ color: 'var(--accent)', animation: 'spin 1s linear infinite' }} />
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, marginBottom: 40 }}>
-          {items.map(p => {
-            const r = testResult[p.id!]
-            const tc = r?.success ? 'var(--green)' : r?.error ? 'var(--red)' : 'var(--amber)'
-            return (
-              <div key={p.id} style={{
-                padding: 20,
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border-bright)',
-                borderTop: `2px solid ${tc}`,
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{
-                      width: 36, height: 36,
-                      border: '1px solid var(--border-bright)',
-                      background: 'var(--bg-base)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: TYPE_COLORS[p.provider_type] || 'var(--text-muted)',
-                    }}>
-                      <Plug size={14} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>{p.name}</div>
-                      <div style={{ fontSize: 9, color: tc, letterSpacing: '0.1em', marginTop: 2 }}>
-                        {r?.success ? `CONNECTED · ${r.latency_ms}ms` : r?.error ? 'CONNECTION FAILED' : 'TEST PENDING'}
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => { setEditing(p.id!); setForm({ ...p, models: convertLegacyModels(p.models), metadata_json: { preserve_think: !!p.metadata_json?.preserve_think } }); setFormModels(convertLegacyModels(p.models)); setShowForm(true) }}
-                      style={{ padding: 4, color: 'var(--text-muted)', cursor: 'pointer', background: 'none', border: 'none' }}>
-                      <Pencil size={12} />
-                    </button>
-                    <button onClick={async () => { if (!confirm(`Delete provider "${p.name}"?`)) return; try { await api.deleteProvider(String(p.id!)); load() } catch (e: any) { alert(e.message) } }}
-                      style={{ padding: 4, color: 'var(--red)', cursor: 'pointer', background: 'none', border: 'none' }}>
-                      <Trash size={12} />
-                    </button>
-                  </div>
-                </div>
-
-                <div style={{ fontSize: 10, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', marginBottom: 8, letterSpacing: '0.05em' }}>
-                  {p.base_url || '(default endpoint)'}
-                </div>
-
-                {/* Models list */}
-                {p.models && p.models.length > 0 && (
-                  <div style={{ marginBottom: 12 }}>
-                    <div style={{ fontSize: 9, letterSpacing: '0.15em', color: 'var(--text-muted)', marginBottom: 6 }}>MODELS</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {p.models.map(m => {
-                        const modelInfo = typeof m === 'string' ? { name: m, model_type: 'chat' as const } : m
-                        const key = `${p.id}:${modelInfo.name}`
-                        const mr = modelTestResults[key]
-                        const mc = mr?.success ? 'var(--green)' : mr?.error ? 'var(--red)' : 'var(--text-muted)'
-                        const typeBadgeColor = modelInfo.model_type === 'embedding' ? 'var(--cyan)' : modelInfo.model_type === 'rerank' ? 'var(--amber)' : 'var(--text-dim)'
-                        return (
-                          <div key={modelInfo.name} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 6px', border: `1px solid ${mc}`, background: 'var(--bg-base)', fontSize: 9 }}>
-                            <span style={{ color: typeBadgeColor, fontSize: 8, fontFamily: 'var(--font-mono)' }}>{modelInfo.model_type.toUpperCase()}</span>
-                            <span style={{ color: mc, fontFamily: 'var(--font-mono)', letterSpacing: '0.05em' }}>{modelInfo.name}</span>
-                            {mr && (
-                              <span style={{ color: mc, fontSize: 8 }}>{mr.latency_ms}ms</span>
-                            )}
-                            <button
-                              onClick={() => testModel(p, modelInfo.name)}
-                              disabled={testingModelId === key}
-                              style={{
-                                background: 'none', border: 'none', cursor: testingModelId === key ? 'not-allowed' : 'pointer',
-                                color: mc, fontSize: 8, letterSpacing: '0.1em', padding: '0 0 0 4px',
-                              }}>
-                              {testingModelId === key ? '...' : 'TEST'}
-                            </button>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-                  <div style={{
-                    display: 'inline-block',
-                    padding: '2px 8px',
-                    border: '1px solid var(--border)',
-                    fontSize: 9, letterSpacing: '0.15em', color: TYPE_COLORS[p.provider_type] || 'var(--text-muted)',
-                    background: 'var(--bg-base)',
-                  }}>
-                    {TYPE_LABELS[p.provider_type] || p.provider_type}
-                  </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button
-                      onClick={() => { setEditing(p.id!); setForm({ ...p, models: convertLegacyModels(p.models), metadata_json: { preserve_think: !!p.metadata_json?.preserve_think } }); setFormModels(convertLegacyModels(p.models)); setShowForm(true) }}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 4,
-                        padding: '0 8px', height: 26,
-                        border: '1px solid var(--border-bright)',
-                        background: 'transparent', color: 'var(--text-muted)',
-                        fontSize: 9, letterSpacing: '0.1em', cursor: 'pointer',
-                        fontFamily: 'var(--font-mono)',
-                      }}>
-                      EDIT
-                    </button>
-                    <button
-                      onClick={() => testConnection(p.id!)}
-                      disabled={testingProviderId === p.id}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 6,
-                        padding: '0 10px', height: 28,
-                        border: '1px solid var(--border-bright)',
-                        background: testingProviderId === p.id ? 'var(--bg-elevated)' : 'transparent',
-                        color: testingProviderId === p.id ? 'var(--text-dim)' : 'var(--accent)',
-                        fontSize: 10, letterSpacing: '0.1em', cursor: testingProviderId === p.id ? 'not-allowed' : 'pointer',
-                        fontFamily: 'var(--font-mono)', transition: 'all 0.15s',
-                      }}>
-                      {testingProviderId === p.id ? 'TESTING...' : 'TEST CONNECTION'}
-                    </button>
-                  </div>
-                </div>
-
-                {r?.error && (
-                  <div style={{ marginTop: 10, padding: '8px 10px', background: 'var(--red-dim)', border: '1px solid rgba(255,59,48,0.2)', fontSize: 10, color: 'var(--red)', letterSpacing: '0.05em' }}>
-                    {r.error}
-                  </div>
-                )}
+        <>
+          {/* Configured providers */}
+          {sortedProviders.length > 0 && (
+            <div style={{ marginBottom: 28 }}>
+              <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 12 }}>已配置 · {sortedProviders.length}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
+                {sortedProviders.map(p => (
+                  <ProviderCard
+                    key={p.id}
+                    provider={p}
+                    onSettings={() => setSettingsTarget({ provider: p })}
+                    onModels={() => setModelsTarget(p)}
+                    onDelete={() => del(p)}
+                  />
+                ))}
               </div>
-            )
-          })}
-        </div>
+            </div>
+          )}
+
+          {/* Preset (unconfigured) providers */}
+          {filteredPresets.length > 0 && (
+            <div>
+              <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 12 }}>可添加的 Provider · {filteredPresets.length}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+                {filteredPresets.map(preset => (
+                  <PresetCard
+                    key={preset.name}
+                    preset={preset}
+                    onAdd={() => setSettingsTarget({ preset })}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {sortedProviders.length === 0 && filteredPresets.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--text-dim)', fontSize: 11 }}>
+              未找到匹配的 Provider
+            </div>
+          )}
+        </>
       )}
 
-      {/* Model Routing Table */}
-      <div style={{ marginTop: 32 }}>
-        <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 12 }}>ROUTING LOGIC</div>
-        <h2 style={{ fontSize: 14, fontWeight: 600, letterSpacing: '0.1em', color: 'var(--text-primary)', marginBottom: 16 }}>MODEL ROUTING TABLE</h2>
-        <div style={{ border: '1px solid var(--border-bright)', overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: 'var(--bg-base)', borderBottom: '1px solid var(--border-bright)' }}>
-                {['AGENT', 'CURRENT PROVIDER', 'AVAILABLE MODELS', 'ACTION'].map((h, i) => (
-                  <th key={i} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {[{ agent: 'MASTER AGENT', provider: 'GROK API (xAI)', models: 'grok-3, grok-3-mini' }, { agent: 'THREAT INTEL (OPENCLAW)', provider: 'QWEN TUNING', models: 'qwen-plus, qwen-turbo' }, { agent: 'LOG ANALYZER (HERMES)', provider: 'OLLAMA (LOCAL)', models: 'llama3.1, bge-m3' }].map((row, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
-                  <td style={{ padding: '14px 16px', fontSize: 11, color: 'var(--text-primary)', letterSpacing: '0.05em' }}>{row.agent}</td>
-                  <td style={{ padding: '14px 16px', fontSize: 11, color: 'var(--green)', letterSpacing: '0.05em' }}>{row.provider}</td>
-                  <td style={{ padding: '14px 16px', fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{row.models}</td>
-                  <td style={{ padding: '14px 16px' }}>
-                    <button style={{
-                      display: 'flex', alignItems: 'center', gap: 4,
-                      fontSize: 9, letterSpacing: '0.1em', color: 'var(--accent)', cursor: 'pointer',
-                      background: 'none', border: 'none', padding: 0,
-                    }}>
-                      RECONFIGURE <ArrowRight size={10} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* Settings Modal */}
+      {settingsTarget !== null && (
+        <SettingsModal
+          provider={settingsTarget.provider}
+          preset={settingsTarget.preset}
+          onClose={() => setSettingsTarget(null)}
+          onSaved={() => { setSettingsTarget(null); load() }}
+        />
+      )}
 
-      {/* Modal */}
-      {showForm && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}
-          onClick={e => e.target === e.currentTarget && setShowForm(false)}>
-          <div style={{
-            width: 520, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
-            padding: 32,
-          }}>
-            <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: 16, marginBottom: 24 }}>
-              <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>CONFIGURATION</div>
-              <h3 style={{ fontSize: 16, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{editing ? 'EDIT PROVIDER' : 'NEW PROVIDER'}</h3>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>PROVIDER NAME</label>
-                <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="e.g. Grok API"
-                  style={{
-                    width: '100%', height: 38, padding: '0 12px',
-                    background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                    color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
-                    fontFamily: 'var(--font-mono)',
-                  }} />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>TYPE</label>
-                  <select value={form.provider_type} onChange={e => setForm(f => ({ ...f, provider_type: e.target.value }))}
-                    style={{
-                      width: '100%', height: 38, padding: '0 12px',
-                      background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                      color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)',
-                    }}>
-                    <option value="openai">OPENAI COMPAT</option>
-                    <option value="anthropic">ANTHROPIC COMPAT</option>
-                    <option value="azure">AZURE OPENAI</option>
-                    <option value="groq">GROQ</option>
-                    <option value="openrouter">OPENROUTER</option>
-                    <option value="ollama">OLLAMA (LOCAL)</option>
-                    <option value="custom">CUSTOM PROVIDER</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>BASE URL</label>
-                  <input value={form.base_url || ''} onChange={e => setForm(f => ({ ...f, base_url: e.target.value }))}
-                    placeholder="https://api.x.ai/v1"
-                    style={{
-                      width: '100%', height: 38, padding: '0 12px',
-                      background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                      color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
-                      fontFamily: 'var(--font-mono)',
-                    }} />
-                </div>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>API KEY</label>
-                <input type="password" value={form.api_key || ''} onChange={e => setForm(f => ({ ...f, api_key: e.target.value }))}
-                  placeholder="sk-..."
-                  style={{
-                    width: '100%', height: 38, padding: '0 12px',
-                    background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                    color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
-                    fontFamily: 'var(--font-mono)',
-                  }} />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: '1px solid var(--border-bright)', background: 'var(--bg-base)' }}>
-                <div>
-                  <div style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>PRESERVE THINK TAGS</div>
-                  <div style={{ fontSize: 9, color: 'var(--text-dim)', marginTop: 2 }}>Keep provider `&lt;think&gt;...&lt;/think&gt;` content in chat output</div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={!!form.metadata_json?.preserve_think}
-                  onChange={e => setForm(f => ({ ...f, metadata_json: { ...(f.metadata_json || {}), preserve_think: e.target.checked } }))}
-                />
-              </div>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)' }}>MODELS</label>
-                  <button
-                    onClick={() => fetchModels(form)}
-                    disabled={fetchingModels || !form.base_url}
-                    title="Fetch models from provider API"
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 4,
-                      padding: '0 8px', height: 26,
-                      border: '1px solid var(--accent-border)',
-                      background: fetchingModels ? 'var(--bg-elevated)' : 'var(--accent-dim)',
-                      color: fetchingModels ? 'var(--text-dim)' : 'var(--accent)',
-                      fontSize: 9, letterSpacing: '0.1em', cursor: fetchingModels ? 'not-allowed' : 'pointer',
-                      fontFamily: 'var(--font-mono)',
-                    }}>
-                    {fetchingModels ? 'FETCHING...' : '⬡ FETCH MODELS'}
-                  </button>
-                </div>
-                {/* Added models list */}
-                {formModels.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-                    {formModels.map(m => (
-                      <div key={m.name} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', border: '1px solid var(--border-bright)', background: 'var(--bg-base)', fontSize: 9 }}>
-                        <span style={{ color: m.model_type === 'embedding' ? 'var(--cyan)' : m.model_type === 'rerank' ? 'var(--amber)' : 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: 8 }}>{m.model_type.toUpperCase()}</span>
-                        <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{m.name}</span>
-                        <button onClick={() => removeModel(m.name)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-dim)', padding: 0, display: 'flex' }}><X size={10} /></button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {/* Add model row */}
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input value={newModelName} onChange={e => setNewModelName(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && addModel()}
-                    placeholder="model name"
-                    style={{
-                      flex: 1, height: 32, padding: '0 8px',
-                      background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                      color: 'var(--text-primary)', fontSize: 11, fontFamily: 'var(--font-mono)',
-                    }} />
-                  <select value={newModelType} onChange={e => setNewModelType(e.target.value as 'chat' | 'embedding' | 'rerank')}
-                    style={{
-                      width: 110, height: 32, padding: '0 6px',
-                      background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                      color: 'var(--text-primary)', fontSize: 10, fontFamily: 'var(--font-mono)',
-                    }}>
-                    <option value="chat">CHAT</option>
-                    <option value="embedding">EMBEDDING</option>
-                    <option value="rerank">RERANK</option>
-                  </select>
-                  <button onClick={addModel} style={{
-                    padding: '0 10px', height: 32,
-                    border: '1px solid var(--accent-border)',
-                    background: 'var(--accent-dim)', color: 'var(--accent)',
-                    fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer',
-                    fontFamily: 'var(--font-mono)',
-                  }}>+ ADD</button>
-                </div>
-                {modelsError && (
-                  <div style={{ marginTop: 6, fontSize: 9, color: 'var(--red)', letterSpacing: '0.05em' }}>{modelsError}</div>
-                )}
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 12, marginTop: 28 }}>
-              <button onClick={() => setShowForm(false)}
-                style={{
-                  flex: 1, height: 40, border: '1px solid var(--border-bright)',
-                  background: 'transparent', color: 'var(--text-muted)',
-                  fontSize: 11, letterSpacing: '0.15em', cursor: 'pointer',
-                  fontFamily: 'var(--font-mono)',
-                }}>
-                CANCEL
-              </button>
-              <button onClick={submit}
-                style={{
-                  flex: 1, height: 40, border: '1px solid var(--accent-border)',
-                  background: 'var(--accent)', color: '#000',
-                  fontWeight: 700, fontSize: 11, letterSpacing: '0.15em', cursor: 'pointer',
-                  fontFamily: 'var(--font-mono)',
-                }}>
-                {editing ? 'SAVE CHANGES' : 'CREATE PROVIDER'}
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Models Modal */}
+      {modelsTarget && (
+        <ModelsModal
+          provider={modelsTarget}
+          onClose={() => setModelsTarget(null)}
+          onSaved={() => { setModelsTarget(null); load() }}
+        />
       )}
     </div>
   )
