@@ -48,7 +48,6 @@ const PRESETS: Preset[] = [
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function providerStatus(p: Provider): 'ready' | 'partial' | 'unconfigured' {
-  const hasKey = !!(p.api_key && p.api_key !== '******' && p.api_key.length > 0) || !!(p.metadata_json?.has_key)
   // api_key from server is '******' when set — treat that as configured
   const keyConfigured = !!(p.api_key)
   const hasModels = p.models && p.models.length > 0
