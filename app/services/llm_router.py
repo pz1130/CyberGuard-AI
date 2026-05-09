@@ -566,6 +566,74 @@ Examples:
 
             return content
 
+    async def stream_chat(
+        self,
+        messages: List[Dict[str, str]],
+        model: Optional[str] = None,
+        provider_id: Optional[int] = None,
+        model_override: Optional[str] = None,
+        temperature_override: Optional[float] = None,
+    ):
+        """Stream chat completion tokens as an async generator.
+
+        Yields string chunks as they arrive from the provider.
+        Usage::
+            async for chunk in router.stream_chat(messages, provider_id=1):
+                yield f"data: {chunk}\\n\\n"
+        """
+        active_model = model_override or model
+        if not active_model and provider_id:
+            config = await self.get_provider_config_async(provider_id)
+            if config and config.get("models"):
+                active_model = config["models"][0]
+        active_model = active_model or settings.MASTER_AGENT_MODEL
+
+        master_config = await self._load_master_config()
+
+        if settings.MOCK_MODE:
+            last_msg = messages[-1]["content"] if messages else ""
+            mock = (
+                f"🛡️ **CyberGuard (Mock Mode)**\n\n"
+                f"已收到您的消息：\"{last_msg[:100]}\"\n\n"
+                "当前运行在 Mock 模式下，请配置真实 AI Provider。"
+            )
+            for word in mock.split(" "):
+                yield word + " "
+                await asyncio.sleep(0.02)
+            return
+
+        client = await self.get_client_async(provider_id=provider_id)
+        temperature = (
+            temperature_override
+            if temperature_override is not None
+            else (master_config.get("temperature") or settings.MASTER_AGENT_TEMPERATURE)
+        )
+
+        accumulated = []
+        try:
+            stream = await client.chat.completions.create(
+                model=active_model,
+                messages=messages,
+                temperature=temperature,
+                stream=True,
+            )
+            async for chunk in stream:
+                delta = chunk.choices[0].delta.content if chunk.choices else None
+                if delta:
+                    accumulated.append(delta)
+                    yield delta
+        except Exception as e:
+            yield f"\n\n[错误: {e}]"
+            return
+
+        # Strip think tags from final accumulated response (best-effort)
+        full = "".join(accumulated)
+        strip = await self._should_strip_think(provider_id)
+        if strip and "<think>" in full.lower():
+            # We already streamed the raw content — emit a replacement signal
+            # so the client knows to strip think blocks from display
+            pass  # client-side stripping for streamed content
+
     async def embed(
         self,
         texts: List[str],

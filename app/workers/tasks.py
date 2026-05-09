@@ -124,7 +124,11 @@ def sync_scheduled_jobs_task(self):
             # Dispatch to run_master_agent_task
             run_master_agent_task.apply_async(
                 args=[execution_id, prompt, 0],
-                kwargs={"agent_id": task.agent_id},
+                kwargs={
+                    "agent_id": task.agent_id,
+                    "source": "scheduled",
+                    "task_name": task.name,
+                },
             )
             fired_count += 1
 
@@ -391,19 +395,103 @@ def run_master_agent_task(self, execution_id: str, user_input: str, user_id: int
         conversation_id = kwargs.get("conversation_id")
         if conversation_id and result:
             _save_to_conversation_async(conversation_id, user_input, result)
+            _auto_title_conversation(conversation_id, user_input, result)
+
+        # Email admin if this was a scheduled task
+        if kwargs.get("source") == "scheduled":
+            task_name = kwargs.get("task_name", execution_id)
+            _notify_task_done(task_name, execution_id, "completed")
 
         return {"status": "completed", "execution_id": execution_id, "result": result}
 
     except Exception as e:
         error_msg = str(e)
+        _update_execution_with_result_sync(execution_id, "failed", None, str(e))
+        if kwargs.get("source") == "scheduled":
+            task_name = kwargs.get("task_name", execution_id)
+            _notify_task_done(task_name, execution_id, "failed", error=error_msg)
         # Do NOT retry on event-loop errors or auth errors — they are not transient
         if "Event loop is closed" in error_msg or "401" in error_msg or "Unauthorized" in error_msg:
             logger.error(f"[run_master_agent_task] execution_id={execution_id} non-retryable error: {e}")
-            _update_execution_with_result_sync(execution_id, "failed", None, str(e))
-            raise  # No retry, let Celery mark it failed
+            raise
         logger.error(f"[run_master_agent_task] execution_id={execution_id} error: {e}")
-        _update_execution_with_result_sync(execution_id, "failed", None, str(e))
         raise
+
+
+def _auto_title_conversation(conversation_id: int, user_input: str, result: dict):
+    """Generate a short conversation title from the first user message using LLM.
+
+    Only runs when the conversation still has the default title ('新对话').
+    Runs synchronously in the Celery worker — uses a fresh event loop.
+    """
+    try:
+        from app.core.database import get_sync_session
+        from app.models.conversation import Conversation
+        from sqlalchemy import select
+
+        SessionLocal = get_sync_session()
+        with SessionLocal() as session:
+            conv_result = session.execute(
+                select(Conversation).where(Conversation.id == conversation_id)
+            )
+            conv = conv_result.scalar_one_or_none()
+            if not conv or conv.title != "新对话":
+                return  # Already has a custom title
+
+        async def _generate():
+            from app.services.llm_router import get_llm_router
+            router = get_llm_router()
+            prompt = (
+                f"请为以下对话生成一个简洁的标题（10字以内，不加引号）：\n{user_input[:200]}"
+            )
+            try:
+                title = await router.chat(
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature_override=0.3,
+                )
+                return title.strip().strip('"').strip("'")[:50] or "新对话"
+            except Exception:
+                return None
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            title = loop.run_until_complete(_generate())
+        finally:
+            loop.close()
+
+        if not title:
+            return
+
+        SessionLocal = get_sync_session()
+        with SessionLocal() as session:
+            conv_result = session.execute(
+                select(Conversation).where(Conversation.id == conversation_id)
+            )
+            conv = conv_result.scalar_one_or_none()
+            if conv and conv.title == "新对话":
+                conv.title = title
+                session.commit()
+                logger.info(f"[auto-title] conv_id={conversation_id} → {title!r}")
+    except Exception as e:
+        logger.warning(f"[auto-title] Failed for conv {conversation_id}: {e}")
+
+
+def _notify_task_done(task_name: str, execution_id: str, status: str, error: str | None = None):
+    """Fire-and-forget email when a scheduled task finishes (sync wrapper)."""
+    async def _send():
+        from app.services.email_service import notify_scheduled_task_done
+        await notify_scheduled_task_done(task_name, execution_id, status, error)
+
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(_send())
+        finally:
+            loop.close()
+    except Exception as e:
+        logger.warning(f"[email] notify_task_done failed: {e}")
 
 
 @shared_task(

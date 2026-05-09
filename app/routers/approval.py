@@ -1,14 +1,18 @@
-"""Approval requests REST API."""
+"""Approval requests REST API + SSE push."""
+import asyncio
+import json
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_session
 from app.core.dependencies import require_role
-from app.core.rbac import Role, Permission
+from app.core.rbac import Role
 from app.core.auth import AuthenticatedUser
+from app.models.approval import ApprovalRequest
 from app.schemas.approval import (
-    ApprovalRequestCreate,
     ApprovalRequestResponse,
     ApprovalDecision,
     ApprovalListResponse,
@@ -21,25 +25,110 @@ logger = logging.getLogger(__name__)
 
 @router.get("/approvals", response_model=ApprovalListResponse)
 async def list_approvals(
-    status_filter: str = "pending",  # pending / approved / rejected / all
+    status_filter: str = "pending",
     _=Depends(require_role(Role.ADMIN)),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """List approval requests. ADMIN only."""
-    from sqlalchemy import select
-    from app.models.approval import ApprovalRequest
-
+    """List approval requests (ADMIN only). ?status_filter=pending|approved|rejected|all"""
     query = select(ApprovalRequest).order_by(ApprovalRequest.created_at.desc())
-
     if status_filter != "all":
         query = query.where(ApprovalRequest.status == status_filter)
-
     result = await session.execute(query)
     records = list(result.scalars().all())
-
     return ApprovalListResponse(
         requests=[ApprovalRequestResponse.model_validate(r) for r in records],
         total=len(records),
+    )
+
+
+@router.get("/approvals/events")
+async def approval_sse_events(
+    current_user: AuthenticatedUser = Depends(require_role(Role.ADMIN)),
+):
+    """SSE stream for real-time approval notifications (ADMIN only).
+
+    Connect at GET /api/v1/approvals/events.
+    Each event: ``data: {JSON}\\n\\n``
+
+    Uses Redis pub/sub on channel ``approval:admin:events`` for low-latency
+    push, with a 2-second DB-poll heartbeat as fallback.
+    """
+    admin_channel = "approval:admin:events"
+
+    async def event_stream():
+        seen_ids: set[int] = set()
+        pubsub = None
+
+        # Seed already-pending IDs so we don't replay old events on connect
+        try:
+            existing = await ApprovalService.list_pending()
+            seen_ids = {r.id for r in existing}
+            # Send current pending count as initial event
+            yield (
+                f"data: {json.dumps({'type': 'connected', 'pending': len(seen_ids)})}\n\n"
+            )
+        except Exception:
+            pass
+
+        # Subscribe to Redis admin channel
+        try:
+            from app.core.redis_client import get_redis
+            r = await get_redis()
+            pubsub = r.pubsub()
+            await pubsub.subscribe(admin_channel)
+        except Exception as e:
+            logger.warning(f"[approval SSE] Redis subscribe failed: {e}")
+
+        try:
+            while True:
+                # Wait for Redis notification or 10-second heartbeat
+                got_msg = False
+                if pubsub:
+                    try:
+                        msg = await asyncio.wait_for(
+                            pubsub.get_message(ignore_subscribe_messages=True, timeout=10),
+                            timeout=10.5,
+                        )
+                        if msg:
+                            got_msg = True
+                    except (asyncio.TimeoutError, Exception):
+                        pass
+
+                if not got_msg:
+                    # Heartbeat so the client knows the connection is alive
+                    yield ": heartbeat\n\n"
+
+                # Always re-check DB for new pending requests
+                try:
+                    pending = await ApprovalService.list_pending()
+                    new_ids = {r.id for r in pending} - seen_ids
+                    for rid in sorted(new_ids):
+                        record = next(r for r in pending if r.id == rid)
+                        payload = ApprovalRequestResponse.model_validate(record).model_dump(mode="json")
+                        payload["type"] = "new_request"
+                        yield f"data: {json.dumps(payload)}\n\n"
+                        seen_ids.add(rid)
+                except Exception as e:
+                    yield f"data: {json.dumps({'type': 'error', 'detail': str(e)})}\n\n"
+
+        except asyncio.CancelledError:
+            pass
+        finally:
+            if pubsub:
+                try:
+                    await pubsub.unsubscribe(admin_channel)
+                    await pubsub.close()
+                except Exception:
+                    pass
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 
@@ -47,7 +136,6 @@ async def list_approvals(
 async def get_approval(
     approval_id: int,
     _=Depends(require_role(Role.ADMIN)),
-    session: AsyncSession = Depends(get_db_session),
 ):
     """Get a specific approval request by ID."""
     record = await ApprovalService.get_by_id(approval_id)
@@ -63,11 +151,7 @@ async def decide_approval(
     current_user: AuthenticatedUser = Depends(require_role(Role.ADMIN)),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Approve or reject a pending request. ADMIN only."""
-    from sqlalchemy import select
-    from app.models.approval import ApprovalRequest
-
-    # Fetch request_id from DB
+    """Approve or reject a pending request (ADMIN only)."""
     result = await session.execute(
         select(ApprovalRequest).where(ApprovalRequest.id == approval_id)
     )
@@ -86,55 +170,36 @@ async def decide_approval(
         updated = await ApprovalService.decide(
             request_id=record.request_id,
             decision=body.decision,
-            approver_id=approver.id,
+            approver_id=current_user.user_id,
             comment=body.comment,
         )
-        return ApprovalRequestResponse.model_validate(updated)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
+    # Send email notification to requester (best-effort, non-blocking)
+    asyncio.create_task(_notify_decision(record, body.decision, body.comment))
 
-@router.get("/approvals/sse")
-async def approval_sse(
-    _=Depends(require_role(Role.ADMIN)),
-):
-    """SSE stream of new pending approval requests.
-
-    Admin dashboard can listen at GET /api/v1/approvals/sse
-    to receive real-time notifications when new approval requests arrive.
-
-    Each event: "data: {json payload}\\n\\n"
-    """
-    import asyncio
-    import json
-    from fastapi.responses import StreamingResponse
-
-    async def event_generator():
-        # Poll DB every 2 seconds and yield when new pending requests appear
-        seen_ids: set[int] = set()
-        while True:
-            try:
-                pending = await ApprovalService.list_pending()
-                new_ids = {r.id for r in pending} - seen_ids
-                if new_ids:
-                    for rid in sorted(new_ids):
-                        record = next(r for r in pending if r.id == rid)
-                        yield f"data: {json.dumps(ApprovalRequestResponse.model_validate(record).model_dump(mode='json'))}\n\n"
-                        seen_ids.add(rid)
-            except Exception as e:
-                yield f"data: {{\"error\": \"{e}}}\n\n"
-            await asyncio.sleep(2)
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",  # Disable Nginx buffering
-        },
-    )
+    return ApprovalRequestResponse.model_validate(updated)
 
 
-# Type hint for User model (used in decide endpoint)
-from app.models.user import User
+async def _notify_decision(record: ApprovalRequest, decision: str, comment: str | None):
+    """Fire-and-forget email when an approval decision is made."""
+    try:
+        from app.services.email_service import notify_approval_decided
+        from app.core.database import AsyncSessionLocal
+        from app.models.user import User
+        # Fetch requester email
+        async with AsyncSessionLocal() as session:
+            user_result = await session.execute(
+                select(User).where(User.id == record.user_id)
+            )
+            user = user_result.scalar_one_or_none()
+        if user and user.email:
+            await notify_approval_decided(
+                to_email=user.email,
+                request_id=record.request_id,
+                decision=decision,
+                comment=comment,
+            )
+    except Exception as e:
+        logger.warning(f"[approval] notify_decision failed: {e}")

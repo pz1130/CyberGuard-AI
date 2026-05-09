@@ -61,8 +61,24 @@ class ApprovalService:
             await session.commit()
             await session.refresh(record)
 
-        # Notify any listener processes via Redis
+        # Notify waiting workers via approval-specific Redis channel
         await ApprovalService._publish(request_id, "created")
+
+        # Publish to admin events channel so SSE listeners see the new request
+        await ApprovalService._publish_admin_event({
+            "event": "new_request",
+            "request_id": request_id,
+            "action_type": action_type,
+            "risk_level": risk_level,
+        })
+
+        # Email admin (best-effort, fire-and-forget)
+        asyncio.create_task(ApprovalService._email_admin_created(
+            request_id=request_id,
+            action_description=action_description,
+            risk_level=risk_level,
+            user_id=user_id,
+        ))
 
         logger.info(
             f"[approval] Created request {record.id} for request_id={request_id} "
@@ -72,7 +88,7 @@ class ApprovalService:
 
     @staticmethod
     async def _publish(request_id: str, event: str) -> None:
-        """Publish an event to the Redis approval channel (best-effort)."""
+        """Publish an event to the per-request Redis channel (best-effort)."""
         try:
             from app.core.redis_client import get_redis
             r = await get_redis()
@@ -80,6 +96,34 @@ class ApprovalService:
             await r.publish(channel, json.dumps({"event": event, "request_id": request_id}))
         except Exception as e:
             logger.warning(f"[approval] Redis publish failed for {request_id}: {e}")
+
+    @staticmethod
+    async def _publish_admin_event(payload: dict) -> None:
+        """Publish to the shared admin SSE channel (best-effort)."""
+        try:
+            from app.core.redis_client import get_redis
+            r = await get_redis()
+            await r.publish("approval:admin:events", json.dumps(payload))
+        except Exception as e:
+            logger.warning(f"[approval] Admin event publish failed: {e}")
+
+    @staticmethod
+    async def _email_admin_created(
+        request_id: str,
+        action_description: str,
+        risk_level: str,
+        user_id: int,
+    ) -> None:
+        try:
+            from app.services.email_service import notify_approval_created
+            await notify_approval_created(
+                request_id=request_id,
+                action_description=action_description,
+                risk_level=risk_level,
+                user_id=user_id,
+            )
+        except Exception as e:
+            logger.warning(f"[approval] Email notify failed: {e}")
 
     @staticmethod
     async def wait_for_decision(
