@@ -89,8 +89,9 @@ class AgentConfigUpdate(BaseModel):
 class AgentConfigRead(BaseModel):
     """Agent config returned by the API.
 
-    api_key is never returned — only a masked placeholder if one is set.
-    openclaw_agent_id is surfaced from metadata_json for display.
+    `api_key` 只在创建时一次性返回，其余时候为 None。
+    `has_api_key` 表示 DB 里是否已存有 Key（不暴露明文）。
+    `is_online` 仅 openclaw 后端有意义：最近 5 分钟内有 poll/heartbeat 即视为在线。
     """
     id: int
     agent_name: str
@@ -103,16 +104,24 @@ class AgentConfigRead(BaseModel):
     permission_level: str
     associated_skills: Optional[List[int]]
     metadata_json: Optional[Dict[str, Any]]
+    openclaw_last_seen: Optional[datetime] = None
+    has_api_key: bool = False
+    is_online: bool = False
+    api_key: Optional[str] = None   # 仅创建时填充，其余 None
     created_at: datetime
     updated_at: datetime
 
-    @property
-    def openclaw_agent_id(self) -> Optional[str]:
-        return (self.metadata_json or {}).get("openclaw_agent_id")
-
-    @property
-    def has_api_key(self) -> bool:
-        return bool((self.metadata_json or {}).get("api_key_encrypted"))
+    @classmethod
+    def model_validate(cls, obj, **kwargs):
+        inst = super().model_validate(obj, **kwargs)
+        inst.has_api_key = bool(getattr(obj, "api_key_hash", None))
+        last_seen = getattr(obj, "openclaw_last_seen", None)
+        inst.openclaw_last_seen = last_seen
+        if last_seen:
+            from datetime import timezone
+            delta = (datetime.utcnow() - last_seen).total_seconds()
+            inst.is_online = delta < 300
+        return inst
 
     class Config:
         from_attributes = True

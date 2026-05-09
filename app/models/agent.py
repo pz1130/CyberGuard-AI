@@ -22,6 +22,9 @@ class AgentConfig(Base):
     permission_level = Column(String(20), default="medium")  # low, medium, high
     associated_skills = Column(JSON, nullable=True)  # List of skill IDs
     metadata_json = Column(JSON, nullable=True)
+    # OpenClaw Gateway fields
+    api_key_hash = Column(String(128), nullable=True)      # SHA-256 of the oc-xxx key
+    openclaw_last_seen = Column(DateTime, nullable=True)   # last poll/heartbeat time
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

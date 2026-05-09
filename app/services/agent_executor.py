@@ -363,28 +363,95 @@ class AgentExecutor:
         return result
 
     async def _execute_openclaw(self, config: Dict[str, Any], task: str) -> Dict[str, Any]:
-        """Execute a task on a Clawith/OpenClaw agent via /v1/responses."""
-        from app.services import openclaw_executor
+        """向 OpenClaw 节点派发任务（Gateway 轮询模式）。
 
-        endpoint = config.get("endpoint_url", "").rstrip("/")
-        if not endpoint:
-            return {"status": "error", "output": None, "error": "No endpoint URL configured"}
+        流程：
+          1. 在 gateway_messages 表写入一条 pending 任务
+          2. 等待 OpenClaw 节点 poll → execute → report
+          3. 通过 Redis pub/sub（或 DB 轮询兜底）等待结果
+          4. 超时返回 error
+        """
+        import asyncio
+        import uuid
+        from app.core.database import AsyncSessionLocal
+        from app.models.gateway_message import GatewayMessage
+        from sqlalchemy import select
 
-        # Resolve api_key — stored encrypted in env_vars or metadata_json
-        api_key = _resolve_api_key(config)
-        if not api_key:
-            return {"status": "error", "output": None, "error": "No API key configured for OpenClaw agent"}
+        agent_id = config["id"]
+        execution_id = str(uuid.uuid4())
+        timeout = config.get("timeout", settings.SUB_AGENT_TIMEOUT)
 
-        # Resolve the Clawith agent ID (distinct from our internal DB id)
-        meta = config.get("metadata_json") or {}
-        openclaw_agent_id = meta.get("openclaw_agent_id") or meta.get("agent_id") or "main"
+        # 1. 写入 pending 任务
+        async with AsyncSessionLocal() as session:
+            msg = GatewayMessage(
+                agent_id=agent_id,
+                content=task,
+                execution_id=execution_id,
+                status="pending",
+            )
+            session.add(msg)
+            await session.commit()
+            await session.refresh(msg)
+            message_id = msg.id
 
-        return await openclaw_executor.execute(
-            endpoint_url=endpoint,
-            api_key=api_key,
-            openclaw_agent_id=openclaw_agent_id,
-            task=task,
-        )
+        # 2. 订阅 Redis 频道等待结果
+        channel = f"gateway:result:{execution_id}"
+        pubsub = None
+        try:
+            from app.core.redis_client import get_redis
+            r = await get_redis()
+            pubsub = r.pubsub()
+            await pubsub.subscribe(channel)
+        except Exception:
+            pubsub = None
+
+        # 3. 等待 report，同时 DB 轮询兜底（每 3 秒）
+        deadline = asyncio.get_event_loop().time() + timeout
+        result_text: str | None = None
+
+        try:
+            while asyncio.get_event_loop().time() < deadline:
+                remaining = deadline - asyncio.get_event_loop().time()
+
+                # 等 Redis 通知（最多 3 秒一次）
+                if pubsub:
+                    try:
+                        msg_data = await asyncio.wait_for(
+                            pubsub.get_message(ignore_subscribe_messages=True, timeout=3),
+                            timeout=3.5,
+                        )
+                        if msg_data and msg_data.get("data"):
+                            import json as _json
+                            data = _json.loads(msg_data["data"])
+                            result_text = data.get("result", "")
+                            break
+                    except (asyncio.TimeoutError, Exception):
+                        pass
+
+                # DB 轮询兜底
+                async with AsyncSessionLocal() as session:
+                    r2 = await session.execute(
+                        select(GatewayMessage).where(GatewayMessage.id == message_id)
+                    )
+                    row = r2.scalar_one_or_none()
+                    if row and row.status == "completed":
+                        result_text = row.result or ""
+                        break
+                    if row and row.status == "failed":
+                        return {"status": "error", "output": None, "error": row.error or "Agent reported failure"}
+        finally:
+            if pubsub:
+                try:
+                    await pubsub.unsubscribe(channel)
+                    await pubsub.close()
+                except Exception:
+                    pass
+
+        if result_text is None:
+            return {"status": "error", "output": None,
+                    "error": f"OpenClaw 节点在 {timeout}s 内未响应（节点可能离线或负载过高）"}
+
+        return {"status": "completed", "output": result_text}
 
     async def execute_parallel(self, agent_ids: list, task: str, user_id: int) -> Dict[int, Dict[str, Any]]:
         """Execute task on multiple agents in parallel."""

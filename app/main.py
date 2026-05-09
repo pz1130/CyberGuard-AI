@@ -206,7 +206,7 @@ async def startup_probe():
 # Routers (imported here to avoid circular imports)
 # ---------------------------------------------------------------------------
 from app.routers import auth, users, agents, skills, knowledge, chat, tasks, groupchat, schedule, audit, backup, config, providers, mcp, envvars, approval, token_usage, master_config, conversations, n8n
-from app.routers import chat_stream
+from app.routers import chat_stream, gateway
 
 app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
 app.include_router(users.router, prefix="/api/v1", tags=["Users"])
@@ -228,6 +228,7 @@ app.include_router(token_usage.router, prefix="/api/v1", tags=["Token Usage"])
 app.include_router(master_config.router, prefix="/api/v1", tags=["Master Agent Config"])
 app.include_router(conversations.router, prefix="/api/v1", tags=["Conversations"])
 app.include_router(n8n.router, prefix="/api/v1", tags=["N8N"])
+app.include_router(gateway.router, prefix="/api/v1", tags=["OpenClaw Gateway"])
 
 # WebSocket routes under /ws (proxied by Vite: /ws → ws://localhost:8000/ws)
 app.include_router(groupchat.router, prefix="/ws", tags=["Group Chat WS"])
