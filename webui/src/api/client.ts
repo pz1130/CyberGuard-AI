@@ -52,6 +52,7 @@ export const api = {
   updateAgent: (id: string, body: any) => request(`/agents/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteAgent: (id: string) => request(`/agents/${id}`, { method: 'DELETE' }),
   testAgent: (id: string, body: any) => request(`/agents/${id}/test`, { method: 'POST', body: JSON.stringify(body) }),
+  regenAgentApiKey: (id: string) => request(`/agents/${id}/api-key`, { method: 'POST' }),
 
   // Skills
   getSkills: () => request('/skills'),
