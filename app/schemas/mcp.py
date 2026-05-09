@@ -71,6 +71,13 @@ class MCPToolBase(BaseModel):
     input_schema_json: Optional[str] = None
     category: Optional[str] = None
     is_active: bool = True
+    required_permission: Optional[str] = Field(
+        default=None,
+        description=(
+            "RBAC permission required to execute this tool (e.g. 'knowledge:write', "
+            "'admin:all'). Null/empty = requires only TASK_EXECUTE."
+        ),
+    )
 
 
 class MCPToolCreate(MCPToolBase):
@@ -85,6 +92,10 @@ class MCPToolUpdate(BaseModel):
     input_schema_json: Optional[str] = None
     category: Optional[str] = None
     is_active: Optional[bool] = None
+    required_permission: Optional[str] = Field(
+        default=None,
+        description="RBAC permission required to execute this tool. Pass None to keep existing, empty string to clear.",
+    )
 
 
 class MCPToolResponse(BaseModel):
@@ -95,6 +106,7 @@ class MCPToolResponse(BaseModel):
     description: Optional[str]
     input_schema_json: Optional[str]
     category: Optional[str]
+    required_permission: Optional[str]
     is_active: bool
     last_used_at: Optional[datetime]
     use_count: int

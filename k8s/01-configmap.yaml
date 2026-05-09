@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cyberguard-config
+  namespace: cyberguard
+data:
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "INFO"
+  CORS_ORIGINS: "https://your-frontend.example.com"
+  REDIS_URL: "redis://redis-svc:6379/0"
+  DATABASE_URL: "postgresql+asyncpg://cyberguard:${POSTGRES_PASSWORD}@postgres-svc:5432/cyberguard"
+  MOCK_MODE: "false"

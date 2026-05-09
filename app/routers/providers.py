@@ -139,6 +139,43 @@ async def _test_provider_connectivity(
 
     start = time.monotonic()
     try:
+        # MiniMax uses OpenAI-compatible API despite anthropic provider_type
+        if provider_type == "anthropic" and ("minimaxi" in base_url or ".minimaxi.com" in base_url):
+            test_model = models[0] if models else "MiniMax-Text-01"
+            try:
+                await client.chat.completions.create(
+                    model=test_model,
+                    messages=[{"role": "user", "content": "hi"}],
+                    max_tokens=5,
+                )
+                latency_ms = (time.monotonic() - start) * 1000
+                return ProviderTestResponse(
+                    success=True,
+                    latency_ms=round(latency_ms, 1),
+                    model=test_model,
+                )
+            except APIStatusError as e:
+                latency_ms = (time.monotonic() - start) * 1000
+                if e.status_code == 401:
+                    return ProviderTestResponse(
+                        success=True,
+                        latency_ms=round(latency_ms, 1),
+                        model=test_model,
+                        error="Connected (401 Unauthorized — check your API key)",
+                    )
+                return ProviderTestResponse(
+                    success=False,
+                    latency_ms=round(latency_ms, 1),
+                    error=f"HTTP {e.status_code}: {e.message[:200]}",
+                )
+            except Exception as e:
+                latency_ms = (time.monotonic() - start) * 1000
+                return ProviderTestResponse(
+                    success=False,
+                    latency_ms=round(latency_ms, 1),
+                    error=str(e)[:200],
+                )
+
         if provider_type == "anthropic":
             import httpx
             headers = {
@@ -200,13 +237,11 @@ async def _test_provider_connectivity(
 
 
 def _provider_to_read_schema(provider: Provider) -> ProviderRead:
-    """Convert Provider model to ProviderRead schema, decrypting api_key."""
-    api_key_decrypted = None
+    """Convert Provider model to ProviderRead schema, masking api_key for security."""
+    # Never return decrypted api_key in responses; mask it for display purposes
+    api_key_masked = None
     if provider.api_key_encrypted:
-        try:
-            api_key_decrypted = decrypt_data(provider.api_key_encrypted)
-        except Exception:
-            api_key_decrypted = None
+        api_key_masked = "******"  # Masked, not the actual value
 
     return ProviderRead(
         id=provider.id,
@@ -219,7 +254,7 @@ def _provider_to_read_schema(provider: Provider) -> ProviderRead:
         metadata_json=provider.metadata_json,
         created_at=provider.created_at,
         updated_at=provider.updated_at,
-        api_key=api_key_decrypted,
+        api_key=api_key_masked,
     )
 
 
@@ -326,7 +361,10 @@ async def update_provider(
     update_data = body.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         if key == "api_key":
-            setattr(provider, "api_key_encrypted", encrypt_data(value) if value else None)
+            # Skip re-encryption if the client sends back the masked placeholder
+            if value and value != "******":
+                setattr(provider, "api_key_encrypted", encrypt_data(value))
+            # If value is None or "******", keep the existing encrypted key unchanged
         else:
             setattr(provider, key, value)
 

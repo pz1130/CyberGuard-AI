@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { wsBase } from '../api/client'
+import { api } from '../api/client'
+import { Radio, Send, Plus, Users, Play, Square, ChevronRight, Bot, User } from 'lucide-react'
 
-export default function GroupChat() {
+// ─── Human Room Chat ────────────────────────────────────────────────────────────
+
+function HumanChat() {
   const [rooms, setRooms] = useState<string[]>(['general', 'agents', 'alerts'])
   const [activeRoom, setActiveRoom] = useState('general')
   const [messages, setMessages] = useState<{ role: string; user: string; content: string }[]>([])
@@ -12,14 +15,20 @@ export default function GroupChat() {
 
   const connect = (room: string) => {
     if (wsRef.current) wsRef.current.close()
-    const ws = new WebSocket(`${wsBase}/groupchat/${room}`)
+    const token = localStorage.getItem('token') || ''
+    const wsBase = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
+    const ws = new WebSocket(`${wsBase}/ws/groupchat/${room}?token=${encodeURIComponent(token)}`)
     ws.onopen = () => setConnected(true)
     ws.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data)
-        setMessages(m => [...m, { role: 'other', user: data.user || '匿名', content: data.content || data.message || JSON.stringify(data) }])
+        setMessages(m => [...m, {
+          role: 'other',
+          user: data._username || data.user || 'SYSTEM',
+          content: data.content || data.message || JSON.stringify(data),
+        }])
       } catch {
-        setMessages(m => [...m, { role: 'other', user: '系统', content: e.data }])
+        setMessages(m => [...m, { role: 'other', user: 'SYSTEM', content: e.data }])
       }
     }
     ws.onclose = () => setConnected(false)
@@ -35,49 +44,69 @@ export default function GroupChat() {
 
   const send = () => {
     if (!input.trim() || !wsRef.current) return
-    wsRef.current.send(JSON.stringify({ content: input, user: '我' }))
-    setMessages(m => [...m, { role: 'self', user: '我', content: input }])
+    wsRef.current.send(JSON.stringify({ content: input, user: 'OPERATOR' }))
+    setMessages(m => [...m, { role: 'self', user: 'OPERATOR', content: input }])
     setInput('')
   }
 
   const addRoom = () => {
-    const name = prompt('房间名称:')
+    const name = prompt('ROOM NAME:')
     if (name && !rooms.includes(name)) setRooms(r => [...r, name])
   }
 
   return (
-    <div className="flex h-full gap-4">
-      {/* Room list */}
-      <div className="w-48 flex-shrink-0 bg-slate-900 rounded-xl p-3 flex flex-col gap-1">
-        <h3 className="text-xs font-semibold text-slate-400 uppercase mb-2 px-2">房间</h3>
+    <div style={{ display: 'flex', flex: 1, gap: 16, minHeight: 0 }}>
+      <div style={{
+        width: 180, flexShrink: 0,
+        background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
+        display: 'flex', flexDirection: 'column', padding: 12,
+      }}>
+        <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>ROOMS</div>
         {rooms.map(r => (
           <button key={r} onClick={() => setActiveRoom(r)}
-            className={`text-left px-3 py-2 rounded-lg text-sm ${activeRoom === r ? 'bg-violet-500/20 text-violet-400' : 'text-slate-400 hover:bg-slate-800'}`}>
-            # {r}
+            style={{
+              display: 'block', width: '100%', padding: '8px 10px', textAlign: 'left', cursor: 'pointer',
+              background: activeRoom === r ? 'var(--accent-dim)' : 'transparent',
+              borderLeft: activeRoom === r ? '2px solid var(--accent)' : '2px solid transparent',
+              color: activeRoom === r ? 'var(--accent)' : 'var(--text-muted)',
+              fontSize: 11, letterSpacing: '0.08em', transition: 'all 0.15s',
+              fontFamily: 'var(--font-mono)',
+            }}>
+            # {r.toUpperCase()}
           </button>
         ))}
-        <button onClick={addRoom} className="mt-2 text-xs text-slate-500 hover:text-white px-3 py-1">+ 新增房间</button>
+        <button onClick={addRoom}
+          style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 12, padding: '6px 10px', fontSize: 10, letterSpacing: '0.1em', color: 'var(--text-dim)', cursor: 'pointer', background: 'none', border: '1px solid var(--border)', fontFamily: 'var(--font-mono)', width: '100%' }}>
+          <Plus size={10} /> NEW ROOM
+        </button>
       </div>
 
-      {/* Chat */}
-      <div className="flex-1 flex flex-col bg-slate-900 rounded-xl overflow-hidden">
-        {/* Header */}
-        <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-white font-medium">#{activeRoom}</span>
-            <span className={`text-xs px-2 py-0.5 rounded ${connected ? 'bg-violet-500/20 text-violet-400' : 'bg-red-500/20 text-red-400'}`}>
-              {connected ? '已连接' : '未连接'}
-            </span>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', minHeight: 0 }}>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em' }}># {activeRoom.toUpperCase()}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', border: `1px solid ${connected ? 'var(--green)' : 'var(--red)'}`, color: connected ? 'var(--green)' : 'var(--red)' }}>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: connected ? 'var(--green)' : 'var(--red)' }} />
+            <span style={{ fontSize: 10, letterSpacing: '0.15em' }}>{connected ? 'CONNECTED' : 'DISCONNECTED'}</span>
           </div>
         </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {messages.length === 0 && <p className="text-slate-500 text-sm text-center mt-10">开始聊天...</p>}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {messages.length === 0 && (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <Radio size={22} style={{ color: 'var(--text-dim)' }} />
+              <div style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>BEGIN GROUP DISCUSSION</div>
+            </div>
+          )}
           {messages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === 'self' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-md rounded-2xl px-4 py-2 text-sm ${m.role === 'self' ? 'bg-violet-500 text-white' : 'bg-slate-800 text-slate-100'}`}>
-                <span className="text-xs opacity-60 block">{m.user}</span>
+            <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'self' ? 'flex-end' : 'flex-start', gap: 4 }}>
+              <div style={{ fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.1em', padding: '0 4px' }}>{m.user.toUpperCase()}</div>
+              <div style={{
+                maxWidth: '70%', padding: '10px 14px',
+                background: m.role === 'self' ? 'var(--accent-dim)' : 'var(--bg-elevated)',
+                border: m.role === 'self' ? '1px solid var(--accent-border)' : '1px solid var(--border-bright)',
+                borderLeft: m.role === 'self' ? '2px solid var(--accent)' : '2px solid var(--cyan)',
+                fontSize: 12, color: 'var(--text-primary)', letterSpacing: '0.02em',
+              }}>
                 {m.content}
               </div>
             </div>
@@ -85,14 +114,305 @@ export default function GroupChat() {
           <div ref={bottomRef} />
         </div>
 
-        {/* Input */}
-        <div className="p-3 border-t border-slate-800 flex gap-2">
-          <input value={input} onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && send()}
-            className="flex-1 bg-slate-800 rounded-xl px-4 py-2 text-sm text-white" placeholder="输入消息..." />
-          <button onClick={send} className="px-5 py-2 bg-violet-500 hover:bg-violet-600 text-white rounded-xl text-sm">发送</button>
+        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10 }}>
+          <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()}
+            placeholder="TRANSMIT MESSAGE..."
+            style={{ flex: 1, height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em', fontFamily: 'var(--font-mono)' }} />
+          <button onClick={send}
+            style={{ height: 38, padding: '0 16px', background: 'var(--accent)', border: '1px solid var(--accent-border)', color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.15em', cursor: 'pointer', fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Send size={11} /> SEND
+          </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─── Multi-Agent Chat ─────────────────────────────────────────────────────────
+
+interface GCAgent {
+  id: number
+  agent_name: string
+  backend_type?: string
+  endpoint_url?: string
+}
+
+interface GCMessage {
+  role: string
+  content: string
+  agent_id?: number
+  agent_name?: string
+  timestamp: string
+}
+
+interface GCSession {
+  session_id: string
+  user_id: number
+  agent_ids: number[]
+  status: string
+  current_round: number
+  max_rounds: number
+  messages: GCMessage[]
+  created_at: string
+}
+
+function MultiAgentChat() {
+  const [agents, setAgents] = useState<GCAgent[]>([])
+  const [selectedAgentIds, setSelectedAgentIds] = useState<number[]>([])
+  const [initialMessage, setInitialMessage] = useState('')
+  const [maxRounds, setMaxRounds] = useState(3)
+  const [session, setSession] = useState<GCSession | null>(null)
+  const [running, setRunning] = useState(false)
+  const [runningRound, setRunningRound] = useState(false)
+  const [loadError, setLoadError] = useState('')
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    api.getAgents().then((data: any) => {
+      const list = Array.isArray(data) ? data : data?.agents || []
+      setAgents(list.filter((a: any) => a.backend_type === 'openclaw' || a.backend_type === 'hermes' || a.backend_type === 'custom'))
+    }).catch(() => {})
+  }, [])
+
+  useEffect(() => { bottomRef.current?.scrollIntoView() }, [session?.messages])
+
+  const toggleAgent = (id: number) => {
+    setSelectedAgentIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  const createAndRun = async () => {
+    if (!initialMessage.trim() || selectedAgentIds.length === 0) return
+    setRunning(true); setLoadError('')
+    try {
+      const result: any = await api.createGroupChatSession({
+        agent_ids: selectedAgentIds,
+        initial_message: initialMessage,
+        max_rounds: maxRounds,
+      })
+      setSession(result)
+      // Auto-run first round
+      await api.runGroupChatRound(result.session_id)
+      refreshSession(result.session_id)
+    } catch (e: any) { setLoadError(e.message) }
+    finally { setRunning(false) }
+  }
+
+  const runRound = async () => {
+    if (!session) return
+    setRunningRound(true)
+    try {
+      await api.runGroupChatRound(session.session_id)
+      await refreshSession(session.session_id)
+    } catch (e: any) { setLoadError(e.message) }
+    finally { setRunningRound(false) }
+  }
+
+  const runToComplete = async () => {
+    if (!session) return
+    setRunningRound(true)
+    try {
+      const result: any = await api.runGroupChatComplete(session.session_id)
+      setSession(result)
+    } catch (e: any) { setLoadError(e.message) }
+    finally { setRunningRound(false) }
+  }
+
+  const cancelSession = async () => {
+    if (!session) return
+    await api.cancelGroupChatSession(session.session_id)
+    setSession(null)
+  }
+
+  const refreshSession = async (id: string) => {
+    const result: any = await api.getGroupChatSession(id)
+    setSession(result)
+  }
+
+  const roleColor = (role: string) => {
+    if (role === 'user') return 'var(--accent)'
+    if (role === 'agent') return 'var(--cyan)'
+    return 'var(--text-muted)'
+  }
+
+  return (
+    <div style={{ display: 'flex', flex: 1, gap: 16, minHeight: 0 }}>
+      {/* Agent selector sidebar */}
+      <div style={{
+        width: 220, flexShrink: 0,
+        background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
+        display: 'flex', flexDirection: 'column', padding: 12,
+      }}>
+        <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>SELECT AGENTS</div>
+        {agents.length === 0 && (
+          <div style={{ fontSize: 10, color: 'var(--text-dim)', padding: '8px 0' }}>No agents configured</div>
+        )}
+        {agents.map(a => (
+          <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 4px', cursor: session ? 'not-allowed' : 'pointer' }}>
+            <input type="checkbox" checked={selectedAgentIds.includes(a.id)} onChange={() => toggleAgent(a.id)}
+              disabled={!!session} style={{ width: 14, height: 14, accentColor: 'var(--accent)' }} />
+            <span style={{ fontSize: 11, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', letterSpacing: '0.03em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {a.agent_name}
+            </span>
+          </label>
+        ))}
+
+        {session && (
+          <div style={{ marginTop: 16, padding: '10px', background: 'var(--bg-base)', border: '1px solid var(--border)', fontSize: 10, color: 'var(--text-dim)', lineHeight: 1.8 }}>
+            <div style={{ color: 'var(--text-muted)', letterSpacing: '0.1em', marginBottom: 4 }}>SESSION</div>
+            <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>Round {session.current_round}/{session.max_rounds}</div>
+            <div style={{ color: session.status === 'active' ? 'var(--green)' : 'var(--text-dim)' }}>{session.status.toUpperCase()}</div>
+          </div>
+        )}
+      </div>
+
+      {/* Chat area */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', minHeight: 0 }}>
+        {/* Chat header */}
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>MULTI-AGENT DISCUSSION</span>
+          {session && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 10, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+                ROUND {session.current_round}/{session.max_rounds}
+              </span>
+              <span style={{ fontSize: 10, padding: '2px 8px', border: '1px solid var(--green)', color: 'var(--green)' }}>
+                {session.status.toUpperCase()}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Messages */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {!session && (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <Users size={28} style={{ color: 'var(--text-dim)' }} />
+              <div style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.1em', textAlign: 'center', lineHeight: 1.8 }}>
+                Select agents → Write a prompt → Launch discussion
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-dim)', maxWidth: 300, textAlign: 'center', lineHeight: 1.6 }}>
+                Each agent will respond in sequence. Results are streamed back as agents reply.
+              </div>
+            </div>
+          )}
+
+          {session?.messages.map((m, i) => (
+            <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 4px' }}>
+                {m.role === 'agent' ? (
+                  <Bot size={10} style={{ color: 'var(--cyan)' }} />
+                ) : (
+                  <User size={10} style={{ color: 'var(--accent)' }} />
+                )}
+                <span style={{ fontSize: 9, color: roleColor(m.role), letterSpacing: '0.1em', fontWeight: 600 }}>
+                  {m.role === 'agent' ? (m.agent_name || `AGENT-${m.agent_id}`).toUpperCase() : 'USER'}
+                </span>
+                <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>
+                  {new Date(m.timestamp).toLocaleTimeString()}
+                </span>
+              </div>
+              <div style={{
+                maxWidth: '80%', padding: '10px 14px',
+                background: m.role === 'user' ? 'var(--accent-dim)' : 'var(--bg-elevated)',
+                border: `1px solid ${m.role === 'user' ? 'var(--accent-border)' : 'var(--border-bright)'}`,
+                borderLeft: `2px solid ${roleColor(m.role)}`,
+                fontSize: 12, color: 'var(--text-primary)', letterSpacing: '0.02em', lineHeight: 1.6,
+                whiteSpace: 'pre-wrap',
+              }}>
+                {m.content}
+              </div>
+            </div>
+          ))}
+          <div ref={bottomRef} />
+        </div>
+
+        {/* Input / Controls */}
+        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {!session ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <textarea
+                value={initialMessage}
+                onChange={e => setInitialMessage(e.target.value)}
+                placeholder="Initial prompt for the group discussion..."
+                rows={3}
+                style={{ width: '100%', padding: '8px 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 11, letterSpacing: '0.05em', fontFamily: 'var(--font-mono)', resize: 'none' }}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>MAX ROUNDS</span>
+                  <input type="number" value={maxRounds} onChange={e => setMaxRounds(Number(e.target.value))} min={1} max={20}
+                    style={{ width: 50, height: 28, padding: '0 8px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 11, fontFamily: 'var(--font-mono)', textAlign: 'center' }} />
+                </div>
+                <button onClick={createAndRun} disabled={running || selectedAgentIds.length === 0 || !initialMessage.trim()}
+                  style={{ height: 34, padding: '0 18px', background: running ? 'var(--bg-elevated)' : 'var(--accent)', border: '1px solid var(--accent-border)', color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.15em', cursor: running ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {running ? 'STARTING...' : <><Play size={11} /> START DISCUSSION</>}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 8 }}>
+              {session.status === 'active' && (
+                <>
+                  <button onClick={runRound} disabled={runningRound}
+                    style={{ flex: 1, height: 36, border: '1px solid var(--accent-border)', background: runningRound ? 'var(--bg-elevated)' : 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.1em', cursor: runningRound ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    {runningRound ? 'RUNNING...' : <><ChevronRight size={11} /> NEXT ROUND</>}
+                  </button>
+                  <button onClick={runToComplete} disabled={runningRound}
+                    style={{ height: 36, padding: '0 16px', border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 11, letterSpacing: '0.1em', cursor: runningRound ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    AUTO
+                  </button>
+                </>
+              )}
+              <button onClick={cancelSession}
+                style={{ height: 36, padding: '0 14px', border: '1px solid var(--red)', background: 'transparent', color: 'var(--red)', fontSize: 11, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Square size={11} /> END
+              </button>
+            </div>
+          )}
+          {loadError && (
+            <div style={{ padding: '6px 10px', background: 'rgba(255,0,0,0.1)', border: '1px solid var(--red)', fontSize: 10, color: 'var(--red)', fontFamily: 'var(--font-mono)' }}>
+              {loadError}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
+export default function GroupChat() {
+  const [tab, setTab] = useState<'room' | 'multi'>('room')
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - var(--header-height) - 48px)' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 36, height: 36, border: '1px solid var(--border-bright)', background: 'var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--cyan)' }}>
+            <Radio size={15} />
+          </div>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>GROUP CHAT</div>
+            <div style={{ fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>MULTI-AGENT WEBSOCKET DISCUSSION</div>
+          </div>
+        </div>
+
+        {/* Tab switcher */}
+        <div style={{ display: 'flex', border: '1px solid var(--border-bright)' }}>
+          <button onClick={() => setTab('room')}
+            style={{ padding: '6px 16px', fontSize: 10, letterSpacing: '0.15em', cursor: 'pointer', background: tab === 'room' ? 'var(--accent-dim)' : 'transparent', color: tab === 'room' ? 'var(--accent)' : 'var(--text-muted)', border: 'none', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+            ROOM CHAT
+          </button>
+          <button onClick={() => setTab('multi')}
+            style={{ padding: '6px 16px', fontSize: 10, letterSpacing: '0.15em', cursor: 'pointer', background: tab === 'multi' ? 'var(--accent-dim)' : 'transparent', color: tab === 'multi' ? 'var(--accent)' : 'var(--text-muted)', border: 'none', fontFamily: 'var(--font-mono)', fontWeight: 600, borderLeft: '1px solid var(--border-bright)' }}>
+            MULTI-AGENT
+          </button>
+        </div>
+      </div>
+
+      {tab === 'room' ? <HumanChat /> : <MultiAgentChat />}
     </div>
   )
 }

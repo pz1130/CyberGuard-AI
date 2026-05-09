@@ -1,12 +1,51 @@
 """Sub-Agent HTTP executor wrapper."""
 import httpx
 import json
-from typing import Dict, Any, Optional
+import re
+from typing import Dict, Any, Optional, List
 from datetime import datetime
+from urllib.parse import urlparse
 
 from app.config import settings
 from app.core.security import decrypt_data
 from app.core.rbac import Permission
+from app.services.openclaw_executor import get_executor_for_backend
+
+# Blocked hostnames for SSRF protection
+_BLOCKED_HOSTS = frozenset({
+    "169.254.169.254",       # AWS / Azure metadata
+    "metadata.google.internal",  # GCP metadata
+    "metadata.internal",
+    "metadata.azure.com",
+    "localhost",
+    "0.0.0.0",
+    "127.0.0.1",
+})
+
+
+def _validate_endpoint_url(endpoint_url: str) -> str:
+    """
+    Validate endpoint URL to prevent SSRF.
+    Returns the validated URL or raises ValueError.
+    """
+    if not endpoint_url:
+        raise ValueError("Endpoint URL cannot be empty")
+    parsed = urlparse(endpoint_url)
+    scheme = parsed.scheme.lower()
+    if scheme not in ("http", "https"):
+        raise ValueError(f"Disallowed scheme: {scheme}. Only http/https allowed.")
+    hostname = parsed.hostname or ""
+    # Block direct IP access to private ranges
+    if hostname in _BLOCKED_HOSTS:
+        raise ValueError(f"Disallowed host: {hostname}")
+    # Block obvious private/CIDR ranges (basic check)
+    if hostname.startswith(("10.", "172.16.", "172.17.", "172.18.", "172.19.",
+                            "172.20.", "172.21.", "172.22.", "172.23.",
+                            "172.24.", "172.25.", "172.26.", "172.27.",
+                            "172.28.", "172.29.", "172.30.", "172.31.",
+                            "192.168.")):
+        raise ValueError(f"Disallowed private network range: {hostname}")
+    return endpoint_url
 
 
 class SubAgentWrapper:
@@ -61,6 +100,12 @@ class SubAgentWrapper:
                 "error": f"No endpoint configured for agent {self.agent_name}",
             }
 
+        # SSRF protection + scheme check
+        try:
+            validated_url = _validate_endpoint_url(self.endpoint_url)
+        except ValueError as e:
+            return {"status": "error", "output": None, "error": f"Invalid endpoint URL: {e}"}
+
         payload = {
             "task": task,
             "context": context or {},
@@ -70,9 +115,16 @@ class SubAgentWrapper:
 
         for attempt in range(self.max_retries):
             try:
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                # Enforce HTTPS; verify certs in production
+                import ssl
+                parsed = urlparse(validated_url)
+                verify_certs = parsed.scheme == "https"
+                async with httpx.AsyncClient(
+                    timeout=self.timeout,
+                    verify=verify_certs,
+                ) as client:
                     response = await client.post(
-                        f"{self.endpoint_url}/execute",
+                        f"{validated_url}/execute",
                         headers=self._get_headers(),
                         json=payload,
                     )
@@ -121,9 +173,16 @@ class SubAgentWrapper:
             return {"success": False, "error": "No endpoint configured"}
 
         try:
-            async with httpx.AsyncClient(timeout=10) as client:
+            validated_url = _validate_endpoint_url(self.endpoint_url)
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+
+        try:
+            parsed = urlparse(validated_url)
+            verify_certs = parsed.scheme == "https"
+            async with httpx.AsyncClient(timeout=10, verify=verify_certs) as client:
                 response = await client.get(
-                    f"{self.endpoint_url}/health",
+                    f"{validated_url}/health",
                     headers=self._get_headers(),
                 )
                 if response.status_code == 200:
@@ -138,9 +197,16 @@ class SubAgentWrapper:
             return {"status": "offline", "error": "No endpoint configured"}
 
         try:
-            async with httpx.AsyncClient(timeout=10) as client:
+            validated_url = _validate_endpoint_url(self.endpoint_url)
+        except ValueError as e:
+            return {"status": "offline", "error": str(e)}
+
+        try:
+            parsed = urlparse(validated_url)
+            verify_certs = parsed.scheme == "https"
+            async with httpx.AsyncClient(timeout=10, verify=verify_certs) as client:
                 response = await client.get(
-                    f"{self.endpoint_url}/status",
+                    f"{validated_url}/status",
                     headers=self._get_headers(),
                 )
                 if response.status_code == 200:
@@ -153,7 +219,46 @@ class SubAgentWrapper:
 class AgentExecutor:
     """Service for managing sub-agent executions."""
 
-    async def execute(self, agent_id: int, task: str, user_id: int) -> Dict[str, Any]:
+    async def get_mcp_tools_for_agent(self, agent_metadata_json: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """
+        Fetch active MCP tools and convert to OpenClaw tool format.
+        If agent metadata specifies mcp_tool_ids, only those tools are returned.
+        Otherwise all active MCP tools are returned.
+        """
+        from app.core.database import get_db_context
+        from app.models.mcp import MCPTool
+        from sqlalchemy import select
+        import json
+
+        async with get_db_context() as session:
+            query = select(MCPTool).where(MCPTool.is_active == True)
+            # Filter by selected tool IDs if specified in agent config
+            if agent_metadata_json and agent_metadata_json.get("mcp_tool_ids"):
+                tool_ids = agent_metadata_json["mcp_tool_ids"]
+                query = query.where(MCPTool.id.in_(tool_ids))
+            result = await session.execute(query)
+            tools = result.scalars().all()
+
+        openclaw_tools = []
+        for t in tools:
+            try:
+                input_schema = json.loads(t.input_schema_json) if t.input_schema_json else {}
+            except Exception:
+                input_schema = {}
+            openclaw_tools.append({
+                "name": t.tool_name,
+                "description": t.description or "",
+                "input_schema": input_schema,
+            })
+        return openclaw_tools
+
+    async def execute(
+        self,
+        agent_id: int,
+        task: str,
+        user_id: int,
+        tools: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
         """
         Execute task on a specific sub-agent.
 
@@ -161,6 +266,7 @@ class AgentExecutor:
             agent_id: Database ID of the agent config
             task: Task description
             user_id: User ID making the request
+            tools: Optional list of tool definitions to pass to the agent
 
         Returns:
             Execution result
@@ -188,12 +294,20 @@ class AgentExecutor:
                 "id": agent_obj.id,
                 "agent_name": agent_obj.agent_name,
                 "backend_type": agent_obj.backend_type,
+                "provider_id": agent_obj.provider_id,
                 "endpoint_url": agent_obj.endpoint_url,
                 "env_vars_encrypted": agent_obj.env_vars_encrypted,
+                "system_prompt": agent_obj.system_prompt,
                 "permission_level": getattr(agent_obj, "permission_level", "medium"),
+                "associated_skills": agent_obj.associated_skills,
+                "metadata_json": agent_obj.metadata_json,
+                # OpenClaw-specific fields (from metadata_json if not set directly)
+                "api_key": getattr(agent_obj, "api_key", "") or "",
+                "auth_mode": getattr(agent_obj, "auth_mode", "api_key"),
+                "streaming": getattr(agent_obj, "streaming", True),
             }
 
-        wrapper = SubAgentWrapper(config_dict)
+        wrapper = get_executor_for_backend(config_dict)
 
         # Check permission level
         permission_level = config_dict.get("permission_level", "medium")
@@ -205,9 +319,15 @@ class AgentExecutor:
                 "error": "High permission agent requires approval",
             }
 
+        # If no tools explicitly provided, auto-load MCP tools for OpenClaw backends
+        if tools is None and config_dict["backend_type"] == "openclaw":
+            tools = await self.get_mcp_tools_for_agent(config_dict.get("metadata_json"))
+
         result = await wrapper.execute(
             task=task,
             context={"user_id": user_id},
+            tools=tools,
+            system_prompt=config_dict.get("system_prompt"),
         )
 
         result["agent_id"] = agent_id

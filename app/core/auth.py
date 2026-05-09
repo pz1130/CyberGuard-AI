@@ -28,22 +28,53 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     else:
         expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire, "iat": datetime.utcnow()})
+    # Generate unique jti for revocation support
+    import uuid
+    to_encode["jti"] = str(uuid.uuid4())
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 
-def verify_token(token: str) -> Optional[Dict[str, Any]]:
-    """Decode and validate a JWT access token. Returns None if invalid."""
+async def is_token_revoked(jti: str) -> bool:
+    """Check if a token's JTI is in the revocation blacklist (Redis)."""
+    from app.core.redis_client import get_redis
+    redis = await get_redis()
+    if redis:
+        return await redis.sismember("token:blacklist", jti)
+    return False
+
+
+async def revoke_token(jti: str, remaining_ttl_seconds: int) -> None:
+    """
+    Add a token's JTI to the revocation blacklist.
+    Stores in Redis with TTL so the entry auto-expires when the token would have expired anyway.
+    """
+    from app.core.redis_client import get_redis
+    redis = await get_redis()
+    if redis:
+        # TTL must be positive — don't bother storing if token is already expired
+        if remaining_ttl_seconds > 0:
+            await redis.sadd("token:blacklist", jti)
+            await redis.expire("token:blacklist", remaining_ttl_seconds + 60)  # 60s grace period
+
+
+async def verify_token(token: str) -> Optional[Dict[str, Any]]:
+    """Decode and validate a JWT access token. Returns None if invalid or revoked."""
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+        jti = payload.get("jti")
+        if jti:
+            revoked = await is_token_revoked(jti)
+            if revoked:
+                return None
         return payload
     except JWTError:
         return None
 
 
-def decode_access_token(token: str) -> Dict[str, Any]:
+async def decode_access_token(token: str) -> Dict[str, Any]:
     """Decode and validate a JWT access token. Raises HTTPException if invalid."""
-    payload = verify_token(token)
+    payload = await verify_token(token)
     if payload is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -57,18 +88,29 @@ def create_refresh_token(data: Dict[str, Any]) -> str:
     """Create a JWT refresh token with 7-day expiration."""
     expire = datetime.utcnow() + timedelta(days=7)
     to_encode = data.copy()
-    to_encode.update({"exp": expire, "iat": datetime.utcnow(), "type": "refresh"})
+    import uuid
+    to_encode.update({"exp": expire, "iat": datetime.utcnow(), "type": "refresh", "jti": str(uuid.uuid4())})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
 
 
-def verify_refresh_token(token: str) -> Dict[str, Any]:
+async def verify_refresh_token(token: str) -> Dict[str, Any]:
     """Verify a refresh token and return its payload."""
-    payload = decode_access_token(token)
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     if payload.get("type") != "refresh":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token type: expected refresh token",
         )
+    jti = payload.get("jti")
+    if jti and await is_token_revoked(jti):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked")
     return payload
 
 

@@ -45,6 +45,23 @@ class TaskUpdate(BaseModel):
     output_data: Optional[Dict[str, Any]] = None
 
 
+class ExecutionRead(BaseModel):
+    """Execution record schema matching AgentExecution ORM model."""
+    id: int
+    execution_id: str
+    agent_id: Optional[int]
+    status: str
+    input_data: Optional[Dict[str, Any]]
+    output_data: Optional[Dict[str, Any]]
+    error_message: Optional[str]
+    started_at: Optional[datetime]
+    completed_at: Optional[datetime]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class TaskResponse(BaseModel):
     """Task response schema."""
     id: int

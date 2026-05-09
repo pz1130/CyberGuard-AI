@@ -1,14 +1,20 @@
 """Authentication router."""
 from datetime import timedelta
+from typing import Optional
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import jwt, JWTError
 from app.core.dependencies import get_db, get_current_user
-from app.core.auth import create_access_token, verify_token, AuthenticatedUser
+from app.core.auth import create_access_token, verify_refresh_token, AuthenticatedUser, revoke_token
 from app.schemas.auth import LoginRequest, TokenResponse, RefreshTokenRequest
 from app.config import settings
+
+ALGORITHM = settings.ALGORITHM
+
+bearer_scheme = HTTPBearer(auto_error=False)
 
 router = APIRouter()
 
@@ -66,8 +72,19 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/auth/logout", tags=["Authentication"])
-async def logout():
-    """Logout endpoint (client-side token discard)."""
+async def logout(credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme)):
+    """Logout and revoke the current token."""
+    if credentials:
+        token = credentials.credentials
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+            jti = payload.get("jti")
+            exp = payload.get("exp", 0)
+            if jti and exp:
+                remaining = max(0, exp - int(datetime.utcnow().timestamp()))
+                await revoke_token(jti, remaining)
+        except JWTError:
+            pass  # Invalid token already — nothing to revoke
     return {"message": "Successfully logged out"}
 
 
@@ -80,9 +97,8 @@ async def get_current_user_info(current_user: AuthenticatedUser = Depends(get_cu
 @router.post("/auth/refresh", response_model=RefreshResponse, tags=["Authentication"])
 async def refresh(body: RefreshTokenRequest):
     """Refresh access token using a valid refresh token."""
-    payload = verify_token(body.refresh_token)
-    if not payload:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired refresh token")
+    import asyncio
+    payload = await verify_refresh_token(body.refresh_token)
 
     new_access_token = create_access_token(
         data={"sub": payload["sub"], "username": payload["username"], "role": payload["role"]},

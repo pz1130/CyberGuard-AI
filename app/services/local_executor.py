@@ -1,6 +1,6 @@
 """Built-in local agent executor — fallback when no remote sub-agent is registered."""
 import json
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from app.services.llm_router import get_llm_router
 
 
@@ -32,6 +32,63 @@ AGENT_TYPE_KEYWORDS = {
         "osint", "recon", " footprint", "whois", "dns lookup",
         "子域名", "信息收集", "侦察",
     ],
+    "n8n_workflow": [
+        "n8n", "workflow", "工作流", "automation", "automate",
+        "自动化", "流程", "create workflow", "n8n workflow",
+        "自动化工作流", "创建工作流",
+    ],
+}
+
+# Default fallback system prompts (used when no skill is configured in DB)
+FALLBACK_SYSTEM_PROMPTS: Dict[str, str] = {
+    "threat_intel": """你是一个网络安全威胁情报分析 Agent。
+当给定 IOC（IP、域名、Hash、URL）时，请从以下角度分析：
+1. 该 IOC 的恶意活动历史
+2. 关联的 APT 组织或攻击活动
+3. 推荐的下一步行动（监控/封禁/深入调查）
+如果无法确定，给出最可能的分类和置信度。""",
+    "log_anomaly": """你是一个日志异常分析 Agent。
+分析给定的日志条目，识别：
+1. 异常模式（多次失败登录、异常时间访问等）
+2. 可能的攻击向量
+3. 推荐的响应动作
+请用结构化格式输出。""",
+    "vuln_scanner": """你是一个漏洞扫描分析 Agent。
+分析目标系统或 CVE 描述，提供：
+1. 漏洞严重程度和 CVSS 评分
+2. 受影响版本/配置
+3. 利用可行性（PoC/野利用）
+4. 修复建议（补丁/缓解措施）""",
+    "remediation": """你是一个安全事件响应 Agent。
+给定安全事件，提供：
+1. 紧急止损措施
+2. 事件遏制步骤
+3. 根因分析框架
+4. 后续加固建议""",
+    "compliance": """你是一个合规检查 Agent。
+对照 ISO 27001 / GDPR / PCI-DSS 等框架：
+1. 识别控制项差距
+2. 评估当前合规状态
+3. 提供整改建议""",
+    "osint": """你是一个 OSINT 侦察 Agent。
+对目标进行开源情报收集：
+1. WHOIS / DNS 信息
+2. 关联的公开数据泄露
+3. 社交媒体足迹
+4. 网络空间测绘数据""",
+    "n8n_workflow": """你是一个 N8N 工作流生成 Agent。
+当用户请求创建自动化工作流时：
+1. 理解用户的自动化目标
+2. 设计合适的 N8N 工作流 JSON 结构
+3. 选择合适的触发节点（Webhook、Schedule 等）
+4. 添加相应的操作节点
+5. 直接输出 N8N 工作流 JSON""",
+    "general": """你 CyberGuard 安全助理。
+基于你的网络安全知识，帮助用户：
+- 分析安全事件和 IOC
+- 提供威胁情报
+- 回答安全问题
+- 指导安全运营""",
 }
 
 
@@ -48,12 +105,24 @@ def match_agent_type(task_description: str) -> Optional[str]:
 class LocalAgentExecutor:
     """
     Fallback executor that runs tasks directly via LLM when no remote
-    sub-agent is available. Also acts as a real skill provider with
-    built-in capabilities.
+    sub-agent is available. Loads skills from DB by agent_type category,
+    falling back to built-in prompts when no skill is found.
     """
 
     def __init__(self, llm_router=None):
         self.llm_router = llm_router or get_llm_router()
+
+    async def _get_system_prompt(self, agent_type: str) -> str:
+        """Load skill prompt from DB by category, fall back to built-in prompt."""
+        from app.services.skill_loader import SkillLoader
+
+        try:
+            skill_content = await SkillLoader.load_skills_for_agent_type(agent_type)
+            if skill_content:
+                return skill_content
+        except Exception:
+            pass  # DB unavailable — use fallback
+        return FALLBACK_SYSTEM_PROMPTS.get(agent_type, FALLBACK_SYSTEM_PROMPTS["general"])
 
     async def execute(
         self,
@@ -72,52 +141,8 @@ class LocalAgentExecutor:
         start = time.monotonic()
 
         agent_type = agent_type or match_agent_type(task) or "general"
+        system_prompt = await self._get_system_prompt(agent_type)
 
-        system_prompts: Dict[str, str] = {
-            "threat_intel": """你是一个网络安全威胁情报分析 Agent。
-当给定 IOC（IP、域名、Hash、URL）时，请从以下角度分析：
-1. 该 IOC 的恶意活动历史
-2. 关联的 APT 组织或攻击活动
-3. 推荐的下一步行动（监控/封禁/深入调查）
-如果无法确定，给出最可能的分类和置信度。""",
-            "log_anomaly": """你是一个日志异常分析 Agent。
-分析给定的日志条目，识别：
-1. 异常模式（多次失败登录、异常时间访问等）
-2. 可能的攻击向量
-3. 推荐的响应动作
-请用结构化格式输出。""",
-            "vuln_scanner": """你是一个漏洞扫描分析 Agent。
-分析目标系统或 CVE 描述，提供：
-1. 漏洞严重程度和 CVSS 评分
-2. 受影响版本/配置
-3. 利用可行性（PoC/野利用）
-4. 修复建议（补丁/缓解措施）""",
-            "remediation": """你是一个安全事件响应 Agent。
-给定安全事件，提供：
-1. 紧急止损措施
-2. 事件遏制步骤
-3. 根因分析框架
-4. 后续加固建议""",
-            "compliance": """你是一个合规检查 Agent。
-对照 ISO 27001 / GDPR / PCI-DSS 等框架：
-1. 识别控制项差距
-2. 评估当前合规状态
-3. 提供整改建议""",
-            "osint": """你是一个 OSINT 侦察 Agent。
-对目标进行开源情报收集：
-1. WHOIS / DNS 信息
-2. 关联的公开数据泄露
-3. 社交媒体足迹
-4. 网络空间测绘数据""",
-            "general": """你 CyberGuard 安全助理。
-基于你的网络安全知识，帮助用户：
-- 分析安全事件和 IOC
-- 提供威胁情报
-- 回答安全问题
-- 指导安全运营""",
-        }
-
-        system_prompt = system_prompts.get(agent_type, system_prompts["general"])
         user_content = task
         if context:
             user_content = f"上下文信息：{json.dumps(context, ensure_ascii=False)}\n\n任务：{task}"

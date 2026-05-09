@@ -82,6 +82,7 @@ class AgentChatRequest(BaseModel):
     provider_id: Optional[int] = Field(default=None, description="指定 AI Provider ID，不指定则用默认")
     model: Optional[str] = Field(default=None, description="指定模型名称，不指定则用 Provider 默认")
     mode: Optional[str] = Field(default="normal", description="运行模式：normal / group_chat / knowledge")
+    conversation_id: Optional[int] = Field(default=None, description="关联的会话 ID")
 
 
 class AgentChatResponse(BaseModel):

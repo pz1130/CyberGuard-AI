@@ -1,5 +1,7 @@
 """LangGraph Master Agent implementation."""
+import asyncio
 import json
+import logging
 import uuid
 from datetime import datetime
 from typing import List, Dict, Any, Optional
@@ -10,6 +12,8 @@ from langgraph.prebuilt import ToolNode
 from app.agents.states import MasterAgentState, AgentState, SubAgentResult
 from app.services.agent_executor import AgentExecutor
 from app.core.audit import log_audit
+
+logger = logging.getLogger(__name__)
 
 
 class MasterAgent:
@@ -60,6 +64,7 @@ class MasterAgent:
                 "sub_agents": "sub_agent_executor_node",
                 "group_chat": "group_chat_moderator_node",
                 "approval": "approval_node",
+                "summarize_direct": "summarizer_node",
                 "end": END,
             }
         )
@@ -88,7 +93,8 @@ class MasterAgent:
 
         task_plan = state.get("task_plan", [])
         if not task_plan:
-            return "end"
+            # No tasks — go to summarizer for direct LLM response
+            return "summarize_direct"
 
         # Check if any task requires approval
         for task in task_plan:
@@ -123,7 +129,14 @@ class MasterAgent:
         # Use LLM to parse intent if available
         if self.llm_router:
             try:
-                parsed = await self.llm_router.parse_intent(user_input, provider_id=state.get("provider_id"))
+                parsed = await self.llm_router.parse_intent(
+                    user_input,
+                    provider_id=state.get("provider_id"),
+                    model=state.get("model"),
+                    intent_parser_prompt_override=state.get("intent_parser_prompt_override"),
+                    temperature_override=state.get("temperature_override"),
+                    model_override=state.get("model_override"),
+                )
                 state["intent"] = parsed.get("intent")
                 state["task_plan"] = parsed.get("task_plan", [])
             except Exception as e:
@@ -201,7 +214,7 @@ class MasterAgent:
             task_desc = task.get("task", "")
             agent_id = task.get("agent_id")  # explicit ID override
 
-            # Try remote if registered
+            # Try remote if registered AND has endpoint URL
             if agent_id:
                 result = await self.executor.execute(
                     agent_id=agent_id,
@@ -212,12 +225,14 @@ class MasterAgent:
 
             if agent_type in remote_agents:
                 agent = remote_agents[agent_type]
-                result = await self.executor.execute(
-                    agent_id=agent["id"],
-                    task=task_desc,
-                    user_id=user_id,
-                )
-                return agent_type, result
+                # Only use remote if it has an endpoint URL, otherwise fall back to local
+                if agent.get("endpoint_url"):
+                    result = await self.executor.execute(
+                        agent_id=agent["id"],
+                        task=task_desc,
+                        user_id=user_id,
+                    )
+                    return agent_type, result
 
             # Fallback: local LLM executor
             local_exec = self._get_local_executor()
@@ -349,7 +364,11 @@ class MasterAgent:
                         for k, v in sub_results.items()
                     ]
                     state["final_summary"] = await self.llm_router.generate_summary(
-                        results_list, provider_id=state.get("provider_id")
+                        results_list,
+                        provider_id=state.get("provider_id"),
+                        summarizer_prompt_override=state.get("summarizer_prompt_override"),
+                        temperature_override=state.get("temperature_override"),
+                        model_override=state.get("model_override"),
                     )
                 except Exception:
                     state["final_summary"] = "\n\n".join(
@@ -369,19 +388,26 @@ class MasterAgent:
         elif self.llm_router:
             # No sub-agents involved — respond directly via LLM
             user_input = state.get("user_input", "")
-            print(f"[DEBUG _summarizer_node] llm_router exists, calling chat()...")
+            logger.debug(f"_summarizer_node: llm_router exists, calling chat()...")
             try:
+                # Build messages with optional system prompt override
+                system_prompt = state.get("system_prompt_override")
+                messages = [{"role": "user", "content": user_input}]
+                if system_prompt:
+                    messages.insert(0, {"role": "system", "content": system_prompt})
                 state["final_summary"] = await self.llm_router.chat(
-                    messages=[{"role": "user", "content": user_input}],
+                    messages=messages,
                     provider_id=state.get("provider_id"),
                     model=state.get("model"),
+                    model_override=state.get("model_override"),
+                    temperature_override=state.get("temperature_override"),
                 )
-                print(f"[DEBUG _summarizer_node] chat() returned: {state['final_summary'][:100]}")
+                logger.debug(f"_summarizer_node chat() returned: {state['final_summary'][:100]}")
             except Exception as e:
-                print(f"[DEBUG _summarizer_node] chat() EXCEPTION: {e}")
+                logger.warning(f"_summarizer_node chat() exception: {e}")
                 state["final_summary"] = f"无法处理您的请求，请检查 AI Provider 配置。错误: {e}"
         else:
-            print("[DEBUG _summarizer_node] llm_router is None!")
+            logger.debug("_summarizer_node: llm_router is None, returning fallback message")
             state["final_summary"] = "暂无 AI Provider 可用，请先在「AI Provider 配置」页面中添加一个 Provider。"
 
         state["risk_score"] = 0.5
@@ -390,12 +416,85 @@ class MasterAgent:
         return state
 
     async def _approval_node(self, state: MasterAgentState) -> MasterAgentState:
-        """Handle human approval for high-risk operations."""
+        """Handle human approval for high-risk operations.
+
+        Creates a DB record and WAITS until an admin approves/rejects via
+        the REST API (POST /api/v1/approvals/{id}/decide) or the request expires.
+        """
         state["current_state"] = AgentState.HUMAN_APPROVAL
         state["approval_status"] = "pending"
 
-        # This would typically block and wait for human input
-        # For now, mark as requiring approval
+        request_id = state.get("request_id", "")
+
+        # Summarise what needs approval for the admin dashboard
+        sub_results = state.get("sub_results", {})
+        risk_keywords = ["critical", "emergency", "delete", "deploy", "drop", "truncate"]
+        risk_level = "high" if any(
+            kw in str(sub_results).lower()
+            for kw in risk_keywords
+        ) else "medium"
+
+        # Build a human-readable description
+        if sub_results:
+            descriptions = [
+                f"{k}: {v.get('output', '')[:200]}"
+                for k, v in sub_results.items()
+                if v.get("status") == "needs_approval"
+            ]
+            action_description = "; ".join(descriptions) or "Agent execution requires approval"
+        else:
+            task_plan = state.get("task_plan", [])
+            action_description = "; ".join(
+                t.get("task", "")[:200] for t in task_plan if t.get("requires_approval")
+            ) or "Task requires human approval"
+
+        from app.services.approval_service import ApprovalService
+
+        # Write pending request to DB (non-blocking notification via SSE)
+        try:
+            record = await ApprovalService.create_request(
+                request_id=request_id,
+                user_id=state.get("user_id", 0),
+                action_type="agent_execution",
+                action_description=action_description,
+                agent_id=None,
+                payload={
+                    "sub_results": sub_results,
+                    "task_plan": state.get("task_plan"),
+                    "user_input": state.get("user_input"),
+                },
+                risk_level=risk_level,
+                urgency="urgent" if risk_level == "high" else "normal",
+                expires_in_minutes=60,
+            )
+            state["approval_record_id"] = record.id
+        except Exception as e:
+            # Log but don't hard-fail — admin can still manage via DB
+            import logging
+            logging.getLogger(__name__).error(f"[approval] Failed to create DB record: {e}")
+
+        # WAIT for human decision (suspends graph execution, does NOT block event loop)
+        try:
+            status, comment = await ApprovalService.wait_for_decision(
+                request_id=request_id,
+                timeout_seconds=3600,  # 1 hour
+            )
+        except asyncio.TimeoutError:
+            status = "expired"
+
+        state["approval_status"] = status
+        state["approval_comment"] = comment
+
+        # Transition based on decision
+        if status == "approved":
+            state["validation_passed"] = True
+            state["current_state"] = AgentState.SUMMARIZE
+        else:
+            # rejected or expired
+            state["validation_passed"] = False
+            state["error_message"] = f"Approval {status}: {comment or 'timeout'}"
+            state["current_state"] = AgentState.ERROR
+
         return state
 
     async def _error_node(self, state: MasterAgentState) -> MasterAgentState:

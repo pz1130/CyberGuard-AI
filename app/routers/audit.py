@@ -31,7 +31,11 @@ async def list_audit_logs(
     if action:
         query = query.where(AuditLog.action == action)
 
-    total_result = await db.execute(select(func.count(AuditLog.id)))
+    total_result = await db.execute(select(func.count(AuditLog.id)).where(
+        (AuditLog.user_id == user_id if user_id else True) &
+        (AuditLog.agent_id == agent_id if agent_id else True) &
+        (AuditLog.action == action if action else True)
+    ))
     total = total_result.scalar()
 
     query = query.order_by(desc(AuditLog.timestamp)).offset(skip).limit(limit)

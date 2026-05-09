@@ -37,7 +37,7 @@ async def get_current_user(
         )
     
     token = credentials.credentials
-    payload = decode_access_token(token)
+    payload = await decode_access_token(token)
     
     user_id_str = payload.get("user_id") or payload.get("sub")
     if not user_id_str:
@@ -62,7 +62,14 @@ async def get_current_user(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User not found",
             )
-        
+
+        # is_active is column index 4 (0-based)
+        if not user_row[4]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account is disabled",
+            )
+
         return AuthenticatedUser(
             user_id=user_row[0],
             username=user_row[1],
@@ -122,11 +129,13 @@ def require_permission(*permissions: Permission):
         current_user: AuthenticatedUser = Depends(get_current_user),
     ) -> AuthenticatedUser:
         user_role = Role(current_user.role)
-        
-        if not has_permission(user_role, permissions[0]):
+
+        # require_permission() with multiple permissions requires ALL of them (AND logic)
+        missing = [p for p in permissions if not has_permission(user_role, p)]
+        if missing:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Required permissions: {[p.value for p in permissions]}",
+                detail=f"Missing permissions: {[p.value for p in missing]}",
             )
         return current_user
     
@@ -152,3 +161,91 @@ async def get_optional_current_user(
 # Aliases for convenience
 require_role = require_roles
 require_permissions = require_permission
+
+
+# ---------------------------------------------------------------------------
+# Rate limiting — Redis sliding window (requires auth upstream)
+# ---------------------------------------------------------------------------
+
+def rate_limit(
+    requests_per_minute: int = 30,
+    requests_per_hour: int = 500,
+    burst_limit: int = 5,
+):
+    """
+    Factory: creates a combined auth + permission + rate-limit dependency.
+
+    Usage:
+        @router.post("/chat", ...)
+        async def chat(
+            body: ChatRequest,
+            current_user: AuthenticatedUser = Depends(
+                rate_limit(requests_per_minute=30)(require_permission(Permission.TASK_EXECUTE))
+            ),
+        ):
+            ...
+
+    Or chain manually:
+        rate_limit()(get_current_user)  # auth only
+        rate_limit()(require_permission(Permission.TASK_EXECUTE))  # auth + perms
+    """
+    import functools
+    import os
+    import time
+
+    from app.core.ratelimit import (
+        check_rate_limit,
+        check_concurrency_limit,
+        release_concurrency,
+        RateLimitExceeded,
+        ConcurrencyLimitExceeded,
+    )
+
+    rpm_env = int(os.getenv("RATELIMIT_REQUESTS_PER_MINUTE", str(requests_per_minute)))
+    rph_env = int(os.getenv("RATELIMIT_REQUESTS_PER_HOUR", str(requests_per_hour)))
+    burst_env = int(os.getenv("RATELIMIT_BURST", str(burst_limit)))
+
+    def make_rate_limited(auth_dependency):
+        """Wrap any auth dependency with Redis rate limiting."""
+        async def rate_limit_wrapper(
+            _ratelimit_scope: None = None,  # filled by FastAPI from auth_dependency result
+        ):
+            # FastAPI injects the auth dependency result based on type annotation
+            # The actual user resolution happens in auth_dependency
+            pass
+
+        # Build the actual FastAPI dependency by chaining manually
+        async def endpoint(
+            current_user: AuthenticatedUser = Depends(auth_dependency),
+        ) -> AuthenticatedUser:
+            user_id = current_user.user_id
+
+            # Per-minute sliding window
+            allowed, _, reset_at = await check_rate_limit(
+                user_id, 60, rpm_env, "ratelimit:minute"
+            )
+            if not allowed:
+                raise RateLimitExceeded(retry_after=max(1, reset_at - int(time.time())))
+
+            # Per-hour sliding window
+            allowed, _, reset_at = await check_rate_limit(
+                user_id, 3600, rph_env, "ratelimit:hour"
+            )
+            if not allowed:
+                raise RateLimitExceeded(retry_after=max(1, reset_at - int(time.time())))
+
+            # Burst (in-flight concurrency)
+            allowed, current = await check_concurrency_limit(
+                user_id, burst_env, "concurrency"
+            )
+            if not allowed:
+                raise ConcurrencyLimitExceeded(current=current)
+
+            try:
+                yield current_user
+            finally:
+                await release_concurrency(user_id)
+
+        return endpoint
+
+    return make_rate_limited

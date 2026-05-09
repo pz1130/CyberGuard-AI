@@ -1,8 +1,10 @@
 """Agent configuration and management router."""
+import json
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_db, require_role, require_permission
 from app.core.rbac import Role, Permission
+from app.core.security import encrypt_data
 from app.schemas.agent import (
     AgentConfigCreate, AgentConfigRead, AgentConfigUpdate,
     AgentConfigListResponse, AgentTestRequest, AgentTestResponse,
@@ -40,11 +42,20 @@ async def create_agent(
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Agent name already exists")
 
-    agent = AgentConfig(**body.model_dump(exclude={'env_vars'}))
+    # Build metadata_json with OpenClaw fields
+    metadata = dict(body.metadata_json) if body.metadata_json else {}
+    if body.api_key:
+        metadata["api_key"] = encrypt_data(body.api_key)
+    if body.auth_mode:
+        metadata["auth_mode"] = body.auth_mode
+    if body.streaming is not None:
+        metadata["streaming"] = body.streaming
+    metadata_json = metadata if metadata else None
+
+    agent = AgentConfig(**body.model_dump(exclude={'env_vars', 'api_key', 'auth_mode', 'streaming', 'metadata_json'}))
+    agent.metadata_json = metadata_json
     # Encrypt env_vars before storing
     if body.env_vars:
-        from app.core.security import encrypt_data
-        import json
         agent.env_vars_encrypted = encrypt_data(json.dumps(body.env_vars))
     db.add(agent)
     await db.commit()
@@ -79,11 +90,25 @@ async def update_agent(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    for key, value in body.model_dump(exclude_unset=True).items():
+    update_data = body.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
         if key == "env_vars" and value:
-            from app.core.security import encrypt_data
-            import json
             setattr(agent, "env_vars_encrypted", encrypt_data(json.dumps(value)))
+        elif key == "api_key" and value:
+            # Encrypt and store in metadata_json
+            metadata = dict(agent.metadata_json) if agent.metadata_json else {}
+            metadata["api_key"] = encrypt_data(value)
+            agent.metadata_json = metadata
+        elif key in ("auth_mode", "streaming"):
+            # Store in metadata_json
+            metadata = dict(agent.metadata_json) if agent.metadata_json else {}
+            metadata[key] = value
+            agent.metadata_json = metadata
+        elif key == "metadata_json":
+            # Merge with existing metadata
+            existing = dict(agent.metadata_json) if agent.metadata_json else {}
+            existing.update(value or {})
+            agent.metadata_json = existing
         else:
             setattr(agent, key, value)
 
@@ -119,14 +144,15 @@ async def test_agent_connection(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    from app.services.agent_executor import SubAgentWrapper
+    from app.services.agent_executor import get_executor_for_backend
     config_dict = {
         "id": agent.id,
         "agent_name": agent.agent_name,
         "backend_type": agent.backend_type,
         "endpoint_url": agent.endpoint_url,
         "env_vars_encrypted": agent.env_vars_encrypted,
+        "metadata_json": agent.metadata_json,
     }
-    wrapper = SubAgentWrapper(config_dict)
-    test_result = await wrapper.test_connection()
+    executor = get_executor_for_backend(config_dict)
+    test_result = await executor.test_connection()
     return AgentTestResponse(**test_result)

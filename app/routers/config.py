@@ -72,21 +72,108 @@ async def import_config(
 ):
     """
     Import system configuration from JSON.
-    Validates structure before applying.
+    Performs conflict resolution: skips items that already exist (by name/id).
     """
     required_keys = ["version", "agents", "skills", "tools", "knowledge_bases"]
     for key in required_keys:
         if key not in config:
             return {"status": "error", "detail": f"Missing required key: {key}"}
 
-    # TODO: Implement actual import with conflict resolution
+    imported = {"agents": 0, "skills": 0, "tools": 0, "knowledge_bases": 0}
+    errors = []
+
+    # Import agents
+    from sqlalchemy import select
+    from app.models import AgentConfig
+    for agent_data in config.get("agents", []):
+        try:
+            existing = await db.execute(
+                select(AgentConfig).where(AgentConfig.agent_name == agent_data.get("agent_name"))
+            )
+            if existing.scalar_one_or_none():
+                continue  # skip existing
+            agent = AgentConfig(
+                agent_name=agent_data.get("agent_name"),
+                backend_type=agent_data.get("backend_type", "custom"),
+                endpoint_url=agent_data.get("endpoint_url"),
+                description=agent_data.get("description"),
+                permission_level=agent_data.get("permission_level", "medium"),
+                is_active=True,
+            )
+            db.add(agent)
+            imported["agents"] += 1
+        except Exception as e:
+            errors.append(f"agent {agent_data.get('agent_name')}: {e}")
+
+    # Import skills
+    from app.models import Skill
+    for skill_data in config.get("skills", []):
+        try:
+            existing = await db.execute(
+                select(Skill).where(Skill.name == skill_data.get("name"))
+            )
+            if existing.scalar_one_or_none():
+                continue
+            skill = Skill(
+                name=skill_data.get("name"),
+                description=skill_data.get("description"),
+                md_content=skill_data.get("md_content", ""),
+                version=skill_data.get("version", "1.0.0"),
+                is_active=True,
+            )
+            db.add(skill)
+            imported["skills"] += 1
+        except Exception as e:
+            errors.append(f"skill {skill_data.get('name')}: {e}")
+
+    # Import tools
+    from app.models import Tool
+    for tool_data in config.get("tools", []):
+        try:
+            existing = await db.execute(
+                select(Tool).where(Tool.name == tool_data.get("name"))
+            )
+            if existing.scalar_one_or_none():
+                continue
+            tool = Tool(
+                name=tool_data.get("name"),
+                description=tool_data.get("description"),
+                md_content=tool_data.get("md_content", ""),
+                permission_level=tool_data.get("permission_level", "medium"),
+                requires_approval=tool_data.get("requires_approval", False),
+                is_active=True,
+            )
+            db.add(tool)
+            imported["tools"] += 1
+        except Exception as e:
+            errors.append(f"tool {tool_data.get('name')}: {e}")
+
+    # Import knowledge bases
+    from app.models import KnowledgeBase
+    for kb_data in config.get("knowledge_bases", []):
+        try:
+            existing = await db.execute(
+                select(KnowledgeBase).where(KnowledgeBase.name == kb_data.get("name"))
+            )
+            if existing.scalar_one_or_none():
+                continue
+            kb = KnowledgeBase(
+                name=kb_data.get("name"),
+                description=kb_data.get("description"),
+                embedding_model=kb_data.get("embedding_model", ""),
+                rerank_model=kb_data.get("rerank_model", ""),
+                is_active=True,
+            )
+            db.add(kb)
+            imported["knowledge_bases"] += 1
+        except Exception as e:
+            errors.append(f"knowledge_base {kb_data.get('name')}: {e}")
+
+    await db.commit()
+
     return {
         "status": "ok",
-        "detail": "Import validated. Full apply not yet implemented.",
-        "imported": {
-            "agents": len(config.get("agents", [])),
-            "skills": len(config.get("skills", [])),
-            "tools": len(config.get("tools", [])),
-            "knowledge_bases": len(config.get("knowledge_bases", [])),
-        },
+        "detail": "Import completed",
+        "imported": imported,
+        "errors": errors if errors else None,
     }

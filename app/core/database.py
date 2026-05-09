@@ -1,6 +1,7 @@
 """Database connection and session management."""
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -23,6 +24,34 @@ AsyncSessionLocal = async_sessionmaker(
     autocommit=False,
     autoflush=False,
 )
+
+# Synchronous engine for Celery workers
+_sync_engine = None
+_SyncSessionLocal = None
+
+
+def get_sync_engine():
+    """Get or create synchronous engine for sync contexts (Celery workers)."""
+    global _sync_engine
+    if _sync_engine is None:
+        sync_url = settings.DATABASE_URL.replace("+asyncpg", "")
+        _sync_engine = create_engine(
+            sync_url,
+            echo=False,
+            pool_size=5,
+            max_overflow=10,
+            pool_pre_ping=True,
+        )
+    return _sync_engine
+
+
+def get_sync_session():
+    """Get a synchronous session factory for Celery workers."""
+    global _SyncSessionLocal
+    if _SyncSessionLocal is None:
+        _SyncSessionLocal = sessionmaker(bind=get_sync_engine())
+    return _SyncSessionLocal
+
 
 # Base class for models
 Base = declarative_base()

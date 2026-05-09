@@ -1,7 +1,22 @@
 """Pydantic schemas for agent management."""
-from pydantic import BaseModel, Field
+import re
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+
+
+def _validate_endpoint_url(v: Optional[str]) -> Optional[str]:
+    """Validate endpoint URL format and scheme at schema level."""
+    if v is None:
+        return v
+    if not isinstance(v, str):
+        raise ValueError("endpoint_url must be a string")
+    if not v.startswith(("http://", "https://")):
+        raise ValueError("endpoint_url must start with http:// or https://")
+    # Basic hostname check — no suspicious schemes
+    if re.search(r"[;&|`$<>]", v):
+        raise ValueError("endpoint_url contains disallowed characters")
+    return v
 
 
 class AgentConfigBase(BaseModel):
@@ -9,18 +24,24 @@ class AgentConfigBase(BaseModel):
     agent_name: str = Field(..., min_length=1, max_length=100)
     backend_type: str = Field(..., description="openclaw, hermes, custom")
     provider_id: Optional[str] = None
-    endpoint_url: Optional[str] = None
+    endpoint_url: Optional[str] = Field(default=None)
     description: Optional[str] = None
     is_active: bool = True
     permission_level: str = "medium"
     associated_skills: Optional[List[int]] = None
     metadata_json: Optional[Dict[str, Any]] = None
+    # OpenClaw-specific fields
+    auth_mode: Optional[str] = Field(default="api_key", description="api_key, bearer, none")
+    streaming: Optional[bool] = Field(default=True, description="Enable streaming")
+
+    _url_validator = field_validator("endpoint_url", mode="before")(_validate_endpoint_url)
 
 
 class AgentConfigCreate(AgentConfigBase):
     """Agent configuration creation schema."""
     system_prompt: Optional[str] = None
     env_vars: Optional[Dict[str, str]] = None
+    api_key: Optional[str] = Field(default=None, description="OpenClaw API key (stored encrypted)")
 
 
 class AgentConfigUpdate(BaseModel):
@@ -28,13 +49,18 @@ class AgentConfigUpdate(BaseModel):
     agent_name: Optional[str] = None
     backend_type: Optional[str] = None
     provider_id: Optional[str] = None
-    endpoint_url: Optional[str] = None
+    endpoint_url: Optional[str] = Field(default=None)
     system_prompt: Optional[str] = None
     description: Optional[str] = None
     is_active: Optional[bool] = None
     permission_level: Optional[str] = None
     associated_skills: Optional[List[int]] = None
     metadata_json: Optional[Dict[str, Any]] = None
+    auth_mode: Optional[str] = None
+    streaming: Optional[bool] = None
+    api_key: Optional[str] = None
+
+    _url_validator = field_validator("endpoint_url", mode="before")(_validate_endpoint_url)
 
 
 class AgentConfigResponse(BaseModel):

@@ -1,12 +1,14 @@
 """MCP (Model Context Protocol) server configuration router."""
 import asyncio
 import json
+import re
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 from app.core.dependencies import get_db, require_permission
 from app.core.rbac import Permission
+from app.core.auth import AuthenticatedUser
 from app.core.security import encrypt_data, decrypt_data
 from app.models.mcp import MCPServer, MCPTool
 from app.schemas.mcp import (
@@ -21,6 +23,87 @@ router = APIRouter()
 # Live subprocess handles: server_name → asyncio.subprocess.Process
 _live_processes: dict[str, asyncio.subprocess.Process] = {}
 
+# Allowed executable extensions (Windows)
+_ALLOWED_EXTENSIONS = frozenset({".exe", ".bat", ".cmd", ".ps1", ".sh", ""})
+
+# Dangerous environment variables that should never be passed to subprocesses
+_DANGEROUS_ENV_VARS = frozenset({
+    "LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT", "LD_DEBUG",
+    "BASH_ENV", "ENV", "PROMPT_COMMAND", "PS4",
+    "GIT_TRACE_PACKET", "GIT_TRACE", "GIT_TRACE_PERFORMANCE",
+    "GIT_TRACE_REFS", "GIT_TRACE_REFS", "GIT_TRACE_PACKET",
+    "GIT_SSH", "GIT_SSH_COMMAND", "GIT_ASKPASS",
+    "SVN_SSH", "PERL5LIB", "PERL5OPT", "PERL5DB",
+    "PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP",
+    "NODE_PATH", "NODE_OPTIONS",
+    "JAVA_HOME", "CLASSPATH",
+    "RUBYOPT", "RUBYLIB",
+})
+
+
+def _validate_command(command: str) -> str:
+    """
+    Validate that command is a safe absolute path to an allowed executable.
+    Raises ValueError if unsafe.
+    """
+    import os
+    if not command:
+        raise ValueError("command cannot be empty")
+    # Must be absolute path
+    if not os.path.isabs(command):
+        raise ValueError("command must be an absolute path")
+    # Check extension blocklist
+    base, ext = os.path.splitext(command)
+    if ext.lower() in {".js", ".py", ".rb", ".php", ".pl"}:
+        raise ValueError(f"unsafe command extension: {ext}")
+    # Command must exist and be executable
+    if not os.path.isfile(command):
+        raise ValueError(f"command not found: {command}")
+    if not os.access(command, os.X_OK):
+        raise ValueError(f"command not executable: {command}")
+    return command
+
+
+def _validate_args(args: Optional[list]) -> list:
+    """
+    Validate that args contain no shell metacharacters.
+    Raises ValueError if any arg contains dangerous patterns.
+    """
+    if not args:
+        return []
+    # Shell metacharacters that enable command injection
+    shell_metachar = re.compile(r'[;&|`$<>\\\'"*?#~=[\]{}()!%^|]', re.UNICODE)
+    dangerous_keywords = re.compile(
+        r'^\s*(curl|wget|nc|netcat|python|perl|ruby|bash|sh|zsh|'
+        r'ncat|openssl|socat|chsh|systemctl|service|reboot|shutdown|'
+        r'mkfs|mke2fs|dd|rm\s+-rf|mount|umount)\s*$',
+        re.IGNORECASE
+    )
+    validated = []
+    for arg in args:
+        if not isinstance(arg, str):
+            raise ValueError(f"arg must be string, got {type(arg).__name__}")
+        # Block metacharacters that could break out of argument context
+        if shell_metachar.search(arg):
+            raise ValueError(f"arg contains disallowed shell metachar: {arg!r}")
+        stripped = arg.strip()
+        if dangerous_keywords.match(stripped):
+            raise ValueError(f"arg contains disallowed keyword: {stripped!r}")
+        validated.append(arg)
+    return validated
+
+
+def _sanitize_env(env: dict) -> dict:
+    """
+    Remove dangerous env vars and return a safe environment for subprocess.
+    """
+    import os
+    safe = {k: v for k, v in env.items() if k not in _DANGEROUS_ENV_VARS}
+    # Ensure SHELL is not set or points to safe value
+    safe.pop("SHELL", None)
+    safe.pop("PATHEXT", None)
+    return safe
+
 
 # ---- STDIO subprocess management ----
 
@@ -28,6 +111,20 @@ async def _start_stdio_server(server: MCPServer) -> bool:
     """Launch an STDIO MCP server as an asyncio subprocess."""
     if server.name in _live_processes:
         return True  # already running
+
+    # Validate command and args before executing
+    if not server.command:
+        return False
+    try:
+        validated_command = _validate_command(server.command)
+    except ValueError:
+        return False
+
+    validated_args: list = []
+    try:
+        validated_args = _validate_args(server.args)
+    except ValueError:
+        return False
 
     try:
         decrypted_env: dict[str, str] = {}
@@ -38,12 +135,12 @@ async def _start_stdio_server(server: MCPServer) -> bool:
         import os
         base_env = dict(os.environ)
         base_env.update(decrypted_env)
+        # Sanitize dangerous env vars before passing to subprocess
+        base_env = _sanitize_env(base_env)
         base_env["PATH"] = "/usr/bin:/usr/local/bin:/opt/homebrew/bin"
 
-        args = server.args if server.args else []
-
         # Use asyncio.create_subprocess_exec for non-blocking STDIO
-        cmd_args = [server.command] + (list(args) if args else [])
+        cmd_args = [validated_command] + validated_args
         proc = await asyncio.create_subprocess_exec(
             *cmd_args,
             env=base_env,
@@ -128,6 +225,23 @@ async def _execute_stdio_tool(server: MCPServer, tool_name: str, arguments: dict
 async def _execute_http_tool(server: MCPServer, tool_name: str, arguments: dict) -> dict:
     """Execute a tool via HTTP POST to an MCP server endpoint."""
     import httpx
+    from urllib.parse import urlparse
+
+    # SSRF protection
+    if not server.url:
+        raise RuntimeError("MCP server has no URL configured")
+    parsed = urlparse(server.url)
+    if parsed.scheme not in ("http", "https"):
+        raise RuntimeError(f"Disallowed URL scheme: {parsed.scheme}")
+    hostname = parsed.hostname or ""
+    blocked = {"169.254.169.254", "metadata.google.internal", "metadata.internal",
+               "localhost", "127.0.0.1", "0.0.0.0"}
+    if hostname in blocked or hostname.startswith(("10.", "172.16.", "172.17.", "172.18.",
+                                                   "172.19.", "172.20.", "172.21.", "172.22.",
+                                                   "172.23.", "172.24.", "172.25.", "172.26.",
+                                                   "172.27.", "172.28.", "172.29.", "172.30.",
+                                                   "172.31.", "192.168.")):
+        raise RuntimeError(f"Disallowed host in URL: {hostname}")
 
     headers = dict(server.headers_json or {})
     if server.auth_token_encrypted:
@@ -144,7 +258,7 @@ async def _execute_http_tool(server: MCPServer, tool_name: str, arguments: dict)
         },
     }
 
-    async with httpx.AsyncClient(timeout=server.timeout_seconds) as client:
+    async with httpx.AsyncClient(timeout=server.timeout_seconds, verify=parsed.scheme == "https") as client:
         response = await client.post(
             f"{server.url}/tools/call",
             headers=headers,
@@ -286,7 +400,10 @@ async def delete_mcp_server(
         raise HTTPException(status_code=404, detail="MCP server not found")
 
     await _stop_stdio_server(server.name)
-    await db.delete(server)
+    # Use SQL deletes for backward compatibility with older DB schemas
+    # where ORM relationship loading may fail due to missing columns.
+    await db.execute(text("DELETE FROM mcp_tools WHERE server_id = :server_id"), {"server_id": server_id})
+    await db.execute(text("DELETE FROM mcp_servers WHERE id = :server_id"), {"server_id": server_id})
     await db.commit()
 
 
@@ -363,10 +480,25 @@ async def _discover_tools_via_jsonrpc(server: MCPServer) -> list[dict]:
 
     # HTTP transport
     import httpx
+    from urllib.parse import urlparse
+    if server.url:
+        parsed = urlparse(server.url)
+        if parsed.scheme not in ("http", "https"):
+            raise RuntimeError(f"Disallowed scheme: {parsed.scheme}")
+        hostname = parsed.hostname or ""
+        blocked = {"169.254.169.254", "metadata.google.internal", "metadata.internal",
+                   "localhost", "127.0.0.1", "0.0.0.0"}
+        if hostname in blocked or hostname.startswith(("10.", "172.16.", "172.17.", "172.18.",
+                                                       "172.19.", "172.20.", "172.21.", "172.22.",
+                                                       "172.23.", "172.24.", "172.25.", "172.26.",
+                                                       "172.27.", "172.28.", "172.29.", "172.30.",
+                                                       "172.31.", "192.168.")):
+            raise RuntimeError(f"Disallowed host: {hostname}")
     headers = dict(server.headers_json or {})
     if server.auth_token_encrypted:
         headers["Authorization"] = f"Bearer {decrypt_data(server.auth_token_encrypted)}"
-    async with httpx.AsyncClient(timeout=server.timeout_seconds or 30) as client:
+    async with httpx.AsyncClient(timeout=server.timeout_seconds or 30,
+                                 verify=(parsed.scheme == "https") if server.url else True) as client:
         r = await client.post(server.url, json=payload, headers=headers)
         r.raise_for_status()
         data = r.json()
@@ -488,7 +620,7 @@ async def delete_mcp_tool(
 async def execute_mcp_tool(
     body: MCPToolExecuteRequest,
     db: AsyncSession = Depends(get_db),
-    _=Depends(require_permission(Permission.TASK_EXECUTE)),
+    current_user: AuthenticatedUser = Depends(require_permission(Permission.TASK_EXECUTE)),
 ):
     """Execute an MCP tool and return results."""
     import time, uuid
@@ -503,6 +635,30 @@ async def execute_mcp_tool(
     server = server_result.scalar_one_or_none()
     if not server or not server.is_active:
         raise HTTPException(status_code=400, detail="MCP server is not available")
+
+    # P2-2: Per-tool RBAC enforcement
+    # A tool can optionally declare a required_permission (e.g. 'knowledge:write').
+    # If set, the calling user's role must possess that permission in addition to TASK_EXECUTE.
+    if tool.required_permission:
+        try:
+            required_perm = Permission(tool.required_permission)
+        except ValueError:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Tool '{tool.tool_name}' has an invalid required_permission: "
+                       f"'{tool.required_permission}'",
+            )
+        user_role = Role(current_user.role)
+        from app.core.rbac import has_permission as _has_permission
+        if not _has_permission(user_role, required_perm):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    f"Permission denied. Tool '{tool.tool_name}' requires "
+                    f"'{tool.required_permission}', but your role '{current_user.role}' "
+                    f"does not have it."
+                ),
+            )
 
     try:
         if server.transport_type == "stdio":
@@ -533,3 +689,26 @@ async def execute_mcp_tool(
             error=str(e),
             execution_time_ms=round(execution_time_ms, 2),
         )
+
+
+@router.get("/mcp/tools/all", response_model=MCPToolListResponse)
+async def list_all_mcp_tools(
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_permission(Permission.AGENT_READ)),
+):
+    """
+    List all active MCP tools across all servers.
+    Used by the agent config UI to select which tools to expose to a sub-agent.
+    """
+    result = await db.execute(
+        select(MCPTool, MCPServer.name.label("server_name"))
+        .join(MCPServer, MCPTool.server_id == MCPServer.id)
+        .where(MCPTool.is_active == True, MCPServer.is_active == True)
+        .order_by(MCPServer.name, MCPTool.tool_name)
+    )
+    rows = result.all()
+    tools = []
+    for row in rows:
+        tool = row[0]
+        tools.append(MCPToolRead.model_validate(tool))
+    return MCPToolListResponse(total=len(tools), tools=tools)

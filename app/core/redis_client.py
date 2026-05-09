@@ -5,27 +5,13 @@ import redis.asyncio as redis
 
 from app.config import settings
 
-_redis_client: Optional[redis.Redis] = None
-
-
 async def get_redis() -> redis.Redis:
-    """Get Redis client instance."""
-    global _redis_client
-    if _redis_client is None:
-        _redis_client = redis.from_url(
-            settings.REDIS_URL,
-            encoding="utf-8",
-            decode_responses=True,
-        )
-    return _redis_client
-
-
-async def close_redis():
-    """Close Redis connection."""
-    global _redis_client
-    if _redis_client:
-        await _redis_client.close()
-        _redis_client = None
+    """Get a fresh Redis client (always create new to avoid cross-event-loop issues)."""
+    return redis.from_url(
+        settings.REDIS_URL,
+        encoding="utf-8",
+        decode_responses=True,
+    )
 
 
 class RedisCache:
@@ -72,3 +58,11 @@ class RedisCache:
 
 
 cache = RedisCache()
+
+# Alias for backwards compatibility
+close_redis = None  # will be set after ratelimit import
+
+def _init_close_redis():
+    global close_redis
+    from app.core.ratelimit import close_redis as cr
+    close_redis = cr

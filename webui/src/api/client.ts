@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 const BASE = '/api/v1'
 
 async function request(path: string, options: RequestInit = {}) {
@@ -15,7 +16,9 @@ async function request(path: string, options: RequestInit = {}) {
     throw new Error('Unauthorized')
   }
   if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  const text = await res.text()
+  if (!text) return null
+  return JSON.parse(text)
 }
 
 export const api = {
@@ -55,6 +58,16 @@ export const api = {
   createSkill: (body: any) => request('/skills', { method: 'POST', body: JSON.stringify(body) }),
   updateSkill: (id: string, body: any) => request(`/skills/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteSkill: (id: string) => request(`/skills/${id}`, { method: 'DELETE' }),
+  installSkillFromUrl: (body: { url: string; headers?: Record<string, string> }) =>
+    request('/skills/install/url', { method: 'POST', body: JSON.stringify(body) }),
+  importSkillFile: (formData: FormData) => {
+    const token = localStorage.getItem('token')
+    return fetch(`${BASE}/skills/import`, {
+      method: 'POST',
+      body: formData,
+      headers: { Authorization: `Bearer ${token}` },
+    }).then(r => r.json())
+  },
 
   // Knowledge — knowledge bases
   getKnowledgeBases: () => request('/knowledge/bases'),
@@ -88,11 +101,12 @@ export const api = {
     request('/knowledge/query', { method: 'POST', body: JSON.stringify(body) }),
 
   // Chat
-  chat: (body: { message: string; agent_id?: string; provider_id?: number; model?: string }) =>
+  chat: (body: { message: string; agent_id?: string; provider_id?: number; model?: string; conversation_id?: number }) =>
     request('/chat', { method: 'POST', body: JSON.stringify(body) }),
 
   // Tasks
   getTasks: () => request('/tasks'),
+  getTask: (id: string) => request(`/tasks/${id}`),
   createTask: (body: any) => request('/tasks', { method: 'POST', body: JSON.stringify(body) }),
   updateTask: (id: string, body: any) => request(`/tasks/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteTask: (id: string) => request(`/tasks/${id}`, { method: 'DELETE' }),
@@ -113,7 +127,7 @@ export const api = {
     return request(`/audit/logs${qs ? '?' + qs : ''}`)
   },
   exportAuditLogs: (params?: any) =>
-    request(`/audit/export?${new URLSearchParams(params || {})} `),
+    request(`/audit/export?${new URLSearchParams(params || {})}`),
 
   // Backup
   listBackups: () => request('/backup'),
@@ -121,8 +135,50 @@ export const api = {
   restoreBackup: (id: string) => request(`/backup/${id}/restore`, { method: 'POST' }),
 
   // Config
-  exportConfig: () => request('/config/export'),
+  exportConfig: () => request('/config/export', { method: 'POST' }),
+  getMasterConfig: () => request('/master-config'),
+  updateMasterConfig: (body: any) => request('/master-config', { method: 'PUT', body: JSON.stringify(body) }),
+
+  // Conversations
+  getConversations: () => request('/conversations'),
+  createConversation: (body?: {
+    title?: string
+    system_prompt_override?: string | null
+    intent_parser_prompt_override?: string | null
+    summarizer_prompt_override?: string | null
+    model_override?: string | null
+    temperature_override?: number | null
+    knowledge_base_id?: number | null
+  }) => request('/conversations', { method: 'POST', body: JSON.stringify(body || {}) }),
+  getConversation: (id: number) => request(`/conversations/${id}`),
+  updateConversation: (id: number, body: {
+    title?: string
+    messages_json?: string
+    system_prompt_override?: string | null
+    intent_parser_prompt_override?: string | null
+    summarizer_prompt_override?: string | null
+    model_override?: string | null
+    temperature_override?: number | null
+    knowledge_base_id?: number | null
+  }) =>
+    request(`/conversations/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteConversation: (id: number) => request(`/conversations/${id}`, { method: 'DELETE' }),
+  appendConversationMessage: (id: number, body: { role: string; content: string }) =>
+    request(`/conversations/${id}/messages`, { method: 'POST', body: JSON.stringify(body) }),
+  getConversationMessages: (id: number) => request(`/conversations/${id}/messages`),
   importConfig: (body: any) => request('/config/import', { method: 'POST', body: JSON.stringify(body) }),
+
+  // Group Chat (Multi-Agent)
+  createGroupChatSession: (body: { agent_ids: number[]; initial_message: string; max_rounds?: number }) =>
+    request('/groupchat/sessions', { method: 'POST', body: JSON.stringify(body) }),
+  getGroupChatSession: (sessionId: string) =>
+    request(`/groupchat/sessions/${sessionId}`),
+  runGroupChatRound: (sessionId: string) =>
+    request(`/groupchat/sessions/${sessionId}/round`, { method: 'POST' }),
+  runGroupChatComplete: (sessionId: string) =>
+    request(`/groupchat/sessions/${sessionId}/complete`, { method: 'POST' }),
+  cancelGroupChatSession: (sessionId: string) =>
+    request(`/groupchat/sessions/${sessionId}`, { method: 'DELETE' }),
 
   // ---- MCP Servers ----
   getMCPServers: () => request('/mcp/servers'),
@@ -132,6 +188,7 @@ export const api = {
   startMCPServer: (id: number) => request(`/mcp/servers/${id}/start`, { method: 'POST' }),
   stopMCPServer: (id: number) => request(`/mcp/servers/${id}/stop`, { method: 'POST' }),
   getMCPServerTools: (serverId: number) => request(`/mcp/servers/${serverId}/tools`),
+  getAllMcpTools: () => request('/mcp/tools/all'),
 
   // MCP Tools
   createMCPTool: (body: any) => request('/mcp/tools', { method: 'POST', body: JSON.stringify(body) }),
@@ -148,6 +205,27 @@ export const api = {
     request(`/envvars/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteEnvVar: (id: number) => request(`/envvars/${id}`, { method: 'DELETE' }),
   decryptEnvVar: (id: number) => request(`/envvars/decrypt/${id}`),
+
+  // ---- N8N ----
+  getN8NConnections: () => request('/n8n/connections'),
+  createN8NConnection: (body: { name: string; base_url: string; api_key?: string; is_active?: boolean; is_default?: boolean }) =>
+    request('/n8n/connections', { method: 'POST', body: JSON.stringify(body) }),
+  updateN8NConnection: (id: number, body: { name?: string; base_url?: string; api_key?: string; is_active?: boolean; is_default?: boolean }) =>
+    request(`/n8n/connections/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteN8NConnection: (id: number) => request(`/n8n/connections/${id}`, { method: 'DELETE' }),
+  testN8NConnection: (id: number) => request(`/n8n/connections/${id}/test`, { method: 'POST' }),
+  getN8NWorkflows: (connectionId?: number) =>
+    request(connectionId ? `/n8n/workflows?connection_id=${connectionId}` : '/n8n/workflows'),
+  getN8NWorkflow: (id: string, connectionId?: number) =>
+    request(connectionId ? `/n8n/workflows/${id}?connection_id=${connectionId}` : `/n8n/workflows/${id}`),
+  createN8NWorkflow: (body: { name: string; workflow_json: any; connection_id?: number }) =>
+    request('/n8n/workflows', { method: 'POST', body: JSON.stringify(body) }),
+  updateN8NWorkflow: (id: string, body: { workflow_json: any; connection_id?: number }) =>
+    request(`/n8n/workflows/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteN8NWorkflow: (id: string, connectionId?: number) =>
+    request(connectionId ? `/n8n/workflows/${id}?connection_id=${connectionId}` : `/n8n/workflows/${id}`, { method: 'DELETE' }),
+  generateN8NWorkflow: (body: { description: string; connection_id?: number }) =>
+    request('/n8n/workflows/generate', { method: 'POST', body: JSON.stringify(body) }),
 }
 
 export const wsBase = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`

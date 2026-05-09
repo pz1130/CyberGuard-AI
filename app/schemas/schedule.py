@@ -34,6 +34,7 @@ class ScheduleUpdate(BaseModel):
 class ScheduleResponse(BaseModel):
     """Schedule response schema."""
     id: int
+    task_id: str
     name: str
     description: Optional[str]
     cron_expression: str

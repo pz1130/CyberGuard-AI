@@ -10,10 +10,11 @@ from alembic import context
 
 from app.config import settings
 from app.core.database import Base
-from app.models import User, RoleModel, AgentConfig, AgentExecution, Skill, Tool, KnowledgeBase, Document  # noqa: F401
+from app.models import User, RoleModel, AgentConfig, AgentExecution, Skill, Tool, KnowledgeBase, Document, DocumentChunk  # noqa: F401
 
 # this is the Alembic Config object
 config = context.config
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 # Interpret the config file for Python logging.
 if config.config_file_name is not None:

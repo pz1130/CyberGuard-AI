@@ -1,46 +1,55 @@
 # CyberGuard AI - WebUI
 
-Single-page application (SPA) for the CyberGuard AI Agent Platform.
+React + TypeScript + Vite SPA for the CyberGuard AI Agent Platform.
 
 ## Quick Start
 
-### 1. Start the FastAPI backend
+### Development
+
 ```bash
-cd ..
-uvicorn app.main:app --reload --port 8000
+npm install
+npm run dev
 ```
 
-### 2. Start the WebUI server
+Open **http://localhost:3000**
+
+Default admin credentials are printed to the console on first backend start (randomly generated password).
+
+### Production Build
+
 ```bash
-python server.py
+npm run build
+npm run preview
 ```
 
-Then open **http://localhost:3000**
-
-Default login: `admin` / `admin123`
+The production build is served by the Docker container on port 8080 (proxied to 3000 in docker-compose).
 
 ## Architecture
 
-- `index.html` — Complete SPA (HTML + CSS + JS, no build step)
-- `server.py` — Python HTTP server with API proxy to FastAPI
+- `src/App.tsx` — Root component with tab-based routing
+- `src/pages/` — One React component per page/tab
+- `src/components/` — Shared components (Sidebar, Header)
+- `src/api/client.ts` — API client (fetch wrappers for all endpoints)
+- `src/i18n/` — i18next translations (Chinese / English)
+- `vite.config.ts` — Vite config with API proxy to FastAPI backend
 
-The server proxies `/api/*` requests to `http://localhost:8000/api/v1/*`.
+The Vite dev server proxies `/api/*` → `http://localhost:8000/api/v1/*` and `/ws/*` → `ws://localhost:8000/ws/*`.
 
-## Features
+## Pages
 
-| Page | Status |
-|------|--------|
-| 🗣️ Chat (Master Agent) | ✅ Live |
-| 🖥️ AI Provider 管理 | ✅ CRUD |
-| 🤖 Sub-Agent 管理 | ✅ CRUD + Test |
-| 🧠 Skill / Tool Pool | ✅ CRUD |
-| 📚 Knowledge Base | 🚧 Coming soon |
-| 👥 群聊室 | 🚧 Coming soon |
-| ⏰ 定时任务 | 🚧 Coming soon |
-| 🔌 MCP | 🚧 Coming soon |
-| ⚙️ 环境变量 | 🚧 Coming soon |
-| 🛡️ 安全 | 🚧 Coming soon |
-| 📊 Token 消耗 | 🚧 Coming soon |
-| 💾 备份 | 🚧 Coming soon |
-| 📋 审计日志 | 🚧 Coming soon |
-| 👤 用户管理 (RBAC) | 🚧 Coming soon |
+| Page | Description |
+|------|-------------|
+| Chat | Master Agent conversation interface |
+| AI Provider 管理 | Configure LLM providers (OpenAI, Anthropic, custom) |
+| Sub-Agent 管理 | Register and manage remote sub-agents |
+| Skill / Tool Pool | Manage available skills and tools as MD files |
+| Knowledge Base | Upload and query documents with embeddings |
+| 群聊室 | Real-time multi-agent group chat via WebSocket |
+| 定时任务 | Schedule tasks with cron expressions |
+| MCP | Model Context Protocol servers and tools |
+| 环境变量 | Encrypted environment variables for agents |
+| 安全 | RBAC, encryption status, security settings |
+| Token 消耗 | Track API token usage per user/provider |
+| 备份 | pg_dump + AES-256 backup/restore |
+| 审计日志 | Full audit trail of all operations |
+| 用户管理 | RBAC user and role management |

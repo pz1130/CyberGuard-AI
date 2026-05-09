@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Shield, Key, Lock, AlertTriangle } from 'lucide-react'
+import { Key, Lock, AlertTriangle } from 'lucide-react'
 
 export default function Security() {
   const [settings, setSettings] = useState({
@@ -14,81 +14,104 @@ export default function Security() {
 
   const update = (key: string, value: any) => setSettings(s => ({ ...s, [key]: value }))
 
+  const Toggle = ({ enabled, onToggle, color = 'var(--cyan)' }: { enabled: boolean; onToggle: () => void; color?: string }) => (
+    <button onClick={onToggle}
+      style={{
+        position: 'relative', width: 44, height: 22,
+        background: enabled ? color : 'var(--bg-elevated)',
+        border: `1px solid ${enabled ? color : 'var(--border-bright)'}`,
+        cursor: 'pointer', transition: 'all 0.2s',
+      }}>
+      <div style={{
+        position: 'absolute', top: 2, left: 2,
+        width: 16, height: 16,
+        background: enabled ? color : 'var(--text-dim)',
+        transition: 'all 0.2s',
+        transform: enabled ? 'translateX(22px)' : 'translateX(0)',
+      }} />
+    </button>
+  )
+
+  const SettingRow = ({ icon, title, desc, enabled, onToggle, color = 'var(--cyan)' }: {
+    icon: React.ReactNode; title: string; desc: string; enabled: boolean; onToggle: () => void; color?: string
+  }) => (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: 20,
+      background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
+      marginBottom: 12,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ width: 38, height: 38, border: '1px solid var(--border-bright)', background: 'var(--bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center', color }}>
+          {icon}
+        </div>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em', marginBottom: 4 }}>{title}</div>
+          <div style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>{desc}</div>
+        </div>
+      </div>
+      <Toggle enabled={enabled} onToggle={onToggle} color={color} />
+    </div>
+  )
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <h2 className="text-xl font-semibold flex items-center gap-2"><Shield size={20} /> 安全设置</h2>
-          <p className="text-xs text-slate-500 mt-1">管理加密、审计、访问控制等安全策略</p>
+          <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>ZERO TRUST ARCHITECTURE</div>
+          <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>SECURITY CONFIG</h1>
         </div>
       </div>
 
-      <div className="space-y-6">
-        {/* Encryption */}
-        <div className="bg-slate-900 rounded-xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <Key size={18} className="text-violet-400" />
-              <div>
-                <h3 className="font-medium text-white">AES-256 加密</h3>
-                <p className="text-xs text-slate-400">对敏感数据进行静态加密</p>
-              </div>
-            </div>
-            <button onClick={() => update('encryption_enabled', !settings.encryption_enabled)}
-              className={`w-12 h-6 rounded-full transition-colors ${settings.encryption_enabled ? 'bg-violet-500' : 'bg-slate-600'}`}>
-              <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${settings.encryption_enabled ? 'translate-x-6' : 'translate-x-0.5'}`} />
-            </button>
-          </div>
-        </div>
+      <div style={{ maxWidth: 680 }}>
+        <SettingRow
+          icon={<Key size={15} />}
+          title="AES-256 ENCRYPTION"
+          desc="Sensitive data encrypted at rest and in transit"
+          enabled={settings.encryption_enabled}
+          onToggle={() => update('encryption_enabled', !settings.encryption_enabled)}
+          color="var(--cyan)"
+        />
 
-        {/* RBAC */}
-        <div className="bg-slate-900 rounded-xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <Lock size={18} className="text-blue-400" />
-              <div>
-                <h3 className="font-medium text-white">RBAC 访问控制</h3>
-                <p className="text-xs text-slate-400">基于角色的权限管理</p>
-              </div>
-            </div>
-            <button onClick={() => update('rbac_enabled', !settings.rbac_enabled)}
-              className={`w-12 h-6 rounded-full transition-colors ${settings.rbac_enabled ? 'bg-violet-500' : 'bg-slate-600'}`}>
-              <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${settings.rbac_enabled ? 'translate-x-6' : 'translate-x-0.5'}`} />
-            </button>
-          </div>
-        </div>
+        <SettingRow
+          icon={<Lock size={15} />}
+          title="RBAC ACCESS CONTROL"
+          desc="Role-based permission management"
+          enabled={settings.rbac_enabled}
+          onToggle={() => update('rbac_enabled', !settings.rbac_enabled)}
+          color="var(--cyan)"
+        />
 
-        {/* Audit Logging */}
-        <div className="bg-slate-900 rounded-xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <AlertTriangle size={18} className="text-yellow-400" />
-              <div>
-                <h3 className="font-medium text-white">审计日志</h3>
-                <p className="text-xs text-slate-400">记录所有操作行为，支持 SIEM 导出</p>
-              </div>
-            </div>
-            <button onClick={() => update('audit_logging', !settings.audit_logging)}
-              className={`w-12 h-6 rounded-full transition-colors ${settings.audit_logging ? 'bg-violet-500' : 'bg-slate-600'}`}>
-              <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${settings.audit_logging ? 'translate-x-6' : 'translate-x-0.5'}`} />
-            </button>
-          </div>
-        </div>
+        <SettingRow
+          icon={<AlertTriangle size={15} />}
+          title="AUDIT LOGGING"
+          desc="Record all operations, SIEM export supported"
+          enabled={settings.audit_logging}
+          onToggle={() => update('audit_logging', !settings.audit_logging)}
+          color="var(--amber)"
+        />
 
         {/* Numeric settings */}
-        <div className="bg-slate-900 rounded-xl p-5 space-y-4">
-          <h3 className="font-medium text-white">阈值配置</h3>
+        <div style={{ padding: 20, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
+            THRESHOLD CONFIGURATION
+          </div>
           {[
-            { key: 'max_login_attempts', label: '最大登录尝试次数', min: 3, max: 20 },
-            { key: 'session_timeout_minutes', label: '会话超时（分钟）', min: 5, max: 480 },
-            { key: 'api_key_rotation_days', label: 'API Key 轮换周期（天）', min: 7, max: 365 },
+            { key: 'max_login_attempts', label: 'MAX LOGIN ATTEMPTS', min: 3, max: 20 },
+            { key: 'session_timeout_minutes', label: 'SESSION TIMEOUT (MINUTES)', min: 5, max: 480 },
+            { key: 'api_key_rotation_days', label: 'API KEY ROTATION (DAYS)', min: 7, max: 365 },
           ].map(({ key, label, min, max }) => (
-            <div key={key} className="flex items-center justify-between">
-              <span className="text-sm text-slate-300">{label}</span>
+            <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.08em' }}>{label}</span>
               <input type="number" min={min} max={max}
                 value={(settings as any)[key]}
                 onChange={e => update(key, parseInt(e.target.value))}
-                className="w-24 bg-slate-800 rounded-lg px-3 py-1.5 text-sm text-white text-right" />
+                style={{
+                  width: 80, height: 32, padding: '0 10px', textAlign: 'right',
+                  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+                  color: 'var(--text-primary)', fontSize: 11, fontFamily: 'var(--font-mono)',
+                }} />
             </div>
           ))}
         </div>

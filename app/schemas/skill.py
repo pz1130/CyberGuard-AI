@@ -40,8 +40,8 @@ class SkillResponse(BaseModel):
     description: Optional[str]
     version: str
     category: Optional[str]
-    permission_level: str
-    requires_approval: bool
+    permission_level: Optional[str] = None
+    requires_approval: Optional[bool] = False
     is_active: bool
     metadata_json: Optional[Dict[str, Any]]
     created_at: datetime
@@ -110,3 +110,16 @@ class ToolListResponse(BaseModel):
     """Paginated tool list response."""
     total: int
     tools: list[ToolResponse]
+
+
+class SkillInstallUrlRequest(BaseModel):
+    """Request to install a skill from a URL."""
+    url: str = Field(..., description="Raw URL pointing to a skill markdown file")
+    headers: Optional[Dict[str, str]] = Field(default=None, description="Optional HTTP headers (e.g. Authorization)")
+
+
+class SkillInstallResponse(BaseModel):
+    """Response after installing a skill."""
+    success: bool
+    skill: Optional[SkillRead] = None
+    error: Optional[str] = None

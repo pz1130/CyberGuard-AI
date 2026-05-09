@@ -72,6 +72,13 @@ class MasterAgentState(TypedDict, total=False):
     model: Optional[str]
     timestamp: str
 
+    # Per-conversation config overrides
+    system_prompt_override: Optional[str]
+    intent_parser_prompt_override: Optional[str]
+    summarizer_prompt_override: Optional[str]
+    model_override: Optional[str]
+    temperature_override: Optional[float]
+
 
 class SubAgentResult(TypedDict):
     """Result from a sub-agent execution."""

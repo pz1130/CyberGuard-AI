@@ -1,58 +1,208 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@400;600;700;800&display=swap');
 
+/* ── Design Tokens ── Industrial Terminal / Cyberpunk Ops ── */
 :root {
-  --sidebar-width: 240px;
+  --sidebar-width: 288px;
   --header-height: 56px;
+
+  /* Core palette */
+  --bg-base: #050505;
+  --bg-surface: #0a0a0a;
+  --bg-elevated: #0f0f0f;
+  --bg-hover: #141414;
+
+  /* Accent: phosphor green */
+  --accent: #00ff41;
+  --accent-dim: rgba(0, 255, 65, 0.08);
+  --accent-border: rgba(0, 255, 65, 0.25);
+  --accent-glow: 0 0 16px rgba(0, 255, 65, 0.15);
+
+  /* Status */
+  --green: #00ff41;
+  --purple: #a855f7;
+  --amber: #ff9500;
+  --amber-dim: rgba(255, 149, 0, 0.1);
+  --red: #ff3b30;
+  --red-dim: rgba(255, 59, 48, 0.1);
+  --cyan: #00d4ff;
+  --cyan-dim: rgba(0, 212, 255, 0.1);
+
+  /* Text — dark mode: high contrast */
+  --text-primary: #ffffff;
+  --text-muted: #b4b4b4;
+  --text-dim: #888888;
+  --text-accent: #00ff41;
+
+  /* Borders */
+  --border: #1f1f1f;
+  --border-bright: #383838;
+
+  /* Typography */
+  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+  --font-display: 'Syne', sans-serif;
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* ── Light Theme ── */
+[data-theme="light"] {
+  --bg-base: #f5f5f5;
+  --bg-surface: #ffffff;
+  --bg-elevated: #eeeeee;
+  --bg-hover: #e2e2e2;
+  --accent: #009922;
+  --accent-dim: rgba(0, 153, 34, 0.08);
+  --accent-border: rgba(0, 153, 34, 0.3);
+  --green: #009922;
+  --purple: #7c3aed;
+  --amber: #d97706;
+  --red: #dc2626;
+  --cyan: #0891b2;
+  --text-primary: #0a0a0a;
+  --text-muted: #444444;
+  --text-dim: #666666;
+  --text-accent: #009922;
+  --border: #cccccc;
+  --border-bright: #aaaaaa;
 }
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
 html, body, #root {
   height: 100%;
-  font-family: 'Inter', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--font-mono);
+  font-size: 16px;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
   font-feature-settings: 'cv11', 'ss01', 'ss03';
 }
 
 body {
   overflow: hidden;
-  background-color: #020617; /* slate-950 */
-  color: #e2e8f0; /* slate-200 */
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 16px;
 }
 
-.dark { color-scheme: dark; }
-
-/* Refined scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.25);
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(100, 116, 139, 0.45);
+/* ── Grid background texture ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0, 255, 65, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 255, 65, 0.025) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
 }
 
-/* Selection */
+/* ── Scanline overlay ── */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.03) 2px,
+    rgba(0, 0, 0, 0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ── Light theme: subtle grid ── */
+[data-theme="light"] body::before {
+  background-image:
+    linear-gradient(rgba(0, 170, 42, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 170, 42, 0.04) 1px, transparent 1px);
+}
+
+[data-theme="light"] body::after {
+  display: none;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-bright); }
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+/* ── Selection ── */
 ::selection {
-  background-color: rgba(139, 92, 246, 0.4); /* violet-500/40 */
-  color: #fff;
+  background: rgba(0, 255, 65, 0.2);
+  color: var(--accent);
 }
 
-/* Remove number input spinners for cleaner look */
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+/* ── Focus ── */
+*:focus-visible {
+  outline: 1px solid rgba(0, 255, 65, 0.4);
+  outline-offset: 2px;
 }
-input[type="number"] { -moz-appearance: textfield; }
+
+/* ── Input base ── */
+input, textarea, select {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-bright);
+  color: var(--text-primary);
+  transition: border-color 0.15s;
+}
+input:focus, textarea:focus, select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+input::placeholder, textarea::placeholder { color: var(--text-dim); font-size: 15px; }
+
+/* ── Button base ── */
+button { font-family: var(--font-mono); cursor: pointer; }
+
+/* ── Accent glow animation ── */
+@keyframes accent-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  49% { opacity: 1; }
+  50% { opacity: 0; }
+  99% { opacity: 0; }
+}
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in { animation: fade-in 0.3s ease forwards; }
+.animate-fade-in-up { animation: fade-in-up 0.3s ease forwards; }
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.blink { animation: blink 1s step-end infinite; }
+.spin { animation: spin 1s linear infinite; }
+
+/* Staggered children */
+.stagger > * { animation: fade-in-up 0.4s ease forwards; opacity: 0; }
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 60ms; }
+.stagger > *:nth-child(3) { animation-delay: 120ms; }
+.stagger > *:nth-child(4) { animation-delay: 180ms; }
+.stagger > *:nth-child(5) { animation-delay: 240ms; }
+.stagger > *:nth-child(n+6) { animation-delay: 300ms; }
+
+/* Status dot */
+.status-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.status-dot.online { animation: accent-pulse 2s ease-in-out infinite; }

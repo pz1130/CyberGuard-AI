@@ -1,9 +1,14 @@
 """Skill and Tool pool management router."""
-from fastapi import APIRouter, Depends, HTTPException, status
+import tempfile
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_db, require_permission
 from app.core.rbac import Permission
-from app.schemas.skill import SkillCreate, SkillRead, SkillUpdate, SkillListResponse, ToolCreate, ToolRead, ToolUpdate, ToolListResponse
+from app.schemas.skill import (
+    SkillCreate, SkillRead, SkillUpdate, SkillListResponse,
+    ToolCreate, ToolRead, ToolUpdate, ToolListResponse,
+    SkillInstallUrlRequest, SkillInstallResponse,
+)
 from app.models.skill import Skill, Tool
 from sqlalchemy import select, func
 
@@ -62,6 +67,79 @@ async def delete_skill(skill_id: int, db: AsyncSession = Depends(get_db), _=Depe
         raise HTTPException(status_code=404, detail="Skill not found")
     await db.delete(skill)
     await db.commit()
+
+
+@router.post("/skills/install/url", response_model=SkillInstallResponse)
+async def install_skill_from_url(
+    body: SkillInstallUrlRequest,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_permission(Permission.SKILL_WRITE)),
+):
+    """Install a skill by fetching its markdown from a URL."""
+    from app.services.skill_installer import install_skill_from_url as fetch_and_parse
+
+    result = await fetch_and_parse(body.url, body.headers)
+    if not result["success"]:
+        return SkillInstallResponse(success=False, error=result["error"])
+
+    skill_data = result["skill_data"]
+
+    # Upsert: update existing skill with same name, or create new
+    existing = await db.execute(select(Skill).where(Skill.name == skill_data["name"]))
+    existing_skill = existing.scalar_one_or_none()
+
+    if existing_skill:
+        for key, value in skill_data.items():
+            setattr(existing_skill, key, value)
+        skill = existing_skill
+    else:
+        skill = Skill(**skill_data)
+        db.add(skill)
+
+    await db.commit()
+    await db.refresh(skill)
+    return SkillInstallResponse(success=True, skill=SkillRead.model_validate(skill))
+
+
+@router.post("/skills/import", response_model=SkillInstallResponse)
+async def import_skill_file(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_permission(Permission.SKILL_WRITE)),
+):
+    """Import a skill from an uploaded .md or .json file."""
+    from app.services.skill_installer import install_skill_from_content
+
+    if not file.filename:
+        return SkillInstallResponse(success=False, error="No filename provided")
+
+    content = await file.read()
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        return SkillInstallResponse(success=False, error="File must be UTF-8 encoded")
+
+    result = install_skill_from_content(file.filename, text)
+    if not result["success"]:
+        return SkillInstallResponse(success=False, error=result["error"])
+
+    skill_data = result["skill_data"]
+
+    # Upsert
+    existing = await db.execute(select(Skill).where(Skill.name == skill_data["name"]))
+    existing_skill = existing.scalar_one_or_none()
+
+    if existing_skill:
+        for key, value in skill_data.items():
+            setattr(existing_skill, key, value)
+        skill = existing_skill
+    else:
+        skill = Skill(**skill_data)
+        db.add(skill)
+
+    await db.commit()
+    await db.refresh(skill)
+    return SkillInstallResponse(success=True, skill=SkillRead.model_validate(skill))
 
 
 # --- Tools ---

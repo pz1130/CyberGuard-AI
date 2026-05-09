@@ -21,6 +21,7 @@ class AuditLog(Base):
     request_path = Column(String(500), nullable=True)
     metadata_json = Column(JSON, nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    request_id = Column(String(36), nullable=True)
 
     # Relationship
     user = relationship("User", back_populates="audit_logs")

@@ -18,7 +18,6 @@ export default function EnvVars() {
   const [newType, setNewType] = useState<'text' | 'secret'>('text')
   const [newDesc, setNewDesc] = useState('')
   const [showNew, setShowNew] = useState(false)
-  // Per-item: decrypted values cached locally (not stored in DB)
   const [decryptedValues, setDecryptedValues] = useState<Record<number, string>>({})
   const [visibleValues, setVisibleValues] = useState<Record<string, boolean>>({})
   const [decrypting, setDecrypting] = useState<number | null>(null)
@@ -35,19 +34,14 @@ export default function EnvVars() {
   const add = async () => {
     if (!newKey.trim()) return
     try {
-      await api.createEnvVar({
-        key: newKey.trim().toUpperCase(),
-        value: newVal,
-        value_type: newType,
-        description: newDesc || undefined,
-      })
+      await api.createEnvVar({ key: newKey.trim().toUpperCase(), value: newVal, value_type: newType, description: newDesc || undefined })
       setNewKey(''); setNewVal(''); setNewType('text'); setNewDesc(''); setShowNew(false)
       load()
     } catch (e: any) { alert(e.message) }
   }
 
   const del = async (id: number) => {
-    if (!confirm('确认删除？')) return
+    if (!confirm('CONFIRM DELETION?')) return
     try {
       await api.deleteEnvVar(id)
       setVars(v => v.filter(x => x.id !== id))
@@ -65,7 +59,6 @@ export default function EnvVars() {
 
   const decryptValue = async (id: number, key: string) => {
     if (decryptedValues[id]) {
-      // Toggle visibility
       setVisibleValues(prev => ({ ...prev, [key]: !prev[key] }))
       return
     }
@@ -79,7 +72,7 @@ export default function EnvVars() {
   }
 
   const displayValue = (v: EnvVar) => {
-    if (v.value_type !== 'secret') return '（文本类型，不可预览）'
+    if (v.value_type !== 'secret') return '—'
     if (!decryptedValues[v.id!]) return '••••••••'
     if (!visibleValues[v.key]) return '••••••••'
     return decryptedValues[v.id!]
@@ -87,139 +80,203 @@ export default function EnvVars() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <h2 className="text-xl font-semibold">环境变量</h2>
-          <p className="text-xs text-slate-500 mt-1">
-            系统级密钥和连接信息，AES-256 加密存储，仅 Admin 可解密
-          </p>
+          <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>SYSTEM CONFIGURATION</div>
+          <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>ENVIRONMENT VARIABLES</h1>
         </div>
-        <div className="flex gap-2">
-          <button onClick={load} className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-600 text-white rounded-lg text-sm">
-            <RefreshCw size={14} /> 刷新
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={load}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '0 12px', height: 36,
+              border: '1px solid var(--border-bright)', background: 'transparent',
+              color: 'var(--text-muted)', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer',
+              fontFamily: 'var(--font-mono)',
+            }}>
+            <RefreshCw size={11} /> REFRESH
           </button>
           <button onClick={() => setShowNew(!showNew)}
-            className="flex items-center gap-2 px-4 py-2 bg-violet-500 hover:bg-violet-600 text-white rounded-lg text-sm">
-            + 添加变量
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '0 16px', height: 36,
+              background: 'var(--accent)', border: '1px solid var(--accent-border)',
+              color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.15em', cursor: 'pointer',
+              fontFamily: 'var(--font-mono)',
+            }}>
+            <Lock size={11} /> NEW VAR
           </button>
+        </div>
+      </div>
+
+      {/* Security notice */}
+      <div style={{
+        padding: '10px 14px', marginBottom: 20,
+        background: 'var(--red-dim)', border: '1px solid rgba(255,59,48,0.2)',
+        display: 'flex', alignItems: 'flex-start', gap: 10,
+      }}>
+        <Lock size={13} style={{ color: 'var(--amber)', marginTop: 1, flexShrink: 0 }} />
+        <div style={{ fontSize: 10, color: 'var(--amber)', letterSpacing: '0.05em', lineHeight: 1.6 }}>
+          VALUES ARE AES-256 ENCRYPTED IN TRANSIT AND AT REST. DECRYPTION REQUIRES ADMIN PERMISSIONS.
         </div>
       </div>
 
       {/* Add New Form */}
       {showNew && (
-        <div className="bg-slate-900 rounded-xl p-5 mb-6 space-y-3">
-          <h3 className="text-sm font-medium text-white">新增环境变量</h3>
-          <div className="grid grid-cols-3 gap-3">
+        <div style={{ marginBottom: 20, padding: 20, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 16 }}>NEW ENVIRONMENT VARIABLE</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">变量名</label>
+              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>KEY</label>
               <input value={newKey} onChange={e => setNewKey(e.target.value.toUpperCase())}
-                className="w-full bg-slate-800 rounded-lg px-3 py-2 text-sm text-white font-mono"
-                placeholder="VARIABLE_NAME" />
+                placeholder="VARIABLE_NAME"
+                style={{
+                  width: '100%', height: 38, padding: '0 12px',
+                  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+                  color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
+                  fontFamily: 'var(--font-mono)',
+                }} />
             </div>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">值</label>
+              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>VALUE</label>
               <input value={newVal} onChange={e => setNewVal(e.target.value)}
-                className="w-full bg-slate-800 rounded-lg px-3 py-2 text-sm text-white font-mono"
-                placeholder="值（会加密存储）" />
+                placeholder="VALUE (ENCRYPTED)"
+                style={{
+                  width: '100%', height: 38, padding: '0 12px',
+                  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+                  color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
+                  fontFamily: 'var(--font-mono)',
+                }} />
             </div>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">类型</label>
+              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>TYPE</label>
               <select value={newType} onChange={e => setNewType(e.target.value as 'text' | 'secret')}
-                className="w-full bg-slate-800 rounded-lg px-3 py-2 text-sm text-white">
-                <option value="text">文本</option>
-                <option value="secret">密钥</option>
+                style={{
+                  width: '100%', height: 38, padding: '0 12px',
+                  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+                  color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)',
+                }}>
+                <option value="text">TEXT</option>
+                <option value="secret">SECRET</option>
               </select>
             </div>
-            <div className="col-span-3">
-              <label className="text-xs text-slate-400 mb-1 block">描述（可选）</label>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>DESCRIPTION (OPTIONAL)</label>
               <input value={newDesc} onChange={e => setNewDesc(e.target.value)}
-                className="w-full bg-slate-800 rounded-lg px-3 py-2 text-sm text-white"
-                placeholder="用途说明..." />
+                placeholder="PURPOSE / USAGE..."
+                style={{
+                  width: '100%', height: 38, padding: '0 12px',
+                  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+                  color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
+                  fontFamily: 'var(--font-mono)',
+                }} />
             </div>
           </div>
-          <div className="flex gap-2 justify-end">
-            <button onClick={() => setShowNew(false)} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-sm">取消</button>
-            <button onClick={add} className="px-4 py-2 bg-violet-500 text-white rounded-lg text-sm">添加</button>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button onClick={() => setShowNew(false)}
+              style={{
+                padding: '0 14px', height: 34,
+                border: '1px solid var(--border-bright)', background: 'transparent',
+                color: 'var(--text-muted)', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer',
+                fontFamily: 'var(--font-mono)',
+              }}>
+              CANCEL
+            </button>
+            <button onClick={add}
+              style={{
+                padding: '0 14px', height: 34,
+                background: 'var(--accent)', border: '1px solid var(--accent-border)',
+                color: '#000', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', cursor: 'pointer',
+                fontFamily: 'var(--font-mono)',
+              }}>
+              ADD
+            </button>
           </div>
         </div>
       )}
 
-      {/* Security notice */}
-      <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl px-4 py-3 mb-6 flex items-start gap-3">
-        <Lock size={16} className="text-yellow-400 mt-0.5 flex-shrink-0" />
-        <p className="text-xs text-yellow-300">
-          环境变量值在传输和存储中使用 AES-256 加密。点击「查看」会实时解密，仅对具有设置写入权限的 Admin 开放。
-        </p>
-      </div>
-
       {/* List */}
-      <div className="space-y-2">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {loading ? (
-          <p className="text-slate-400 py-8 text-center">加载中...</p>
+          <div style={{ padding: '40px 0', textAlign: 'center', fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>LOADING...</div>
         ) : vars.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-slate-500">暂无环境变量</p>
-            <p className="text-xs text-slate-600 mt-1">点击右上角「添加变量」创建第一个</p>
+          <div style={{ padding: '40px 0', textAlign: 'center' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.1em', marginBottom: 8 }}>NO ENVIRONMENT VARIABLES</div>
+            <div style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>CLICK "NEW VAR" TO CREATE ONE</div>
           </div>
-        ) : (
-          vars.map(v => (
-            <div key={v.id} className="bg-slate-900 rounded-xl p-4 flex items-center gap-4">
-              {/* Key */}
-              <div className="w-52 flex-shrink-0">
-                <span className="text-sm font-mono text-violet-400">{v.key}</span>
-                <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${v.value_type === 'secret' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-slate-800 text-slate-400'}`}>
-                  {v.value_type === 'secret' ? <Lock size={10} className="inline" /> : null}
-                  {v.value_type === 'secret' ? '密钥' : '文本'}
-                </span>
-              </div>
-
-              {/* Value */}
-              <div className="flex-1 flex items-center gap-2">
-                {v.value_type === 'secret' ? (
-                  <>
-                    <span className="text-sm font-mono text-slate-300">
-                      {displayValue(v)}
-                    </span>
-                    {v.is_active && (
-                      <button
-                        onClick={() => decryptValue(v.id!, v.key)}
-                        disabled={decrypting === v.id}
-                        className="p-1.5 text-slate-400 hover:text-white disabled:opacity-50"
-                        title="解密查看"
-                      >
-                        {decrypting === v.id ? (
-                          <RefreshCw size={14} className="animate-spin" />
-                        ) : visibleValues[v.key] ? (
-                          <EyeOff size={14} />
-                        ) : (
-                          <Eye size={14} />
-                        )}
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <span className="text-xs text-slate-500 italic">（文本类型不可预览）</span>
-                )}
-              </div>
-
-              {/* Description */}
-              <div className="flex-1 text-xs text-slate-500 truncate">{v.description || '—'}</div>
-
-              {/* Active toggle */}
-              <button
-                onClick={() => toggleActive(v)}
-                className={`text-xs px-2 py-1 rounded ${v.is_active ? 'bg-violet-500/20 text-violet-400' : 'bg-slate-800 text-slate-400'}`}
-              >
-                {v.is_active ? '启用' : '禁用'}
-              </button>
-
-              {/* Delete */}
-              <button onClick={() => del(v.id!)} className="p-1.5 text-slate-400 hover:text-red-400 flex-shrink-0">
-                <Trash2 size={14} />
-              </button>
+        ) : vars.map(v => (
+          <div key={v.id} style={{
+            display: 'flex', alignItems: 'center', gap: 12,
+            padding: '12px 16px',
+            background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
+          }}>
+            {/* Key */}
+            <div style={{ width: 200, flexShrink: 0 }}>
+              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--accent)', letterSpacing: '0.05em' }}>{v.key}</span>
+              <span style={{
+                marginLeft: 8, padding: '1px 5px',
+                border: `1px solid ${v.value_type === 'secret' ? 'var(--amber)' : 'var(--border)'}`,
+                color: v.value_type === 'secret' ? 'var(--amber)' : 'var(--text-muted)',
+                fontSize: 8, letterSpacing: '0.1em', background: 'var(--bg-base)',
+              }}>
+                {v.value_type === 'secret' && <Lock size={8} style={{ display: 'inline', marginRight: 2 }} />}
+                {v.value_type === 'secret' ? 'SECRET' : 'TEXT'}
+              </span>
             </div>
-          ))
-        )}
+
+            {/* Value */}
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+              {v.value_type === 'secret' ? (
+                <>
+                  <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
+                    {displayValue(v)}
+                  </span>
+                  {v.is_active && (
+                    <button
+                      onClick={() => decryptValue(v.id!, v.key)}
+                      disabled={decrypting === v.id}
+                      style={{ padding: 4, color: 'var(--text-muted)', cursor: 'pointer', background: 'none', border: 'none' }}>
+                      {decrypting === v.id ? (
+                        <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} />
+                      ) : visibleValues[v.key] ? (
+                        <EyeOff size={12} />
+                      ) : (
+                        <Eye size={12} />
+                      )}
+                    </button>
+                  )}
+                </>
+              ) : (
+                <span style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.05em', fontStyle: 'italic' }}>TEXT TYPE — NOT PREVIEWABLE</span>
+              )}
+            </div>
+
+            {/* Description */}
+            <div style={{ flex: 1, fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {v.description || '—'}
+            </div>
+
+            {/* Active */}
+            <button
+              onClick={() => toggleActive(v)}
+              style={{
+                padding: '2px 8px',
+                border: `1px solid ${v.is_active ? 'var(--green)' : 'var(--border)'}`,
+                background: v.is_active ? 'rgba(0,255,65,0.05)' : 'transparent',
+                color: v.is_active ? 'var(--green)' : 'var(--text-dim)',
+                fontSize: 9, letterSpacing: '0.1em', cursor: 'pointer',
+                fontFamily: 'var(--font-mono)',
+              }}>
+              {v.is_active ? 'ACTIVE' : 'INACTIVE'}
+            </button>
+
+            {/* Delete */}
+            <button onClick={() => del(v.id!)} style={{ padding: 4, color: 'var(--red)', cursor: 'pointer', background: 'none', border: 'none' }}>
+              <Trash2 size={12} />
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   )

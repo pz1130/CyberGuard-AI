@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api/client'
-import { FileText, Download, Search } from 'lucide-react'
+import { FileText, Download, Search, Loader2 } from 'lucide-react'
 
 interface Log {
   id?: number
@@ -46,58 +46,99 @@ export default function AuditLogs() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-xl font-semibold flex items-center gap-2"><FileText size={20} /> 审计日志</h2>
-          <p className="text-xs text-slate-500 mt-1">所有操作行为记录，支持 SIEM 格式导出</p>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{
+            width: 36, height: 36, border: '1px solid var(--border-bright)',
+            background: 'var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'var(--cyan)',
+          }}>
+            <FileText size={15} />
+          </div>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>AUDIT LOG</div>
+            <div style={{ fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>COMPLETE OPERATION RECORDS · SIEM EXPORT</div>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button onClick={exportLogs}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-600 text-white rounded-lg text-sm">
-            <Download size={16} /> 导出
-          </button>
-        </div>
+        <button onClick={exportLogs}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '0 16px', height: 36,
+            background: 'var(--accent)', border: '1px solid var(--accent-border)',
+            color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.15em', cursor: 'pointer',
+            fontFamily: 'var(--font-mono)',
+          }}>
+          <Download size={11} /> EXPORT
+        </button>
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 mb-4">
-        <div className="flex-1 relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+      <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+        <div style={{ flex: 1, position: 'relative' }}>
+          <Search size={12} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
           <input value={filter} onChange={e => setFilter(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-sm text-white" placeholder="搜索操作或用户 ID..." />
+            placeholder="SEARCH ACTION OR USER ID..."
+            style={{
+              width: '100%', height: 36, paddingLeft: 36, paddingRight: 12,
+              background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+              color: 'var(--text-primary)', fontSize: 11, letterSpacing: '0.05em',
+              fontFamily: 'var(--font-mono)',
+            }} />
         </div>
         <select value={limit} onChange={e => setLimit(Number(e.target.value))}
-          className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white">
-          <option value={20}>20 条</option>
-          <option value={50}>50 条</option>
-          <option value={100}>100 条</option>
-          <option value={500}>500 条</option>
+          style={{
+            height: 36, padding: '0 10px',
+            background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+            color: 'var(--text-primary)', fontSize: 11, fontFamily: 'var(--font-mono)',
+          }}>
+          <option value={20}>20 RECORDS</option>
+          <option value={50}>50 RECORDS</option>
+          <option value={100}>100 RECORDS</option>
+          <option value={500}>500 RECORDS</option>
         </select>
-        <button onClick={load} className="px-4 py-2 bg-slate-800 hover:bg-slate-600 text-white rounded-lg text-sm">刷新</button>
+        <button onClick={load}
+          style={{
+            height: 36, padding: '0 14px',
+            border: '1px solid var(--border-bright)', background: 'transparent',
+            color: 'var(--text-muted)', fontSize: 11, letterSpacing: '0.1em', cursor: 'pointer',
+            fontFamily: 'var(--font-mono)',
+          }}>
+          REFRESH
+        </button>
       </div>
 
       {/* Table */}
-      <div className="bg-slate-900 rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
+      <div style={{ border: '1px solid var(--border-bright)', overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr className="border-b border-slate-800">
-              <th className="text-left px-4 py-3 text-slate-400 font-medium text-xs">时间</th>
-              <th className="text-left px-4 py-3 text-slate-400 font-medium text-xs">用户</th>
-              <th className="text-left px-4 py-3 text-slate-400 font-medium text-xs">操作</th>
-              <th className="text-left px-4 py-3 text-slate-400 font-medium text-xs">Request ID</th>
+            <tr style={{ background: 'var(--bg-base)', borderBottom: '1px solid var(--border-bright)' }}>
+              {['TIMESTAMP', 'USER', 'ACTION', 'REQUEST ID'].map((h, i) => (
+                <th key={i} style={{ padding: '12px 16px', textAlign: i === 0 ? 'left' : 'left', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={4} className="text-center py-8 text-slate-500">加载中...</td></tr>
+              <tr>
+                <td colSpan={4} style={{ textAlign: 'center', padding: 40 }}>
+                  <Loader2 size={18} style={{ color: 'var(--accent)', animation: 'spin 1s linear infinite', margin: '0 auto' }} />
+                </td>
+              </tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={4} className="text-center py-8 text-slate-500">暂无日志</td></tr>
+              <tr>
+                <td colSpan={4} style={{ textAlign: 'center', padding: 40, fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>NO LOG RECORDS</td>
+              </tr>
             ) : filtered.map((log, i) => (
-              <tr key={i} className="border-b border-slate-800/50 hover:bg-slate-800/30">
-                <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">{log.timestamp ? new Date(log.timestamp).toLocaleString('zh-CN') : '—'}</td>
-                <td className="px-4 py-3 text-slate-300 text-xs">{log.user_id ?? '—'}</td>
-                <td className="px-4 py-3 text-white text-xs font-mono">{log.action}</td>
-                <td className="px-4 py-3 text-slate-500 text-xs font-mono">{log.request_id ?? '—'}</td>
+              <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                <td style={{ padding: '14px 16px', fontSize: 10, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                  {log.timestamp ? new Date(log.timestamp).toLocaleString('zh-CN') : '—'}
+                </td>
+                <td style={{ padding: '14px 16px', fontSize: 11, color: 'var(--text-muted)' }}>
+                  {log.user_id ?? '—'}
+                </td>
+                <td style={{ padding: '14px 16px', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--cyan)', letterSpacing: '0.05em' }}>{log.action}</td>
+                <td style={{ padding: '14px 16px', fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-dim)' }}>{log.request_id ?? '—'}</td>
               </tr>
             ))}
           </tbody>

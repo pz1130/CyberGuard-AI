@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 import bcrypt
 
-from app.core.dependencies import get_db, require_role
+from app.core.dependencies import get_db, get_current_user, require_role
 from app.core.auth import AuthenticatedUser
 from app.core.rbac import Role
 from app.schemas.user import UserCreate, UserRead, UserUpdate, UserListResponse
@@ -70,7 +70,7 @@ async def create_user(
 @router.get("/users/me", response_model=UserRead)
 async def get_me(
     db: AsyncSession = Depends(get_db),
-    current_user: AuthenticatedUser = Depends(require_role(Role.VIEWER)),
+    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     """Get current authenticated user."""
     result = await db.execute(select(User).where(User.id == current_user.user_id))
