@@ -9,7 +9,38 @@ from urllib.parse import urlparse
 from app.config import settings
 from app.core.security import decrypt_data
 from app.core.rbac import Permission
-from app.services.openclaw_executor import get_executor_for_backend
+
+
+def _resolve_api_key(config: Dict[str, Any]) -> str:
+    """Extract the API key for an agent, trying multiple storage locations.
+
+    Priority:
+      1. env_vars_encrypted JSON field with key "OPENCLAW_API_KEY"
+      2. metadata_json.api_key_encrypted  (AES-256 encrypted)
+      3. metadata_json.api_key            (plain, legacy / dev)
+    """
+    # 1. env_vars_encrypted
+    env_enc = config.get("env_vars_encrypted")
+    if env_enc:
+        try:
+            env_vars = json.loads(decrypt_data(env_enc))
+            key = env_vars.get("OPENCLAW_API_KEY", "")
+            if key:
+                return key
+        except Exception:
+            pass
+
+    # 2. metadata_json.api_key_encrypted
+    meta = config.get("metadata_json") or {}
+    enc = meta.get("api_key_encrypted", "")
+    if enc:
+        try:
+            return decrypt_data(enc)
+        except Exception:
+            pass
+
+    # 3. metadata_json.api_key (plain)
+    return meta.get("api_key", "")
 
 # Blocked hostnames for SSRF protection
 _BLOCKED_HOSTS = frozenset({
@@ -307,34 +338,53 @@ class AgentExecutor:
                 "streaming": getattr(agent_obj, "streaming", True),
             }
 
-        wrapper = get_executor_for_backend(config_dict)
-
         # Check permission level
         permission_level = config_dict.get("permission_level", "medium")
         if permission_level == "high":
-            # Require admin approval
             return {
                 "status": "needs_approval",
                 "output": None,
                 "error": "High permission agent requires approval",
             }
 
-        # If no tools explicitly provided, auto-load MCP tools for OpenClaw backends
-        if tools is None and config_dict["backend_type"] == "openclaw":
-            tools = await self.get_mcp_tools_for_agent(config_dict.get("metadata_json"))
+        backend = config_dict["backend_type"]
 
-        result = await wrapper.execute(
-            task=task,
-            context={"user_id": user_id},
-            tools=tools,
-            system_prompt=config_dict.get("system_prompt"),
-        )
+        if backend == "openclaw":
+            result = await self._execute_openclaw(config_dict, task)
+        else:
+            # Generic HTTP fallback (Hermes / custom backends)
+            wrapper = SubAgentWrapper(config_dict)
+            result = await wrapper.execute(task=task, context={"user_id": user_id})
 
         result["agent_id"] = agent_id
         result["agent_name"] = config_dict.get("agent_name")
         result["timestamp"] = datetime.utcnow().isoformat()
 
         return result
+
+    async def _execute_openclaw(self, config: Dict[str, Any], task: str) -> Dict[str, Any]:
+        """Execute a task on a Clawith/OpenClaw agent via /v1/responses."""
+        from app.services import openclaw_executor
+
+        endpoint = config.get("endpoint_url", "").rstrip("/")
+        if not endpoint:
+            return {"status": "error", "output": None, "error": "No endpoint URL configured"}
+
+        # Resolve api_key — stored encrypted in env_vars or metadata_json
+        api_key = _resolve_api_key(config)
+        if not api_key:
+            return {"status": "error", "output": None, "error": "No API key configured for OpenClaw agent"}
+
+        # Resolve the Clawith agent ID (distinct from our internal DB id)
+        meta = config.get("metadata_json") or {}
+        openclaw_agent_id = meta.get("openclaw_agent_id") or meta.get("agent_id") or "main"
+
+        return await openclaw_executor.execute(
+            endpoint_url=endpoint,
+            api_key=api_key,
+            openclaw_agent_id=openclaw_agent_id,
+            task=task,
+        )
 
     async def execute_parallel(self, agent_ids: list, task: str, user_id: int) -> Dict[int, Dict[str, Any]]:
         """Execute task on multiple agents in parallel."""
