@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api/client'
-import { Plus, Loader2, Cpu, Trash, Pencil, Copy, RefreshCw, Wifi, WifiOff, Key } from 'lucide-react'
+import { Plus, Loader2, Cpu, Trash, Pencil, Copy, Wifi, WifiOff, Key } from 'lucide-react'
 
 interface Agent {
   id?: string
@@ -47,7 +47,7 @@ const inputStyle: React.CSSProperties = {
 }
 
 // ── Step guide shown inside the form when backend_type === 'openclaw' ─────────
-function OpenClawGuide({ apiKey, agentName }: { apiKey?: string; agentName: string }) {
+function OpenClawGuide({ apiKey }: { apiKey?: string }) {
   const [copied, setCopied] = useState(false)
 
   const copy = (text: string) => {
@@ -570,7 +570,7 @@ export default function Agents() {
 
               {/* OpenClaw Guide */}
               {form.backend_type === 'openclaw' && (
-                <OpenClawGuide apiKey={createdApiKey || undefined} agentName={form.agent_name} />
+                <OpenClawGuide apiKey={createdApiKey || undefined} />
               )}
 
             </div>
