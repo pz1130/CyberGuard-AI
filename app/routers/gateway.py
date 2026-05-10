@@ -1,10 +1,11 @@
-"""OpenClaw Gateway — poll / report / heartbeat endpoints.
+"""OpenClaw Gateway — poll / report / heartbeat / send-message endpoints.
 
-OpenClaw 节点用这三个接口与 CyberGuard 通信：
+OpenClaw 节点用这四个接口与 CyberGuard 通信：
 
-  GET  /api/v1/gateway/poll       — 取待处理任务
-  POST /api/v1/gateway/report     — 回报执行结果
-  POST /api/v1/gateway/heartbeat  — 保持在线状态
+  GET  /api/v1/gateway/poll         — 取待处理任务
+  POST /api/v1/gateway/report       — 回报执行结果
+  POST /api/v1/gateway/heartbeat    — 保持在线状态
+  POST /api/v1/gateway/send-message — 主动向 CyberGuard 发送消息
 
 所有请求用 X-Api-Key 头携带创建 Agent 时返回的 oc-xxx 密钥。
 """
@@ -13,12 +14,11 @@ import json
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db_context, AsyncSessionLocal
+from app.core.database import AsyncSessionLocal
 from app.models.agent import AgentConfig
 from app.models.gateway_message import GatewayMessage
 
@@ -74,6 +74,14 @@ class HeartbeatResponse(BaseModel):
     success: bool
     timestamp: str
 
+class SendMessageRequest(BaseModel):
+    content: str
+    target: Optional[str] = None  # 预留：指定目标用户或 Agent 名称
+
+class SendMessageResponse(BaseModel):
+    success: bool
+    message_id: int
+
 
 # ---------------------------------------------------------------------------
 # Endpoints
@@ -119,6 +127,9 @@ async def poll(x_api_key: str = Header(..., alias="X-Api-Key")):
                 "id": m.id,
                 "content": m.content,
                 "execution_id": m.execution_id,
+                "conversation_id": m.execution_id,  # alias for AI agent compatibility
+                "sender_user_name": "CyberGuard",
+                "sender_user_id": 0,
                 "created_at": m.created_at.isoformat(),
             }
             for m in messages
@@ -187,3 +198,44 @@ async def heartbeat(x_api_key: str = Header(..., alias="X-Api-Key")):
             await session.commit()
 
     return HeartbeatResponse(success=True, timestamp=datetime.utcnow().isoformat())
+
+
+@router.post("/gateway/send-message", response_model=SendMessageResponse)
+async def send_message(
+    body: SendMessageRequest,
+    x_api_key: str = Header(..., alias="X-Api-Key"),
+):
+    """OpenClaw 节点主动向 CyberGuard 发送消息（存入 gateway_messages 供 UI 查看）。"""
+    agent = await _auth_agent(x_api_key)
+
+    async with AsyncSessionLocal() as session:
+        msg = GatewayMessage(
+            agent_id=agent.id,
+            content=f"[来自 Agent] {body.content}",
+            status="completed",          # 主动发送的消息无需等待执行
+            result=body.content,
+            created_at=datetime.utcnow(),
+            completed_at=datetime.utcnow(),
+        )
+        session.add(msg)
+
+        # 更新在线时间
+        agent_row = await session.get(AgentConfig, agent.id)
+        if agent_row:
+            agent_row.openclaw_last_seen = datetime.utcnow()
+
+        await session.commit()
+        await session.refresh(msg)
+
+    # 尝试通过 Redis 通知 UI（best-effort）
+    try:
+        from app.core.redis_client import get_redis
+        r = await get_redis()
+        await r.publish(
+            f"gateway:incoming:{agent.id}",
+            json.dumps({"agent_id": agent.id, "content": body.content, "target": body.target}),
+        )
+    except Exception:
+        pass
+
+    return SendMessageResponse(success=True, message_id=msg.id)

@@ -46,71 +46,64 @@ const inputStyle: React.CSSProperties = {
   fontFamily: 'var(--font-mono)', boxSizing: 'border-box',
 }
 
-// ── OpenClaw setup guide ───────────────────────────────────────────────────────
+// ── OpenClaw setup guide (Clawith-style: generate a skill file for the AI agent) ──
 function OpenClawGuide({ apiKey }: { apiKey?: string }) {
-  const [copiedKey, setCopiedKey] = useState<string | null>(null)
+  const [copied, setCopied] = useState<string | null>(null)
 
-  const copy = (text: string, id: string) => {
+  const cp = (text: string, id: string) => {
     navigator.clipboard.writeText(text).then(() => {
-      setCopiedKey(id); setTimeout(() => setCopiedKey(null), 2000)
+      setCopied(id); setTimeout(() => setCopied(null), 2000)
     })
   }
 
-  const host = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host
-  const key = apiKey || 'YOUR_API_KEY'
+  const baseUrl = `${window.location.protocol}//${window.location.hostname}:8000`
+  const key = apiKey || '<YOUR_API_KEY>'
 
-  const pythonScript = `import requests, time
+  const skillFile = `---
+name: cyberguard_sync
+description: Sync with CyberGuard platform — check inbox and submit results.
+---
 
-CYBERGUARD = "http://${host}"   # 改成你的 CyberGuard 地址
-API_KEY    = "${key}"
+# CyberGuard Sync
 
-headers = {"X-Api-Key": API_KEY}
+## When to use
+Check for new tasks from the CyberGuard platform during every heartbeat cycle.
+You can also proactively send messages back to CyberGuard.
 
-def poll():
-    r = requests.get(f"{CYBERGUARD}/api/v1/gateway/poll", headers=headers, timeout=10)
-    return r.json().get("messages", [])
+## Instructions
 
-def report(message_id, result):
-    requests.post(f"{CYBERGUARD}/api/v1/gateway/report", headers=headers,
-                  json={"message_id": message_id, "result": result}, timeout=10)
+### 1. Check inbox
+Make an HTTP GET request:
+- URL: ${baseUrl}/api/v1/gateway/poll
+- Header: X-Api-Key: ${key}
 
-def heartbeat():
-    requests.post(f"{CYBERGUARD}/api/v1/gateway/heartbeat", headers=headers, timeout=5)
+The response contains a \`messages\` array. Each message includes:
+- \`id\` — unique message ID (use this for reporting)
+- \`content\` — the task text sent from CyberGuard
+- \`conversation_id\` — the task tracking ID
 
-print("OpenClaw worker started, polling every 10s ...")
-tick = 0
-while True:
-    try:
-        tasks = poll()
-        for task in tasks:
-            print(f"[TASK] {task['content']}")
-            # ↓ 把这里替换成你的实际执行逻辑
-            result = f"已收到任务：{task['content']}"
-            report(task["id"], result)
-            print(f"[DONE] message_id={task['id']}")
-        if tick % 6 == 0:   # 每 60s 发一次心跳
-            heartbeat()
-        tick += 1
-    except Exception as e:
-        print(f"[ERR] {e}")
-    time.sleep(10)`
+### 2. Report results
+For each completed task, make an HTTP POST request:
+- URL: ${baseUrl}/api/v1/gateway/report
+- Header: X-Api-Key: ${key}
+- Header: Content-Type: application/json
+- Body: {"message_id": "<id from the message>", "result": "<your response>"}
 
-  const installCmd = `pip install requests\npython openclaw_worker.py`
+### 3. Send a message to CyberGuard (optional)
+To proactively send information back, make an HTTP POST request:
+- URL: ${baseUrl}/api/v1/gateway/send-message
+- Header: X-Api-Key: ${key}
+- Header: Content-Type: application/json
+- Body: {"content": "<your message>"}
 
-  const s: React.CSSProperties = {
-    fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.75,
-  }
-  const stepLabel = (n: string, title: string) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-      <div style={{
-        width: 20, height: 20, borderRadius: 2, flexShrink: 0,
-        background: 'rgba(0,255,65,0.12)', border: '1px solid var(--accent-border)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 9, color: 'var(--accent)', fontWeight: 700, fontFamily: 'var(--font-mono)',
-      }}>{n}</div>
-      <span style={{ fontSize: 10, color: 'var(--text-primary)', letterSpacing: '0.08em', fontWeight: 600 }}>{title}</span>
-    </div>
-  )
+### 4. Heartbeat (optional, every 60s)
+To stay marked as online:
+- URL: ${baseUrl}/api/v1/gateway/heartbeat
+- Header: X-Api-Key: ${key}`
+
+  const heartbeatInstruction = `Check CyberGuard inbox using the cyberguard_sync skill and process any pending tasks`
+
+  const dimText: React.CSSProperties = { fontSize: 11, color: 'var(--text-dim)', lineHeight: 1.7 }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
@@ -127,96 +120,80 @@ while True:
       <div style={{
         padding: '16px', background: 'var(--bg-base)',
         border: '1px solid var(--accent-border)',
-        display: 'flex', flexDirection: 'column', gap: 18,
+        display: 'flex', flexDirection: 'column', gap: 16,
       }}>
 
-        {/* Concept */}
+        {/* Intro */}
+        <div style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.7 }}>
+          把下面的连接指令交给外部 Agent，它就能通过网关收发 CyberGuard 消息。
+        </div>
+        <div style={{ ...dimText }}>
+          API Key 已包含在连接指令中
+        </div>
+
+        {/* Key copy row — only show when we have the real key */}
+        {apiKey && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ ...dimText, flexShrink: 0 }}>复制 Key</div>
+            <div style={{
+              flex: 1, padding: '6px 10px',
+              background: 'rgba(0,255,65,0.06)', border: '1px solid var(--accent-border)',
+              fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent)',
+              letterSpacing: '0.03em', wordBreak: 'break-all',
+            }}>{apiKey}</div>
+            <button onClick={() => cp(apiKey, 'key')} style={{
+              padding: '6px 12px', border: '1px solid var(--accent-border)',
+              background: copied === 'key' ? 'var(--accent)' : 'transparent',
+              color: copied === 'key' ? '#000' : 'var(--accent)',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+              fontSize: 10, letterSpacing: '0.1em', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap',
+            }}>
+              <Copy size={11} /> {copied === 'key' ? 'COPIED' : 'COPY KEY'}
+            </button>
+          </div>
+        )}
+
+        {!apiKey && (
+          <div style={{
+            ...dimText, padding: '8px 12px',
+            background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+          }}>
+            API Key 将在创建 Agent 后出现（仅显示一次）。忘记保存可用卡片上的 <span style={{ color: 'var(--accent)' }}>REGEN KEY</span> 重新生成。
+          </div>
+        )}
+
+        {/* Skill file block */}
+        <div>
+          <div style={{ ...dimText, marginBottom: 6 }}>
+            在 OpenClaw 节点上创建 <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>skills/cyberguard_sync.md</span>，内容如下：
+          </div>
+          <CodeBlock
+            text={skillFile}
+            onCopy={(t) => cp(t, 'skill')}
+            copied={copied === 'skill'}
+          />
+        </div>
+
+        {/* Heartbeat instruction */}
+        <div>
+          <div style={{ ...dimText, marginBottom: 6 }}>
+            然后在 OpenClaw 的 <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>HEARTBEAT.md</span> 中加入：
+          </div>
+          <CodeBlock
+            text={heartbeatInstruction}
+            onCopy={(t) => cp(t, 'hb')}
+            copied={copied === 'hb'}
+          />
+        </div>
+
+        {/* Online hint */}
         <div style={{
-          ...s, padding: '10px 12px',
+          ...dimText, padding: '8px 12px',
           background: 'var(--bg-elevated)', border: '1px solid var(--border)',
           borderLeft: '3px solid var(--accent)',
         }}>
-          <strong style={{ color: 'var(--text-primary)' }}>工作原理：</strong><br />
-          你在自己的服务器上运行一个 <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>openclaw_worker.py</span> 脚本。
-          它每隔几秒来 CyberGuard 取任务，在<strong>本地执行</strong>后把结果汇报回来。
-          <br />CyberGuard 无需知道你的服务器地址，你也不需要开放任何端口。
-        </div>
-
-        {/* Step 1 — save key */}
-        <div>
-          {stepLabel('1', '保存 API Key（只出现这一次）')}
-          {apiKey ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{
-                flex: 1, padding: '8px 12px',
-                background: 'rgba(0,255,65,0.06)', border: '1px solid var(--accent-border)',
-                fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent)',
-                letterSpacing: '0.04em', wordBreak: 'break-all',
-              }}>{apiKey}</div>
-              <button onClick={() => copy(apiKey, 'key')} style={{
-                padding: '8px 12px', border: '1px solid var(--accent-border)',
-                background: copiedKey === 'key' ? 'var(--accent)' : 'transparent',
-                color: copiedKey === 'key' ? '#000' : 'var(--accent)',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
-                fontSize: 10, letterSpacing: '0.1em', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap',
-              }}>
-                <Copy size={11} /> {copiedKey === 'key' ? 'COPIED' : 'COPY'}
-              </button>
-            </div>
-          ) : (
-            <div style={{
-              ...s, padding: '8px 12px',
-              background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-            }}>
-              Key 将在点击「创建」后出现，<strong style={{ color: 'var(--text-primary)' }}>仅显示一次</strong>。
-              若忘记保存，可用卡片上的 <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>REGEN KEY</span> 重新生成。
-            </div>
-          )}
-        </div>
-
-        {/* Step 2 — create file */}
-        <div>
-          {stepLabel('2', '在你的服务器上创建 openclaw_worker.py')}
-          <div style={{ ...s, marginBottom: 8 }}>
-            新建一个文件，把下面的代码全部复制进去，然后把第 2 行的地址改成你的 CyberGuard 实际地址（Key 已自动填入）：
-          </div>
-          <CodeBlock text={pythonScript} onCopy={(t) => copy(t, 'script')} copied={copiedKey === 'script'} />
-        </div>
-
-        {/* Step 3 — run */}
-        <div>
-          {stepLabel('3', '安装依赖并运行')}
-          <div style={{ ...s, marginBottom: 8 }}>
-            在终端里执行（需要 Python 3.7+）：
-          </div>
-          <CodeBlock text={installCmd} onCopy={(t) => copy(t, 'install')} copied={copiedKey === 'install'} />
-          <div style={{
-            ...s, marginTop: 8, padding: '8px 12px',
-            background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-          }}>
-            看到 <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>OpenClaw worker started</span> 输出后，
-            回到 CyberGuard 刷新此页面，Agent 卡片右上角会变成{' '}
-            <span style={{ color: 'var(--accent)' }}>● ONLINE</span>，接入完成。
-          </div>
-        </div>
-
-        {/* Step 4 — customize */}
-        <div>
-          {stepLabel('4', '替换执行逻辑（关键）')}
-          <div style={{
-            ...s, padding: '10px 12px',
-            background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-            borderLeft: '3px solid #f59e0b',
-          }}>
-            脚本里标有 <span style={{ color: '#f59e0b', fontFamily: 'var(--font-mono)' }}>↓ 把这里替换成你的实际执行逻辑</span> 的地方，
-            就是你需要修改的位置。<br /><br />
-            <strong style={{ color: 'var(--text-primary)' }}>举例：</strong>
-            <ul style={{ margin: '6px 0 0 16px', padding: 0, lineHeight: 2 }}>
-              <li>调用你的 OpenClaw 扫描工具，把结果字符串赋值给 <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>result</span></li>
-              <li>调用本地 AI 模型处理任务内容（<span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>task['content']</span> 就是任务文本）</li>
-              <li>运行任意 shell 命令，把输出作为 result 返回</li>
-            </ul>
-          </div>
+          配置完成后，OpenClaw 节点每次运行 heartbeat 时会自动轮询 CyberGuard。
+          回到此页面刷新，Agent 卡片右上角显示 <span style={{ color: 'var(--accent)' }}>● ONLINE</span> 即接入成功。
         </div>
 
       </div>
