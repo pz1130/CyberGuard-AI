@@ -673,7 +673,38 @@ export default function Chat() {
                     <ReactMarkdown>{msg.content}</ReactMarkdown>
                   ) : msg.content}
                 </div>
-                {msg.created_at && <div style={{ fontSize: 9, color: 'var(--text-dim)', marginTop: 3 }}>{formatTime(msg.created_at)}</div>}
+                {/* Render attachment previews for user messages */}
+{msg.role === 'user' && msg.attachments && msg.attachments.length > 0 && (
+  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+    {msg.attachments.map((att, i) =>
+      att.type === 'image' ? (
+        <div key={i} style={{ position: 'relative' }}>
+          <img
+            src={att.url}
+            onClick={() => setLightboxUrl(att.url || null)}
+            style={{
+              width: 64, height: 64, objectFit: 'cover',
+              border: '1px solid var(--accent-border)',
+              cursor: 'pointer',
+            }}
+          />
+        </div>
+      ) : (
+        <div key={i} style={{
+          display: 'flex', alignItems: 'center', gap: 4,
+          padding: '4px 8px',
+          border: '1px solid var(--accent-border)',
+          fontSize: 10, fontFamily: 'var(--font-mono)',
+          color: 'var(--text-muted)',
+        }}>
+          <FileText size={10} />
+          <span>{att.name}</span>
+        </div>
+      )
+    )}
+  </div>
+)}
+{msg.created_at && <div style={{ fontSize: 9, color: 'var(--text-dim)', marginTop: 3 }}>{formatTime(msg.created_at)}</div>}
               </div>
             ))
           )}
