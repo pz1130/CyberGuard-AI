@@ -46,149 +46,177 @@ const inputStyle: React.CSSProperties = {
   fontFamily: 'var(--font-mono)', boxSizing: 'border-box',
 }
 
-// ── Step guide shown inside the form when backend_type === 'openclaw' ─────────
+// ── OpenClaw setup guide ───────────────────────────────────────────────────────
 function OpenClawGuide({ apiKey }: { apiKey?: string }) {
-  const [copied, setCopied] = useState(false)
+  const [copiedKey, setCopiedKey] = useState<string | null>(null)
 
-  const copy = (text: string) => {
+  const copy = (text: string, id: string) => {
     navigator.clipboard.writeText(text).then(() => {
-      setCopied(true); setTimeout(() => setCopied(false), 2000)
+      setCopiedKey(id); setTimeout(() => setCopiedKey(null), 2000)
     })
   }
 
-  const pollExample = `GET /api/v1/gateway/poll
-X-Api-Key: ${apiKey || '<api_key>'}`
+  const host = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host
+  const key = apiKey || 'YOUR_API_KEY'
 
-  const reportExample = `POST /api/v1/gateway/report
-X-Api-Key: ${apiKey || '<api_key>'}
-Content-Type: application/json
+  const pythonScript = `import requests, time
 
-{
-  "message_id": 1,
-  "result": "任务执行结果..."
-}`
+CYBERGUARD = "http://${host}"   # 改成你的 CyberGuard 地址
+API_KEY    = "${key}"
 
-  const heartbeatExample = `POST /api/v1/gateway/heartbeat
-X-Api-Key: ${apiKey || '<api_key>'}`
+headers = {"X-Api-Key": API_KEY}
+
+def poll():
+    r = requests.get(f"{CYBERGUARD}/api/v1/gateway/poll", headers=headers, timeout=10)
+    return r.json().get("messages", [])
+
+def report(message_id, result):
+    requests.post(f"{CYBERGUARD}/api/v1/gateway/report", headers=headers,
+                  json={"message_id": message_id, "result": result}, timeout=10)
+
+def heartbeat():
+    requests.post(f"{CYBERGUARD}/api/v1/gateway/heartbeat", headers=headers, timeout=5)
+
+print("OpenClaw worker started, polling every 10s ...")
+tick = 0
+while True:
+    try:
+        tasks = poll()
+        for task in tasks:
+            print(f"[TASK] {task['content']}")
+            # ↓ 把这里替换成你的实际执行逻辑
+            result = f"已收到任务：{task['content']}"
+            report(task["id"], result)
+            print(f"[DONE] message_id={task['id']}")
+        if tick % 6 == 0:   # 每 60s 发一次心跳
+            heartbeat()
+        tick += 1
+    except Exception as e:
+        print(f"[ERR] {e}")
+    time.sleep(10)`
+
+  const installCmd = `pip install requests\npython openclaw_worker.py`
+
+  const s: React.CSSProperties = {
+    fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.75,
+  }
+  const stepLabel = (n: string, title: string) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+      <div style={{
+        width: 20, height: 20, borderRadius: 2, flexShrink: 0,
+        background: 'rgba(0,255,65,0.12)', border: '1px solid var(--accent-border)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 9, color: 'var(--accent)', fontWeight: 700, fontFamily: 'var(--font-mono)',
+      }}>{n}</div>
+      <span style={{ fontSize: 10, color: 'var(--text-primary)', letterSpacing: '0.08em', fontWeight: 600 }}>{title}</span>
+    </div>
+  )
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-      {/* Banner */}
+      {/* Header */}
       <div style={{
         padding: '10px 14px',
         background: 'rgba(0,255,65,0.04)',
-        border: '1px solid var(--accent-border)',
-        borderBottom: 'none',
+        border: '1px solid var(--accent-border)', borderBottom: 'none',
         fontSize: 10, color: 'var(--accent)', letterSpacing: '0.12em', fontWeight: 700,
       }}>
-        ◆ OPENCLAW GATEWAY — 接入指南
+        ◆ OPENCLAW 接入指南
       </div>
 
       <div style={{
-        padding: '14px 16px',
-        background: 'var(--bg-base)',
+        padding: '16px', background: 'var(--bg-base)',
         border: '1px solid var(--accent-border)',
-        display: 'flex', flexDirection: 'column', gap: 14,
-        fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.7,
+        display: 'flex', flexDirection: 'column', gap: 18,
       }}>
 
-        {/* Architecture note */}
-        <div style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.03em', lineHeight: 1.8 }}>
-          OpenClaw 采用<span style={{ color: 'var(--accent)' }}>拉取模式</span>：
-          OpenClaw 节点主动轮询 CyberGuard 取任务，本地执行后回报结果。
-          <br />无需对外暴露任何端口。
+        {/* Concept */}
+        <div style={{
+          ...s, padding: '10px 12px',
+          background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+          borderLeft: '3px solid var(--accent)',
+        }}>
+          <strong style={{ color: 'var(--text-primary)' }}>工作原理：</strong><br />
+          你在自己的服务器上运行一个 <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>openclaw_worker.py</span> 脚本。
+          它每隔几秒来 CyberGuard 取任务，在<strong>本地执行</strong>后把结果汇报回来。
+          <br />CyberGuard 无需知道你的服务器地址，你也不需要开放任何端口。
         </div>
 
-        {/* Step 1 — API Key */}
+        {/* Step 1 — save key */}
         <div>
-          <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 8 }}>
-            STEP 1 — 保存 API KEY
-          </div>
+          {stepLabel('1', '保存 API Key（只出现这一次）')}
           {apiKey ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{
                 flex: 1, padding: '8px 12px',
                 background: 'rgba(0,255,65,0.06)', border: '1px solid var(--accent-border)',
                 fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent)',
-                letterSpacing: '0.05em', wordBreak: 'break-all',
+                letterSpacing: '0.04em', wordBreak: 'break-all',
+              }}>{apiKey}</div>
+              <button onClick={() => copy(apiKey, 'key')} style={{
+                padding: '8px 12px', border: '1px solid var(--accent-border)',
+                background: copiedKey === 'key' ? 'var(--accent)' : 'transparent',
+                color: copiedKey === 'key' ? '#000' : 'var(--accent)',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                fontSize: 10, letterSpacing: '0.1em', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap',
               }}>
-                {apiKey}
-              </div>
-              <button
-                onClick={() => copy(apiKey)}
-                title="复制"
-                style={{
-                  padding: '8px 10px', border: '1px solid var(--accent-border)',
-                  background: copied ? 'var(--accent)' : 'transparent',
-                  color: copied ? '#000' : 'var(--accent)',
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
-                  fontSize: 10, letterSpacing: '0.1em', fontFamily: 'var(--font-mono)',
-                  whiteSpace: 'nowrap',
-                }}>
-                <Copy size={11} /> {copied ? 'COPIED' : 'COPY'}
+                <Copy size={11} /> {copiedKey === 'key' ? 'COPIED' : 'COPY'}
               </button>
             </div>
           ) : (
             <div style={{
-              padding: '8px 12px',
+              ...s, padding: '8px 12px',
               background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-              fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.03em',
             }}>
-              API Key 将在创建后显示（仅显示一次）。
-              <br />如需重新生成，使用卡片上的 <span style={{ color: 'var(--accent)' }}>REGEN KEY</span> 按钮。
+              Key 将在点击「创建」后出现，<strong style={{ color: 'var(--text-primary)' }}>仅显示一次</strong>。
+              若忘记保存，可用卡片上的 <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>REGEN KEY</span> 重新生成。
             </div>
           )}
-          <div style={{ marginTop: 6, fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.03em' }}>
-            ⚠ 此 Key 只在创建时返回一次，请立即保存。
+        </div>
+
+        {/* Step 2 — create file */}
+        <div>
+          {stepLabel('2', '在你的服务器上创建 openclaw_worker.py')}
+          <div style={{ ...s, marginBottom: 8 }}>
+            新建一个文件，把下面的代码全部复制进去，然后把第 2 行的地址改成你的 CyberGuard 实际地址（Key 已自动填入）：
+          </div>
+          <CodeBlock text={pythonScript} onCopy={(t) => copy(t, 'script')} copied={copiedKey === 'script'} />
+        </div>
+
+        {/* Step 3 — run */}
+        <div>
+          {stepLabel('3', '安装依赖并运行')}
+          <div style={{ ...s, marginBottom: 8 }}>
+            在终端里执行（需要 Python 3.7+）：
+          </div>
+          <CodeBlock text={installCmd} onCopy={(t) => copy(t, 'install')} copied={copiedKey === 'install'} />
+          <div style={{
+            ...s, marginTop: 8, padding: '8px 12px',
+            background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+          }}>
+            看到 <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>OpenClaw worker started</span> 输出后，
+            回到 CyberGuard 刷新此页面，Agent 卡片右上角会变成{' '}
+            <span style={{ color: 'var(--accent)' }}>● ONLINE</span>，接入完成。
           </div>
         </div>
 
-        {/* Step 2 — poll */}
+        {/* Step 4 — customize */}
         <div>
-          <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 8 }}>
-            STEP 2 — OpenClaw 节点轮询取任务
+          {stepLabel('4', '替换执行逻辑（关键）')}
+          <div style={{
+            ...s, padding: '10px 12px',
+            background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+            borderLeft: '3px solid #f59e0b',
+          }}>
+            脚本里标有 <span style={{ color: '#f59e0b', fontFamily: 'var(--font-mono)' }}>↓ 把这里替换成你的实际执行逻辑</span> 的地方，
+            就是你需要修改的位置。<br /><br />
+            <strong style={{ color: 'var(--text-primary)' }}>举例：</strong>
+            <ul style={{ margin: '6px 0 0 16px', padding: 0, lineHeight: 2 }}>
+              <li>调用你的 OpenClaw 扫描工具，把结果字符串赋值给 <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>result</span></li>
+              <li>调用本地 AI 模型处理任务内容（<span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>task['content']</span> 就是任务文本）</li>
+              <li>运行任意 shell 命令，把输出作为 result 返回</li>
+            </ul>
           </div>
-          <CodeBlock text={pollExample} onCopy={copy} />
-          <div style={{ marginTop: 6, fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.03em' }}>
-            建议每 5–30 秒轮询一次。返回 <code style={{ color: 'var(--accent)' }}>messages[]</code>，
-            status=pending 的任务已变为 delivered。
-          </div>
-        </div>
-
-        {/* Step 3 — report */}
-        <div>
-          <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 8 }}>
-            STEP 3 — 执行完成后回报结果
-          </div>
-          <CodeBlock text={reportExample} onCopy={copy} />
-        </div>
-
-        {/* Step 4 — heartbeat */}
-        <div>
-          <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 8 }}>
-            STEP 4 — 心跳维持在线状态（可选，建议每 60 秒）
-          </div>
-          <CodeBlock text={heartbeatExample} onCopy={copy} />
-          <div style={{ marginTop: 6, fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.03em' }}>
-            5 分钟内无 poll/heartbeat 视为离线。
-          </div>
-        </div>
-
-        {/* Response format */}
-        <div>
-          <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 8 }}>
-            POLL 响应格式
-          </div>
-          <CodeBlock text={`{
-  "messages": [
-    {
-      "id": 42,
-      "content": "分析 CVE-2024-1234 的影响",
-      "execution_id": "uuid",
-      "created_at": "2026-05-09T10:00:00"
-    }
-  ]
-}`} onCopy={copy} />
         </div>
 
       </div>
@@ -196,14 +224,15 @@ X-Api-Key: ${apiKey || '<api_key>'}`
   )
 }
 
-function CodeBlock({ text, onCopy }: { text: string; onCopy: (t: string) => void }) {
+function CodeBlock({ text, onCopy, copied }: { text: string; onCopy: (t: string) => void; copied?: boolean }) {
   return (
     <div style={{ position: 'relative' }}>
       <pre style={{
-        margin: 0, padding: '10px 12px',
+        margin: 0, padding: '10px 40px 10px 12px',
         background: 'var(--bg-elevated)', border: '1px solid var(--border)',
         fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-primary)',
         whiteSpace: 'pre-wrap', wordBreak: 'break-all', lineHeight: 1.7,
+        maxHeight: 300, overflowY: 'auto',
       }}>
         {text}
       </pre>
@@ -211,12 +240,13 @@ function CodeBlock({ text, onCopy }: { text: string; onCopy: (t: string) => void
         onClick={() => onCopy(text)}
         style={{
           position: 'absolute', top: 6, right: 6,
-          padding: '2px 6px', border: '1px solid var(--border)',
-          background: 'var(--bg-base)', color: 'var(--text-dim)',
+          padding: '3px 8px', border: '1px solid var(--border)',
+          background: copied ? 'var(--accent)' : 'var(--bg-base)',
+          color: copied ? '#000' : 'var(--text-dim)',
           fontSize: 9, cursor: 'pointer', fontFamily: 'var(--font-mono)',
-          letterSpacing: '0.1em',
+          letterSpacing: '0.1em', transition: 'all 0.15s',
         }}>
-        COPY
+        {copied ? 'COPIED' : 'COPY'}
       </button>
     </div>
   )
