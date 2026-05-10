@@ -102,6 +102,8 @@ ALLOWED_ATTACHMENT_TYPES = {
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 }
 
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB per file
+
 
 @router.post("/chat/attachments", response_model=ChatAttachmentsResponse, status_code=status.HTTP_202_ACCEPTED)
 async def chat_attachments(
@@ -142,7 +144,18 @@ async def chat_attachments(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Unsupported file type: {f.content_type}. Allowed: {', '.join(sorted(ALLOWED_ATTACHMENT_TYPES))}",
             )
+        # Check file size before reading into memory
+        if f.size is not None and f.size > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File '{f.filename}' exceeds maximum size of {MAX_FILE_SIZE // (1024 * 1024)} MB",
+            )
         content = await f.read()
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File '{f.filename}' exceeds maximum size of {MAX_FILE_SIZE // (1024 * 1024)} MB",
+            )
         attachments.append(
             {
                 "filename": f.filename,
@@ -174,6 +187,7 @@ async def chat_attachments(
             "mode": "normal",
             "provider_id": provider_id,
             "model": model,
+            "agent_id": agent_id,
             "attachments": attachments,
         },
     )
