@@ -333,6 +333,21 @@ def _run_async_master_agent(execution_id: str, user_input: str, user_id: int, **
     if rag_context:
         user_input = f"[知识库检索结果]\n{rag_context}\n\n[用户问题]\n{user_input}"
 
+    # Inject attachment content into user_input when attachments are present
+    attachments = kwargs.get("attachments")
+    if attachments:
+        attachment_lines = []
+        for att in attachments:
+            filename = att.get("filename", "attachment")
+            content = att.get("content", "")
+            mime_type = att.get("content_type", "")
+            # Truncate very long content
+            truncated = content[:1000] if content else ""
+            attachment_lines.append(f"[附件: {filename}] (type: {mime_type})\n{truncated}")
+
+        attachment_desc = "\n\n".join(attachment_lines)
+        user_input = f"{user_input}\n\n--- 附件信息 ---\n{attachment_desc}"
+
     async def _run():
         master_agent = get_master_agent()
         return await master_agent.run(
