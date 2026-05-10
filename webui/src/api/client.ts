@@ -105,6 +105,32 @@ export const api = {
   chat: (body: { message: string; agent_id?: string; provider_id?: number; model?: string; conversation_id?: number }) =>
     request('/chat', { method: 'POST', body: JSON.stringify(body) }),
 
+  // Chat with attachments (multipart/form-data)
+  uploadChatAttachments: (
+    files: File[],
+    message: string,
+    conversationId: number,
+    modelOverride?: { provider_id?: number; model?: string },
+    agentId?: string,
+  ) => {
+    const token = localStorage.getItem('token')
+    const fd = new FormData()
+    files.forEach(f => fd.append('files', f))
+    fd.append('message', message)
+    fd.append('conversation_id', String(conversationId))
+    if (modelOverride?.provider_id) fd.append('provider_id', String(modelOverride.provider_id))
+    if (modelOverride?.model) fd.append('model', modelOverride.model)
+    if (agentId) fd.append('agent_id', agentId)
+    return fetch(`${BASE}/chat/attachments`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd,
+    }).then(async r => {
+      if (!r.ok) throw new Error(await r.text())
+      return r.json()
+    })
+  },
+
   // Tasks
   getTasks: () => request('/tasks'),
   getTask: (id: string) => request(`/tasks/${id}`),
@@ -133,7 +159,11 @@ export const api = {
   // Backup
   listBackups: () => request('/backup'),
   createBackup: (body?: any) => request('/backup', { method: 'POST', body: JSON.stringify(body || {}) }),
-  restoreBackup: (id: string) => request(`/backup/${id}/restore`, { method: 'POST' }),
+  restoreBackup: (id: string) =>
+    request(`/backup/${id}/restore`, {
+      method: 'POST',
+      body: JSON.stringify({ backup_id: id, confirm: true }),
+    }),
 
   // Config
   exportConfig: () => request('/config/export', { method: 'POST' }),
