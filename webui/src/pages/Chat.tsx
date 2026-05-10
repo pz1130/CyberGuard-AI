@@ -678,7 +678,7 @@ export default function Chat() {
   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
     {msg.attachments.map((att, i) =>
       att.type === 'image' ? (
-        <div key={i} style={{ position: 'relative' }}>
+        <div key={`${att.name}-${att.size}-${i}`} style={{ position: 'relative' }}>
           <img
             src={att.url}
             onClick={() => setLightboxUrl(att.url || null)}
@@ -690,7 +690,7 @@ export default function Chat() {
           />
         </div>
       ) : (
-        <div key={i} style={{
+        <div key={`${att.name}-${att.size}-${i}`} style={{
           display: 'flex', alignItems: 'center', gap: 4,
           padding: '4px 8px',
           border: '1px solid var(--accent-border)',
