@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { api } from '../api/client'
 import ReactMarkdown from 'react-markdown'
-import { Send, Plus, X, Check, Edit2, Trash2, Settings } from 'lucide-react'
+import { Send, Plus, X, Check, Edit2, Trash2, Settings, Paperclip, Image as ImageIcon, FileText } from 'lucide-react'
 
 interface Message {
   role: 'user' | 'assistant' | 'system'
@@ -49,6 +49,27 @@ const FALLBACK_MODELS = [
   { provider_id: 0, provider_name: 'GROK', provider_type: 'xai', base_url: 'https://api.x.ai/v1', model: 'grok-3' },
 ]
 
+const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
+const ACCEPTED_DOC_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+  'text/markdown',
+  'text/csv',
+  'application/json',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+]
+const MAX_FILES = 10
+
+interface AttachmentFile {
+  file: File
+  previewUrl: string
+}
+
 export default function Chat() {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
@@ -80,6 +101,10 @@ export default function Chat() {
     knowledge_base_id: null as number | null,
   })
   const [availableKBs, setAvailableKBs] = useState<KnowledgeBase[]>([])
+
+  const [attachments, setAttachments] = useState<AttachmentFile[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -629,6 +654,86 @@ export default function Chat() {
 
         {/* Input */}
         <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept={[...ACCEPTED_IMAGE_TYPES, ...ACCEPTED_DOC_TYPES].join(',')}
+            onChange={(e) => {
+              const files = Array.from(e.target.files || [])
+              if (files.length + attachments.length > MAX_FILES) {
+                alert(`最多上传 ${MAX_FILES} 个文件`)
+                return
+              }
+              const newAttachments = files.map(f => ({
+                file: f,
+                previewUrl: ACCEPTED_IMAGE_TYPES.includes(f.type)
+                  ? URL.createObjectURL(f)
+                  : '',
+              }))
+              setAttachments(prev => [...prev, ...newAttachments])
+              e.target.value = ''
+            }}
+            style={{ display: 'none' }}
+          />
+          {attachments.length > 0 && (
+            <div style={{
+              padding: '8px 16px',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 8,
+              borderTop: '1px solid var(--border)',
+              background: 'var(--bg-base)',
+            }}>
+              {attachments.map((att, i) => (
+                <div key={i} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '4px 8px',
+                  border: '1px solid var(--accent-border)',
+                  background: 'var(--accent-dim)',
+                  fontSize: 10,
+                  fontFamily: 'var(--font-mono)',
+                  color: 'var(--text-primary)',
+                }}>
+                  {ACCEPTED_IMAGE_TYPES.includes(att.file.type) ? (
+                    <ImageIcon size={10} style={{ color: 'var(--accent)' }} />
+                  ) : (
+                    <FileText size={10} style={{ color: 'var(--accent)' }} />
+                  )}
+                  <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {att.file.name}
+                  </span>
+                  <button
+                    onClick={() => {
+                      if (att.previewUrl) URL.revokeObjectURL(att.previewUrl)
+                      setAttachments(prev => prev.filter((_, idx) => idx !== i))
+                    }}
+                    style={{
+                      padding: 0, background: 'none', border: 'none',
+                      color: 'var(--text-dim)', cursor: 'pointer', display: 'flex',
+                    }}>
+                    <X size={10} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={!activeConvId || loading}
+            style={{
+              width: 36, height: 36, flexShrink: 0,
+              border: '1px solid var(--border-bright)',
+              background: 'transparent',
+              color: activeConvId && !loading ? 'var(--text-muted)' : 'var(--text-dim)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: activeConvId && !loading ? 'pointer' : 'not-allowed',
+              opacity: activeConvId && !loading ? 1 : 0.5,
+            }}>
+            <Paperclip size={14} />
+          </button>
           <textarea
             ref={textareaRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey}
             placeholder={activeConvId ? 'Type your message...' : 'Select a conversation first...'}
@@ -652,6 +757,33 @@ export default function Chat() {
             <Send size={14} />
           </button>
         </div>
+        {lightboxUrl && (
+          <div
+            onClick={() => setLightboxUrl(null)}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 9999,
+              background: 'rgba(0,0,0,0.9)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer',
+            }}>
+            <img
+              src={lightboxUrl}
+              style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain' }}
+              onClick={e => e.stopPropagation()}
+            />
+            <button
+              onClick={() => setLightboxUrl(null)}
+              style={{
+                position: 'absolute', top: 16, right: 16,
+                padding: 8, background: 'var(--bg-elevated)',
+                border: '1px solid var(--border-bright)',
+                color: 'var(--text-primary)', cursor: 'pointer',
+                fontSize: 11, fontFamily: 'var(--font-mono)',
+              }}>
+              CLOSE
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
