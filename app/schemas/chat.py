@@ -97,6 +97,13 @@ class AgentChatResponse(BaseModel):
     agent_name: Optional[str] = None
     response: Optional[str] = None
 
+
+class ChatAttachmentsResponse(BaseModel):
+    """Response schema for chat with attachments endpoint."""
+    task_id: str
+    status: str
+    message: Optional[str] = None
+
 # Aliases
 ChatRequest = AgentChatRequest
 ChatResponse = AgentChatResponse
