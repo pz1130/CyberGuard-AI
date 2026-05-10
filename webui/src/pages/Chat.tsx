@@ -7,6 +7,12 @@ interface Message {
   role: 'user' | 'assistant' | 'system'
   content: string
   created_at?: string
+  attachments?: Array<{
+    type: 'image' | 'doc'
+    url?: string
+    name: string
+    size?: number
+  }>
 }
 
 interface TaskResponse {
@@ -339,20 +345,48 @@ export default function Chat() {
 
   // Send message
   const send = async () => {
-    if (!input.trim() || loading) return
+    if ((!input.trim() && attachments.length === 0) || loading) return
     if (!activeConvId) {
       alert('请先创建或选择一个会话')
       return
     }
 
-    const userMsg: Message = { role: 'user', content: input.trim(), created_at: new Date().toISOString() }
+    const modelOverride = getModelOverride()
+
+    const userMsg: Message = {
+      role: 'user',
+      content: input.trim() || (attachments.length > 0 ? `[${attachments.length} 个附件]` : ''),
+      created_at: new Date().toISOString(),
+      attachments: attachments.map(att => ({
+        type: (ACCEPTED_IMAGE_TYPES.includes(att.file.type) ? 'image' : 'doc') as 'image' | 'doc',
+        url: att.previewUrl,
+        name: att.file.name,
+        size: att.file.size,
+      })),
+    }
     setMessages(prev => [...prev, userMsg])
     setInput('')
     setLoading(true)
-    setPollingStatus('DISPATCHING TASK...')
+    setPollingStatus(attachments.length > 0 ? 'UPLOADING ATTACHMENTS...' : 'DISPATCHING TASK...')
 
     try {
-      const chatResp = await api.chat({ message: input.trim(), conversation_id: activeConvId, ...getModelOverride() }) as { task_id: string; status: string; message: string }
+      const files = attachments.map(a => a.file)
+
+      const chatResp = files.length > 0
+        ? await api.uploadChatAttachments(
+            files,
+            input.trim(),
+            activeConvId,
+            Object.keys(modelOverride).length > 0 ? modelOverride : undefined,
+          ) as { task_id: string; status: string; message: string }
+        : await api.chat({ message: input.trim(), conversation_id: activeConvId, ...modelOverride }) as { task_id: string; status: string; message: string }
+
+      // Clean up object URLs
+      attachments.forEach(att => {
+        if (att.previewUrl) URL.revokeObjectURL(att.previewUrl)
+      })
+      setAttachments([])
+
       const taskId = chatResp.task_id
       activeTaskIdRef.current = taskId
       localStorage.setItem('activeChatTaskId', taskId)
@@ -747,7 +781,7 @@ export default function Chat() {
               opacity: activeConvId ? 1 : 0.5,
             }}
           />
-          <button onClick={send} disabled={!activeConvId || loading || !input.trim()} style={{
+          <button onClick={send} disabled={!activeConvId || loading || (!input.trim() && attachments.length === 0)} style={{
             width: 40, height: 40, flexShrink: 0,
             background: 'var(--accent)', border: '1px solid var(--accent-border)',
             color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center',
