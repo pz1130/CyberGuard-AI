@@ -134,6 +134,7 @@ export const api = {
   // Tasks
   getTasks: () => request('/tasks'),
   getTask: (id: string) => request(`/tasks/${id}`),
+  cancelTask: (id: string) => request(`/tasks/${id}/cancel`, { method: 'POST' }),
   createTask: (body: any) => request('/tasks', { method: 'POST', body: JSON.stringify(body) }),
   updateTask: (id: string, body: any) => request(`/tasks/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteTask: (id: string) => request(`/tasks/${id}`, { method: 'DELETE' }),

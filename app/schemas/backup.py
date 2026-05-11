@@ -14,8 +14,8 @@ class BackupConfigBase(BaseModel):
 
 class BackupConfigCreate(BackupConfigBase):
     """Backup configuration creation schema."""
-    schedule_cron: str = Field(..., description="Cron expression for scheduled backups")
-    target_path: str
+    target: Optional[str] = Field(None, description="S3/OSS target path for remote backup")
+    schedule_cron: Optional[str] = Field(None, description="Cron expression for scheduled backups (unused in one-shot backup)")
     compress: bool = True
     encrypt: bool = True
 
@@ -65,6 +65,26 @@ class BackupExecutionResponse(BaseModel):
     error: Optional[str] = None
 
 
+class BackupRequest(BaseModel):
+    """One-shot backup execution request from the WebUI."""
+    name: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=100,
+        description="Optional display name from the UI. Not persisted in MVP.",
+    )
+    description: Optional[str] = None
+    backup_type: str = Field(
+        default="full",
+        description="Accepted for compatibility with the UI. Only full backups are supported in MVP.",
+    )
+    retention_days: int = Field(default=30, ge=1, le=3650)
+    target: Optional[str] = Field(
+        default=None,
+        description="Optional S3/OSS bucket name for remote backup upload.",
+    )
+
+
 class RestoreRequest(BaseModel):
     """Restore request schema."""
     backup_id: str
@@ -92,8 +112,7 @@ class BackupListResponse(BaseModel):
     total: int
     backups: List[Dict[str, Any]]
 
-# Aliases
-BackupRequest = BackupConfigCreate
+# Aliases for router compatibility
 BackupResponse = BackupExecutionResponse
 
 

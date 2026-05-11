@@ -3,11 +3,43 @@ import { api } from '../api/client'
 import { Database, Download, Trash2, Plus, RefreshCw, Loader2 } from 'lucide-react'
 
 interface Backup {
-  id?: string
+  id: string
   name: string
   size?: string
   created_at?: string
   type: string
+  status?: string
+}
+
+interface BackupApiRecord {
+  id: string
+  created_at?: string
+  size_bytes?: number
+  format?: string
+  status?: string
+}
+
+function formatBytes(size?: number) {
+  if (!size || size <= 0) return undefined
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let value = size
+  let unitIndex = 0
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex += 1
+  }
+  return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`
+}
+
+function mapBackup(record: BackupApiRecord): Backup {
+  return {
+    id: record.id,
+    name: `backup-${record.id.slice(0, 8)}`,
+    size: formatBytes(record.size_bytes),
+    created_at: record.created_at,
+    type: record.format || 'full',
+    status: record.status,
+  }
 }
 
 export default function Backup() {
@@ -18,8 +50,9 @@ export default function Backup() {
 
   const load = async () => {
     try {
-      const data = await api.listBackups() as Backup[] | { backups?: Backup[] }
-      setItems(Array.isArray(data) ? data : data?.backups || [])
+      const data = await api.listBackups() as BackupApiRecord[] | { backups?: BackupApiRecord[] }
+      const records = Array.isArray(data) ? data : data?.backups || []
+      setItems(records.map(mapBackup))
     } catch { setItems([]) } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [])
@@ -27,7 +60,10 @@ export default function Backup() {
   const create = async () => {
     setCreating(true)
     try {
-      await api.createBackup({ name: `backup-${Date.now()}` })
+      await api.createBackup({
+        name: `backup-${Date.now()}`,
+        backup_type: 'full',
+      })
       await load()
     } catch (e: any) { alert(e.message) } finally { setCreating(false) }
   }
@@ -141,12 +177,13 @@ export default function Backup() {
                       padding: '2px 6px', border: '1px solid var(--border)',
                       color: 'var(--cyan)', fontSize: 8, letterSpacing: '0.15em', background: 'var(--bg-base)',
                     }}>
-                      {(b.type || 'FULL').toUpperCase()}
+                      {(b.type || 'FULL').replace(/\.AES$/i, '').toUpperCase()}
                     </span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                     {b.size && <span style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>{b.size}</span>}
                     {b.created_at && <span style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>{b.created_at}</span>}
+                    {b.status && <span style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>{b.status.toUpperCase()}</span>}
                   </div>
                 </div>
               </div>

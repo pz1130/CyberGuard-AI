@@ -1,6 +1,8 @@
 """Task execution tracking router."""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from celery.result import AsyncResult
+from app.workers.celery_app import celery_app
 from app.core.dependencies import get_db, require_permission
 from app.core.rbac import Permission
 from app.schemas.task import ExecutionRead, TaskListResponse
@@ -43,3 +45,27 @@ async def get_task(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return ExecutionRead.model_validate(task)
+
+
+@router.post("/tasks/{task_id}/cancel")
+async def cancel_task(
+    task_id: str,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_permission(Permission.TASK_WRITE)),
+):
+    """Cancel/revoke a running Celery task by revoking it and updating DB status."""
+    # Revoke the Celery task (ignore if already done)
+    celery_app.control.revoke(task_id, terminate=True)
+
+    # Update DB execution record to cancelled
+    result = await db.execute(
+        select(AgentExecution).where(AgentExecution.execution_id == task_id)
+    )
+    execution = result.scalar_one_or_none()
+    if execution:
+        execution.status = "cancelled"
+        from datetime import datetime
+        execution.completed_at = datetime.utcnow()
+        await db.commit()
+
+    return {"task_id": task_id, "status": "cancelled"}

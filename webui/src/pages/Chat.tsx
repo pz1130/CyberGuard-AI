@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { api } from '../api/client'
 import ReactMarkdown from 'react-markdown'
-import { Send, Plus, X, Check, Edit2, Trash2, Settings, Paperclip, Image as ImageIcon, FileText } from 'lucide-react'
+import { Send, Plus, X, Check, Edit2, Trash2, Settings, Paperclip, Image as ImageIcon, FileText, StopCircle } from 'lucide-react'
 
 interface Message {
   role: 'user' | 'assistant' | 'system'
@@ -812,14 +812,33 @@ export default function Chat() {
               opacity: activeConvId ? 1 : 0.5,
             }}
           />
-          <button onClick={send} disabled={!activeConvId || loading || (!input.trim() && attachments.length === 0)} style={{
-            width: 40, height: 40, flexShrink: 0,
-            background: 'var(--accent)', border: '1px solid var(--accent-border)',
-            color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: (activeConvId && loading) ? 'not-allowed' : 'pointer',
-            opacity: (activeConvId && loading) ? 0.5 : 1,
-          }}>
-            <Send size={14} />
+          <button
+            onClick={() => {
+              if (loading && activeTaskIdRef.current) {
+                // Cancel the running task
+                api.cancelTask(activeTaskIdRef.current).catch(console.error)
+                if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+                pollIntervalRef.current = null
+                activeTaskIdRef.current = null
+                localStorage.removeItem('activeChatTaskId')
+                setLoading(false)
+                setPollingStatus('')
+                setMessages(prev => [...prev, { role: 'assistant', content: '⚠ TASK CANCELLED BY OPERATOR', created_at: new Date().toISOString() }])
+              } else {
+                send()
+              }
+            }}
+            disabled={!activeConvId || (!loading && !input.trim() && attachments.length === 0)}
+            style={{
+              width: 40, height: 40, flexShrink: 0,
+              background: loading ? 'var(--red)' : 'var(--accent)',
+              border: `1px solid ${loading ? 'var(--red)' : 'var(--accent-border)'}`,
+              color: loading ? '#fff' : '#000',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: (!activeConvId || (!loading && !input.trim() && attachments.length === 0)) ? 'not-allowed' : 'pointer',
+              opacity: (!activeConvId || (!loading && !input.trim() && attachments.length === 0)) ? 0.5 : 1,
+            }}>
+            {loading ? <StopCircle size={14} /> : <Send size={14} />}
           </button>
         </div>
         {lightboxUrl && (
