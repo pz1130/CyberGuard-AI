@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { api } from '../api/client'
 import ReactMarkdown from 'react-markdown'
-import { Send, Plus, X, Check, Edit2, Trash2, Settings, Paperclip, Image as ImageIcon, FileText, StopCircle } from 'lucide-react'
+import { Send, Plus, X, Check, Edit2, Trash2, Settings, Paperclip, Image as ImageIcon, FileText } from 'lucide-react'
 
 interface Message {
   role: 'user' | 'assistant' | 'system'
@@ -838,7 +838,11 @@ export default function Chat() {
               cursor: (!activeConvId || (!loading && !input.trim() && attachments.length === 0)) ? 'not-allowed' : 'pointer',
               opacity: (!activeConvId || (!loading && !input.trim() && attachments.length === 0)) ? 0.5 : 1,
             }}>
-            {loading ? <StopCircle size={14} /> : <Send size={14} />}
+            {loading ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+              </svg>
+            ) : <Send size={14} />}
           </button>
         </div>
         {lightboxUrl && (
