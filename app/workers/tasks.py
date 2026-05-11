@@ -339,8 +339,15 @@ def _run_async_master_agent(execution_id: str, user_input: str, user_id: int, **
         attachment_lines = []
         for att in attachments:
             filename = att.get("filename", "attachment")
-            content = att.get("content", "")
+            # Router stores base64 content under "data" key
+            b64_content = att.get("data", "")
             mime_type = att.get("content_type", "")
+            # Decode base64 to get text content
+            try:
+                import base64 as b64_mod
+                content = b64_mod.b64decode(b64_content).decode("utf-8", errors="replace")
+            except Exception:
+                content = ""
             # Truncate very long content
             truncated = content[:1000] if content else ""
             attachment_lines.append(f"[附件: {filename}] (type: {mime_type})\n{truncated}")
