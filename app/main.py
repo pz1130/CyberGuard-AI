@@ -230,8 +230,7 @@ app.include_router(conversations.router, prefix="/api/v1", tags=["Conversations"
 app.include_router(n8n.router, prefix="/api/v1", tags=["N8N"])
 app.include_router(gateway.router, prefix="/api/v1", tags=["OpenClaw Gateway"])
 
-# WebSocket routes under /ws (proxied by Vite: /ws → ws://localhost:8000/ws)
-app.include_router(groupchat.router, prefix="/ws", tags=["Group Chat WS"])
+app.include_router(groupchat.router, prefix="/api/v1", tags=["Group Chat"])
 
 
 # ---------------------------------------------------------------------------

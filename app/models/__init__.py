@@ -9,7 +9,6 @@ from app.models.envvar import EnvVar
 from app.models.provider import Provider
 from app.models.backup import BackupRecord
 from app.models.approval import ApprovalRequest
-from app.models.groupchat import GroupChatMessage
 from app.models.token_usage import TokenUsageLog
 
 __all__ = [
@@ -23,6 +22,5 @@ __all__ = [
     "Provider",
     "BackupRecord",
     "ApprovalRequest",
-    "GroupChatMessage",
     "TokenUsageLog",
 ]

@@ -58,9 +58,8 @@ approval_requests (id, request_id, user_id, action_type, action_description, age
 schedules (id, name, cron_expr, task_type, payload_json, is_active, last_run_at,
            next_run_at, created_by, created_at, updated_at)
 
--- 群聊
-groupchat_rooms (id, room_id, name, topic, is_active, created_by, created_at)
-groupchat_messages (id, room_id, sender_type, sender_id, content, metadata_json, created_at)
+-- 群聊会话（多 Agent 圆桌讨论，存 Redis；表已废弃）
+-- group_chat_messages 表已在 migration 005 中删除（room chat 功能下线）
 
 -- 对话历史
 conversations (id, conversation_id, user_id, title, messages_json, provider_id,
@@ -149,13 +148,17 @@ PUT  /api/v1/conversations/{id} → 更新对话（标题/消息）
 DELETE /api/v1/conversations/{id} → 删除对话
 ```
 
-### 群聊（WebSocket）
+### 群聊（Multi-Agent 圆桌讨论，REST）
 ```
-WS  /ws/groupchat/{room_id}         → 实时群聊（Redis Pub/Sub）
-GET /api/v1/groupchat/rooms         → 房间列表
-POST /api/v1/groupchat/rooms        → 创建房间
-GET /api/v1/groupchat/rooms/{room_id}/messages → 历史消息
+POST   /api/v1/groupchat/sessions                       → 创建会话（选 agent + 初始 prompt）
+GET    /api/v1/groupchat/sessions/{session_id}          → 查询会话状态
+POST   /api/v1/groupchat/sessions/{session_id}/message  → 追加一条用户消息（不跑 round）
+POST   /api/v1/groupchat/sessions/{session_id}/round    → 跑一轮（每个 agent 各发言一次）
+POST   /api/v1/groupchat/sessions/{session_id}/complete → 自动跑到 max_rounds 或共识
+DELETE /api/v1/groupchat/sessions/{session_id}          → 取消会话
 ```
+Session 状态持久化在 Redis，不再使用 Postgres 表。原本基于 WebSocket 的人对人 ROOM CHAT
+已在 2026-05-12 版本中下线（详见 alembic 005）。
 
 ### 定时任务
 ```
@@ -251,11 +254,9 @@ GET /health/started → Startup probe
 
 ## 3. WebSocket
 
-```
-WS /ws/groupchat/{room_id}  → 实时群聊（Redis Pub/Sub 广播）
-```
-
-连接时需要在 query param 或 header 中携带 JWT token。服务端通过 `app/routers/groupchat.py` 处理。
+当前版本无 WebSocket 端点。原本的 `/ws/groupchat/{room_id}` 人对人房间聊天已在
+2026-05-12 版本中删除——单 operator 部署场景下没有实际用途，多 Agent 协作改用上面的
+REST + Redis 会话方案。
 
 ## 4. 安全与中间件
 

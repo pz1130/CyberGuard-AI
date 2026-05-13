@@ -1,132 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../api/client'
-import { Radio, Send, Plus, Users, Play, Square, ChevronRight, Bot, User } from 'lucide-react'
-
-// ─── Human Room Chat ────────────────────────────────────────────────────────────
-
-function HumanChat() {
-  const [rooms, setRooms] = useState<string[]>(['general', 'agents', 'alerts'])
-  const [activeRoom, setActiveRoom] = useState('general')
-  const [messages, setMessages] = useState<{ role: string; user: string; content: string }[]>([])
-  const [input, setInput] = useState('')
-  const [connected, setConnected] = useState(false)
-  const wsRef = useRef<WebSocket | null>(null)
-  const bottomRef = useRef<HTMLDivElement>(null)
-
-  const connect = (room: string) => {
-    if (wsRef.current) wsRef.current.close()
-    const token = localStorage.getItem('token') || ''
-    const wsBase = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
-    const ws = new WebSocket(`${wsBase}/ws/groupchat/${room}?token=${encodeURIComponent(token)}`)
-    ws.onopen = () => setConnected(true)
-    ws.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data)
-        setMessages(m => [...m, {
-          role: 'other',
-          user: data._username || data.user || 'SYSTEM',
-          content: data.content || data.message || JSON.stringify(data),
-        }])
-      } catch {
-        setMessages(m => [...m, { role: 'other', user: 'SYSTEM', content: e.data }])
-      }
-    }
-    ws.onclose = () => setConnected(false)
-    wsRef.current = ws
-  }
-
-  useEffect(() => {
-    connect(activeRoom)
-    return () => wsRef.current?.close()
-  }, [activeRoom])
-
-  useEffect(() => { bottomRef.current?.scrollIntoView() }, [messages])
-
-  const send = () => {
-    if (!input.trim() || !wsRef.current) return
-    wsRef.current.send(JSON.stringify({ content: input, user: 'OPERATOR' }))
-    setMessages(m => [...m, { role: 'self', user: 'OPERATOR', content: input }])
-    setInput('')
-  }
-
-  const addRoom = () => {
-    const name = prompt('ROOM NAME:')
-    if (name && !rooms.includes(name)) setRooms(r => [...r, name])
-  }
-
-  return (
-    <div style={{ display: 'flex', flex: 1, gap: 16, minHeight: 0 }}>
-      <div style={{
-        width: 180, flexShrink: 0,
-        background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
-        display: 'flex', flexDirection: 'column', padding: 12,
-      }}>
-        <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>ROOMS</div>
-        {rooms.map(r => (
-          <button key={r} onClick={() => setActiveRoom(r)}
-            style={{
-              display: 'block', width: '100%', padding: '8px 10px', textAlign: 'left', cursor: 'pointer',
-              background: activeRoom === r ? 'var(--accent-dim)' : 'transparent',
-              borderLeft: activeRoom === r ? '2px solid var(--accent)' : '2px solid transparent',
-              color: activeRoom === r ? 'var(--accent)' : 'var(--text-muted)',
-              fontSize: 11, letterSpacing: '0.08em', transition: 'all 0.15s',
-              fontFamily: 'var(--font-mono)',
-            }}>
-            # {r.toUpperCase()}
-          </button>
-        ))}
-        <button onClick={addRoom}
-          style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 12, padding: '6px 10px', fontSize: 10, letterSpacing: '0.1em', color: 'var(--text-dim)', cursor: 'pointer', background: 'none', border: '1px solid var(--border)', fontFamily: 'var(--font-mono)', width: '100%' }}>
-          <Plus size={10} /> NEW ROOM
-        </button>
-      </div>
-
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', minHeight: 0 }}>
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em' }}># {activeRoom.toUpperCase()}</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', border: `1px solid ${connected ? 'var(--green)' : 'var(--red)'}`, color: connected ? 'var(--green)' : 'var(--red)' }}>
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: connected ? 'var(--green)' : 'var(--red)' }} />
-            <span style={{ fontSize: 10, letterSpacing: '0.15em' }}>{connected ? 'CONNECTED' : 'DISCONNECTED'}</span>
-          </div>
-        </div>
-
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {messages.length === 0 && (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              <Radio size={22} style={{ color: 'var(--text-dim)' }} />
-              <div style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>BEGIN GROUP DISCUSSION</div>
-            </div>
-          )}
-          {messages.map((m, i) => (
-            <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'self' ? 'flex-end' : 'flex-start', gap: 4 }}>
-              <div style={{ fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.1em', padding: '0 4px' }}>{m.user.toUpperCase()}</div>
-              <div style={{
-                maxWidth: '70%', padding: '10px 14px',
-                background: m.role === 'self' ? 'var(--accent-dim)' : 'var(--bg-elevated)',
-                border: m.role === 'self' ? '1px solid var(--accent-border)' : '1px solid var(--border-bright)',
-                borderLeft: m.role === 'self' ? '2px solid var(--accent)' : '2px solid var(--cyan)',
-                fontSize: 12, color: 'var(--text-primary)', letterSpacing: '0.02em',
-              }}>
-                {m.content}
-              </div>
-            </div>
-          ))}
-          <div ref={bottomRef} />
-        </div>
-
-        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', gap: 10 }}>
-          <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()}
-            placeholder="TRANSMIT MESSAGE..."
-            style={{ flex: 1, height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em', fontFamily: 'var(--font-mono)' }} />
-          <button onClick={send}
-            style={{ height: 38, padding: '0 16px', background: 'var(--accent)', border: '1px solid var(--accent-border)', color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.15em', cursor: 'pointer', fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Send size={11} /> SEND
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
+import { Radio, Users, Play, Square, ChevronRight, Bot, User } from 'lucide-react'
 
 // ─── Multi-Agent Chat ─────────────────────────────────────────────────────────
 
@@ -383,8 +257,6 @@ function MultiAgentChat() {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function GroupChat() {
-  const [tab, setTab] = useState<'room' | 'multi'>('room')
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - var(--header-height) - 48px)' }}>
       {/* Header */}
@@ -395,24 +267,12 @@ export default function GroupChat() {
           </div>
           <div>
             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>GROUP CHAT</div>
-            <div style={{ fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>MULTI-AGENT WEBSOCKET DISCUSSION</div>
+            <div style={{ fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>MULTI-AGENT PANEL DISCUSSION</div>
           </div>
-        </div>
-
-        {/* Tab switcher */}
-        <div style={{ display: 'flex', border: '1px solid var(--border-bright)' }}>
-          <button onClick={() => setTab('room')}
-            style={{ padding: '6px 16px', fontSize: 10, letterSpacing: '0.15em', cursor: 'pointer', background: tab === 'room' ? 'var(--accent-dim)' : 'transparent', color: tab === 'room' ? 'var(--accent)' : 'var(--text-muted)', border: 'none', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-            ROOM CHAT
-          </button>
-          <button onClick={() => setTab('multi')}
-            style={{ padding: '6px 16px', fontSize: 10, letterSpacing: '0.15em', cursor: 'pointer', background: tab === 'multi' ? 'var(--accent-dim)' : 'transparent', color: tab === 'multi' ? 'var(--accent)' : 'var(--text-muted)', border: 'none', fontFamily: 'var(--font-mono)', fontWeight: 600, borderLeft: '1px solid var(--border-bright)' }}>
-            MULTI-AGENT
-          </button>
         </div>
       </div>
 
-      {tab === 'room' ? <HumanChat /> : <MultiAgentChat />}
+      <MultiAgentChat />
     </div>
   )
 }

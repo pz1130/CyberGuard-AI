@@ -65,11 +65,11 @@ mcp_tools (id, server_id, tool_name, description, input_schema_json, required_pe
 env_vars (id, key, value_encrypted, value_type, description, is_active, ...)
 token_usage_logs (id, provider_id, provider_name, model_name, prompt_tokens, completion_tokens, total_tokens, call_count, date_str, ...)
 ```
-Additional tables (created at runtime by models): `approval_requests`, `schedules`, `groupchat_rooms`, `groupchat_messages`, `conversations`, `n8n_configs`, `master_agent_config`, `backups`
+Additional tables (created at runtime by models): `approval_requests`, `schedules`, `conversations`, `n8n_configs`, `master_agent_config`, `backups`. (The legacy `groupchat_rooms` / `groupchat_messages` tables were dropped in migration 005 when the human room chat feature was removed; multi-agent group chat sessions persist in Redis only.)
 
 ## 7. Main Workflows
 - **Normal task**: User → chat API → Master Agent → LLM intent parse → route to Sub-Agents (parallel) → validate results → LLM summarize → response
-- **Group Chat**: User publishes topic → WebSocket room (`/ws/groupchat/{room_id}`) → Master Agent moderates (round-robin) → Sub-Agents respond → Master summarizes
+- **Multi-Agent Group Chat**: User selects N sub-agents + initial prompt → `POST /api/v1/groupchat/sessions` → each round every agent responds in sequence → session state cached in Redis → REST polled by WebUI
 - **High-Risk / Human-in-the-Loop**: Agent execution flags `needs_approval` or output contains risk keywords → `ApprovalRequest` created in DB → admin decides via REST/WebUI → execution resumes or aborts
 - **Scheduled Tasks**: Celery beat + Redis; tasks run in worker process; email notification on completion (if configured)
 - **N8N Workflow Generation**: User describes goal in natural language → LLM generates N8N workflow JSON → optionally auto-deployed to connected N8N instance

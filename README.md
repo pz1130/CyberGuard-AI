@@ -102,7 +102,7 @@ alembic -c alembic.ini upgrade head
 All API endpoints are under `/api/v1/`. Key routes:
 
 - `POST /api/v1/chat` — Submit task to Master Agent
-- `WS /ws/groupchat/{room_id}` — Real-time group chat
+- `POST /api/v1/groupchat/sessions` — Multi-agent panel discussion
 - `POST /api/v1/schedule` — Create scheduled task
 - `GET /api/v1/audit/export` — Export SIEM-format logs
 - `POST /api/v1/backup` — Trigger backup

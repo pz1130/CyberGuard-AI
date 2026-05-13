@@ -69,10 +69,12 @@
 - 测试连通性按钮
 - 保存后自动出现在聊天页面的 Provider 选择器中
 
-### 群聊室（GroupChat.tsx）
-- 创建/加入房间，输入话题
-- WebSocket 连接 `/ws/groupchat/{room_id}`
-- 实时显示各 Agent 发言（不同颜色区分），Master Agent 最终总结
+### 群聊室（GroupChat.tsx — 多 Agent 圆桌讨论）
+- 左侧勾选要参与的 sub-agent，主区写初始 prompt + 选 `max_rounds`
+- 点击 START DISCUSSION → REST `POST /api/v1/groupchat/sessions` 创建会话并自动跑首轮
+- 每轮调用 `/sessions/{id}/round` 让每个被选 agent 各发言一次；AUTO 按钮一键跑到 max_rounds
+- 用户气泡 = 绿色 accent，agent 气泡 = 青色 cyan；按时间顺序展开
+- 会话状态走 Redis，无 WebSocket（原本基于 WebSocket 的人对人 ROOM CHAT 已于 2026-05-12 下线）
 
 ### N8N（N8N.tsx）
 - N8N 实例配置管理（地址 + API Key）
