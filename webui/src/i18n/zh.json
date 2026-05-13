@@ -44,7 +44,8 @@
     "audit": "审计日志",
     "users": "用户管理",
     "settings": "设置",
-    "n8n": "N8N 工作流"
+    "n8n": "N8N 工作流",
+    "webhooks": "Webhook"
   },
   "header": {
     "switchTheme": "切换主题",

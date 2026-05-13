@@ -44,7 +44,8 @@
     "audit": "Audit Logs",
     "users": "User Management",
     "settings": "Settings",
-    "n8n": "N8N Workflows"
+    "n8n": "N8N Workflows",
+    "webhooks": "Webhooks"
   },
   "header": {
     "switchTheme": "Toggle theme",

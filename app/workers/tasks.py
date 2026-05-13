@@ -580,3 +580,35 @@ celery_app.conf.beat_schedule = {
         "schedule": 60.0,  # 1 minute
     },
 }
+
+
+# ---------------------------------------------------------------------------
+# Outgoing webhook delivery
+# ---------------------------------------------------------------------------
+
+@shared_task(
+    bind=True,
+    autoretry_for=(ConnectionError, TimeoutError),
+    retry_backoff=True,
+    retry_backoff_max=120,
+    retry_jitter=True,
+    max_retries=3,
+    default_retry_delay=30,
+    ignore_result=True,
+)
+def deliver_webhook_task(self, webhook_id: int, event: str, payload: dict):
+    """Async outgoing webhook delivery with retries.
+
+    Retries on transient network errors only. Permanent failures (HTTP 4xx/5xx
+    from the target server) are recorded on the webhook row and *not* retried —
+    by design, so that a buggy receiver doesn't burn the queue.
+    """
+    from app.services.webhook_service import deliver_sync
+
+    result = deliver_sync(webhook_id=webhook_id, event=event, payload=payload)
+    if not result["success"]:
+        logger.warning(
+            "[deliver_webhook_task] webhook=%s event=%s failed: %s",
+            webhook_id, event, result.get("error"),
+        )
+    return result

@@ -10,6 +10,7 @@ from app.models.provider import Provider
 from app.models.backup import BackupRecord
 from app.models.approval import ApprovalRequest
 from app.models.token_usage import TokenUsageLog
+from app.models.webhook import Webhook
 
 __all__ = [
     "User", "RoleModel",
@@ -23,4 +24,5 @@ __all__ = [
     "BackupRecord",
     "ApprovalRequest",
     "TokenUsageLog",
+    "Webhook",
 ]

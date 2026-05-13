@@ -1,7 +1,7 @@
-import { MessageSquare, Cpu, Plug, Wrench, BookOpen, Users, Clock, Settings, Shield, Coins, Database, FileText, UserCog, GitBranch } from 'lucide-react'
+import { MessageSquare, Cpu, Plug, Wrench, BookOpen, Users, Clock, Settings, Shield, Coins, Database, FileText, UserCog, GitBranch, Webhook } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-export type Tab = 'chat' | 'agents' | 'providers' | 'skills' | 'knowledge' | 'groupchat' | 'schedule' | 'mcp' | 'envvars' | 'security' | 'token' | 'backup' | 'audit' | 'users' | 'settings' | 'n8n'
+export type Tab = 'chat' | 'agents' | 'providers' | 'skills' | 'knowledge' | 'groupchat' | 'schedule' | 'mcp' | 'envvars' | 'security' | 'token' | 'backup' | 'audit' | 'users' | 'settings' | 'n8n' | 'webhooks'
 
 type NavItem = { key: Tab; labelKey: string; icon: React.ReactNode; group: string }
 const NAV_ITEMS: NavItem[] = [
@@ -12,6 +12,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'knowledge', labelKey: 'nav.knowledge', icon: <BookOpen size={13} />, group: 'FEATURES' },
   { key: 'groupchat', labelKey: 'nav.groupchat', icon: <Users size={13} />, group: 'FEATURES' },
   { key: 'n8n', labelKey: 'nav.n8n', icon: <GitBranch size={13} />, group: 'FEATURES' },
+  { key: 'webhooks', labelKey: 'nav.webhooks', icon: <Webhook size={13} />, group: 'FEATURES' },
   { key: 'schedule', labelKey: 'nav.schedule', icon: <Clock size={13} />, group: 'OPS' },
   { key: 'mcp', labelKey: 'nav.mcp', icon: <Plug size={13} />, group: 'OPS' },
   { key: 'envvars', labelKey: 'nav.envvars', icon: <Settings size={13} />, group: 'OPS' },

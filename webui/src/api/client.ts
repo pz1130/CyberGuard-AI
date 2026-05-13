@@ -102,7 +102,7 @@ export const api = {
     request('/knowledge/query', { method: 'POST', body: JSON.stringify(body) }),
 
   // Chat
-  chat: (body: { message: string; agent_id?: string; provider_id?: number; model?: string; conversation_id?: number }) =>
+  chat: (body: { message: string; agent_id?: string; provider_id?: number; model?: string; conversation_id?: number; mode?: string }) =>
     request('/chat', { method: 'POST', body: JSON.stringify(body) }),
 
   // Chat with attachments (multipart/form-data)
@@ -112,6 +112,7 @@ export const api = {
     conversationId: number,
     modelOverride?: { provider_id?: number; model?: string },
     agentId?: string,
+    mode?: string,
   ) => {
     const token = localStorage.getItem('token')
     const fd = new FormData()
@@ -121,6 +122,7 @@ export const api = {
     if (modelOverride?.provider_id) fd.append('provider_id', String(modelOverride.provider_id))
     if (modelOverride?.model) fd.append('model', modelOverride.model)
     if (agentId) fd.append('agent_id', agentId)
+    if (mode) fd.append('mode', mode)
     return fetch(`${BASE}/chat/attachments`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
@@ -258,6 +260,26 @@ export const api = {
     request(connectionId ? `/n8n/workflows/${id}?connection_id=${connectionId}` : `/n8n/workflows/${id}`, { method: 'DELETE' }),
   generateN8NWorkflow: (body: { description: string; connection_id?: number }) =>
     request('/n8n/workflows/generate', { method: 'POST', body: JSON.stringify(body) }),
+
+  // ---- Webhooks ----
+  getWebhooks: () => request('/webhooks'),
+  createWebhook: (body: {
+    name: string
+    direction: 'incoming' | 'outgoing'
+    description?: string
+    is_active?: boolean
+    outgoing_url?: string
+    outgoing_events?: string[]
+    outgoing_secret?: string
+  }) => request('/webhooks', { method: 'POST', body: JSON.stringify(body) }),
+  updateWebhook: (id: number, body: any) =>
+    request(`/webhooks/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteWebhook: (id: number) =>
+    request(`/webhooks/${id}`, { method: 'DELETE' }),
+  regenWebhookToken: (id: number) =>
+    request(`/webhooks/${id}/regenerate-token`, { method: 'POST' }),
+  testWebhook: (id: number) =>
+    request(`/webhooks/${id}/test`, { method: 'POST', body: JSON.stringify({}) }),
 }
 
 export const wsBase = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`
