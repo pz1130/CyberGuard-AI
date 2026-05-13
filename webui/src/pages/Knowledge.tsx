@@ -7,8 +7,16 @@ interface KB {
   name: string
   description?: string
   embedding_model?: string
+  embedding_dim?: number
   rerank_model?: string
   is_active?: boolean
+}
+
+// Auto-detect vector dim from the embedding model name. Default 1536 (most providers).
+const dimFromModel = (model?: string): number => {
+  if (!model) return 1536
+  if (/embedding-3-large|text-embedding-3-large/i.test(model)) return 3072
+  return 1536
 }
 
 interface Doc {
@@ -44,7 +52,7 @@ export default function Knowledge() {
   const [selected, setSelected] = useState<KB | null>(null)
   const [loadingKB, setLoadingKB] = useState(true)
   const [showKBForm, setShowKBForm] = useState(false)
-  const [kbForm, setKBForm] = useState<Partial<KB>>({ name: '', description: '', embedding_model: 'text-embedding-3-small' })
+  const [kbForm, setKBForm] = useState<Partial<KB>>({ name: '', description: '', embedding_model: 'text-embedding-3-small', embedding_dim: 1536 })
   const [docs, setDocs] = useState<Doc[]>([])
   const [loadingDocs, setLoadingDocs] = useState(false)
   const [textForm, setTextForm] = useState({ filename: '', content: '' })
@@ -91,7 +99,7 @@ export default function Knowledge() {
     try {
       await api.createKnowledgeBase(kbForm)
       setShowKBForm(false)
-      setKBForm({ name: '', description: '', embedding_model: 'text-embedding-3-small' })
+      setKBForm({ name: '', description: '', embedding_model: 'text-embedding-3-small', embedding_dim: 1536 })
       loadKBs()
     } catch (e: any) { alert(e.message) }
   }
@@ -210,8 +218,15 @@ export default function Knowledge() {
                 }} />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>EMBEDDING MODEL</label>
-              <select value={kbForm.embedding_model || ''} onChange={e => setKBForm(f => ({ ...f, embedding_model: e.target.value }))}
+              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>
+                <span>EMBEDDING MODEL</span>
+                <span style={{ color: 'var(--accent)' }}>DIM: {kbForm.embedding_dim || 1536}</span>
+              </label>
+              <select value={kbForm.embedding_model || ''}
+                onChange={e => {
+                  const model = e.target.value
+                  setKBForm(f => ({ ...f, embedding_model: model, embedding_dim: dimFromModel(model) }))
+                }}
                 style={{
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
@@ -223,6 +238,9 @@ export default function Knowledge() {
                   <option key={m.name} value={m.name}>{m.name}</option>
                 ))}
               </select>
+              <div style={{ marginTop: 4, fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.02em' }}>
+                创建后维度不可改。3-large=3072，其他=1536。
+              </div>
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>RERANK MODEL</label>
@@ -300,7 +318,11 @@ export default function Knowledge() {
                   <Database size={12} style={{ color: selected?.id === k.id ? 'var(--accent)' : 'var(--text-muted)', flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 11, color: selected?.id === k.id ? 'var(--accent)' : 'var(--text-primary)', letterSpacing: '0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k.name}</div>
-                    {k.embedding_model && <div style={{ fontSize: 9, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k.embedding_model}</div>}
+                    {(k.embedding_model || k.embedding_dim) && (
+                      <div style={{ fontSize: 9, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {k.embedding_model || '—'}{k.embedding_dim ? ` · ${k.embedding_dim}d` : ''}
+                      </div>
+                    )}
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); deleteKB(k) }}
@@ -415,7 +437,7 @@ export default function Knowledge() {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept=".txt,.md,.csv,.json,text/*"
+                      accept=".txt,.md,.csv,.json,.html,.pdf,.docx,text/*,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                       onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f) }}
                       style={{ display: 'none' }}
                     />

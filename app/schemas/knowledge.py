@@ -1,7 +1,12 @@
 """Pydantic schemas for knowledge base and document management."""
-from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
+
+from app.models.knowledge import (
+    SUPPORTED_EMBEDDING_DIMS, DEFAULT_EMBEDDING_DIM,
+    EMBEDDING_DIM_SMALL, EMBEDDING_DIM_LARGE,
+)
 
 
 class KnowledgeBaseBase(BaseModel):
@@ -9,8 +14,22 @@ class KnowledgeBaseBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
     embedding_model: Optional[str] = None
+    embedding_dim: int = Field(
+        default=DEFAULT_EMBEDDING_DIM,
+        description=f"Embedding vector dimension. Must be one of {SUPPORTED_EMBEDDING_DIMS}. "
+                    f"Locked at creation — change requires re-embedding all docs.",
+    )
     rerank_model: Optional[str] = None
     is_active: bool = True
+
+    @field_validator("embedding_dim")
+    @classmethod
+    def _validate_dim(cls, v: int) -> int:
+        if v not in SUPPORTED_EMBEDDING_DIMS:
+            raise ValueError(
+                f"embedding_dim must be one of {SUPPORTED_EMBEDDING_DIMS}, got {v}"
+            )
+        return v
 
 
 class KnowledgeBaseCreate(KnowledgeBaseBase):
@@ -19,7 +38,7 @@ class KnowledgeBaseCreate(KnowledgeBaseBase):
 
 
 class KnowledgeBaseUpdate(BaseModel):
-    """Knowledge base update schema."""
+    """Knowledge base update schema. `embedding_dim` is intentionally immutable."""
     name: Optional[str] = None
     description: Optional[str] = None
     embedding_model: Optional[str] = None
@@ -34,6 +53,7 @@ class KnowledgeBaseResponse(BaseModel):
     name: str
     description: Optional[str]
     embedding_model: Optional[str]
+    embedding_dim: int
     rerank_model: Optional[str]
     is_active: bool
     metadata_json: Optional[Dict[str, Any]]

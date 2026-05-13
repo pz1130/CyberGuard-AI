@@ -11,7 +11,7 @@ from app.schemas.knowledge import (
     KnowledgeQueryRequest, KnowledgeQueryResponse,
 )
 from app.models.knowledge import KnowledgeBase, Document
-from app.services.knowledge_service import get_knowledge_service
+from app.services.knowledge_service import get_knowledge_service, extract_text
 
 router = APIRouter()
 
@@ -133,17 +133,16 @@ async def upload_document(
     _=Depends(require_permission(Permission.KNOWLEDGE_WRITE)),
 ):
     """
-    Upload a text-based document file (txt / md / csv / json).
-    Binary formats (PDF, docx) are not supported in MVP.
+    Upload a document. Supported formats:
+      - PDF (application/pdf) — text extracted via pypdf (scanned-image PDFs not supported)
+      - Word (.docx) — text + tables extracted via python-docx
+      - UTF-8 text (.txt / .md / .csv / .json / .html / ...) — decoded as-is
     """
     raw = await file.read()
     try:
-        content = raw.decode("utf-8")
-    except UnicodeDecodeError:
-        raise HTTPException(
-            status_code=400,
-            detail="Only UTF-8 text files are supported (txt/md/csv/json). Use /text endpoint for raw text.",
-        )
+        content = extract_text(raw, file.content_type, file.filename or "")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     service = get_knowledge_service()
     try:

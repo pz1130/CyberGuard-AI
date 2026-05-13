@@ -1,15 +1,102 @@
 """Knowledge base service: chunking, embedding, and semantic search."""
+import io
 import json
-import math
+import logging
 import hashlib
-from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime
+from typing import List, Dict, Any, Optional
 
-from sqlalchemy import select, text, func
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.knowledge import KnowledgeBase, Document, DocumentChunk
+from app.models.knowledge import (
+    KnowledgeBase, Document, DocumentChunk,
+    EMBEDDING_COLUMN_BY_DIM, SUPPORTED_EMBEDDING_DIMS,
+    EMBEDDING_DIM_LARGE,
+)
+
+# SQL type cast used in pgvector ANN queries. Must match the column type
+# declared in the model (vector for 1536, halfvec for 3072).
+_SQL_VECTOR_TYPE_BY_DIM: Dict[int, str] = {
+    1536: "vector",
+    EMBEDDING_DIM_LARGE: "halfvec",
+}
 from app.services.llm_router import get_llm_router
+
+logger = logging.getLogger(__name__)
+
+
+# --------------------------------------------------------------------------
+# Binary → text extraction
+# --------------------------------------------------------------------------
+def extract_text(raw: bytes, mime_type: Optional[str], filename: str = "") -> str:
+    """Extract plain text from PDF / docx / utf-8 byte payloads.
+
+    Routing:
+      - application/pdf                                  → pypdf
+      - application/vnd.openxmlformats-...wordprocessingml → python-docx
+      - everything else                                  → utf-8 decode
+
+    Raises ValueError on parse failure so the router returns a 400.
+    """
+    mt = (mime_type or "").lower()
+    fn = (filename or "").lower()
+
+    if mt == "application/pdf" or fn.endswith(".pdf"):
+        try:
+            from pypdf import PdfReader
+        except ImportError as e:
+            raise ValueError(f"PDF support requires pypdf: {e}")
+        try:
+            reader = PdfReader(io.BytesIO(raw))
+            pages = []
+            for i, page in enumerate(reader.pages):
+                try:
+                    pages.append(page.extract_text() or "")
+                except Exception as pe:
+                    logger.warning("[extract_text] PDF page %d failed: %s", i, pe)
+            text_out = "\n\n".join(p.strip() for p in pages if p and p.strip())
+            if not text_out:
+                raise ValueError("PDF contains no extractable text (likely scanned image).")
+            return text_out
+        except ValueError:
+            raise
+        except Exception as e:
+            raise ValueError(f"PDF parse failed: {e}")
+
+    if mt in (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/msword",
+    ) or fn.endswith(".docx"):
+        try:
+            from docx import Document as DocxDocument
+        except ImportError as e:
+            raise ValueError(f"docx support requires python-docx: {e}")
+        try:
+            doc = DocxDocument(io.BytesIO(raw))
+            paragraphs = [p.text for p in doc.paragraphs if p.text and p.text.strip()]
+            # Also pull cell text from tables.
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        if cell.text and cell.text.strip():
+                            paragraphs.append(cell.text.strip())
+            text_out = "\n\n".join(paragraphs).strip()
+            if not text_out:
+                raise ValueError("docx contains no text.")
+            return text_out
+        except ValueError:
+            raise
+        except Exception as e:
+            raise ValueError(f"docx parse failed: {e}")
+
+    # Default: UTF-8 text (.txt, .md, .csv, .json, .html, etc.)
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        raise ValueError(
+            "Unsupported file: not PDF/docx and not valid UTF-8. "
+            "Convert binary formats to text first."
+        )
 
 
 # --------------------------------------------------------------------------
@@ -83,22 +170,27 @@ class KnowledgeService:
         provider_id: Optional[int] = None,
     ) -> Document:
         """
-        Chunk + embed text content and persist as Document + DocumentChunk rows.
+        Chunk + embed text and persist as Document + DocumentChunk rows.
 
-        Stores each chunk with its embedding vector in the document_chunks table
-        (pgvector + HNSW index) instead of a JSON blob.
-
-        Returns the created Document (refreshed from DB).
+        Embeddings are written to the column matching KB.embedding_dim
+        (`embedding` for 1536, `embedding_large` for 3072); the other column
+        is left NULL. The CK constraint on document_chunks enforces XOR.
         """
         kb = await db.get(KnowledgeBase, kb_id)
         if not kb:
             raise ValueError(f"Knowledge base {kb_id} not found")
 
+        col_name = EMBEDDING_COLUMN_BY_DIM.get(kb.embedding_dim)
+        if not col_name:
+            raise ValueError(
+                f"KB {kb_id} has unsupported embedding_dim={kb.embedding_dim}. "
+                f"Supported: {SUPPORTED_EMBEDDING_DIMS}"
+            )
+
         chunks = chunk_text(content)
         if not chunks:
             raise ValueError("Document is empty after chunking")
 
-        # Batch embed all chunks in one API call
         embeddings = await self._embed(
             texts=chunks,
             embedding_model=kb.embedding_model,
@@ -110,9 +202,17 @@ class KnowledgeService:
                 f"Embedding count mismatch: expected {len(chunks)}, got {len(embeddings)}"
             )
 
+        # Validate the provider returned the dimension the KB expects.
+        first_dim = len(embeddings[0]) if embeddings else 0
+        if first_dim != kb.embedding_dim:
+            raise ValueError(
+                f"Provider returned {first_dim}-dim vectors but KB {kb_id} expects "
+                f"{kb.embedding_dim}-dim. Either reconfigure the AI Provider's embedding "
+                f"model or create a new KB with embedding_dim={first_dim}."
+            )
+
         file_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
 
-        # Create the Document record first
         doc = Document(
             kb_id=kb_id,
             filename=filename,
@@ -120,23 +220,23 @@ class KnowledgeService:
             file_hash=file_hash,
             file_size=len(content.encode("utf-8")),
             mime_type=mime_type,
-            metadata_json={"chunk_count": len(chunks)},
+            metadata_json={"chunk_count": len(chunks), "embedding_dim": kb.embedding_dim},
         )
         db.add(doc)
         await db.flush()  # Get doc.id without committing
 
-        # Create one DocumentChunk per chunk (vectors stored in pgvector ARRAY column)
-        chunk_records = [
-            DocumentChunk(
-                document_id=doc.id,
-                kb_id=kb_id,
-                chunk_index=i,
-                content=chunk,
-                embedding=emb,  # List[float] — SQLAlchemy ARRAY column handles conversion
-                metadata_json={"filename": filename},
-            )
-            for i, (chunk, emb) in enumerate(zip(chunks, embeddings))
-        ]
+        # Write to the dim-appropriate column; leave the other NULL.
+        chunk_records: List[DocumentChunk] = []
+        for i, (chunk, emb) in enumerate(zip(chunks, embeddings)):
+            kwargs: Dict[str, Any] = {
+                "document_id": doc.id,
+                "kb_id": kb_id,
+                "chunk_index": i,
+                "content": chunk,
+                "metadata_json": {"filename": filename},
+            }
+            kwargs[col_name] = emb
+            chunk_records.append(DocumentChunk(**kwargs))
 
         db.add_all(chunk_records)
         await db.commit()
@@ -174,22 +274,35 @@ class KnowledgeService:
             return []
 
         q_vec = query_embeddings[0]
+        if len(q_vec) != kb.embedding_dim:
+            raise ValueError(
+                f"Query embedding is {len(q_vec)}-dim but KB {kb_id} expects "
+                f"{kb.embedding_dim}-dim. Check the AI Provider's embedding model."
+            )
 
-        # Use raw SQL for the ANN query — pgvector's vector_cosine_distance
-        # requires an ARRAY literal on the Python side; JSON cast is the most
-        # portable approach across asyncpg / psycopg2.
+        col_name = EMBEDDING_COLUMN_BY_DIM.get(kb.embedding_dim)
+        cast_type = _SQL_VECTOR_TYPE_BY_DIM.get(kb.embedding_dim)
+        if not col_name or not cast_type:
+            raise ValueError(
+                f"KB {kb_id} has unsupported embedding_dim={kb.embedding_dim}"
+            )
+
+        # Use raw SQL for the ANN query — pgvector requires an explicit
+        # ::vector(<dim>) or ::halfvec(<dim>) cast matching the column type.
+        # `col_name` and `cast_type` are allowlisted from server-side maps,
+        # so f-string interpolation is safe (no user input).
         import json as _json
         q_vec_json = _json.dumps(q_vec)
 
-        raw_sql = text("""
+        raw_sql = text(f"""
             SELECT
                 dc.document_id,
                 dc.chunk_index,
                 dc.content,
-                (1 - (dc.embedding <=> (:q_vec)::vector)) AS score
+                (1 - (dc.{col_name} <=> (:q_vec)::{cast_type}({kb.embedding_dim}))) AS score
             FROM document_chunks dc
-            WHERE dc.kb_id = :kb_id
-            ORDER BY dc.embedding <=> (:q_vec)::vector
+            WHERE dc.kb_id = :kb_id AND dc.{col_name} IS NOT NULL
+            ORDER BY dc.{col_name} <=> (:q_vec)::{cast_type}({kb.embedding_dim})
             LIMIT :top_k
         """)
 

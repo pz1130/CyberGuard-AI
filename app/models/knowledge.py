@@ -1,9 +1,24 @@
 """Knowledge base database models."""
 from datetime import datetime
-from sqlalchemy import Column, Float, Integer, String, Boolean, DateTime, Text, ForeignKey, JSON, Index
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, JSON, Index, CheckConstraint
 from sqlalchemy.orm import relationship
+from pgvector.sqlalchemy import Vector, HALFVEC
 from app.core.database import Base
+
+# Supported embedding dimensions and the column each maps to.
+# Add new dims by creating a new column + HNSW index via Alembic, then
+# extending this map. Service code routes by KB.embedding_dim.
+EMBEDDING_DIM_SMALL = 1536   # text-embedding-3-small, text-embedding-ada-002
+EMBEDDING_DIM_LARGE = 3072   # text-embedding-3-large
+SUPPORTED_EMBEDDING_DIMS = (EMBEDDING_DIM_SMALL, EMBEDDING_DIM_LARGE)
+DEFAULT_EMBEDDING_DIM = EMBEDDING_DIM_SMALL
+
+# Map dim → SQLAlchemy column name on DocumentChunk. KnowledgeService uses
+# this to decide which column to write/query.
+EMBEDDING_COLUMN_BY_DIM = {
+    EMBEDDING_DIM_SMALL: "embedding",
+    EMBEDDING_DIM_LARGE: "embedding_large",
+}
 
 
 class KnowledgeBase(Base):
@@ -15,12 +30,22 @@ class KnowledgeBase(Base):
     name = Column(String(100), unique=True, nullable=False, index=True)
     description = Column(String(500), nullable=True)
     embedding_model = Column(String(100), nullable=True)
+    # Dimension of vectors produced by `embedding_model`. Locked at KB creation —
+    # cannot change without re-embedding all docs. CHECK enforced in DB.
+    embedding_dim = Column(Integer, nullable=False, default=DEFAULT_EMBEDDING_DIM)
     rerank_model = Column(String(100), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     metadata_encrypted = Column(Text, nullable=True)  # AES-256 encrypted
     metadata_json = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            f"embedding_dim IN ({EMBEDDING_DIM_SMALL}, {EMBEDDING_DIM_LARGE})",
+            name="ck_knowledge_bases_embedding_dim",
+        ),
+    )
 
     # Relationships
     documents = relationship("Document", back_populates="knowledge_base", cascade="all, delete-orphan")
@@ -67,19 +92,25 @@ class DocumentChunk(Base):
     kb_id = Column(Integer, nullable=False)  # Denormalised for fast HNSW filtered queries
     chunk_index = Column(Integer, nullable=False)
     content = Column(Text, nullable=False)
-    # 1536-dim float array matching text-embedding-3-small
-    embedding = Column(ARRAY(Float()), nullable=False)
+    # Exactly one embedding column is populated per chunk, matching the KB's
+    # `embedding_dim`. CHECK constraint enforces XOR. HNSW indexes on both,
+    # built in Alembic 003 (small) and 004 (large).
+    embedding = Column(Vector(EMBEDDING_DIM_SMALL), nullable=True)         # vector(1536)
+    # HNSW with `vector` caps at 2000 dims; 3072 must use halfvec (16-bit, HNSW up to 4000).
+    # Precision loss is negligible for cosine similarity.
+    embedding_large = Column(HALFVEC(EMBEDDING_DIM_LARGE), nullable=True)  # halfvec(3072)
     metadata_json = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
     document = relationship("Document", back_populates="chunks")
 
-    # HNSW index is managed via Alembic migration, not here (SQLAlchemy 2.x
-    # does not yet have first-class HNSW index support in Table metadata).
-    # Keep a plain index on document_id for fast lookups.
     __table_args__ = (
         Index("ix_document_chunks_document_id", "document_id"),
+        CheckConstraint(
+            "(embedding IS NOT NULL)::int + (embedding_large IS NOT NULL)::int = 1",
+            name="ck_document_chunks_one_embedding",
+        ),
     )
 
     def __repr__(self):
