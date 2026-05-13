@@ -74,6 +74,7 @@ async def chat(
             "provider_id": body.provider_id,
             "model": body.model,
             "conversation_id": body.conversation_id,
+            "agent_id": body.agent_id,
         },
     )
 
@@ -112,6 +113,7 @@ async def chat_attachments(
     agent_id: Optional[str] = Form(None),
     provider_id: Optional[int] = Form(None),
     model: Optional[str] = Form(None),
+    mode: Optional[str] = Form("normal"),
     files: List[UploadFile] = File(default=[]),
     db: AsyncSession = Depends(get_db),
     current_user: AuthenticatedUser = Depends(
@@ -202,10 +204,11 @@ async def chat_attachments(
     run_master_agent_task.apply_async(
         args=[execution_id, message, user_id],
         kwargs={
-            "mode": "normal",
+            "mode": mode or "normal",
             "provider_id": provider_id,
             "model": model,
             "conversation_id": conversation_id,
+            "agent_id": agent_id,
             "attachments": attachments,
         },
     )

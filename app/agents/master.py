@@ -120,13 +120,111 @@ class MasterAgent:
         return state
 
     async def _parse_intent_node(self, state: MasterAgentState) -> MasterAgentState:
-        """Parse user intent and create task plan."""
+        """Parse user intent and create task plan.
+
+        Dispatch precedence (first match wins):
+          1. Explicit `agent_id` from UI — single task to that one agent.
+          2. mode == "fast" — empty task_plan, falls through to Master LLM reply.
+          3. mode == "expert" — fan out to every active sub-agent.
+          4. mode == "normal" (default) — LLM intent parser decides.
+        """
         state["current_state"] = AgentState.PARSE_INTENT
 
         user_input = state.get("user_input", "")
         user_id = state.get("user_id")
+        mode = (state.get("mode") or "normal").lower()
 
-        # Use LLM to parse intent if available
+        # ----- 1. Explicit agent selection from the WebUI -----
+        explicit_agent_id = state.get("agent_id")
+        if explicit_agent_id:
+            try:
+                aid = int(explicit_agent_id)
+            except (TypeError, ValueError):
+                aid = explicit_agent_id
+            state["intent"] = "task_execution"
+            state["task_plan"] = [{
+                "agent_id": aid,
+                "task": user_input,
+                "requires_approval": False,
+            }]
+            await log_audit(
+                user_id=user_id,
+                agent_id=str(aid),
+                action="parse_intent",
+                input_data={"user_input": user_input, "explicit_agent_id": aid, "mode": mode},
+                output_data={"intent": "task_execution", "bypassed_llm_parser": True},
+                request_id=state.get("request_id"),
+            )
+            state["current_state"] = AgentState.ROUTE_TO_SUB
+            return state
+
+        # ----- 2. Fast mode — Master Agent only, skip sub-agents -----
+        if mode == "fast":
+            state["intent"] = "knowledge_query"
+            state["task_plan"] = []
+            await log_audit(
+                user_id=user_id,
+                agent_id=None,
+                action="parse_intent",
+                input_data={"user_input": user_input, "mode": "fast"},
+                output_data={"intent": "knowledge_query", "bypassed_llm_parser": True},
+                request_id=state.get("request_id"),
+            )
+            state["current_state"] = AgentState.ROUTE_TO_SUB
+            return state
+
+        # ----- 3. Expert mode — fan out to all active sub-agents -----
+        if mode == "expert":
+            from app.core.database import get_db_context
+            from app.models.agent import AgentConfig
+            from sqlalchemy import select
+
+            active: List[Dict[str, Any]] = []
+            try:
+                async with get_db_context() as session:
+                    result = await session.execute(
+                        select(AgentConfig).where(AgentConfig.is_active == True)
+                    )
+                    active = [
+                        {"id": a.id, "agent_name": a.agent_name, "backend_type": a.backend_type}
+                        for a in result.scalars().all()
+                    ]
+            except Exception as e:
+                logger.warning(f"[expert mode] Failed to load active agents: {e}")
+
+            if active:
+                state["intent"] = "task_execution"
+                state["task_plan"] = [
+                    {
+                        "agent_id": a["id"],
+                        "agent_name": a["agent_name"],
+                        "task": user_input,
+                        "requires_approval": False,
+                    }
+                    for a in active
+                ]
+            else:
+                # No active sub-agents — degrade to Master LLM with a note.
+                state["intent"] = "knowledge_query"
+                state["task_plan"] = []
+                state["expert_mode_no_agents"] = True
+
+            await log_audit(
+                user_id=user_id,
+                agent_id=None,
+                action="parse_intent",
+                input_data={"user_input": user_input, "mode": "expert"},
+                output_data={
+                    "intent": state.get("intent"),
+                    "fan_out_count": len(active),
+                    "agents": [a["agent_name"] for a in active],
+                },
+                request_id=state.get("request_id"),
+            )
+            state["current_state"] = AgentState.ROUTE_TO_SUB
+            return state
+
+        # ----- 4. Normal mode — LLM intent parser decides -----
         if self.llm_router:
             try:
                 parsed = await self.llm_router.parse_intent(
@@ -187,24 +285,27 @@ class MasterAgent:
             state["current_state"] = AgentState.VALIDATE_RESULTS
             return state
 
-        # Fetch registered remote agents (by type) from DB
+        # Fetch registered remote agents (by type and by name) from DB
         from app.core.database import get_db_context
         from app.models.agent import AgentConfig
         from sqlalchemy import select
 
         remote_agents: Dict[str, Dict] = {}
+        remote_agents_by_name: Dict[str, Dict] = {}
         try:
             async with get_db_context() as session:
                 result = await session.execute(select(AgentConfig).where(AgentConfig.is_active == True))
                 for agent_obj in result.scalars().all():
                     backend = getattr(agent_obj, "backend_type", "general")
+                    agent_dict = {
+                        "id": agent_obj.id,
+                        "agent_name": agent_obj.agent_name,
+                        "backend_type": backend,
+                        "endpoint_url": agent_obj.endpoint_url,
+                    }
                     if backend not in remote_agents:
-                        remote_agents[backend] = {
-                            "id": agent_obj.id,
-                            "agent_name": agent_obj.agent_name,
-                            "backend_type": backend,
-                            "endpoint_url": agent_obj.endpoint_url,
-                        }
+                        remote_agents[backend] = agent_dict
+                    remote_agents_by_name[agent_obj.agent_name] = agent_dict
         except Exception:
             pass  # No DB agents — will use local executor for all tasks
 
@@ -213,6 +314,7 @@ class MasterAgent:
             agent_type = task.get("agent_type", "general")
             task_desc = task.get("task", "")
             agent_id = task.get("agent_id")  # explicit ID override
+            agent_name = task.get("agent_name")  # explicit name override
 
             # Try remote if registered AND has endpoint URL
             if agent_id:
@@ -223,10 +325,26 @@ class MasterAgent:
                 )
                 return str(agent_id), result
 
+            # OpenClaw agents use the Gateway poll/report flow (no endpoint_url);
+            # hermes/custom backends require an endpoint_url for direct HTTP push.
+            def _routable(agent_dict: Dict[str, Any]) -> bool:
+                return bool(agent_dict.get("endpoint_url")) or agent_dict.get("backend_type") == "openclaw"
+
+            # Try by agent_name first (most specific — user named a specific agent)
+            if agent_name and agent_name in remote_agents_by_name:
+                agent = remote_agents_by_name[agent_name]
+                if _routable(agent):
+                    result = await self.executor.execute(
+                        agent_id=agent["id"],
+                        task=task_desc,
+                        user_id=user_id,
+                    )
+                    return agent_name, result
+
+            # Fall back to backend type matching
             if agent_type in remote_agents:
                 agent = remote_agents[agent_type]
-                # Only use remote if it has an endpoint URL, otherwise fall back to local
-                if agent.get("endpoint_url"):
+                if _routable(agent):
                     result = await self.executor.execute(
                         agent_id=agent["id"],
                         task=task_desc,
@@ -390,12 +508,18 @@ class MasterAgent:
             user_input = state.get("user_input", "")
             logger.debug(f"_summarizer_node: llm_router exists, calling chat()...")
             try:
-                # Build messages: optional system prompt + conversation history + current turn
-                system_prompt = state.get("system_prompt_override")
+                # Build the system prompt: per-conversation override (if any) +
+                # the live list of registered sub-agents so the LLM can answer
+                # meta-questions like "what sub-agents do you have?" truthfully.
+                system_prompt = await self.llm_router.build_chat_system_prompt(
+                    base_prompt=state.get("system_prompt_override"),
+                    mode=state.get("mode"),
+                    expert_no_agents=bool(state.get("expert_mode_no_agents")),
+                )
                 history = state.get("conversation_history") or []
-                messages: List[Dict[str, str]] = []
-                if system_prompt:
-                    messages.append({"role": "system", "content": system_prompt})
+                messages: List[Dict[str, str]] = [
+                    {"role": "system", "content": system_prompt}
+                ]
                 messages.extend(history)
                 messages.append({"role": "user", "content": user_input})
                 state["final_summary"] = await self.llm_router.chat(

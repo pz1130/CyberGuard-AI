@@ -49,6 +49,13 @@ interface ProviderModel {
   model: string
 }
 
+interface AgentOption {
+  id: string
+  agent_name: string
+  backend_type?: string
+  is_active?: boolean
+}
+
 const FALLBACK_MODELS = [
   { provider_id: 0, provider_name: 'OPENAI', provider_type: 'openai', base_url: 'https://api.openai.com/v1', model: 'gpt-4o' },
   { provider_id: 0, provider_name: 'ANTHROPIC', provider_type: 'anthropic', base_url: 'https://api.anthropic.com/v1', model: 'claude-sonnet-4-7-2025' },
@@ -81,6 +88,13 @@ export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
   const [providerModel, setProviderModel] = useState(() => localStorage.getItem('lastProviderModel') || 'auto')
+  const [selectedAgentId, setSelectedAgentId] = useState(() => localStorage.getItem('lastSelectedAgentId') || '')
+  const [availableAgents, setAvailableAgents] = useState<AgentOption[]>([])
+  // Chat mode: 'normal' (LLM decides) | 'fast' (master only) | 'expert' (fan out to all agents)
+  const [chatMode, setChatMode] = useState<'normal' | 'fast' | 'expert'>(() => {
+    const v = localStorage.getItem('lastChatMode')
+    return v === 'fast' || v === 'expert' ? v : 'normal'
+  })
   const [pollingStatus, setPollingStatus] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -126,7 +140,17 @@ export default function Chat() {
   useEffect(() => {
     loadConversations()
     loadKnowledgeBases()
+    loadAvailableAgents()
   }, [])
+
+  // Load registered sub-agents for the selector
+  const loadAvailableAgents = async () => {
+    try {
+      const data = await api.getAgents() as any
+      const list: AgentOption[] = Array.isArray(data) ? data : (data?.agents || [])
+      setAvailableAgents(list.filter(a => a.is_active !== false))
+    } catch { setAvailableAgents([]) }
+  }
 
   // Load knowledge bases
   const loadKnowledgeBases = async () => {
@@ -372,14 +396,18 @@ export default function Chat() {
     try {
       const files = attachments.map(a => a.file)
 
+      const agentIdParam = selectedAgentId || undefined
+      const modeParam = chatMode !== 'normal' ? chatMode : undefined
       const chatResp = files.length > 0
         ? await api.uploadChatAttachments(
             files,
             input.trim(),
             activeConvId,
             Object.keys(modelOverride).length > 0 ? modelOverride : undefined,
+            agentIdParam,
+            modeParam,
           ) as { task_id: string; status: string; message: string }
-        : await api.chat({ message: input.trim(), conversation_id: activeConvId, ...modelOverride }) as { task_id: string; status: string; message: string }
+        : await api.chat({ message: input.trim(), conversation_id: activeConvId, agent_id: agentIdParam, mode: modeParam, ...modelOverride }) as { task_id: string; status: string; message: string }
 
       // Clean up object URLs
       attachments.forEach(att => {
@@ -424,7 +452,11 @@ export default function Chat() {
     setMessages([])
   }
 
-  const handleKey = (e: React.KeyboardEvent) => {
+  const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // IME composition (中文/日文/韩文输入法 etc.): don't send while user is still
+    // composing. `isComposing` is the modern check; `keyCode === 229` is a
+    // legacy fallback for browsers (and some IME states) where isComposing isn't set.
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       send()
@@ -466,7 +498,11 @@ export default function Chat() {
                     <input
                       value={editingTitle}
                       onChange={e => setEditingTitle(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') saveEditTitle(); if (e.key === 'Escape') cancelEditTitle() }}
+                      onKeyDown={e => {
+                        if (e.nativeEvent.isComposing || e.keyCode === 229) return
+                        if (e.key === 'Enter') saveEditTitle()
+                        else if (e.key === 'Escape') cancelEditTitle()
+                      }}
                       autoFocus
                       style={{ flex: 1, height: 24, padding: '0 6px', background: 'var(--bg-base)', border: '1px solid var(--accent)', color: 'var(--text-primary)', fontSize: 11, fontFamily: 'var(--font-mono)' }}
                       onClick={e => e.stopPropagation()}
@@ -510,6 +546,35 @@ export default function Chat() {
               <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/>
             </svg>
           </button>
+          <span style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)' }}>MODE</span>
+          <div style={{ display: 'flex', border: '1px solid var(--border-bright)' }}>
+            {(['normal','fast','expert'] as const).map(m => {
+              const active = chatMode === m
+              const labels: Record<string, string> = { normal: 'NORMAL', fast: 'FAST', expert: 'EXPERT' }
+              const titles: Record<string, string> = {
+                normal: '默认：LLM 解析意图决定是否调用子 agent',
+                fast: '快速：跳过意图解析，只用 Master Agent',
+                expert: '专家：并行派发给所有 active sub-agent，再汇总',
+              }
+              return (
+                <button key={m}
+                  onClick={() => { setChatMode(m); localStorage.setItem('lastChatMode', m) }}
+                  title={titles[m]}
+                  style={{
+                    height: 26, padding: '0 10px',
+                    background: active ? 'var(--accent)' : 'var(--bg-base)',
+                    color: active ? '#000' : 'var(--text-muted)',
+                    border: 'none',
+                    borderRight: m !== 'expert' ? '1px solid var(--border-bright)' : 'none',
+                    fontSize: 10, letterSpacing: '0.1em', fontFamily: 'var(--font-mono)',
+                    fontWeight: active ? 700 : 400,
+                    cursor: 'pointer',
+                  }}>
+                  {labels[m]}
+                </button>
+              )
+            })}
+          </div>
           <span style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)' }}>MODEL</span>
           <select value={providerModel} onChange={e => { localStorage.setItem('lastProviderModel', e.target.value); setProviderModel(e.target.value) }}
             style={{
@@ -520,6 +585,31 @@ export default function Chat() {
             }}>
             <option value="auto">AUTO</option>
             {availableModels.map(m => <option key={`${m.provider_id}:${m.model}`} value={`${m.provider_id}:${m.model}`}>{m.provider_name} / {m.model}</option>)}
+          </select>
+          <span style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)' }}>AGENT</span>
+          <select
+            value={selectedAgentId}
+            onChange={e => {
+              const v = e.target.value
+              setSelectedAgentId(v)
+              if (v) localStorage.setItem('lastSelectedAgentId', v)
+              else localStorage.removeItem('lastSelectedAgentId')
+            }}
+            title={selectedAgentId ? '已锁定到指定 Sub-Agent，绕过意图解析' : '由 Master Agent 解析意图后路由'}
+            style={{
+              height: 26, padding: '0 8px',
+              background: selectedAgentId ? 'rgba(0,255,65,0.08)' : 'var(--bg-base)',
+              border: `1px solid ${selectedAgentId ? 'var(--accent-border)' : 'var(--border-bright)'}`,
+              color: selectedAgentId ? 'var(--accent)' : 'var(--text-primary)',
+              fontSize: 10, letterSpacing: '0.05em',
+              fontFamily: 'var(--font-mono)',
+            }}>
+            <option value="">MASTER (AUTO ROUTE)</option>
+            {availableAgents.map(a => (
+              <option key={a.id} value={a.id}>
+                {a.agent_name}{a.backend_type ? ` · ${a.backend_type.toUpperCase()}` : ''}
+              </option>
+            ))}
           </select>
           <div style={{ flex: 1 }} />
           {activeConvId && (

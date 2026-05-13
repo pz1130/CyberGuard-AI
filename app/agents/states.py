@@ -72,6 +72,13 @@ class MasterAgentState(TypedDict, total=False):
     model: Optional[str]
     timestamp: str
 
+    # Explicit sub-agent selection from the WebUI (bypasses intent parsing)
+    agent_id: Optional[str]
+
+    # Chat dispatch mode: "normal" (LLM decides) | "fast" (master only)
+    # | "expert" (fan out to all active sub-agents)
+    mode: Optional[str]
+
     # Conversation history (list of {"role": "user"/"assistant", "content": str})
     # Injected from the conversations table so the LLM has multi-turn memory
     conversation_history: Optional[List[Dict[str, Any]]]

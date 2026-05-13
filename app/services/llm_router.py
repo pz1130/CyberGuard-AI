@@ -65,6 +65,101 @@ class LLMRouter:
         """Invalidate cached master config (call after updates)."""
         self._master_config = None
 
+    async def _get_agents_info(self) -> List[tuple]:
+        """Fetch active sub-agents from DB for intent parser injection.
+
+        Returns:
+            List of (agent_name, endpoint_url, backend_type, description) tuples.
+        """
+        try:
+            from app.core.database import get_db_context
+            from sqlalchemy import select
+            from app.models.agent import AgentConfig
+
+            async with get_db_context() as session:
+                result = await session.execute(
+                    select(
+                        AgentConfig.agent_name,
+                        AgentConfig.endpoint_url,
+                        AgentConfig.backend_type,
+                        AgentConfig.description,
+                    ).where(AgentConfig.is_active == True)
+                )
+                rows = result.all()
+                return [(r[0], r[1], r[2], r[3]) for r in rows]
+        except Exception:
+            return []
+
+    async def build_chat_system_prompt(
+        self,
+        base_prompt: Optional[str] = None,
+        mode: Optional[str] = None,
+        expert_no_agents: bool = False,
+    ) -> str:
+        """Build the system prompt used by direct-chat replies (no sub-agent invoked).
+
+        Combines:
+          1. `base_prompt` (per-conversation override) or master_config.system_prompt or a fallback.
+          2. A mode-aware sub-agent snapshot:
+             - "fast": tell the LLM it's the only one answering (no agent listing).
+             - "expert" + no agents: explain why fan-out didn't happen.
+             - otherwise: list active sub-agents so meta-questions answer truthfully.
+
+        Called by master.py `_summarizer_node` whenever it falls through to a
+        direct LLM reply.
+        """
+        master_config = await self._load_master_config()
+        prompt = (
+            base_prompt
+            or master_config.get("system_prompt")
+            or "You are CyberGuard, a security operations assistant. Be precise and actionable."
+        )
+
+        m = (mode or "normal").lower()
+        if m == "fast":
+            prompt += (
+                "\n\n## Mode\n"
+                "You are running in **FAST mode**: respond directly without "
+                "consulting any external sub-agent. Be concise."
+            )
+            return prompt
+
+        if m == "expert" and expert_no_agents:
+            prompt += (
+                "\n\n## Mode\n"
+                "You are running in **EXPERT mode**, but no external sub-agents "
+                "are registered or active. You're answering as the Master Agent "
+                "alone — explicitly tell the user this limitation in your reply."
+            )
+            return prompt
+
+        agents = await self._get_agents_info()
+        if not agents:
+            prompt += (
+                "\n\n## Sub-agents registered\n"
+                "(None — no external sub-agents are currently registered or active.)"
+            )
+            return prompt
+
+        lines = ["\n\n## Sub-agents registered (live snapshot)"]
+        lines.append(
+            "These external Sub-Agents are currently registered on this CyberGuard "
+            "instance and can be dispatched by the Master Agent. When the user "
+            "asks whether you can see / call a sub-agent by name, the answer is YES "
+            "for any agent listed below."
+        )
+        for name, url, backend, desc in agents:
+            descr = f" — {desc}" if desc else ""
+            target = url or "(OpenClaw Gateway / no endpoint URL)"
+            lines.append(f"- **{name}** [{backend}]{descr}  ⇢ {target}")
+        lines.append(
+            "\nIf the user mentions one of these agent names, you may answer "
+            "from this list. To actually invoke a sub-agent the user must select "
+            "it in the chat UI's AGENT dropdown, or phrase the request so the "
+            "intent parser routes by name (e.g. \"ask test to ...\")."
+        )
+        return prompt + "\n".join(lines)
+
     def invalidate_provider_cache(self, provider_id: Optional[int] = None):
         """Invalidate cached OpenAI client(s).
 
@@ -371,6 +466,9 @@ class LLMRouter:
         master_config = await self._load_master_config()
         active_model = model_override or model or master_config.get("model") or settings.MASTER_AGENT_MODEL
 
+        # Load available sub-agents from DB to include in prompt
+        agents_info = await self._get_agents_info()
+
         # Use per-conversation override if provided, else global config
         system_prompt = (
             intent_parser_prompt_override
@@ -379,15 +477,16 @@ class LLMRouter:
 
 Output JSON with:
 - intent: one of [task_execution, group_chat, knowledge_query, admin_action]
-- task_plan: array of {"agent_type": str, "task": "description", "requires_approval": bool}
+- task_plan: array of {"agent_type": str, "agent_name": str, "task": "description", "requires_approval": bool}
 - reasoning: brief explanation
 
 Task decomposition rules:
 - Split compound requests into multiple tasks
-- Each task maps to one agent_type
-- Do NOT use agent_id — use agent_type only
+- Each task maps to one agent_type or one agent_name
+- If user mentions a specific agent by name, use agent_name to route directly to that agent
+- Do NOT use agent_id — use agent_name or agent_type only
 
-agent_type options:
+agent_type options (fallback when no specific agent is mentioned):
 - threat_intel: threat IOC analysis, CVE lookup, malware analysis, APT tracking
 - log_anomaly: log parsing, anomaly detection, SIEM alerts
 - vuln_scanner: vulnerability scanning, CVE assessment, exploit analysis
@@ -404,8 +503,18 @@ Examples:
 - "block this domain" → agent_type: remediation
 - "create a n8n workflow to check my email every hour" → agent_type: n8n_workflow
 - "帮我创建一个 n8n 工作流" → agent_type: n8n_workflow
+- "ask 1p to do something" → agent_name: "1p" (use this to route to the named sub-agent)
 """
         )
+
+        # Append available agents to system prompt so LLM knows which agents exist
+        if agents_info:
+            agents_list = "\n".join(
+                f'- agent_name: "{name}", endpoint: {url or "none"}, backend: {backend}'
+                for name, url, backend, _desc in agents_info
+            )
+            system_prompt += f"\n\nAvailable sub-agents in this system:\n{agents_list}\n"
+            system_prompt += '\nIf user asks about or mentions a specific agent by name (e.g. "1p", "test"), use agent_name to route to it.'
         span_name = f"llm.chat parse_intent/{active_model}"
         with tracer.start_as_current_span(span_name, attributes={
             "llm.model": active_model,
