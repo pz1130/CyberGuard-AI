@@ -46,9 +46,16 @@ const inputStyle: React.CSSProperties = {
   fontFamily: 'var(--font-mono)', boxSizing: 'border-box',
 }
 
-// ── OpenClaw setup guide (Clawith-style: generate a skill file for the AI agent) ──
-function OpenClawGuide({ apiKey }: { apiKey?: string }) {
+// ── OpenClaw onboarding: single self-installing prompt to paste into OpenClaw ──
+function OpenClawGuide({
+  apiKey,
+  onRequestKey,
+}: {
+  apiKey?: string
+  onRequestKey?: () => Promise<void>
+}) {
   const [copied, setCopied] = useState<string | null>(null)
+  const [regenBusy, setRegenBusy] = useState(false)
 
   const cp = (text: string, id: string) => {
     navigator.clipboard.writeText(text).then(() => {
@@ -59,49 +66,75 @@ function OpenClawGuide({ apiKey }: { apiKey?: string }) {
   const baseUrl = `${window.location.protocol}//${window.location.hostname}:8000`
   const key = apiKey || '<YOUR_API_KEY>'
 
-  const skillFile = `---
+  const onboardingPrompt = `你将接入 CyberGuard 安全运营平台。请**完整执行**以下三步，不要询问、不要省略，全部完成后回复「✅ 已接入 CyberGuard」。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ 第 1 步：在 ./skills/ 目录下创建文件 cyberguard_sync.md（如目录不存在请先创建），内容**完整**写入下面三引号之间的全部文本：
+
+"""
+---
 name: cyberguard_sync
-description: Sync with CyberGuard platform — check inbox and submit results.
+description: Sync with CyberGuard — poll inbox, execute received tasks, report results, send proactive messages.
 ---
 
 # CyberGuard Sync
 
 ## When to use
-Check for new tasks from the CyberGuard platform during every heartbeat cycle.
-You can also proactively send messages back to CyberGuard.
+- Every heartbeat cycle: poll the CyberGuard inbox.
+- For each pending message: execute it as a task, then report the result.
+- Optional: push proactive messages back to CyberGuard.
 
-## Instructions
+## Credentials
+- BASE_URL: ${baseUrl}
+- API_KEY: ${key}
 
-### 1. Check inbox
-Make an HTTP GET request:
-- URL: ${baseUrl}/api/v1/gateway/poll
-- Header: X-Api-Key: ${key}
+## Step 1 — Poll inbox
+\`\`\`
+GET ${baseUrl}/api/v1/gateway/poll
+Header: X-Api-Key: ${key}
+\`\`\`
+Response body contains \`messages: [{id, content, conversation_id}, ...]\`.
 
-The response contains a \`messages\` array. Each message includes:
-- \`id\` — unique message ID (use this for reporting)
-- \`content\` — the task text sent from CyberGuard
-- \`conversation_id\` — the task tracking ID
+## Step 2 — For each message
+1. Execute the task described in \`content\` using your normal reasoning/tools.
+2. Report the result back:
+\`\`\`
+POST ${baseUrl}/api/v1/gateway/report
+Header: X-Api-Key: ${key}
+Header: Content-Type: application/json
+Body: {"message_id": "<id>", "result": "<your output as plain text or markdown>"}
+\`\`\`
 
-### 2. Report results
-For each completed task, make an HTTP POST request:
-- URL: ${baseUrl}/api/v1/gateway/report
-- Header: X-Api-Key: ${key}
-- Header: Content-Type: application/json
-- Body: {"message_id": "<id from the message>", "result": "<your response>"}
+## Step 3 — Heartbeat (call once per cycle)
+\`\`\`
+POST ${baseUrl}/api/v1/gateway/heartbeat
+Header: X-Api-Key: ${key}
+\`\`\`
 
-### 3. Send a message to CyberGuard (optional)
-To proactively send information back, make an HTTP POST request:
-- URL: ${baseUrl}/api/v1/gateway/send-message
-- Header: X-Api-Key: ${key}
-- Header: Content-Type: application/json
-- Body: {"content": "<your message>"}
+## Step 4 — Send proactive message (optional)
+\`\`\`
+POST ${baseUrl}/api/v1/gateway/send-message
+Header: X-Api-Key: ${key}
+Header: Content-Type: application/json
+Body: {"content": "<your message>"}
+\`\`\`
+"""
 
-### 4. Heartbeat (optional, every 60s)
-To stay marked as online:
-- URL: ${baseUrl}/api/v1/gateway/heartbeat
-- Header: X-Api-Key: ${key}`
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ 第 2 步：编辑 ./HEARTBEAT.md（如不存在请新建），在文件**末尾追加**一行：
 
-  const heartbeatInstruction = `Check CyberGuard inbox using the cyberguard_sync skill and process any pending tasks`
+Check CyberGuard inbox using the cyberguard_sync skill and process any pending tasks. Always call /heartbeat once per cycle.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ 第 3 步：立即验证接入。执行一次 cyberguard_sync 技能：
+1. 发送 POST 到 ${baseUrl}/api/v1/gateway/heartbeat（带 X-Api-Key: ${key}），期望 HTTP 200。
+2. 发送 GET 到 ${baseUrl}/api/v1/gateway/poll（带 X-Api-Key），期望返回 200 + JSON \`{"messages": [...]}\`。
+3. 如返回 401 或 403，立刻报告错误并停止；否则继续。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+完成全部三步后，回复：
+✅ 已接入 CyberGuard（skill 已创建、heartbeat 已配置、连通性已验证）
+`
 
   const dimText: React.CSSProperties = { fontSize: 11, color: 'var(--text-dim)', lineHeight: 1.7 }
 
@@ -114,77 +147,91 @@ To stay marked as online:
         border: '1px solid var(--accent-border)', borderBottom: 'none',
         fontSize: 10, color: 'var(--accent)', letterSpacing: '0.12em', fontWeight: 700,
       }}>
-        ◆ OPENCLAW 接入指南
+        ◆ OPENCLAW 一键接入
       </div>
 
       <div style={{
         padding: '16px', background: 'var(--bg-base)',
         border: '1px solid var(--accent-border)',
-        display: 'flex', flexDirection: 'column', gap: 16,
+        display: 'flex', flexDirection: 'column', gap: 14,
       }}>
 
         {/* Intro */}
         <div style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.7 }}>
-          把下面的连接指令交给外部 Agent，它就能通过网关收发 CyberGuard 消息。
+          复制下方一段提示词，粘贴到 OpenClaw 节点的对话窗口里。OpenClaw 会自动创建 skill、配置 heartbeat 并验证接入——你**无需手动建文件**。
         </div>
-        <div style={{ ...dimText }}>
-          API Key 已包含在连接指令中
-        </div>
-
-        {/* Key copy row — only show when we have the real key */}
-        {apiKey && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ ...dimText, flexShrink: 0 }}>复制 Key</div>
-            <div style={{
-              flex: 1, padding: '6px 10px',
-              background: 'rgba(0,255,65,0.06)', border: '1px solid var(--accent-border)',
-              fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent)',
-              letterSpacing: '0.03em', wordBreak: 'break-all',
-            }}>{apiKey}</div>
-            <button onClick={() => cp(apiKey, 'key')} style={{
-              padding: '6px 12px', border: '1px solid var(--accent-border)',
-              background: copied === 'key' ? 'var(--accent)' : 'transparent',
-              color: copied === 'key' ? '#000' : 'var(--accent)',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
-              fontSize: 10, letterSpacing: '0.1em', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap',
-            }}>
-              <Copy size={11} /> {copied === 'key' ? 'COPIED' : 'COPY KEY'}
-            </button>
-          </div>
-        )}
 
         {!apiKey && (
           <div style={{
-            ...dimText, padding: '8px 12px',
+            padding: '10px 12px',
             background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+            borderLeft: '3px solid #f59e0b',
+            display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
           }}>
-            API Key 将在创建 Agent 后出现（仅显示一次）。忘记保存可用卡片上的 <span style={{ color: 'var(--accent)' }}>REGEN KEY</span> 重新生成。
+            <div style={{ ...dimText, flex: 1, minWidth: 200 }}>
+              {onRequestKey
+                ? <>⚠ 提示词里的 Key 是占位符。点右侧按钮**重新签发** API Key（旧 Key 立即失效），新 Key 会自动塞进提示词。</>
+                : <>⚠ 当前提示词中的 API Key 是占位符。请先点击 <span style={{ color: 'var(--accent)' }}>DEPLOY AGENT</span> 生成真实 Key。</>}
+            </div>
+            {onRequestKey && (
+              <button
+                disabled={regenBusy}
+                onClick={async () => {
+                  if (!confirm('重新签发 API Key？旧 Key 立即失效，已部署的 OpenClaw 节点需要用新 Key 重新接入。')) return
+                  setRegenBusy(true)
+                  try { await onRequestKey() } finally { setRegenBusy(false) }
+                }}
+                style={{
+                  padding: '6px 12px', border: '1px solid var(--accent-border)',
+                  background: regenBusy ? 'var(--bg-base)' : 'var(--accent)',
+                  color: regenBusy ? 'var(--text-dim)' : '#000',
+                  cursor: regenBusy ? 'wait' : 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  fontSize: 10, letterSpacing: '0.1em', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap',
+                  fontWeight: 700,
+                }}>
+                {regenBusy ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Key size={11} />}
+                {regenBusy ? 'GENERATING…' : 'GENERATE NEW KEY'}
+              </button>
+            )}
           </div>
         )}
 
-        {/* Skill file block */}
-        <div>
-          <div style={{ ...dimText, marginBottom: 6 }}>
-            在 OpenClaw 节点上创建 <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>skills/cyberguard_sync.md</span>，内容如下：
-          </div>
-          <CodeBlock
-            text={skillFile}
-            onCopy={(t) => cp(t, 'skill')}
-            copied={copied === 'skill'}
-          />
-        </div>
+        {/* The single onboarding prompt */}
+        <CodeBlock
+          text={onboardingPrompt}
+          onCopy={(t) => cp(t, 'prompt')}
+          copied={copied === 'prompt'}
+        />
 
-        {/* Heartbeat instruction */}
-        <div>
-          <div style={{ ...dimText, marginBottom: 6 }}>
-            然后在 OpenClaw 的 <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>HEARTBEAT.md</span> 中加入：
-          </div>
-          <CodeBlock
-            text={heartbeatInstruction}
-            onCopy={(t) => cp(t, 'hb')}
-            copied={copied === 'hb'}
-          />
-        </div>
+        {/* Quick-copy bare key for users who only need the token */}
+        {apiKey && (
+          <details style={{ marginTop: 2 }}>
+            <summary style={{
+              ...dimText, cursor: 'pointer', userSelect: 'none',
+              listStyle: 'none', letterSpacing: '0.05em',
+            }}>
+              › 只需要 API Key（手动接入）
+            </summary>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+              <div style={{
+                flex: 1, padding: '6px 10px',
+                background: 'rgba(0,255,65,0.06)', border: '1px solid var(--accent-border)',
+                fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent)',
+                wordBreak: 'break-all',
+              }}>{apiKey}</div>
+              <button onClick={() => cp(apiKey, 'key')} style={{
+                padding: '6px 12px', border: '1px solid var(--accent-border)',
+                background: copied === 'key' ? 'var(--accent)' : 'transparent',
+                color: copied === 'key' ? '#000' : 'var(--accent)',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                fontSize: 10, letterSpacing: '0.1em', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap',
+              }}>
+                <Copy size={11} /> {copied === 'key' ? 'COPIED' : 'COPY KEY'}
+              </button>
+            </div>
+          </details>
+        )}
 
         {/* Online hint */}
         <div style={{
@@ -192,8 +239,7 @@ To stay marked as online:
           background: 'var(--bg-elevated)', border: '1px solid var(--border)',
           borderLeft: '3px solid var(--accent)',
         }}>
-          配置完成后，OpenClaw 节点每次运行 heartbeat 时会自动轮询 CyberGuard。
-          回到此页面刷新，Agent 卡片右上角显示 <span style={{ color: 'var(--accent)' }}>● ONLINE</span> 即接入成功。
+          粘贴后 OpenClaw 会回复 <span style={{ color: 'var(--accent)' }}>✅ 已接入 CyberGuard</span>。回到此页面刷新，Agent 卡片右上角出现 <span style={{ color: 'var(--accent)' }}>● ONLINE</span> 即接入成功。
         </div>
 
       </div>
@@ -577,7 +623,17 @@ export default function Agents() {
 
               {/* OpenClaw Guide */}
               {form.backend_type === 'openclaw' && (
-                <OpenClawGuide apiKey={createdApiKey || undefined} />
+                <OpenClawGuide
+                  apiKey={createdApiKey || undefined}
+                  onRequestKey={editing ? async () => {
+                    try {
+                      const res = await (api as any).regenAgentApiKey(editing) as { api_key?: string }
+                      if (res?.api_key) setCreatedApiKey(res.api_key)
+                    } catch (e: any) {
+                      alert(e?.message || '生成 Key 失败')
+                    }
+                  } : undefined}
+                />
               )}
 
             </div>
