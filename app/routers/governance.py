@@ -756,23 +756,25 @@ async def seed_governance_frameworks_on_startup() -> None:
             )).scalar_one_or_none()
 
             if existing:
-                # Framework already loaded — only backfill typical_evidence
-                # on rows that don't yet have one set.
+                # Framework already loaded — refresh typical_evidence to the
+                # latest canonical list. We always overwrite for BUILT-IN
+                # frameworks (matched in BUILT_IN_EVIDENCE_HINTS) so admins
+                # only need to redeploy to push checklist updates. Custom
+                # user-imported frameworks are unaffected because their urn
+                # is absent from this dict.
                 rows = (await session.execute(
                     select(Requirement).where(Requirement.framework_id == existing.id)
                 )).scalars().all()
-                filled = 0
+                changed = 0
                 for r in rows:
-                    if r.typical_evidence:
-                        continue
                     hints = evidence_map.get(r.ref_id)
-                    if hints:
+                    if hints and r.typical_evidence != hints:
                         r.typical_evidence = hints
-                        filled += 1
-                if filled:
+                        changed += 1
+                if changed:
                     await session.commit()
                     logger.info(
-                        f"Backfilled typical_evidence on {filled} rows of "
+                        f"Refreshed typical_evidence on {changed} rows of "
                         f"{existing.name}"
                     )
                 continue
