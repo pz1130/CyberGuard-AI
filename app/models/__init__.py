@@ -11,6 +11,7 @@ from app.models.backup import BackupRecord
 from app.models.approval import ApprovalRequest
 from app.models.token_usage import TokenUsageLog
 from app.models.webhook import Webhook
+from app.models.prompt_template import PromptTemplate
 
 __all__ = [
     "User", "RoleModel",
@@ -25,4 +26,5 @@ __all__ = [
     "ApprovalRequest",
     "TokenUsageLog",
     "Webhook",
+    "PromptTemplate",
 ]

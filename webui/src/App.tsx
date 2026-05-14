@@ -20,6 +20,7 @@ import Users from './pages/Users'
 import Settings from './pages/Settings'
 import N8N from './pages/N8N'
 import Webhooks from './pages/Webhooks'
+import Prompts from './pages/Prompts'
 import Login from './pages/Login'
 
 const PAGES: Record<Tab, { labelKey: string; component: React.ReactNode }> = {
@@ -40,6 +41,7 @@ const PAGES: Record<Tab, { labelKey: string; component: React.ReactNode }> = {
   settings: { labelKey: 'nav.settings', component: <Settings /> },
   n8n: { labelKey: 'nav.n8n', component: <N8N /> },
   webhooks: { labelKey: 'nav.webhooks', component: <Webhooks /> },
+  prompts: { labelKey: 'nav.prompts', component: <Prompts /> },
 }
 
 export default function App() {

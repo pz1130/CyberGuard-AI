@@ -45,7 +45,8 @@
     "users": "User Management",
     "settings": "Settings",
     "n8n": "N8N Workflows",
-    "webhooks": "Webhooks"
+    "webhooks": "Webhooks",
+    "prompts": "Prompt Templates"
   },
   "header": {
     "switchTheme": "Toggle theme",

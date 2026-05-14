@@ -41,6 +41,15 @@ interface KnowledgeBase {
   name: string
 }
 
+interface PromptTemplate {
+  id: number
+  name: string
+  description: string | null
+  content: string
+  category: 'system' | 'intent_parser' | 'summarizer' | 'general'
+  is_active: boolean
+}
+
 interface ProviderModel {
   provider_id: number
   provider_name: string
@@ -121,6 +130,8 @@ export default function Chat() {
     knowledge_base_id: null as number | null,
   })
   const [availableKBs, setAvailableKBs] = useState<KnowledgeBase[]>([])
+  const [promptTemplates, setPromptTemplates] = useState<PromptTemplate[]>([])
+  const autoCreateGuardRef = useRef(false)
 
   const [attachments, setAttachments] = useState<AttachmentFile[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -141,7 +152,31 @@ export default function Chat() {
     loadConversations()
     loadKnowledgeBases()
     loadAvailableAgents()
+    loadPromptTemplates()
   }, [])
+
+  // Auto-create a new conversation when entering Chat without an active one.
+  // The guard ref prevents creating multiple if React re-runs in StrictMode
+  // or if user switches conversations after mount.
+  useEffect(() => {
+    if (autoCreateGuardRef.current) return
+    // Don't auto-create if we're resuming a task from a previous session
+    if (localStorage.getItem('activeChatTaskId')) return
+    if (activeConvId != null) {
+      autoCreateGuardRef.current = true
+      return
+    }
+    autoCreateGuardRef.current = true
+    createConversation()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const loadPromptTemplates = async () => {
+    try {
+      const data = await api.getPromptTemplates() as PromptTemplate[]
+      setPromptTemplates((data || []).filter(t => t.is_active))
+    } catch { setPromptTemplates([]) }
+  }
 
   // Load registered sub-agents for the selector
   const loadAvailableAgents = async () => {
@@ -672,12 +707,71 @@ export default function Chat() {
               </select>
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <div style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 8 }}>CUSTOM SYSTEM PROMPT</div>
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                marginBottom: 8, gap: 12,
+              }}>
+                <div style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--text-muted)' }}>CUSTOM SYSTEM PROMPT</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 9, letterSpacing: '0.15em', color: 'var(--text-dim)' }}>TEMPLATE</span>
+                  <select
+                    value=""
+                    onChange={e => {
+                      const id = e.target.value
+                      if (!id) return
+                      const tpl = promptTemplates.find(t => String(t.id) === id)
+                      if (!tpl) return
+                      // If the textarea is non-empty, ask before overwriting
+                      if (convSettings.system_prompt_override.trim() &&
+                          !confirm('Replace current system prompt with template "' + tpl.name + '"?')) {
+                        e.target.value = ''
+                        return
+                      }
+                      setConvSettings(s => ({ ...s, system_prompt_override: tpl.content }))
+                      e.target.value = ''
+                    }}
+                    title={promptTemplates.length === 0 ? 'No templates — create one under Prompt Templates' : 'Pick a saved prompt template'}
+                    style={{
+                      height: 24, padding: '0 8px',
+                      background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+                      color: 'var(--text-primary)', fontSize: 10, fontFamily: 'var(--font-mono)',
+                      minWidth: 180,
+                    }}
+                  >
+                    <option value="">— Select template —</option>
+                    {/* Show "system" + "general" first as they're most relevant for a system prompt */}
+                    {promptTemplates
+                      .filter(t => t.category === 'system' || t.category === 'general')
+                      .map(t => (
+                        <option key={t.id} value={t.id}>{t.name}{t.category === 'general' ? ' (general)' : ''}</option>
+                      ))}
+                    {promptTemplates.filter(t => t.category !== 'system' && t.category !== 'general').length > 0 && (
+                      <optgroup label="Other categories">
+                        {promptTemplates
+                          .filter(t => t.category !== 'system' && t.category !== 'general')
+                          .map(t => (
+                            <option key={t.id} value={t.id}>{t.name} ({t.category})</option>
+                          ))}
+                      </optgroup>
+                    )}
+                  </select>
+                  {convSettings.system_prompt_override && (
+                    <button
+                      onClick={() => setConvSettings(s => ({ ...s, system_prompt_override: '' }))}
+                      title="Clear"
+                      style={{
+                        height: 24, padding: '0 8px', fontSize: 9, letterSpacing: '0.1em',
+                        background: 'transparent', border: '1px solid var(--border-bright)',
+                        color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'var(--font-mono)',
+                      }}>CLEAR</button>
+                  )}
+                </div>
+              </div>
               <textarea
                 value={convSettings.system_prompt_override}
                 onChange={e => setConvSettings(s => ({ ...s, system_prompt_override: e.target.value }))}
                 rows={3}
-                placeholder="Leave empty to use global default"
+                placeholder="Leave empty to use global default. Pick a saved template from the dropdown above, or type your own."
                 style={{
                   width: '100%', padding: '8px 10px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',

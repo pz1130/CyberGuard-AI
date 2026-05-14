@@ -261,6 +261,27 @@ export const api = {
   generateN8NWorkflow: (body: { description: string; connection_id?: number }) =>
     request('/n8n/workflows/generate', { method: 'POST', body: JSON.stringify(body) }),
 
+  // ---- Prompt Templates ----
+  getPromptTemplates: (category?: string) =>
+    request(category ? `/prompt-templates?category=${encodeURIComponent(category)}` : '/prompt-templates'),
+  getPromptTemplate: (id: number) => request(`/prompt-templates/${id}`),
+  createPromptTemplate: (body: {
+    name: string
+    description?: string
+    content: string
+    category?: 'system' | 'intent_parser' | 'summarizer' | 'general'
+    is_active?: boolean
+  }) => request('/prompt-templates', { method: 'POST', body: JSON.stringify(body) }),
+  updatePromptTemplate: (id: number, body: {
+    name?: string
+    description?: string
+    content?: string
+    category?: 'system' | 'intent_parser' | 'summarizer' | 'general'
+    is_active?: boolean
+  }) => request(`/prompt-templates/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deletePromptTemplate: (id: number) =>
+    request(`/prompt-templates/${id}`, { method: 'DELETE' }),
+
   // ---- Webhooks ----
   getWebhooks: () => request('/webhooks'),
   createWebhook: (body: {

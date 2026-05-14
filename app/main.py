@@ -97,6 +97,15 @@ async def lifespan(app: FastAPI):
             logger.info("Preset providers seeded")
         except Exception as e:
             logger.warning(f"Provider seed skipped: {e}")
+
+    # Seed default prompt templates (dev and prod — idempotent by name).
+    # Runs after migrations so the table exists.
+    try:
+        from app.routers.prompt_templates import seed_prompt_templates_on_startup
+        await seed_prompt_templates_on_startup()
+    except Exception as e:
+        logger.warning(f"Prompt-template seed skipped: {e}")
+
     yield
     # Shutdown
     await engine.dispose()
@@ -205,7 +214,7 @@ async def startup_probe():
 # ---------------------------------------------------------------------------
 # Routers (imported here to avoid circular imports)
 # ---------------------------------------------------------------------------
-from app.routers import auth, users, agents, skills, knowledge, chat, tasks, groupchat, schedule, audit, backup, config, providers, mcp, envvars, approval, token_usage, master_config, conversations, n8n, webhooks
+from app.routers import auth, users, agents, skills, knowledge, chat, tasks, groupchat, schedule, audit, backup, config, providers, mcp, envvars, approval, token_usage, master_config, conversations, n8n, webhooks, prompt_templates
 from app.routers import chat_stream, gateway
 
 app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
@@ -232,6 +241,7 @@ app.include_router(gateway.router, prefix="/api/v1", tags=["OpenClaw Gateway"])
 
 app.include_router(groupchat.router, prefix="/api/v1", tags=["Group Chat"])
 app.include_router(webhooks.router, prefix="/api/v1", tags=["Webhooks"])
+app.include_router(prompt_templates.router, prefix="/api/v1", tags=["Prompt Templates"])
 
 
 # ---------------------------------------------------------------------------
