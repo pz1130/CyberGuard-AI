@@ -486,11 +486,34 @@ async def delete_evidence(
 # AI endpoints
 # ---------------------------------------------------------------------------
 
-async def _llm_complete(messages: list[dict]) -> str:
-    """Call the master LLM router with a system + user prompt."""
+async def _resolve_default_provider_id(db: AsyncSession) -> int | None:
+    """Find the first active provider with an API key configured.
+
+    Falls back to None — llm_router will then use its in-memory default,
+    which may also fail if nothing is configured.
+    """
+    from app.models.provider import Provider
+    result = await db.execute(
+        select(Provider.id)
+        .where(Provider.is_active.is_(True))
+        .order_by(Provider.id)
+        .limit(1)
+    )
+    row = result.first()
+    return row[0] if row else None
+
+
+async def _llm_complete(messages: list[dict], db: AsyncSession) -> str:
+    """Call the master LLM router using the first active DB provider."""
     from app.services.llm_router import get_llm_router
     router_ = get_llm_router()
-    return await router_.chat(messages=messages)
+    provider_id = await _resolve_default_provider_id(db)
+    if provider_id is None:
+        raise HTTPException(
+            503,
+            "No active AI provider configured. Add one under Providers first."
+        )
+    return await router_.chat(messages=messages, provider_id=provider_id)
 
 
 def _extract_json(text: str) -> dict | None:
@@ -538,7 +561,7 @@ async def ai_suggest_evidence(
     text = await _llm_complete([
         {"role": "system", "content": system},
         {"role": "user", "content": user},
-    ])
+    ], db)
     data = _extract_json(text) or {}
     suggestions = data.get("suggestions") or []
     # Fallback: line-split if JSON parse failed
@@ -601,7 +624,7 @@ async def ai_assess(
     text = await _llm_complete([
         {"role": "system", "content": system},
         {"role": "user", "content": user},
-    ])
+    ], db)
     data = _extract_json(text)
     if not data or "status" not in data:
         raise HTTPException(502, f"LLM did not return parseable JSON. Raw: {text[:400]}")
@@ -706,7 +729,7 @@ async def ai_report(
     md = await _llm_complete([
         {"role": "system", "content": system},
         {"role": "user", "content": user},
-    ])
+    ], db)
     return AIReportResponse(assessment_id=asmt_id, markdown=md.strip())
 
 
