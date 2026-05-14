@@ -15,7 +15,7 @@ Hierarchy:
 """
 from datetime import datetime
 from sqlalchemy import (
-    Column, Integer, String, Text, Boolean, DateTime, ForeignKey,
+    Column, Integer, String, Text, Boolean, DateTime, ForeignKey, JSON,
     CheckConstraint, UniqueConstraint, Index,
 )
 from sqlalchemy.orm import relationship
@@ -63,6 +63,9 @@ class Requirement(Base):
     depth = Column(Integer, nullable=False, default=0)
     order_index = Column(Integer, nullable=False, default=0)
     is_assessable = Column(Boolean, nullable=False, default=True)  # categories may be non-assessable
+    # Canonical, framework-version-stable evidence checklist (list[str]).
+    # Shown verbatim in the UI alongside (but separate from) AI suggestions.
+    typical_evidence = Column(JSON, nullable=True)
 
     framework = relationship("Framework", back_populates="requirements")
     parent = relationship("Requirement", remote_side="Requirement.id", backref="children")

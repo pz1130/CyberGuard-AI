@@ -162,6 +162,7 @@ async def import_framework(
             depth=0,
             order_index=idx,
             is_assessable=item.is_assessable,
+            typical_evidence=item.typical_evidence,
         )
         by_ref[item.ref_id] = r
         db.add(r)
@@ -738,18 +739,42 @@ async def ai_report(
 # ---------------------------------------------------------------------------
 
 async def seed_governance_frameworks_on_startup() -> None:
-    """Insert built-in frameworks (ISO 27001:2022, NIST CSF 2.0) if missing.
+    """Insert built-in frameworks (ISO 27001:2022, NIST CSF 2.0) if missing,
+    and backfill typical_evidence for previously-seeded requirements.
 
-    Idempotent — matched by urn. User edits are never overwritten.
+    Idempotent — matched by urn / ref_id. User edits are never overwritten:
+    we only fill typical_evidence rows whose column is NULL.
     """
     from app.services.governance_seeds import BUILT_IN_FRAMEWORKS
+    from app.services.governance_evidence_hints import BUILT_IN_EVIDENCE_HINTS
 
     async with get_db_context() as session:
         for seed in BUILT_IN_FRAMEWORKS:
+            evidence_map = BUILT_IN_EVIDENCE_HINTS.get(seed["urn"], {})
             existing = (await session.execute(
                 select(Framework).where(Framework.urn == seed["urn"])
             )).scalar_one_or_none()
+
             if existing:
+                # Framework already loaded — only backfill typical_evidence
+                # on rows that don't yet have one set.
+                rows = (await session.execute(
+                    select(Requirement).where(Requirement.framework_id == existing.id)
+                )).scalars().all()
+                filled = 0
+                for r in rows:
+                    if r.typical_evidence:
+                        continue
+                    hints = evidence_map.get(r.ref_id)
+                    if hints:
+                        r.typical_evidence = hints
+                        filled += 1
+                if filled:
+                    await session.commit()
+                    logger.info(
+                        f"Backfilled typical_evidence on {filled} rows of "
+                        f"{existing.name}"
+                    )
                 continue
 
             fw = Framework(
@@ -771,6 +796,7 @@ async def seed_governance_frameworks_on_startup() -> None:
                     depth=0,
                     order_index=idx,
                     is_assessable=item.get("is_assessable", True),
+                    typical_evidence=evidence_map.get(item["ref_id"]) or item.get("typical_evidence"),
                 )
                 by_ref[item["ref_id"]] = r
                 session.add(r)

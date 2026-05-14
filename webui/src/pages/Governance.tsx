@@ -30,6 +30,7 @@ interface Requirement {
   depth: number
   order_index: number
   is_assessable: boolean
+  typical_evidence: string[] | null
 }
 
 interface Evidence {
@@ -617,6 +618,43 @@ function RequirementRow({
             <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, marginTop: 10 }}>{req.description}</div>
           )}
 
+          {/* Standard evidence checklist (from framework definition) */}
+          {req.typical_evidence && req.typical_evidence.length > 0 && (
+            <div style={{ padding: '8px 10px', border: '1px solid var(--border-bright)', background: 'var(--bg-base)' }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                marginBottom: 6,
+              }}>
+                <span style={{ fontSize: 10, letterSpacing: '0.15em', color: 'var(--text-muted)' }}>
+                  ◆ STANDARD EVIDENCE CHECKLIST
+                </span>
+                <span style={{ fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>
+                  FROM FRAMEWORK
+                </span>
+              </div>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.7 }}>
+                {req.typical_evidence.map((s, i) => (
+                  <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: 2 }}>
+                    <span style={{ flex: 1 }}>{s}</span>
+                    <button
+                      onClick={() => {
+                        setNewEvidence({ name: s.slice(0, 80), body: '', kind: 'text', url: '' })
+                        setAddingEv(true)
+                      }}
+                      title="Pre-fill 'Add evidence' with this item"
+                      style={{
+                        padding: '0 6px', fontSize: 9, letterSpacing: '0.1em',
+                        background: 'transparent', border: '1px solid var(--border-bright)',
+                        color: 'var(--text-dim)', cursor: 'pointer', fontFamily: 'var(--font-mono)',
+                        height: 18, flexShrink: 0,
+                      }}
+                    >USE</button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* Status / observation editor */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
             <span style={{ fontSize: 9, letterSpacing: '0.15em', color: 'var(--text-dim)' }}>STATUS</span>
@@ -664,8 +702,9 @@ function RequirementRow({
             <Wand2 size={12} style={{ color: 'var(--accent)' }} />
             <span style={{ fontSize: 10, color: 'var(--accent)', letterSpacing: '0.1em' }}>AI</span>
             <button onClick={aiSuggest} disabled={aiLoading !== null}
+              title="Ask the LLM for additional, context-aware evidence ideas beyond the standard checklist above"
               style={{ ...ghostButton(), opacity: aiLoading ? 0.5 : 1 }}>
-              {aiLoading === 'suggest' ? 'THINKING...' : 'SUGGEST EVIDENCE'}
+              {aiLoading === 'suggest' ? 'THINKING...' : 'AI: MORE IDEAS'}
             </button>
             <button onClick={() => aiAssess(false)} disabled={aiLoading !== null}
               style={{ ...ghostButton(), opacity: aiLoading ? 0.5 : 1 }}>
@@ -678,8 +717,8 @@ function RequirementRow({
           </div>
 
           {suggestions.length > 0 && (
-            <div style={{ padding: '8px 10px', border: '1px solid var(--border)', background: 'var(--bg-base)' }}>
-              <div style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--text-dim)', marginBottom: 6 }}>SUGGESTED EVIDENCE</div>
+            <div style={{ padding: '8px 10px', border: '1px solid var(--accent-border)', background: 'var(--bg-base)' }}>
+              <div style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--accent)', marginBottom: 6 }}>◆ AI-GENERATED SUGGESTIONS (CONTEXT-AWARE)</div>
               <ul style={{ margin: 0, paddingLeft: 18, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.7 }}>
                 {suggestions.map((s, i) => <li key={i}>{s}</li>)}
               </ul>

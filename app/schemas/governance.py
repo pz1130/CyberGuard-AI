@@ -19,6 +19,7 @@ class RequirementRead(BaseModel):
     depth: int
     order_index: int
     is_assessable: bool
+    typical_evidence: list[str] | None = None
 
     class Config:
         from_attributes = True
@@ -51,6 +52,7 @@ class FrameworkImportRequirement(BaseModel):
     description: str | None = None
     parent_ref_id: str | None = None
     is_assessable: bool = True
+    typical_evidence: list[str] | None = None
 
 
 class FrameworkImport(BaseModel):
