@@ -1,6 +1,8 @@
 # 实施路线图（优先级与里程碑）
 
-> **状态更新（2026-05-09）**: 下方里程碑 1-4 均已完成。Milestone 5 进行中。
+> **状态更新（2026-05-14）**: 下方里程碑 1-4 均已完成。Milestone 5 进行中。
+> 2026-05 期间额外新增三大模块：Prompt 模板库、双向 Webhook、治理合规（GRC），
+> 详见文末"已超出原始路线图的额外功能"小节。
 
 ## Milestone 1 - MVP 基础框架 ✅ 已完成
 - [x] WebUI 自研 React/Vite/TypeScript 应用 + 所有 Tab 布局（16 个）
@@ -64,3 +66,9 @@
 | AUTO_APPROVE | 开发/测试环境跳过 Human-in-the-Loop |
 | 对话历史持久化 | Conversations CRUD API + WebUI |
 | Provider 预置种子数据 | 生产启动时自动填充默认 Provider 配置 |
+| Prompt 模板库 | 系统 prompt 复用，9 条 cyber-ops 默认模板，Chat 下拉填入（migration 007） |
+| 双向 Webhook | Incoming token+SHA256 / Outgoing HMAC-SHA256 / 订阅 `approval.required` 等事件（migration 006） |
+| 治理 / GRC 模块 | Framework + Requirement 树 + ComplianceAssessment + Evidence；预置 ISO 27001 + NIST CSF 2.0；AI 建议证据 / 判定状态 / 生成审计报告（migration 008-009） |
+| pgvector 知识库 | 替换原 in-process cosine 相似度搜索；按 KB 配置 1536 / 3072 维（migration 003-004） |
+| PDF / DOCX 文档摄取 | 知识库自动解析多种文档格式上传 |
+| OpenClaw 单 prompt 上线 | sub-agent 上线流程简化为单 prompt 加 key 旋转 |

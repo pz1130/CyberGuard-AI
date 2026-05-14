@@ -4,20 +4,24 @@
 - **System Name**: CyberGuard AI Agent Platform (CG-AAP)
 - **Purpose**: A secure, controllable and extensible multi-agent AI system for company cybersecurity operations, threat hunting, incident response and policy making.
 - **Core Architecture**: Master Agent orchestration + Sub-Agent execution + WebUI centralized management
-- **Key Features**: RBAC, Human-in-the-Loop approval workflow, AES-256 encryption, full audit trail, real-time group chat, scheduled tasks (Celery), Skill/Tool Pool, RAG Knowledge Base, N8N workflow integration, prompt injection guardrails, Redis rate limiting, OpenTelemetry tracing
+- **Key Features**: RBAC, Human-in-the-Loop approval workflow, AES-256 encryption, full audit trail, multi-agent group chat, scheduled tasks (Celery), Skill/Tool Pool, RAG Knowledge Base (pgvector), Prompt template library, N8N workflow integration, Bi-directional Webhooks (HMAC), Governance/GRC module (ISO 27001 + NIST CSF seeded, AI-assisted audits), prompt injection guardrails, Redis rate limiting, OpenTelemetry tracing
 - **User Scale**: ≤5 concurrent users, configurable Sub-Agents
 
 ## 2. High-Level Architecture
 ```
-User → WebUI (Custom React/Vite/TypeScript)
-  → FastAPI Backend (REST + WebSocket)
+User → WebUI (Custom React/Vite/TypeScript, 19 modules)
+  → FastAPI Backend (REST + SSE; legacy WebSocket removed in 2026-05)
     → Master Agent (LangGraph StateGraph)
-      → Redis (Celery task queue + WebSocket pub/sub + rate limiting + JWT blacklist)
-      → PostgreSQL (all persistent state, AES-256 encrypted secrets)
+      → Redis (Celery broker + group-chat session store + rate limiting + JWT blacklist)
+      → PostgreSQL + pgvector (all persistent state, AES-256 encrypted secrets, vector search)
       → Sub-Agents (configurable: remote via HTTP endpoint, or local LLM fallback)
-      → LLM Router (OpenAI-compatible API, any provider)
-    → Knowledge Base (embedding via LLM Router + vector similarity search)
+      → LLM Router (OpenAI-compatible API, any provider, DB-stored configs)
+    → Knowledge Base (pgvector embedding, per-KB 1536/3072-dim columns)
+    → Prompt Template Library (reusable system prompts selectable per conversation)
     → N8N Integration (workflow generation + management via N8N REST API)
+    → Webhooks (incoming HMAC-validated → Master Agent; outgoing event subscriptions)
+    → Governance / GRC (Frameworks → Requirements → Assessments → Evidence,
+                         AI suggests evidence / judges compliance / drafts reports)
     → OpenTelemetry (optional OTLP tracing of HTTP, LLM, DB, Celery)
 ```
 
@@ -30,6 +34,9 @@ User → WebUI (Custom React/Vite/TypeScript)
 - **Skill/Tool Pool**: Both Skills and Tools are stored in PostgreSQL with Markdown content, version, permission level, and approval flag. Managed from the Skills tab in WebUI.
 - **Knowledge Base**: Documents stored in PostgreSQL. Embedding via LLM Router's `/embeddings` endpoint (OpenAI-compatible). Similarity search done in-process (cosine similarity over stored vectors).
 - **N8N Integration**: CRUD for N8N workflow configurations, LLM-generated workflow JSON from natural language, and direct N8N REST API management (list/create/update/delete workflows).
+- **Webhooks**: Bi-directional. Incoming = external service POSTs to `/api/v1/webhooks/incoming/{token}` and the payload is dispatched to the Master Agent (token SHA-256 hashed in DB). Outgoing = CyberGuard fires HTTPS POSTs to subscriber URLs on subscribed events (e.g. `approval.required`); optional HMAC-SHA256 secret produces `X-CyberGuard-Signature: sha256=…` header.
+- **Prompt Templates**: User-defined reusable system prompts categorised as `system` / `intent_parser` / `summarizer` / `general`. Selectable from the chat "CUSTOM SYSTEM PROMPT" panel. Seeded with cyber-ops defaults (Pentest Auditor, Threat Hunter, SOC L2, IR Coordinator, Vuln Triage, Compliance Reviewer, Secure Code Reviewer, …).
+- **Governance / GRC**: Inspired by intuitem/ciso-assistant-community. Five tables: `gov_frameworks → gov_requirements (tree) → gov_assessments → gov_requirement_assessments → gov_evidences`. Seeded with ISO/IEC 27001:2022 Annex A (93 controls) and NIST CSF 2.0 (~106 subcategories), each with a canonical 5-8-item `typical_evidence` checklist. AI endpoints (`ai-suggest-evidence`, `ai-assess`, `ai-report`) leverage the master LLM Router for context-aware audit assistance.
 - **Celery Workers**: Background task execution using Celery with Redis as broker and result backend.
 - **Other Modules**: Scheduled Tasks (Celery-based), MCP server management, Environment Variables (AES-256 encrypted in DB), Security/RBAC, Token Usage monitoring, Backup (local), Audit Log (full chain, exportable), User Management (RBAC), Conversation History, Human-in-the-Loop Approval, Master Agent Config, Prompt Injection Guardrails, Redis Rate Limiting, OpenTelemetry Tracing.
 
@@ -64,6 +71,19 @@ mcp_servers (id, name, transport_type, command, args, env_vars_encrypted, url, a
 mcp_tools (id, server_id, tool_name, description, input_schema_json, required_permission, ...)
 env_vars (id, key, value_encrypted, value_type, description, is_active, ...)
 token_usage_logs (id, provider_id, provider_name, model_name, prompt_tokens, completion_tokens, total_tokens, call_count, date_str, ...)
+webhooks (id, name, direction, description, is_active, incoming_token_hash,
+          outgoing_url, outgoing_secret_encrypted, outgoing_events, last_triggered_at,
+          trigger_count, success_count, failure_count, last_error, ...)
+prompt_templates (id, name, description, content, category, is_active, ...)
+gov_frameworks (id, urn, name, version, description, locale, ref_url, is_active, ...)
+gov_requirements (id, framework_id, parent_id, urn, ref_id, name, description,
+                  depth, order_index, is_assessable, typical_evidence, ...)
+gov_assessments (id, name, description, framework_id, scope, status, start_date,
+                 due_date, owner_user_id, ...)
+gov_requirement_assessments (id, assessment_id, requirement_id, status, score,
+                             observation, ai_recommendation, ai_assessed_at, ...)
+gov_evidences (id, requirement_assessment_id, name, description, kind, file_path,
+               url, body, mime_type, size_bytes, uploaded_by_user_id, uploaded_at)
 ```
 Additional tables (created at runtime by models): `approval_requests`, `schedules`, `conversations`, `n8n_configs`, `master_agent_config`, `backups`. (The legacy `groupchat_rooms` / `groupchat_messages` tables were dropped in migration 005 when the human room chat feature was removed; multi-agent group chat sessions persist in Redis only.)
 
@@ -73,6 +93,9 @@ Additional tables (created at runtime by models): `approval_requests`, `schedule
 - **High-Risk / Human-in-the-Loop**: Agent execution flags `needs_approval` or output contains risk keywords → `ApprovalRequest` created in DB → admin decides via REST/WebUI → execution resumes or aborts
 - **Scheduled Tasks**: Celery beat + Redis; tasks run in worker process; email notification on completion (if configured)
 - **N8N Workflow Generation**: User describes goal in natural language → LLM generates N8N workflow JSON → optionally auto-deployed to connected N8N instance
+- **Incoming Webhook**: External system POSTs to `/api/v1/webhooks/incoming/{token}` → token lookup by SHA-256 hash → payload normalised → forwarded to Master Agent as a chat message → response (if any) emitted via outgoing webhook subscriber
+- **Outgoing Webhook**: Internal event (e.g. `approval.required` raised during a high-risk agent execution) → matching outgoing webhooks queried → each fired in parallel with HMAC-SHA256 signature + retry on 5xx → counters and `last_error` persisted on the row
+- **Compliance Assessment**: Operator selects a Framework → `POST /governance/assessments` auto-creates one `RequirementAssessment` per assessable requirement → operator (or AI) attaches Evidence and sets status → `POST /governance/assessments/{id}/ai-report` calls master LLM with collected findings → markdown audit report returned
 
 ## 8. Non-Functional Requirements
 - **Deployment**: Docker Compose (single node) + Kubernetes manifests available (`k8s/`)

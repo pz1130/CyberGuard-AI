@@ -9,10 +9,10 @@
 - **API 客户端**: `src/api/client.ts`（axios 封装，自动携带 JWT）
 - **WebSocket**: 原生 WebSocket（群聊）
 
-## 左侧边栏 Tab（实际实现，共 16 个）
+## 左侧边栏 Tab（实际实现，共 19 个）
 
 ### CORE 分组
-1. **聊天**（Chat）— 与 Master Agent 对话，支持选择 Provider/Model
+1. **聊天**（Chat）— 与 Master Agent 对话；进入时自动建空会话；支持 Mode (NORMAL/FAST/EXPERT)、Provider/Model 切换、CUSTOM SYSTEM PROMPT + 模板下拉、附件上传
 
 ### AGENTS 分组
 2. **Sub-Agent 管理**（Agents）— 创建/编辑/删除 Sub-Agent 配置
@@ -20,20 +20,23 @@
 
 ### FEATURES 分组
 4. **Skill Pool**（Skills）— Skill + Tool Pool 统一管理，Markdown 内容编辑
-5. **知识库**（Knowledge）— 上传文档、向量搜索
-6. **群聊室**（Group Chat）— 实时多 Agent 讨论（WebSocket）
-7. **N8N**（N8N）— N8N 工作流管理 + LLM 生成工作流
+5. **Prompt 模板**（Prompts）— 预定义可复用 system prompt，按 category 过滤，Chat 可一键填入
+6. **知识库**（Knowledge）— 上传文档、pgvector 相似度搜索（每 KB 维度 1536 / 3072）
+7. **群聊室**（Group Chat）— 多 Agent 圆桌讨论（REST + Redis 会话）
+8. **N8N**（N8N）— N8N 工作流管理 + LLM 生成工作流
+9. **Webhook**（Webhooks）— 双向 webhook 管理（incoming token + outgoing HMAC）
+10. **治理合规**（Governance）— GRC：框架库 / 审计实例 / 要求树 / 证据 / AI 辅助评估 + 报告
 
 ### OPS 分组
-8. **定时任务**（Schedule）— Celery 定时任务管理
-9. **MCP**（MCP）— MCP Server 管理和工具发现
-10. **环境变量**（Env Vars）— AES-256 加密的环境变量管理
-11. **安全**（Security）— RBAC 与安全配置
-12. **Token 消耗**（Token Usage）— 按 Provider/Model/日期统计
-13. **备份**（Backup）— 本地备份下载管理
-14. **审计日志**（Audit Logs）— 完整操作记录查询
-15. **用户管理**（Users）— RBAC 用户管理
-16. **设置**（Settings）— Master Agent 配置（model/temperature/prompt）
+11. **定时任务**（Schedule）— Celery 定时任务管理
+12. **MCP**（MCP）— MCP Server 管理和工具发现
+13. **环境变量**（Env Vars）— AES-256 加密的环境变量管理
+14. **安全**（Security）— RBAC 与安全配置
+15. **Token 消耗**（Token Usage）— 按 Provider/Model/日期统计
+16. **备份**（Backup）— 本地备份下载管理
+17. **审计日志**（Audit Logs）— 完整操作记录查询
+18. **用户管理**（Users）— RBAC 用户管理
+19. **设置**（Settings）— Master Agent 配置（model/temperature/prompt）
 
 > **注意**: 没有独立的 "Tool Pool" Tab——Skills 和 Tools 在同一个 Skills 页面中通过类型筛选区分。
 
@@ -80,6 +83,29 @@
 - N8N 实例配置管理（地址 + API Key）
 - 自然语言描述 → 点击"生成工作流" → LLM 返回 JSON，可直接部署到 N8N
 - 列出/启用/删除已有工作流
+
+### Prompt 模板（Prompts.tsx）
+- 卡片网格列出所有可激活模板，按 category 过滤
+- 点 NEW TEMPLATE 弹窗填写 name / description / content / category（system / intent_parser / summarizer / general）
+- 复制按钮一键复制 content；is_active 开关控制是否在 Chat 下拉里显示
+
+### Webhook（Webhooks.tsx）
+- INCOMING：创建后弹出明文 token（只显示一次），后续只看 SHA-256 hash
+- OUTGOING：填 URL + 可选 HMAC secret + 订阅 event 列表（如 `approval.required`）
+- 每条 webhook 显示 trigger / success / failure 计数 + 最近一次错误
+
+### 治理合规（Governance.tsx）
+- **ASSESSMENTS** 标签：列表显示 progress bar（compliant / partial / non / NA 多色分段）
+- **FRAMEWORKS** 标签：内置 ISO 27001:2022 / NIST CSF 2.0，可导入自定义 JSON
+- 创建审计时按 framework 自动展开所有可评估 requirement
+- 展开 requirement 行：
+  1. 描述
+  2. **◆ STANDARD EVIDENCE CHECKLIST** — 框架预置 5-8 条典型证据，每条带 USE 按钮一键填入"添加证据"表单
+  3. 状态 / score (0-100) / observation 编辑器
+  4. AI 按钮：MORE IDEAS（LLM 补充） / ASSESS (PREVIEW) / ASSESS & APPLY
+  5. AI-GENERATED SUGGESTIONS（绿色边框区别于标准清单）
+  6. 现有证据列表（kind ∈ text/url/file）
+- Assessment 顶部 AI REPORT 按钮：生成 markdown 审计报告，弹窗可复制
 
 ### Human-in-the-Loop（触发时弹窗）
 - 高危操作触发时，弹出审批弹窗（从 `/api/v1/approvals` 轮询）

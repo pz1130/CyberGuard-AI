@@ -74,6 +74,29 @@ master_agent_config (id, model, temperature, system_prompt, intent_parser_prompt
 
 -- 备份记录
 backups (id, filename, file_path, file_size, backup_type, status, created_by, created_at)
+
+-- Webhook（双向，migration 006）
+webhooks (id, name, direction, description, is_active,
+          incoming_token_hash, outgoing_url, outgoing_secret_encrypted, outgoing_events,
+          last_triggered_at, trigger_count, success_count, failure_count, last_error,
+          created_at, updated_at)
+
+-- Prompt 模板库（migration 007）
+prompt_templates (id, name, description, content, category, is_active,
+                  created_at, updated_at)
+
+-- 治理 / GRC（migration 008-009，灵感来自 ciso-assistant-community）
+gov_frameworks (id, urn, name, version, description, locale, ref_url, is_active,
+                created_at, updated_at)
+gov_requirements (id, framework_id, parent_id, urn, ref_id, name, description,
+                  depth, order_index, is_assessable, typical_evidence)
+gov_assessments (id, name, description, framework_id, scope, status, start_date,
+                 due_date, owner_user_id, created_at, updated_at)
+gov_requirement_assessments (id, assessment_id, requirement_id, status, score,
+                              observation, ai_recommendation, ai_assessed_at,
+                              updated_at, updated_by_user_id)
+gov_evidences (id, requirement_assessment_id, name, description, kind, file_path,
+               url, body, mime_type, size_bytes, uploaded_by_user_id, uploaded_at)
 ```
 
 ## 2. REST API 端点（所有路径前缀 `/api/v1`）
@@ -244,6 +267,62 @@ POST   /api/v1/n8n/generate     → LLM 生成 N8N 工作流 JSON（不自动部
 GET /api/v1/tasks               → Celery 任务状态列表
 GET /api/v1/tasks/{task_id}     → 获取任务状态
 ```
+
+### Prompt 模板库（migration 007）
+```
+GET    /api/v1/prompt-templates             → 列表（可按 ?category= 过滤）
+POST   /api/v1/prompt-templates             → 创建
+GET    /api/v1/prompt-templates/{id}        → 获取
+PUT    /api/v1/prompt-templates/{id}        → 更新
+DELETE /api/v1/prompt-templates/{id}        → 删除
+```
+category ∈ {`system`, `intent_parser`, `summarizer`, `general`}。启动时按 name 幂等
+seed 9 条常用模板（Pentest Auditor、SOC L2、IR Coordinator、Vuln Triage 等）。
+
+### Webhook（双向，migration 006）
+```
+GET    /api/v1/webhooks                       → Webhook 列表
+POST   /api/v1/webhooks                       → 创建（direction=incoming|outgoing）
+PUT    /api/v1/webhooks/{id}                  → 更新
+DELETE /api/v1/webhooks/{id}                  → 删除
+POST   /api/v1/webhooks/{id}/regenerate-token → 重置 incoming token（仅 incoming）
+POST   /api/v1/webhooks/{id}/test             → 触发一次测试 POST（仅 outgoing）
+POST   /api/v1/webhooks/incoming/{token}      → 公网接收端（无需鉴权，按 token hash 查表）
+```
+- Incoming: token 仅在创建/regenerate 时明文返回一次；DB 中存 SHA-256 hash
+- Outgoing: 订阅 `outgoing_events` (e.g. `["approval.required"]`)，事件触发时并发 POST 到 `outgoing_url`，可选 HMAC-SHA256 `X-CyberGuard-Signature` 头
+- 内置事件：`approval.required`（高危操作创建 ApprovalRequest 时触发）
+
+### 治理 / GRC（migration 008-009）
+```
+# Frameworks（控制目录）
+GET    /api/v1/governance/frameworks                       → 列表
+GET    /api/v1/governance/frameworks/{id}                  → 详情（含 requirements）
+GET    /api/v1/governance/frameworks/{id}/requirements     → 要求清单
+POST   /api/v1/governance/frameworks/import                → 导入 JSON 格式自定义框架
+DELETE /api/v1/governance/frameworks/{id}                  → 删除（若被审计引用则 409）
+
+# Assessments（一次审计实例）
+GET    /api/v1/governance/assessments                      → 列表（含 progress 统计）
+POST   /api/v1/governance/assessments                      → 创建（自动为可评估 req 建 RA 行）
+GET    /api/v1/governance/assessments/{id}                 → 详情
+PUT    /api/v1/governance/assessments/{id}                 → 更新
+DELETE /api/v1/governance/assessments/{id}                 → 删除
+GET    /api/v1/governance/assessments/{id}/requirements    → 列出每条 req 的 assessment
+
+# Requirement assessments + Evidence
+PUT    /api/v1/governance/req-assessments/{id}                       → 更新 status/score/observation
+POST   /api/v1/governance/req-assessments/{id}/evidence              → 新增证据（kind=text|url|file）
+DELETE /api/v1/governance/evidence/{id}                              → 删除证据
+
+# AI 辅助
+POST   /api/v1/governance/req-assessments/{id}/ai-suggest-evidence   → LLM 列出建议证据
+POST   /api/v1/governance/req-assessments/{id}/ai-assess             → LLM 判定合规状态（preview/apply）
+POST   /api/v1/governance/assessments/{id}/ai-report                 → LLM 生成 markdown 审计报告
+```
+启动时 seed ISO/IEC 27001:2022 Annex A（93 控制 / 514 typical_evidence 条目）和
+NIST CSF 2.0（106 subcategories / 547 typical_evidence 条目）。每次启动按 urn 匹配
+**无条件覆盖**内置框架的 `typical_evidence`，方便维护者改清单后重启即生效。
 
 ### 健康检查
 ```
