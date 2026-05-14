@@ -12,6 +12,10 @@ from app.models.approval import ApprovalRequest
 from app.models.token_usage import TokenUsageLog
 from app.models.webhook import Webhook
 from app.models.prompt_template import PromptTemplate
+from app.models.governance import (
+    Framework, Requirement, ComplianceAssessment,
+    RequirementAssessment, Evidence,
+)
 
 __all__ = [
     "User", "RoleModel",
@@ -27,4 +31,6 @@ __all__ = [
     "TokenUsageLog",
     "Webhook",
     "PromptTemplate",
+    "Framework", "Requirement", "ComplianceAssessment",
+    "RequirementAssessment", "Evidence",
 ]

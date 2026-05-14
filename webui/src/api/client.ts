@@ -261,6 +261,49 @@ export const api = {
   generateN8NWorkflow: (body: { description: string; connection_id?: number }) =>
     request('/n8n/workflows/generate', { method: 'POST', body: JSON.stringify(body) }),
 
+  // ---- Governance ----
+  // Frameworks
+  getFrameworks: () => request('/governance/frameworks'),
+  getFramework: (id: number) => request(`/governance/frameworks/${id}`),
+  importFramework: (body: any) =>
+    request('/governance/frameworks/import', { method: 'POST', body: JSON.stringify(body) }),
+  deleteFramework: (id: number) =>
+    request(`/governance/frameworks/${id}`, { method: 'DELETE' }),
+
+  // Assessments
+  getAssessments: () => request('/governance/assessments'),
+  getAssessment: (id: number) => request(`/governance/assessments/${id}`),
+  createAssessment: (body: {
+    name: string
+    description?: string
+    framework_id: number
+    scope?: string
+    start_date?: string
+    due_date?: string
+  }) => request('/governance/assessments', { method: 'POST', body: JSON.stringify(body) }),
+  updateAssessment: (id: number, body: any) =>
+    request(`/governance/assessments/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteAssessment: (id: number) =>
+    request(`/governance/assessments/${id}`, { method: 'DELETE' }),
+  getAssessmentRequirements: (id: number) =>
+    request(`/governance/assessments/${id}/requirements`),
+
+  // Requirement assessments + evidence
+  updateRequirementAssessment: (raId: number, body: { status?: string; score?: number | null; observation?: string }) =>
+    request(`/governance/req-assessments/${raId}`, { method: 'PUT', body: JSON.stringify(body) }),
+  addEvidence: (raId: number, body: { name: string; description?: string; kind: 'text' | 'url' | 'file'; url?: string; body?: string; mime_type?: string }) =>
+    request(`/governance/req-assessments/${raId}/evidence`, { method: 'POST', body: JSON.stringify(body) }),
+  deleteEvidence: (id: number) =>
+    request(`/governance/evidence/${id}`, { method: 'DELETE' }),
+
+  // AI helpers
+  aiSuggestEvidence: (raId: number) =>
+    request(`/governance/req-assessments/${raId}/ai-suggest-evidence`, { method: 'POST' }),
+  aiAssessRequirement: (raId: number, body: { extra_context?: string; apply?: boolean }) =>
+    request(`/governance/req-assessments/${raId}/ai-assess`, { method: 'POST', body: JSON.stringify(body) }),
+  aiGenerateReport: (assessmentId: number) =>
+    request(`/governance/assessments/${assessmentId}/ai-report`, { method: 'POST' }),
+
   // ---- Prompt Templates ----
   getPromptTemplates: (category?: string) =>
     request(category ? `/prompt-templates?category=${encodeURIComponent(category)}` : '/prompt-templates'),

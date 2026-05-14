@@ -46,7 +46,8 @@
     "settings": "Settings",
     "n8n": "N8N Workflows",
     "webhooks": "Webhooks",
-    "prompts": "Prompt Templates"
+    "prompts": "Prompt Templates",
+    "governance": "Governance"
   },
   "header": {
     "switchTheme": "Toggle theme",

@@ -46,7 +46,8 @@
     "settings": "设置",
     "n8n": "N8N 工作流",
     "webhooks": "Webhook",
-    "prompts": "Prompt 模板"
+    "prompts": "Prompt 模板",
+    "governance": "治理合规"
   },
   "header": {
     "switchTheme": "切换主题",

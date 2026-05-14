@@ -106,6 +106,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Prompt-template seed skipped: {e}")
 
+    # Seed default governance frameworks (idempotent by urn).
+    try:
+        from app.routers.governance import seed_governance_frameworks_on_startup
+        await seed_governance_frameworks_on_startup()
+    except Exception as e:
+        logger.warning(f"Governance framework seed skipped: {e}")
+
     yield
     # Shutdown
     await engine.dispose()
@@ -214,7 +221,7 @@ async def startup_probe():
 # ---------------------------------------------------------------------------
 # Routers (imported here to avoid circular imports)
 # ---------------------------------------------------------------------------
-from app.routers import auth, users, agents, skills, knowledge, chat, tasks, groupchat, schedule, audit, backup, config, providers, mcp, envvars, approval, token_usage, master_config, conversations, n8n, webhooks, prompt_templates
+from app.routers import auth, users, agents, skills, knowledge, chat, tasks, groupchat, schedule, audit, backup, config, providers, mcp, envvars, approval, token_usage, master_config, conversations, n8n, webhooks, prompt_templates, governance
 from app.routers import chat_stream, gateway
 
 app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
@@ -242,6 +249,7 @@ app.include_router(gateway.router, prefix="/api/v1", tags=["OpenClaw Gateway"])
 app.include_router(groupchat.router, prefix="/api/v1", tags=["Group Chat"])
 app.include_router(webhooks.router, prefix="/api/v1", tags=["Webhooks"])
 app.include_router(prompt_templates.router, prefix="/api/v1", tags=["Prompt Templates"])
+app.include_router(governance.router, prefix="/api/v1", tags=["Governance"])
 
 
 # ---------------------------------------------------------------------------
