@@ -111,15 +111,13 @@ class InternalAgentRunner:
 ### 2.2 Loop (concrete steps)
 
 1. **Load memory** — query `conversations` for `(conversation_id, agent_id)`, take last `memory_window` messages. Empty if `conversation_id is None` (one-shot dispatch from Master, no persisted slice).
-2. **Build `tools[]`** — union of:
-   - For each id in `associated_skills`: resolve `skills` row. The current `Skill` model has only `md_content` (markdown body) and `category` — **no `input_schema` column**. Two options for the implementation plan to choose between:
-     - **(a)** Add a nullable `input_schema_json` column to `skills` via the same migration `010`. Skills without a schema are exposed as a single-arg tool `<skill.name>(input: str)` whose body is the markdown prompt prepended to the input. Skills with a schema get a structured tool.
-     - **(b)** Treat every selected skill as a single-arg `<skill.name>(input: str)` tool unconditionally for v1. Defer structured-schema work.
-     The spec recommends **(a)** — minimal extra cost, future-proof. The implementation plan will pick.
+2. **Build system prompt** — `system_prompt + "\n\n" + concatenated md_content of every selected skill`. In this codebase `Skill.md_content` is markdown **prompt content** (used by external agents via `SkillLoader.load_skills_for_agent_type` — concatenated into a system prompt). Skills are NOT callable functions; they are knowledge/instructions distributed into the agent's context. This matches existing semantics — see `app/services/skill_loader.py`.
+
+3. **Build `tools[]`** — only callable items:
    - For each id in `mcp_tool_ids`: reuse the existing converter `AgentExecutor.get_mcp_tools_for_agent({"mcp_tool_ids": self.mcp_tool_ids})`. MCP tools already have `input_schema_json` (verified — see `app/models/mcp.py` use in `agent_executor.py:276`).
    - If `knowledge_base_id` is set: append a synthetic `kb_search(query: str, top_k: int = 5)` tool.
-3. **Build `messages`** — `[{"role":"system","content":system_prompt}] + memory + [{"role":"user","content":task}]`.
-4. **Loop** up to `max_steps`:
+4. **Build `messages`** — `[{"role":"system","content":system_prompt}] + memory + [{"role":"user","content":task}]`.
+5. **Loop** up to `max_steps`:
    ```
    resp = await llm_router.chat(messages, tools=tools,
                                  provider_id=llm_provider_id, model=llm_model)
@@ -129,8 +127,8 @@ class InternalAgentRunner:
        messages.append({"role":"tool","tool_call_id":call.id,"content":result})
    messages.append(assistant_message_with_tool_calls)
    ```
-5. **Persist** — append (user task, every assistant turn including intermediate ones, every tool result, final assistant text) to `conversations` with this agent's `agent_id`.
-6. **Return** `{status: "completed", output: final_text, tool_calls: [summary list], agent_id, agent_name, execution_time}`. On loop exhaustion without a final non-tool response: `{status: "error", error: "exceeded tool_loop_max_steps"}`.
+6. **Persist** — append (user task, every assistant turn including intermediate ones, every tool result, final assistant text) into the `conversations` row whose `(parent_conversation_id, agent_id)` matches — auto-create the row on first use. The slice's messages live in that row's `messages_json` blob (the existing `conversations` table stores messages as a JSON string in `messages_json`, not as a separate `messages` table — see `app/models/conversation.py:15`).
+7. **Return** `{status: "completed", output: final_text, tool_calls: [summary list], agent_id, agent_name, execution_time}`. On loop exhaustion without a final non-tool response: `{status: "error", error: "exceeded tool_loop_max_steps"}`.
 
 ### 2.3 Tool dispatch `dispatch(tool_call)`
 
@@ -141,15 +139,11 @@ async def dispatch(self, call):
     name = call.function.name
     args = json.loads(call.function.arguments or "{}")
 
-    # 1. Match against skill names (resolved at runner init)
-    if name in self._skill_by_name:
-        return await SkillLoader.invoke(self._skill_by_name[name], args)
-
-    # 2. Match against MCP tool names
+    # 1. Match against MCP tool names (resolved at runner init)
     if name in self._mcp_by_name:
         return await mcp_runner.invoke(self._mcp_by_name[name], args)
 
-    # 3. KB synthetic tool
+    # 2. KB synthetic tool
     if name == "kb_search" and self.knowledge_base_id:
         return await knowledge_service.search(self.knowledge_base_id,
                                                args["query"],
@@ -158,7 +152,7 @@ async def dispatch(self, call):
     return f"ERROR: unknown tool '{name}'"
 ```
 
-The actual MCP runner / skill executor functions already exist for use elsewhere (`AgentExecutor.get_mcp_tools_for_agent`, `SkillLoader`). The implementation plan must verify their invoke surfaces and add thin invoke helpers if missing.
+MCP execution helpers already exist as private functions in `app/routers/mcp.py` — `_execute_stdio_tool(server, tool_name, arguments)` and `_execute_http_tool(server, tool_name, arguments)`. The implementation plan must extract these into a service module (e.g. `app/services/mcp_executor.py`) so the internal-agent runner can call them directly (rather than going through HTTP), and the router becomes a thin wrapper around the service. This is a small, well-bounded refactor inside the spec's scope.
 
 ### 2.4 Guardrails & RBAC
 
@@ -261,20 +255,30 @@ API CRUD (`/api/v1/agents`) — same endpoints; the create/update handlers branc
 
 ---
 
+### 4.6 LLM Router extension
+
+`llm_router.chat()` today (app/services/llm_router.py:623) does not accept a `tools` kwarg. The implementation plan adds an overloaded `chat()` (or a new sibling `chat_with_tools()`) that:
+- Accepts `tools: list[dict] | None = None`
+- Forwards `tools=` and `tool_choice="auto"` to `client.chat.completions.create(...)`
+- Returns the full `ChatCompletionMessage` (with `.tool_calls`) when tools were passed, so the runner can branch on it. Without tools, returns the string content for backward compatibility — or we just always return the message object and have one current caller in `llm_router.chat` adapt. Plan must pick one and apply consistently.
+
 ## 7. Files touched (estimate)
 
 **New:**
 - `alembic/versions/010_agent_kind_and_internal.py`
 - `app/services/internal_agent.py`
+- `app/services/mcp_executor.py` (extracted from `app/routers/mcp.py` private helpers)
 - WebUI: new internal-agent form component + kind chooser modal
 
 **Modified:**
 - `app/models/agent.py` (new columns)
-- `app/models/conversation.py` (new `agent_id` column)
+- `app/models/conversation.py` (new `agent_id` column; note: parent/child relationship handled via FK on the child row pointing to parent row)
+- `app/services/llm_router.py` (`tools` kwarg on `chat()` returning the full message)
 - `app/services/agent_executor.py` (kind branch + `context` param threading)
 - `app/services/group_chat.py` (parent_conversation_id threading)
 - `app/agents/master.py` (single line: pass `context={"conversation_id": ...}`)
 - `app/routers/agents.py` (validation branching on kind, response shape)
+- `app/routers/mcp.py` (call into new `mcp_executor` service instead of inline `_execute_*` helpers)
 - `webui/src/pages/Agents.tsx` (kind column + filter + chooser + new form)
 - `webui/src/api/agents.ts` (new fields in types)
 
