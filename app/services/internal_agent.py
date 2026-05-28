@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from app.core.database import AsyncSessionLocal
 from app.models.conversation import Conversation
+from app.services.llm_router import get_llm_router
 
 
 # ---------------------------------------------------------------------------
@@ -234,8 +235,6 @@ class InternalAgentRunner:
     async def execute(self, task: str, conversation_id: Optional[int],
                       user_id: int) -> Dict[str, Any]:
         """Run the tool-call loop. Returns same shape as SubAgentWrapper.execute()."""
-        from app.services.llm_router import get_llm_router
-
         start = time.monotonic()
 
         # 1. Permission gate
@@ -283,6 +282,12 @@ class InternalAgentRunner:
                     "agent_name": self.agent_name,
                     "execution_time": round(time.monotonic() - start, 2),
                 }
+
+            # router.chat returns a plain str when tools is None/empty (Task 4 contract)
+            if isinstance(msg, str):
+                final_text = msg
+                new_messages.append({"role": "assistant", "content": final_text})
+                break
 
             tool_calls = getattr(msg, "tool_calls", None)
             if not tool_calls:
