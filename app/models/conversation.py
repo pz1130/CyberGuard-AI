@@ -25,3 +25,8 @@ class Conversation(Base):
 
     # Knowledge base for RAG
     knowledge_base_id = Column(Integer, ForeignKey("knowledge_bases.id"), nullable=True)
+
+    # Internal-agent memory slice: when agent_id is set, this row stores the
+    # message history for that internal agent under a parent (Master) conversation.
+    agent_id = Column(Integer, ForeignKey("agent_configs.id", ondelete="CASCADE"), nullable=True, index=True)
+    parent_conversation_id = Column(Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=True, index=True)
