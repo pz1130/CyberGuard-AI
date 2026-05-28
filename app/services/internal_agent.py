@@ -127,6 +127,8 @@ class InternalAgentRunner:
                 schema = json.loads(t.input_schema_json) if t.input_schema_json else {}
             except json.JSONDecodeError:
                 schema = {}
+            if not isinstance(schema, dict):
+                schema = {}
             out.append({
                 "type": "function",
                 "function": {
