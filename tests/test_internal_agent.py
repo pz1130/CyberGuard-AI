@@ -1,9 +1,7 @@
-import json
 import pytest
 import pytest_asyncio
-from sqlalchemy import select
 
-from app.core.database import get_db_context, AsyncSessionLocal
+from app.core.database import AsyncSessionLocal
 from app.models.agent import AgentConfig
 from app.models.conversation import Conversation
 from app.models.user import User

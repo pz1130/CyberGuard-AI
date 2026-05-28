@@ -4,7 +4,6 @@ Runs an inline tool-call loop against the LLM Router. See:
   docs/superpowers/specs/2026-05-28-internal-agents-design.md
 """
 import json
-import time
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
