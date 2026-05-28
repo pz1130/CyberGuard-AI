@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 from app.config import settings
 from app.core.security import decrypt_data
 from app.core.rbac import Permission
+from app.services.internal_agent import InternalAgentRunner
 
 
 def _resolve_api_key(config: Dict[str, Any]) -> str:
@@ -289,6 +290,7 @@ class AgentExecutor:
         task: str,
         user_id: int,
         tools: Optional[List[Dict[str, Any]]] = None,
+        context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Execute task on a specific sub-agent.
@@ -324,12 +326,18 @@ class AgentExecutor:
             config_dict = {
                 "id": agent_obj.id,
                 "agent_name": agent_obj.agent_name,
+                "kind": agent_obj.kind,
                 "backend_type": agent_obj.backend_type,
                 "provider_id": agent_obj.provider_id,
+                "llm_provider_id": agent_obj.llm_provider_id,
+                "llm_model": agent_obj.llm_model,
                 "endpoint_url": agent_obj.endpoint_url,
                 "env_vars_encrypted": agent_obj.env_vars_encrypted,
                 "system_prompt": agent_obj.system_prompt,
                 "permission_level": getattr(agent_obj, "permission_level", "medium"),
+                "tool_loop_max_steps": agent_obj.tool_loop_max_steps,
+                "memory_window": agent_obj.memory_window,
+                "knowledge_base_id": agent_obj.knowledge_base_id,
                 "associated_skills": agent_obj.associated_skills,
                 "metadata_json": agent_obj.metadata_json,
                 # OpenClaw-specific fields (from metadata_json if not set directly)
@@ -338,28 +346,31 @@ class AgentExecutor:
                 "streaming": getattr(agent_obj, "streaming", True),
             }
 
-        # Check permission level
+        # Check permission level (external — internal handles it internally)
         permission_level = config_dict.get("permission_level", "medium")
-        if permission_level == "high":
-            return {
-                "status": "needs_approval",
-                "output": None,
-                "error": "High permission agent requires approval",
-            }
+        kind = config_dict.get("kind") or "external"
 
-        backend = config_dict["backend_type"]
-
-        if backend == "openclaw":
-            result = await self._execute_openclaw(config_dict, task)
+        if kind == "internal":
+            runner = InternalAgentRunner(config_dict)
+            conv_id = (context or {}).get("conversation_id")
+            result = await runner.execute(task=task, conversation_id=conv_id, user_id=user_id)
         else:
-            # Generic HTTP fallback (Hermes / custom backends)
-            wrapper = SubAgentWrapper(config_dict)
-            result = await wrapper.execute(task=task, context={"user_id": user_id})
+            if permission_level == "high":
+                return {
+                    "status": "needs_approval",
+                    "output": None,
+                    "error": "High permission agent requires approval",
+                }
+            backend = config_dict["backend_type"]
+            if backend == "openclaw":
+                result = await self._execute_openclaw(config_dict, task)
+            else:
+                wrapper = SubAgentWrapper(config_dict)
+                result = await wrapper.execute(task=task, context={"user_id": user_id})
 
         result["agent_id"] = agent_id
         result["agent_name"] = config_dict.get("agent_name")
         result["timestamp"] = datetime.utcnow().isoformat()
-
         return result
 
     async def _execute_openclaw(self, config: Dict[str, Any], task: str) -> Dict[str, Any]:
@@ -453,21 +464,16 @@ class AgentExecutor:
 
         return {"status": "completed", "output": result_text}
 
-    async def execute_parallel(self, agent_ids: list, task: str, user_id: int) -> Dict[int, Dict[str, Any]]:
+    async def execute_parallel(self, agent_ids: list, task: str, user_id: int,
+                                context: Optional[Dict[str, Any]] = None) -> Dict[int, Dict[str, Any]]:
         """Execute task on multiple agents in parallel."""
         import asyncio
-
-        tasks = [
-            self.execute(agent_id, task, user_id)
-            for agent_id in agent_ids
-        ]
-
+        tasks = [self.execute(agent_id, task, user_id, context=context)
+                 for agent_id in agent_ids]
         results = await asyncio.gather(*tasks, return_exceptions=True)
-
         return {
             agent_id: results[i] if not isinstance(results[i], Exception) else {
-                "status": "error",
-                "error": str(results[i]),
+                "status": "error", "error": str(results[i]),
             }
             for i, agent_id in enumerate(agent_ids)
         }

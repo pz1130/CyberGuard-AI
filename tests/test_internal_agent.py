@@ -152,3 +152,38 @@ async def test_execute_loop_terminates_on_final_message(monkeypatch):
     res = await runner.execute(task="hi", conversation_id=None, user_id=1)
     assert res["status"] == "completed"
     assert res["output"] == "final answer"
+
+
+@pytest.mark.asyncio
+async def test_agent_executor_routes_internal_kind(monkeypatch):
+    from app.services.agent_executor import AgentExecutor
+    from app.core.database import AsyncSessionLocal
+    from app.models.agent import AgentConfig
+
+    async with AsyncSessionLocal() as s:
+        ag = AgentConfig(agent_name="exec_test_int", kind="internal",
+                          system_prompt="sys", is_active=True,
+                          permission_level="medium", tool_loop_max_steps=1)
+        s.add(ag); await s.commit(); await s.refresh(ag)
+        agent_id = ag.id
+
+    captured = {}
+    class FakeRunner:
+        def __init__(self, cfg): captured["cfg"] = cfg
+        async def execute(self, task, conversation_id, user_id):
+            captured["task"] = task
+            return {"status": "completed", "output": "ok",
+                    "agent_id": agent_id, "agent_name": "exec_test_int"}
+    monkeypatch.setattr("app.services.agent_executor.InternalAgentRunner",
+                         FakeRunner, raising=False)
+
+    ex = AgentExecutor()
+    result = await ex.execute(agent_id=agent_id, task="hello", user_id=1,
+                               context={"conversation_id": None})
+    assert result["status"] == "completed"
+    assert captured["task"] == "hello"
+    assert captured["cfg"]["agent_name"] == "exec_test_int"
+
+    async with AsyncSessionLocal() as s:
+        await s.execute(AgentConfig.__table__.delete().where(AgentConfig.id == agent_id))
+        await s.commit()
