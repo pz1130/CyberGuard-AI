@@ -92,3 +92,63 @@ async def test_build_tools_includes_kb_when_kb_set(monkeypatch):
     tools = await runner._build_tools()
     names = [t["function"]["name"] for t in tools]
     assert "kb_search" in names
+
+
+@pytest.mark.asyncio
+async def test_dispatch_kb_search(monkeypatch):
+    import json
+    from app.services.internal_agent import InternalAgentRunner
+
+    captured = {}
+    class FakeKB:
+        async def search(self, kb_id, query, top_k):
+            captured["call"] = (kb_id, query, top_k)
+            return ["chunk1", "chunk2"]
+    monkeypatch.setattr("app.services.internal_agent.knowledge_service", FakeKB())
+
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "", "knowledge_base_id": 9,
+           "associated_skills": [], "metadata_json": {}, "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+    runner._mcp_by_name = {}
+
+    from types import SimpleNamespace
+    call = SimpleNamespace(
+        function=SimpleNamespace(name="kb_search",
+                                  arguments=json.dumps({"query": "foo", "top_k": 3})),
+        id="c1",
+    )
+    out = await runner._dispatch(call)
+    assert captured["call"] == (9, "foo", 3)
+    assert "chunk1" in out
+
+
+@pytest.mark.asyncio
+async def test_execute_high_permission_returns_needs_approval():
+    from app.services.internal_agent import InternalAgentRunner
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "", "permission_level": "high",
+           "associated_skills": [], "metadata_json": {}}
+    runner = InternalAgentRunner(cfg)
+    res = await runner.execute(task="t", conversation_id=None, user_id=1)
+    assert res["status"] == "needs_approval"
+
+
+@pytest.mark.asyncio
+async def test_execute_loop_terminates_on_final_message(monkeypatch):
+    """Mock llm_router.chat to return a final message (no tool_calls); verify happy path."""
+    from app.services import internal_agent as ia_mod
+    from app.services.internal_agent import InternalAgentRunner
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    fake_msg = SimpleNamespace(content="final answer", tool_calls=None)
+    fake_router = SimpleNamespace(chat=AsyncMock(return_value=fake_msg))
+    monkeypatch.setattr(ia_mod, "get_llm_router", lambda: fake_router)
+
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "sys",
+           "llm_provider_id": 1, "llm_model": "m", "tool_loop_max_steps": 2,
+           "memory_window": 0, "associated_skills": [],
+           "metadata_json": {"mcp_tool_ids": []}, "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+    res = await runner.execute(task="hi", conversation_id=None, user_id=1)
+    assert res["status"] == "completed"
+    assert res["output"] == "final answer"

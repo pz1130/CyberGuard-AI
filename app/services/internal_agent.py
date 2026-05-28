@@ -4,12 +4,32 @@ Runs an inline tool-call loop against the LLM Router. See:
   docs/superpowers/specs/2026-05-28-internal-agents-design.md
 """
 import json
+import time
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
 
 from app.core.database import AsyncSessionLocal
 from app.models.conversation import Conversation
+
+
+# ---------------------------------------------------------------------------
+# KnowledgeService adapter — exposes search(kb_id, query, top_k) as an
+# awaitable without requiring a caller-supplied db session.
+# Mockable from tests via:
+#   monkeypatch.setattr("app.services.internal_agent.knowledge_service", FakeKB())
+# ---------------------------------------------------------------------------
+class _KSAdapter:
+    """Thin adapter so dispatch can call knowledge_service.search(kb_id, query, top_k)."""
+
+    async def search(self, kb_id: int, query: str, top_k: int = 5):
+        from app.services.knowledge_service import get_knowledge_service
+        svc = get_knowledge_service()
+        async with AsyncSessionLocal() as db:
+            return await svc.query(db=db, kb_id=kb_id, query=query, top_k=top_k)
+
+
+knowledge_service = _KSAdapter()
 
 
 class InternalAgentRunner:
@@ -160,8 +180,161 @@ class InternalAgentRunner:
             })
         return tools
 
-    # -------- Public entry point — implemented in Task 7 --------
+    # -------- Tool dispatch --------
+
+    async def _dispatch(self, call) -> str:
+        """Execute a single tool_call and return a JSON-safe string result."""
+        name = call.function.name
+        try:
+            args = json.loads(call.function.arguments or "{}")
+        except json.JSONDecodeError:
+            args = {}
+
+        # 1. MCP tool lookup
+        if hasattr(self, "_mcp_by_name") and name in self._mcp_by_name:
+            from app.services.mcp_executor import execute_mcp_tool
+            tool_row, server_row = self._mcp_by_name[name]
+            try:
+                result = await execute_mcp_tool(server_row, tool_row.tool_name, args)
+                return json.dumps(result, ensure_ascii=False, default=str)
+            except Exception as e:
+                return f"ERROR: MCP tool {name!r} failed: {e}"
+
+        # 2. KB synthetic tool
+        if name == "kb_search" and self.knowledge_base_id:
+            try:
+                chunks = await knowledge_service.search(
+                    self.knowledge_base_id,
+                    args.get("query", ""),
+                    args.get("top_k", 5),
+                )
+                return json.dumps(chunks, ensure_ascii=False, default=str)
+            except Exception as e:
+                return f"ERROR: kb_search failed: {e}"
+
+        return f"ERROR: unknown tool {name!r}"
+
+    async def _resolve_mcp_lookup(self) -> None:
+        """Populate self._mcp_by_name = {tool_name: (MCPTool, MCPServer)} for dispatch."""
+        self._mcp_by_name = {}
+        if not self.mcp_tool_ids:
+            return
+        from app.models.mcp import MCPTool, MCPServer
+        async with AsyncSessionLocal() as s:
+            result = await s.execute(
+                select(MCPTool, MCPServer)
+                .join(MCPServer, MCPServer.id == MCPTool.server_id)
+                .where(MCPTool.id.in_(self.mcp_tool_ids), MCPTool.is_active == True)
+            )
+            for tool, server in result.all():
+                self._mcp_by_name[tool.tool_name] = (tool, server)
+
+    # -------- Public entry point --------
 
     async def execute(self, task: str, conversation_id: Optional[int],
                       user_id: int) -> Dict[str, Any]:
-        raise NotImplementedError("implemented in Task 7")
+        """Run the tool-call loop. Returns same shape as SubAgentWrapper.execute()."""
+        from app.services.llm_router import get_llm_router
+
+        start = time.monotonic()
+
+        # 1. Permission gate
+        if self.permission_level == "high":
+            return {
+                "status": "needs_approval",
+                "output": None,
+                "error": "High permission internal agent requires approval",
+                "agent_id": self.agent_id,
+                "agent_name": self.agent_name,
+                "execution_time": 0,
+            }
+
+        # 2. Build system prompt + tool catalog + memory
+        system_prompt = await self._build_system_prompt()
+        tools = await self._build_tools()
+        await self._resolve_mcp_lookup()
+        history = await self._load_memory(conversation_id)
+
+        messages: List[Dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+        messages.extend(history)
+        messages.append({"role": "user", "content": task})
+
+        # Track new messages added this turn (for persistence)
+        new_messages: List[Dict[str, Any]] = [{"role": "user", "content": task}]
+        tool_call_log: List[Dict[str, Any]] = []
+
+        router = get_llm_router()
+        final_text: Optional[str] = None
+
+        for step in range(self.max_steps):
+            try:
+                msg = await router.chat(
+                    messages=messages,
+                    provider_id=self.llm_provider_id,
+                    model=self.llm_model,
+                    tools=tools if tools else None,
+                )
+            except Exception as e:
+                return {
+                    "status": "failed",
+                    "output": None,
+                    "error": f"LLM error at step {step}: {e}",
+                    "agent_id": self.agent_id,
+                    "agent_name": self.agent_name,
+                    "execution_time": round(time.monotonic() - start, 2),
+                }
+
+            tool_calls = getattr(msg, "tool_calls", None)
+            if not tool_calls:
+                final_text = getattr(msg, "content", None) or ""
+                new_messages.append({"role": "assistant", "content": final_text})
+                break
+
+            # Append assistant message that requested tools
+            assistant_msg = {
+                "role": "assistant",
+                "content": getattr(msg, "content", None) or "",
+                "tool_calls": [
+                    {
+                        "id": c.id,
+                        "type": "function",
+                        "function": {"name": c.function.name,
+                                      "arguments": c.function.arguments},
+                    } for c in tool_calls
+                ],
+            }
+            messages.append(assistant_msg)
+            new_messages.append(assistant_msg)
+
+            for call in tool_calls:
+                result_str = await self._dispatch(call)
+                tool_call_log.append({"name": call.function.name,
+                                       "arguments": call.function.arguments,
+                                       "result_preview": result_str[:200]})
+                tool_msg = {"role": "tool", "tool_call_id": call.id,
+                            "content": result_str}
+                messages.append(tool_msg)
+                new_messages.append(tool_msg)
+
+        if final_text is None:
+            return {
+                "status": "error",
+                "output": None,
+                "error": f"exceeded tool_loop_max_steps ({self.max_steps})",
+                "agent_id": self.agent_id,
+                "agent_name": self.agent_name,
+                "execution_time": round(time.monotonic() - start, 2),
+                "tool_calls": tool_call_log,
+            }
+
+        # Persist memory slice
+        await self._append_memory(conversation_id, user_id, new_messages)
+
+        return {
+            "status": "completed",
+            "output": final_text,
+            "agent_id": self.agent_id,
+            "agent_name": self.agent_name,
+            "execution_time": round(time.monotonic() - start, 2),
+            "tool_calls": tool_call_log,
+        }
