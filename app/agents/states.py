@@ -83,6 +83,9 @@ class MasterAgentState(TypedDict, total=False):
     # Injected from the conversations table so the LLM has multi-turn memory
     conversation_history: Optional[List[Dict[str, Any]]]
 
+    # Conversation ID — used to thread memory slices for internal agents
+    conversation_id: Optional[int]
+
     # Per-conversation config overrides
     system_prompt_override: Optional[str]
     intent_parser_prompt_override: Optional[str]
