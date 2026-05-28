@@ -1,6 +1,6 @@
 """Chat conversation model."""
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Float
+from sqlalchemy import Column, Index, Integer, String, Text, DateTime, ForeignKey, Float
 from app.core.database import Base
 
 
@@ -8,6 +8,9 @@ class Conversation(Base):
     """Chat conversation for persistent history and per-conversation agent config."""
 
     __tablename__ = "conversations"
+    __table_args__ = (
+        Index("ix_conv_agent", "agent_id", "parent_conversation_id"),
+    )
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -28,5 +31,5 @@ class Conversation(Base):
 
     # Internal-agent memory slice: when agent_id is set, this row stores the
     # message history for that internal agent under a parent (Master) conversation.
-    agent_id = Column(Integer, ForeignKey("agent_configs.id", ondelete="CASCADE"), nullable=True, index=True)
-    parent_conversation_id = Column(Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=True, index=True)
+    agent_id = Column(Integer, ForeignKey("agent_configs.id", ondelete="CASCADE"), nullable=True)
+    parent_conversation_id = Column(Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=True)
