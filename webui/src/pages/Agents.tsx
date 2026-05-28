@@ -6,6 +6,7 @@ interface Agent {
   id?: string
   agent_name?: string
   name?: string
+  kind?: string
   backend_type?: string
   description?: string
   endpoint_url?: string
@@ -16,6 +17,11 @@ interface Agent {
   is_online?: boolean
   openclaw_last_seen?: string
   metadata_json?: Record<string, any>
+  llm_provider_id?: number | null
+  llm_model?: string | null
+  tool_loop_max_steps?: number
+  memory_window?: number
+  knowledge_base_id?: number | null
 }
 
 interface FormState {
@@ -290,6 +296,8 @@ export default function Agents() {
   const [testResult, setTestResult] = useState<Record<string, { ok: boolean; msg: string }>>({})
   const [regenLoading, setRegenLoading] = useState<string | null>(null)
   const [regenKey, setRegenKey] = useState<Record<string, string>>({})
+  const [kindFilter, setKindFilter] = useState<string>('all')
+  const [showKindPicker, setShowKindPicker] = useState(false)
 
   const load = async () => {
     try {
@@ -304,19 +312,24 @@ export default function Agents() {
   const openCreate = () => {
     setEditing(null)
     setCreatedApiKey(null)
-    setForm({ agent_name: '', backend_type: 'openclaw', description: '', endpoint_url: '', system_prompt: '', permission_level: 'medium' })
+    const isInternal = form.backend_type === '__internal__'
+    setForm({
+      agent_name: '', backend_type: isInternal ? '__internal__' : 'openclaw',
+      description: '', endpoint_url: '', system_prompt: '', permission_level: 'medium',
+    })
     setShowForm(true)
   }
 
   const openEdit = (a: Agent) => {
     setEditing(a.id!)
     setCreatedApiKey(null)
+    const isInternal = (a.kind || 'external') === 'internal'
     setForm({
       agent_name: a.agent_name || a.name || '',
-      backend_type: a.backend_type || 'openclaw',
+      backend_type: isInternal ? '__internal__' : (a.backend_type || 'openclaw'),
       description: a.description || '',
-      endpoint_url: a.endpoint_url || '',
-      system_prompt: a.system_prompt || '',
+      endpoint_url: isInternal ? String(a.llm_provider_id || '') : (a.endpoint_url || ''),
+      system_prompt: isInternal ? (a.llm_model || '') : (a.system_prompt || ''),
       permission_level: a.permission_level || 'medium',
     })
     setShowForm(true)
@@ -325,16 +338,30 @@ export default function Agents() {
   const submit = async () => {
     if (!form.agent_name) return
     try {
+      const isInternal = form.backend_type === '__internal__'
       const payload: Record<string, any> = {
         agent_name: form.agent_name,
-        backend_type: form.backend_type,
+        kind: isInternal ? 'internal' : 'external',
         description: form.description || undefined,
-        system_prompt: form.system_prompt || undefined,
         permission_level: form.permission_level,
       }
-      // endpoint_url 仅非 OpenClaw 后端需要
-      if (form.backend_type !== 'openclaw' && form.endpoint_url) {
-        payload.endpoint_url = form.endpoint_url
+
+      if (isInternal) {
+        // Internal agent fields
+        const llmProviderId = parseInt(form.endpoint_url || '0', 10)
+        if (llmProviderId) payload.llm_provider_id = llmProviderId
+        const model = form.system_prompt?.trim()
+        if (model) payload.llm_model = model
+        payload.tool_loop_max_steps = 8
+        payload.memory_window = 20
+        payload.backend_type = 'openclaw'  // required but unused for internal
+      } else {
+        // External agent fields
+        payload.backend_type = form.backend_type
+        payload.system_prompt = form.system_prompt || undefined
+        if (form.backend_type !== 'openclaw' && form.endpoint_url) {
+          payload.endpoint_url = form.endpoint_url
+        }
       }
 
       if (editing) {
@@ -342,10 +369,8 @@ export default function Agents() {
         setShowForm(false)
       } else {
         const res = await api.createAgent(payload) as any
-        // 如果是 OpenClaw，显示一次性 API Key
-        if (res?.api_key) {
+        if (!isInternal && res?.api_key) {
           setCreatedApiKey(res.api_key)
-          // 不关闭弹窗，让用户看到并复制 Key
         } else {
           setShowForm(false)
         }
@@ -389,7 +414,7 @@ export default function Agents() {
           <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>AGENT INFRASTRUCTURE</div>
           <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>SUB-AGENTS</h1>
         </div>
-        <button onClick={openCreate} style={{
+        <button onClick={() => setShowKindPicker(true)} style={{
           display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 36,
           background: 'var(--accent)', border: '1px solid var(--accent-border)',
           color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.15em',
@@ -398,6 +423,22 @@ export default function Agents() {
         }}>
           <Plus size={13} /> NEW AGENT
         </button>
+      </div>
+
+      {/* Kind filter */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        {['all', 'external', 'internal'].map(k => (
+          <button key={k} onClick={() => setKindFilter(k)}
+            style={{
+              padding: '4px 12px', border: `1px solid ${kindFilter === k ? 'var(--accent)' : 'var(--border)'}`,
+              background: kindFilter === k ? 'var(--accent)' : 'transparent',
+              color: kindFilter === k ? '#000' : 'var(--text-muted)',
+              fontSize: 9, letterSpacing: '0.1em', cursor: 'pointer',
+              fontFamily: 'var(--font-mono)', fontWeight: 700,
+            }}>
+            {k === 'all' ? 'ALL' : k.toUpperCase()}
+          </button>
+        ))}
       </div>
 
       {/* Grid */}
@@ -415,9 +456,10 @@ export default function Agents() {
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
-          {items.map(a => {
+          {items.filter(a => kindFilter === 'all' || (a.kind || 'external') === kindFilter).map(a => {
             const bc = BACKEND_COLORS[a.backend_type || 'custom']
             const isOpenClaw = a.backend_type === 'openclaw'
+            const isInternal = (a.kind || 'external') === 'internal'
             const online = a.is_online || false
             const thisRegenKey = regenKey[a.id!]
 
@@ -427,16 +469,18 @@ export default function Agents() {
                 border: '1px solid var(--border-bright)',
                 borderLeft: `3px solid ${bc}`,
               }}>
-                {/* Name + badge */}
+                {/* Name + kind badge */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>
                     {agentName(a)}
                   </div>
-                  <div style={{
-                    padding: '2px 7px', border: `1px solid ${bc}`,
-                    fontSize: 8, letterSpacing: '0.15em', color: bc, background: 'var(--bg-base)',
-                  }}>
-                    {(a.backend_type || 'CUSTOM').toUpperCase()}
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <div style={{
+                      padding: '2px 7px', border: `1px solid ${isInternal ? '#60a5fa' : bc}`,
+                      fontSize: 8, letterSpacing: '0.15em', color: isInternal ? '#60a5fa' : bc, background: 'var(--bg-base)',
+                    }}>
+                      {isInternal ? 'INTERNAL' : (a.backend_type || 'CUSTOM').toUpperCase()}
+                    </div>
                   </div>
                 </div>
 
@@ -536,6 +580,63 @@ export default function Agents() {
         </div>
       )}
 
+      {/* Kind chooser modal */}
+      {showKindPicker && (
+        <div
+          onClick={e => e.target === e.currentTarget && setShowKindPicker(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 101, overflowY: 'auto', padding: '40px 20px' }}>
+          <div style={{
+            width: '100%', maxWidth: 480, background: 'var(--bg-surface)',
+            border: '1px solid var(--border-bright)',
+          }}>
+            <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 4 }}>NEW AGENT</div>
+              <h3 style={{ fontSize: 16, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)', margin: 0 }}>
+                CHOOSE AGENT KIND
+              </h3>
+            </div>
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <button
+                onClick={() => { setShowKindPicker(false); openCreate() }}
+                style={{
+                  padding: '18px 20px', border: '1px solid var(--border-bright)',
+                  background: 'var(--bg-base)', cursor: 'pointer', textAlign: 'left',
+                }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 6 }}>EXTERNAL AGENT</div>
+                <div style={{ fontSize: 10, color: 'var(--text-dim)', lineHeight: 1.6 }}>
+                  OpenClaw, Hermes, or Custom HTTP endpoint. Deploy a separate process and connect via protocol.
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  setShowKindPicker(false)
+                  setForm(f => ({ ...f, backend_type: '__internal__' }))
+                  openCreate()
+                }}
+                style={{
+                  padding: '18px 20px', border: '1px solid rgba(96,165,250,0.4)',
+                  background: 'rgba(96,165,250,0.04)', cursor: 'pointer', textAlign: 'left',
+                }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', letterSpacing: '0.1em', marginBottom: 6 }}>INTERNAL AGENT</div>
+                <div style={{ fontSize: 10, color: 'var(--text-dim)', lineHeight: 1.6 }}>
+                  Configured fully in-app. Select system prompt, LLM provider, skills, MCP tools, and optional knowledge base.
+                </div>
+              </button>
+            </div>
+            <div style={{ padding: '12px 24px', borderTop: '1px solid var(--border)' }}>
+              <button onClick={() => setShowKindPicker(false)} style={{
+                padding: '0 16px', height: 32, border: '1px solid var(--border-bright)',
+                background: 'transparent', color: 'var(--text-muted)',
+                fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer',
+                fontFamily: 'var(--font-mono)',
+              }}>
+                CANCEL
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Form Modal */}
       {showForm && (
         <div
@@ -549,13 +650,13 @@ export default function Agents() {
             <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border)' }}>
               <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 4 }}>AGENT CONFIGURATION</div>
               <h3 style={{ fontSize: 16, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)', margin: 0 }}>
-                {editing ? 'EDIT AGENT' : 'DEPLOY NEW AGENT'}
+                {editing ? 'EDIT AGENT' : form.backend_type === '__internal__' ? 'DEPLOY INTERNAL AGENT' : 'DEPLOY EXTERNAL AGENT'}
               </h3>
             </div>
 
             <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-              {/* Name + Backend */}
+              {/* Name + Kind/Backend */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   {label('AGENT NAME *')}
@@ -564,6 +665,60 @@ export default function Agents() {
                     placeholder="e.g. Threat Intel Agent"
                     style={inputStyle} />
                 </div>
+                <div>
+                  {label('AGENT KIND')}
+                  <div style={{
+                    height: 38, padding: '0 12px', display: 'flex', alignItems: 'center',
+                    background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+                    fontSize: 12, fontFamily: 'var(--font-mono)', letterSpacing: '0.05em',
+                    color: form.backend_type === '__internal__' ? '#60a5fa' : 'var(--accent)',
+                  }}>
+                    {form.backend_type === '__internal__' ? 'INTERNAL' : 'EXTERNAL'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Internal agent fields */}
+              {form.backend_type === '__internal__' && (
+                <>
+                  {/* LLM Provider + Model */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                      {label('LLM PROVIDER ID *')}
+                      <input value={form.endpoint_url || ''}
+                        onChange={e => setForm(f => ({ ...f, endpoint_url: e.target.value }))}
+                        placeholder="Provider ID (e.g. 1)"
+                        style={inputStyle} />
+                    </div>
+                    <div>
+                      {label('LLM MODEL')}
+                      <input value={form.system_prompt || ''}
+                        onChange={e => setForm(f => ({ ...f, system_prompt: e.target.value }))}
+                        placeholder="auto / gpt-4o / etc."
+                        style={inputStyle} />
+                    </div>
+                  </div>
+
+                  {/* Tool loop settings */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                      {label('TOOL LOOP MAX STEPS')}
+                      <input type="number" value="8"
+                        readOnly
+                        style={{ ...inputStyle, color: 'var(--text-dim)' }} />
+                    </div>
+                    <div>
+                      {label('MEMORY WINDOW')}
+                      <input type="number" value="20"
+                        readOnly
+                        style={{ ...inputStyle, color: 'var(--text-dim)' }} />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Backend Type (external only) */}
+              {form.backend_type !== '__internal__' && (
                 <div>
                   {label('BACKEND TYPE')}
                   <select value={form.backend_type}
@@ -574,7 +729,7 @@ export default function Agents() {
                     <option value="custom">CUSTOM</option>
                   </select>
                 </div>
-              </div>
+              )}
 
               {/* Description */}
               <div>
