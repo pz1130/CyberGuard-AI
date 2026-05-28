@@ -113,6 +113,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Governance framework seed skipped: {e}")
 
+    # Seed example internal agents (env-gated, idempotent by name).
+    try:
+        from app.routers.agents import seed_example_internal_agents
+        await seed_example_internal_agents()
+    except Exception as e:
+        logger.warning(f"Internal agent seed skipped: {e}")
+
     yield
     # Shutdown
     await engine.dispose()

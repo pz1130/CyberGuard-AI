@@ -1,6 +1,7 @@
 """Agent configuration and management router."""
 import hashlib
 import json
+import os
 import secrets
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -8,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from app.core.dependencies import get_db, require_permission
+from app.core.database import AsyncSessionLocal
 from app.core.rbac import Permission
 from app.core.security import encrypt_data, decrypt_data
 from app.schemas.agent import (
@@ -17,6 +19,66 @@ from app.schemas.agent import (
 from app.models.agent import AgentConfig
 
 router = APIRouter()
+
+
+# ---------------------------------------------------------------------------
+# Startup seed
+# ---------------------------------------------------------------------------
+
+SEED_FLAG = "SEED_EXAMPLE_INTERNAL_AGENTS"
+
+
+async def seed_example_internal_agents() -> None:
+    """Idempotent — runs on startup only when SEED_EXAMPLE_INTERNAL_AGENTS=true."""
+    if os.getenv(SEED_FLAG, "false").lower() != "true":
+        return
+
+    async with AsyncSessionLocal() as s:
+        existing = await s.execute(select(AgentConfig).where(
+            AgentConfig.agent_name.in_(["triage_analyst", "policy_writer"])
+        ))
+        already = {r.agent_name for r in existing.scalars().all()}
+        if len(already) >= 2:
+            return
+
+        providers = await s.execute(select(AgentConfig).where(
+            AgentConfig.kind == "internal"
+        ))
+        # Find a provider id to use — try first internal agent's provider or skip
+        provider_id = None
+        for ag in providers.scalars().all():
+            if ag.llm_provider_id:
+                provider_id = ag.llm_provider_id
+                break
+
+        to_create = []
+        if "triage_analyst" not in already:
+            to_create.append(AgentConfig(
+                agent_name="triage_analyst",
+                kind="internal",
+                backend_type="openclaw",
+                system_prompt="You are a SOC triage analyst. Use available tools to gather threat intelligence, enrich alerts with CVE data, and produce concise incident summaries.",
+                permission_level="medium",
+                llm_provider_id=provider_id,
+                tool_loop_max_steps=8,
+                memory_window=20,
+            ))
+        if "policy_writer" not in already:
+            to_create.append(AgentConfig(
+                agent_name="policy_writer",
+                kind="internal",
+                backend_type="openclaw",
+                system_prompt="You are a security policy writer. Help draft and review security policies, map controls to frameworks (ISO 27001, NIST), and ensure policies are actionable and measurable.",
+                permission_level="low",
+                llm_provider_id=provider_id,
+                tool_loop_max_steps=8,
+                memory_window=20,
+            ))
+        for ag in to_create:
+            s.add(ag)
+        await s.commit()
+        for ag in to_create:
+            await s.refresh(ag)
 
 
 # ---------------------------------------------------------------------------
