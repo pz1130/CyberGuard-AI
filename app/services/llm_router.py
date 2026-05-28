@@ -1,6 +1,7 @@
 """LLM model routing service."""
 import json
 import re
+from types import SimpleNamespace
 from typing import Dict, Any, Optional, List
 from openai import AsyncOpenAI
 
@@ -654,8 +655,7 @@ Examples:
         if settings.MOCK_MODE:
             last_msg = messages[-1]["content"] if messages else ""
             mock_text = f"🛡️ **CyberGuard (Mock Mode)**\n\n已收到您的消息：\"{last_msg[:100]}\"\n\n当前运行在 Mock 模式下，请配置真实的 AI Provider（Providers 页面）以获得实际的安全分析能力。"
-            if tools is not None:
-                from types import SimpleNamespace
+            if tools:
                 return SimpleNamespace(content=mock_text, tool_calls=None)
             return mock_text
 
@@ -688,9 +688,8 @@ Examples:
             span.set_attribute("llm.finish_reason", response.choices[0].finish_reason)
             await self._record_token_usage(active_model, active_provider_id, response)
 
-            if tools is not None:
-                message.content = content
-                return message
+            if tools:
+                return SimpleNamespace(content=content, tool_calls=message.tool_calls)
             return content
 
     async def stream_chat(
