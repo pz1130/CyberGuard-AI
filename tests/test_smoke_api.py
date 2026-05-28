@@ -175,6 +175,50 @@ class TestAPISmoke(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertEqual(task["execution_id"], task_id)
 
+    def test_internal_agent_crud(self):
+        """Create internal agent, verify kind=internal, reject invalid internal."""
+        name = f"smoke-int-{uuid.uuid4().hex[:8]}"
+
+        # Create internal agent (requires llm_provider_id — use placeholder that passes schema)
+        code, created = _request(
+            "POST",
+            "/agents",
+            {
+                "agent_name": name,
+                "kind": "internal",
+                "llm_provider_id": 999,  # may not exist but passes validation
+                "system_prompt": "You are a smoke test internal agent.",
+                "permission_level": "medium",
+            },
+            token=self.token,
+        )
+        self.assertEqual(code, 201, msg=f"create internal failed: {created}")
+        self.assertEqual(created.get("kind"), "internal")
+        agent_id = created["id"]
+
+        # List agents — should include the new one with kind=internal
+        code, listing = _request("GET", "/agents", token=self.token)
+        self.assertEqual(code, 200)
+        found = next((a for a in listing.get("agents", []) if a["id"] == agent_id), None)
+        self.assertIsNotNone(found, msg=f"agent {agent_id} not found in list")
+        self.assertEqual(found["kind"], "internal")
+
+        # Delete
+        code, _ = _request("DELETE", f"/agents/{agent_id}", token=self.token)
+        self.assertEqual(code, 204)
+
+    def test_internal_agent_validation(self):
+        """Reject internal agent without llm_provider_id."""
+        name = f"smoke-bad-int-{uuid.uuid4().hex[:8]}"
+        code, err = _request(
+            "POST",
+            "/agents",
+            {"agent_name": name, "kind": "internal"},
+            token=self.token,
+        )
+        self.assertEqual(code, 400)
+        self.assertIn("llm_provider_id", str(err).lower())
+
 
 if __name__ == "__main__":
     unittest.main()
