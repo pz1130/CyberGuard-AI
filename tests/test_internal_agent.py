@@ -61,3 +61,34 @@ async def test_save_then_load_memory_round_trip(parent_conv_and_internal_agent):
                                  user_id=ids["user_id"], messages=new_msgs)
     loaded = await runner._load_memory(parent_conversation_id=ids["parent_id"])
     assert loaded == new_msgs
+
+
+@pytest.mark.asyncio
+async def test_build_system_prompt_concatenates_skills(monkeypatch):
+    from app.services.internal_agent import InternalAgentRunner
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "BASE",
+           "associated_skills": [101, 102], "metadata_json": {},
+           "permission_level": "medium"}
+
+    async def fake_loader(ids):
+        return {101: "skill A body", 102: "skill B body"}
+
+    runner = InternalAgentRunner(cfg)
+    monkeypatch.setattr(runner, "_load_skill_bodies", fake_loader)
+    prompt = await runner._build_system_prompt()
+    assert "BASE" in prompt and "skill A body" in prompt and "skill B body" in prompt
+
+
+@pytest.mark.asyncio
+async def test_build_tools_includes_kb_when_kb_set(monkeypatch):
+    from app.services.internal_agent import InternalAgentRunner
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "",
+           "associated_skills": [], "metadata_json": {"mcp_tool_ids": []},
+           "knowledge_base_id": 7, "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+
+    async def fake_mcp(*_a, **_kw): return []
+    monkeypatch.setattr(runner, "_load_mcp_tools", fake_mcp)
+    tools = await runner._build_tools()
+    names = [t["function"]["name"] for t in tools]
+    assert "kb_search" in names

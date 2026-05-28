@@ -85,6 +85,79 @@ class InternalAgentRunner:
             row.messages_json = json.dumps(existing, ensure_ascii=False)
             await s.commit()
 
+    # -------- System prompt assembly --------
+
+    async def _load_skill_bodies(self, skill_ids: List[int]) -> Dict[int, str]:
+        if not skill_ids:
+            return {}
+        from app.models.skill import Skill
+        async with AsyncSessionLocal() as s:
+            result = await s.execute(select(Skill).where(Skill.id.in_(skill_ids),
+                                                          Skill.is_active == True))
+            rows = result.scalars().all()
+        return {r.id: (r.md_content or "") for r in rows}
+
+    async def _build_system_prompt(self) -> str:
+        parts = [self.system_prompt] if self.system_prompt else []
+        bodies = await self._load_skill_bodies(self.associated_skills)
+        if bodies:
+            parts.append("\n\n## Skills available to you\n")
+            for sid in self.associated_skills:
+                body = bodies.get(sid)
+                if body:
+                    parts.append(f"\n### Skill #{sid}\n{body}\n")
+        return "\n".join(parts).strip() or "You are an assistant."
+
+    # -------- Tool catalog --------
+
+    async def _load_mcp_tools(self) -> List[Dict[str, Any]]:
+        """Resolve mcp_tool_ids into OpenAI function-tool schemas."""
+        if not self.mcp_tool_ids:
+            return []
+        from app.models.mcp import MCPTool
+        async with AsyncSessionLocal() as s:
+            result = await s.execute(
+                select(MCPTool).where(MCPTool.id.in_(self.mcp_tool_ids),
+                                       MCPTool.is_active == True)
+            )
+            tools = result.scalars().all()
+        out = []
+        for t in tools:
+            try:
+                schema = json.loads(t.input_schema_json) if t.input_schema_json else {}
+            except json.JSONDecodeError:
+                schema = {}
+            out.append({
+                "type": "function",
+                "function": {
+                    "name": t.tool_name,
+                    "description": t.description or "",
+                    "parameters": schema or {"type": "object", "properties": {}},
+                },
+            })
+        return out
+
+    async def _build_tools(self) -> List[Dict[str, Any]]:
+        tools = await self._load_mcp_tools()
+        if self.knowledge_base_id:
+            tools.append({
+                "type": "function",
+                "function": {
+                    "name": "kb_search",
+                    "description": "Search the agent's attached knowledge base.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "search query"},
+                            "top_k": {"type": "integer", "default": 5,
+                                       "description": "max number of chunks to return"},
+                        },
+                        "required": ["query"],
+                    },
+                },
+            })
+        return tools
+
     # -------- Public entry point — implemented in Task 7 --------
 
     async def execute(self, task: str, conversation_id: Optional[int],
