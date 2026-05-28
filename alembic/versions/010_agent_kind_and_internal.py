@@ -15,6 +15,27 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Guard: conversations table has no prior migration in chain 001–009.
+    # On existing DBs (created manually or via pre-Alembic process) this is
+    # a no-op; on fresh installs it creates the table so the ADD COLUMN calls
+    # below don't fail with "relation conversations does not exist".
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS conversations (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            title VARCHAR(200) DEFAULT '新对话',
+            messages_json TEXT DEFAULT '[]',
+            created_at TIMESTAMP NOT NULL DEFAULT now(),
+            updated_at TIMESTAMP NOT NULL DEFAULT now(),
+            system_prompt_override TEXT,
+            intent_parser_prompt_override TEXT,
+            summarizer_prompt_override TEXT,
+            model_override VARCHAR(100),
+            temperature_override REAL,
+            knowledge_base_id INTEGER REFERENCES knowledge_bases(id)
+        )
+    """)
+
     # agent_configs
     op.add_column("agent_configs", sa.Column("kind", sa.String(20),
                                               nullable=False, server_default="external"))
