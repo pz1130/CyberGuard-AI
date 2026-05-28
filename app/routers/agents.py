@@ -42,6 +42,29 @@ def _build_metadata(fields: dict, existing: dict | None = None) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Kind-aware validation
+# ---------------------------------------------------------------------------
+
+def _validate_agent_payload(body) -> None:
+    """Enforce kind-specific constraints before persisting."""
+    kind = (body.kind or "external").lower()
+    if kind not in ("external", "internal"):
+        raise HTTPException(status_code=400, detail=f"invalid kind: {body.kind!r}")
+    if kind == "external":
+        if not body.backend_type:
+            raise HTTPException(status_code=400, detail="external agent requires backend_type")
+        if body.backend_type in ("hermes", "custom") and not body.endpoint_url:
+            raise HTTPException(status_code=400, detail=f"{body.backend_type} requires endpoint_url")
+    else:  # internal
+        if not body.llm_provider_id:
+            raise HTTPException(status_code=400, detail="internal agent requires llm_provider_id")
+        if body.endpoint_url:
+            raise HTTPException(status_code=400, detail="internal agent must not set endpoint_url")
+        if body.backend_type and body.backend_type != "openclaw":
+            raise HTTPException(status_code=400, detail="internal agent must not set backend_type")
+
+
+# ---------------------------------------------------------------------------
 # CRUD
 # ---------------------------------------------------------------------------
 
@@ -75,7 +98,11 @@ async def create_agent(
 
     **其他模式**（hermes / custom）：
     - 填写 `endpoint_url`，CyberGuard 会主动 POST 到该地址。
+
+    **内部 Agent**（kind="internal"）：
+    - 配置 LLM Provider，系统通过 Tool-Call 循环执行。
     """
+    _validate_agent_payload(body)
     existing = await db.execute(select(AgentConfig).where(AgentConfig.agent_name == body.agent_name))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Agent name already exists")
@@ -130,6 +157,8 @@ async def update_agent(
     agent = result.scalar_one_or_none()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+
+    _validate_agent_payload(body)
 
     body_dict = body.model_dump(exclude_unset=True)
 
