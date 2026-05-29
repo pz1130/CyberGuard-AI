@@ -78,6 +78,7 @@ class MCPToolBase(BaseModel):
             "'admin:all'). Null/empty = requires only TASK_EXECUTE."
         ),
     )
+    tags: Optional[List[str]] = None
 
 
 class MCPToolCreate(MCPToolBase):
@@ -96,6 +97,7 @@ class MCPToolUpdate(BaseModel):
         default=None,
         description="RBAC permission required to execute this tool. Pass None to keep existing, empty string to clear.",
     )
+    tags: Optional[List[str]] = None
 
 
 class MCPToolResponse(BaseModel):
@@ -108,6 +110,7 @@ class MCPToolResponse(BaseModel):
     category: Optional[str]
     required_permission: Optional[str]
     is_active: bool
+    tags: Optional[List[str]] = None
     last_used_at: Optional[datetime]
     use_count: int
     created_at: datetime

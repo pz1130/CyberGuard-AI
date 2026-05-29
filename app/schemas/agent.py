@@ -41,6 +41,8 @@ class AgentConfigBase(BaseModel):
         description="low | medium | high",
     )
     associated_skills: Optional[List[int]] = None
+    associated_tools: Optional[List[int]] = None
+    associated_mcp_tools: Optional[List[int]] = None
     llm_provider_id: Optional[int] = None
     llm_model: Optional[str] = None
     tool_loop_max_steps: int = 8
@@ -92,6 +94,8 @@ class AgentConfigUpdate(BaseModel):
     is_active: Optional[bool] = None
     permission_level: Optional[str] = None
     associated_skills: Optional[List[int]] = None
+    associated_tools: Optional[List[int]] = None
+    associated_mcp_tools: Optional[List[int]] = None
     llm_provider_id: Optional[int] = None
     llm_model: Optional[str] = None
     tool_loop_max_steps: Optional[int] = None
@@ -127,6 +131,8 @@ class AgentConfigRead(BaseModel):
     is_active: bool
     permission_level: str
     associated_skills: Optional[List[int]]
+    associated_tools: Optional[List[int]] = None
+    associated_mcp_tools: Optional[List[int]] = None
     metadata_json: Optional[Dict[str, Any]]
     llm_provider_id: Optional[int] = None
     llm_model: Optional[str] = None

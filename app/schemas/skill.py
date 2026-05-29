@@ -12,6 +12,7 @@ class SkillBase(BaseModel):
     permission_level: str = "medium"
     requires_approval: bool = False
     is_active: bool = True
+    tags: Optional[List[str]] = None
 
 
 class SkillCreate(SkillBase):
@@ -31,6 +32,7 @@ class SkillUpdate(BaseModel):
     requires_approval: Optional[bool] = None
     is_active: Optional[bool] = None
     metadata_json: Optional[Dict[str, Any]] = None
+    tags: Optional[List[str]] = None
 
 
 class SkillResponse(BaseModel):
@@ -44,6 +46,7 @@ class SkillResponse(BaseModel):
     requires_approval: Optional[bool] = False
     is_active: bool
     metadata_json: Optional[Dict[str, Any]]
+    tags: Optional[List[str]] = None
     created_at: datetime
     updated_at: datetime
 
@@ -69,6 +72,7 @@ class ToolBase(BaseModel):
     input_schema_json: Optional[str] = None
     timeout_seconds: int = 60
     required_permission: Optional[str] = None
+    tags: Optional[List[str]] = None
 
 
 class ToolCreate(ToolBase):
@@ -92,6 +96,7 @@ class ToolUpdate(BaseModel):
     input_schema_json: Optional[str] = None
     timeout_seconds: Optional[int] = None
     required_permission: Optional[str] = None
+    tags: Optional[List[str]] = None
 
 
 class ToolResponse(BaseModel):
@@ -109,6 +114,7 @@ class ToolResponse(BaseModel):
     input_schema_json: Optional[str] = None
     timeout_seconds: int = 60
     required_permission: Optional[str] = None
+    tags: Optional[List[str]] = None
     created_at: datetime
     updated_at: datetime
 
