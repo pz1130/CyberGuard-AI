@@ -26,6 +26,7 @@ async def list_skills(skip: int = 0, limit: int = 50, tag: Optional[str] = None,
     skills = result.scalars().all()
     if tag:
         skills = [s for s in skills if tag in (s.tags or [])]
+        total = len(skills)
     return SkillListResponse(total=total, skills=[SkillRead.model_validate(s) for s in skills])
 
 
@@ -155,6 +156,7 @@ async def list_tools(skip: int = 0, limit: int = 50, tag: Optional[str] = None, 
     tools = result.scalars().all()
     if tag:
         tools = [t for t in tools if tag in (t.tags or [])]
+        total = len(tools)
     return ToolListResponse(total=total, tools=[ToolRead.model_validate(t) for t in tools])
 
 
