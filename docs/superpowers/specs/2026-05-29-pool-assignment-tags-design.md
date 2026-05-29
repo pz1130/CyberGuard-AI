@@ -68,12 +68,20 @@ pick skills/tools/mcp tools. External agents using the pools is subproject ③.
 - `add_column` the two `agent_configs` columns and the three `tags` columns.
 - **Data migration** in `upgrade()`: for each `agent_configs` row, read
   `metadata_json` (JSON); if it contains `tool_ids`, copy to `associated_tools`;
-  if it contains `mcp_tool_ids`, copy to `associated_mcp_tools`. Leave the
-  metadata keys in place (harmless; read points fall back to them). Use a
-  data-only loop via `op.get_bind()` + raw SELECT/UPDATE (the metadata column is
-  JSON; handle dict or JSON-string forms defensively).
-- `downgrade()`: drop the five columns. (No need to restore metadata — it was
-  never removed.)
+  if it contains `mcp_tool_ids`, copy to `associated_mcp_tools`; then **remove
+  those two keys from `metadata_json`** and write the cleaned metadata back, so the
+  ids live in exactly one place. Use a data-only loop via `op.get_bind()` + raw
+  SELECT/UPDATE; handle `metadata_json` being a dict, a JSON string, or null.
+- `downgrade()`: reversible — for each row, move `associated_tools` →
+  `metadata_json["tool_ids"]` and `associated_mcp_tools` →
+  `metadata_json["mcp_tool_ids"]` (only when non-empty), then drop the five
+  columns. This restores the pre-migration shape so no assignment is lost on
+  rollback.
+
+Because the metadata keys are removed on upgrade, the read-point metadata
+fallback (below) is normally never hit; it is kept purely as defensive cover for
+rows created in the brief window between code deploy and migration, and for
+rollback safety.
 
 ### 2. Read-point changes
 
