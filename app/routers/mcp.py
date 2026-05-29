@@ -1,6 +1,7 @@
 """MCP (Model Context Protocol) server configuration router."""
 import asyncio
 import json
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
@@ -447,6 +448,7 @@ async def execute_mcp_tool(
 
 @router.get("/mcp/tools/all", response_model=MCPToolListResponse)
 async def list_all_mcp_tools(
+    tag: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     _=Depends(require_permission(Permission.AGENT_READ)),
 ):
@@ -465,4 +467,6 @@ async def list_all_mcp_tools(
     for row in rows:
         tool = row[0]
         tools.append(MCPToolRead.model_validate(tool))
+    if tag:
+        tools = [t for t in tools if tag in (t.tags or [])]
     return MCPToolListResponse(total=len(tools), tools=tools)

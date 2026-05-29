@@ -1,5 +1,6 @@
 """Skill and Tool pool management router."""
 import tempfile
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_db, require_permission, get_current_user
@@ -18,11 +19,13 @@ router = APIRouter()
 
 # --- Skills ---
 @router.get("/skills", response_model=SkillListResponse)
-async def list_skills(skip: int = 0, limit: int = 50, db: AsyncSession = Depends(get_db), _=Depends(require_permission(Permission.SKILL_READ))):
+async def list_skills(skip: int = 0, limit: int = 50, tag: Optional[str] = None, db: AsyncSession = Depends(get_db), _=Depends(require_permission(Permission.SKILL_READ))):
     total_result = await db.execute(select(func.count(Skill.id)))
     total = total_result.scalar()
     result = await db.execute(select(Skill).offset(skip).limit(limit))
     skills = result.scalars().all()
+    if tag:
+        skills = [s for s in skills if tag in (s.tags or [])]
     return SkillListResponse(total=total, skills=[SkillRead.model_validate(s) for s in skills])
 
 
@@ -145,11 +148,13 @@ async def import_skill_file(
 
 # --- Tools ---
 @router.get("/tools", response_model=ToolListResponse)
-async def list_tools(skip: int = 0, limit: int = 50, db: AsyncSession = Depends(get_db), _=Depends(require_permission(Permission.SKILL_READ))):
+async def list_tools(skip: int = 0, limit: int = 50, tag: Optional[str] = None, db: AsyncSession = Depends(get_db), _=Depends(require_permission(Permission.SKILL_READ))):
     total_result = await db.execute(select(func.count(Tool.id)))
     total = total_result.scalar()
     result = await db.execute(select(Tool).offset(skip).limit(limit))
     tools = result.scalars().all()
+    if tag:
+        tools = [t for t in tools if tag in (t.tags or [])]
     return ToolListResponse(total=total, tools=[ToolRead.model_validate(t) for t in tools])
 
 
