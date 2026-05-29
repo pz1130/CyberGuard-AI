@@ -325,6 +325,14 @@ export const api = {
   deletePromptTemplate: (id: number) =>
     request(`/prompt-templates/${id}`, { method: 'DELETE' }),
 
+  // ---- Tools (executable tool pool) ----
+  getTools: () => request('/tools'),
+  createTool: (body: any) => request('/tools', { method: 'POST', body: JSON.stringify(body) }),
+  updateTool: (id: number, body: any) => request(`/tools/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteTool: (id: number) => request(`/tools/${id}`, { method: 'DELETE' }),
+  executeTool: (id: number, args: Record<string, any>) =>
+    request(`/tools/${id}/execute`, { method: 'POST', body: JSON.stringify({ args }) }),
+
   // ---- Webhooks ----
   getWebhooks: () => request('/webhooks'),
   createWebhook: (body: {

@@ -7,6 +7,7 @@ import Chat from './pages/Chat'
 import Providers from './pages/Providers'
 import Agents from './pages/Agents'
 import Skills from './pages/Skills'
+import Tools from './pages/Tools'
 import Knowledge from './pages/Knowledge'
 import GroupChat from './pages/GroupChat'
 import Schedule from './pages/Schedule'
@@ -29,6 +30,7 @@ const PAGES: Record<Tab, { labelKey: string; component: React.ReactNode }> = {
   agents: { labelKey: 'nav.agents', component: <Agents /> },
   providers: { labelKey: 'nav.providers', component: <Providers /> },
   skills: { labelKey: 'nav.skills', component: <Skills /> },
+  tools: { labelKey: 'nav.tools', component: <Tools /> },
   knowledge: { labelKey: 'nav.knowledge', component: <Knowledge /> },
   groupchat: { labelKey: 'nav.groupchat', component: <GroupChat /> },
   schedule: { labelKey: 'nav.schedule', component: <Schedule /> },

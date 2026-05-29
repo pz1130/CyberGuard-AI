@@ -33,6 +33,7 @@
     "providers": "AI Provider",
     "agents": "Sub-Agent",
     "skills": "Skill Pool",
+    "tools": "Tool Pool",
     "knowledge": "Knowledge",
     "groupchat": "Group Chat",
     "schedule": "Scheduled Tasks",

@@ -33,6 +33,7 @@
     "providers": "AI Provider",
     "agents": "Sub-Agent",
     "skills": "Skill Pool",
+    "tools": "工具池",
     "knowledge": "知识库",
     "groupchat": "群聊室",
     "schedule": "定时任务",
