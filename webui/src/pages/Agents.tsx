@@ -22,6 +22,9 @@ interface Agent {
   tool_loop_max_steps?: number
   memory_window?: number
   knowledge_base_id?: number | null
+  associated_skills?: number[]
+  associated_tools?: number[]
+  associated_mcp_tools?: number[]
 }
 
 interface FormState {
@@ -34,6 +37,9 @@ interface FormState {
   // Internal-agent-only fields (kept distinct from external endpoint_url/system_prompt)
   llm_provider_id: string
   llm_model: string
+  associated_skills: number[]
+  associated_tools: number[]
+  associated_mcp_tools: number[]
 }
 
 interface ProviderOption {
@@ -291,6 +297,34 @@ function CodeBlock({ text, onCopy, copied }: { text: string; onCopy: (t: string)
   )
 }
 
+// ── PoolPicker: reusable checkbox list for skills / tools / mcp-tools ────────
+function PoolPicker({ label: lbl, options, selected, onToggle }: {
+  label: string
+  options: { id: number; name?: string; tool_name?: string; tags?: string[]; version?: string }[]
+  selected: number[]
+  onToggle: (id: number) => void
+}) {
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>{lbl}</label>
+      <div style={{ maxHeight: 140, overflowY: 'auto', border: '1px solid var(--border-bright)', background: 'var(--bg-base)', padding: 8 }}>
+        {options.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>— none —</div>}
+        {options.map(o => {
+          const name = o.name || o.tool_name || `#${o.id}`
+          return (
+            <label key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', fontSize: 13, cursor: 'pointer' }}>
+              <input type="checkbox" checked={selected.includes(o.id)} onChange={() => onToggle(o.id)} />
+              <span style={{ color: 'var(--text-primary)' }}>{name}</span>
+              {o.version && <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>v{o.version}</span>}
+              {o.tags && o.tags.length > 0 && <span style={{ fontSize: 11, color: '#60a5fa' }}>{o.tags.join(', ')}</span>}
+            </label>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function Agents() {
   const [items, setItems] = useState<Agent[]>([])
@@ -302,6 +336,7 @@ export default function Agents() {
     agent_name: '', backend_type: 'openclaw', description: '',
     endpoint_url: '', system_prompt: '', permission_level: 'medium',
     llm_provider_id: '', llm_model: '',
+    associated_skills: [], associated_tools: [], associated_mcp_tools: [],
   })
   const [testing, setTesting] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<Record<string, { ok: boolean; msg: string }>>({})
@@ -310,6 +345,9 @@ export default function Agents() {
   const [kindFilter, setKindFilter] = useState<string>('all')
   const [showKindPicker, setShowKindPicker] = useState(false)
   const [providers, setProviders] = useState<ProviderOption[]>([])
+  const [skillsPool, setSkillsPool] = useState<any[]>([])
+  const [toolsPool, setToolsPool] = useState<any[]>([])
+  const [mcpToolsPool, setMcpToolsPool] = useState<any[]>([])
 
   const load = async () => {
     try {
@@ -327,9 +365,23 @@ export default function Agents() {
     } catch { setProviders([]) }
   }
 
-  useEffect(() => { load(); loadProviders() }, [])
+  const loadPools = async () => {
+    try {
+      const s = await api.getSkills() as any
+      setSkillsPool(Array.isArray(s) ? s : (s?.skills || []))
+      const t = await api.getTools() as any
+      setToolsPool(Array.isArray(t) ? t : (t?.tools || []))
+      const m = await api.getAllMcpTools() as any
+      setMcpToolsPool(Array.isArray(m) ? m : (m?.tools || []))
+    } catch { /* leave pools empty */ }
+  }
+
+  useEffect(() => { load(); loadProviders(); loadPools() }, [])
 
   const selectedProvider = providers.find(p => String(p.id) === form.llm_provider_id)
+
+  const toggleId = (key: 'associated_skills' | 'associated_tools' | 'associated_mcp_tools', id: number) =>
+    setForm(f => ({ ...f, [key]: f[key].includes(id) ? f[key].filter(x => x !== id) : [...f[key], id] }))
 
   const openCreate = (isInternal = false) => {
     setEditing(null)
@@ -338,6 +390,7 @@ export default function Agents() {
       agent_name: '', backend_type: isInternal ? '__internal__' : 'openclaw',
       description: '', endpoint_url: '', system_prompt: '', permission_level: 'medium',
       llm_provider_id: '', llm_model: '',
+      associated_skills: [], associated_tools: [], associated_mcp_tools: [],
     })
     setShowForm(true)
   }
@@ -355,6 +408,9 @@ export default function Agents() {
       permission_level: a.permission_level || 'medium',
       llm_provider_id: isInternal ? String(a.llm_provider_id || '') : '',
       llm_model: isInternal ? (a.llm_model || '') : '',
+      associated_skills: a.associated_skills || [],
+      associated_tools: a.associated_tools || [],
+      associated_mcp_tools: a.associated_mcp_tools || [],
     })
     setShowForm(true)
   }
@@ -381,6 +437,9 @@ export default function Agents() {
         payload.tool_loop_max_steps = 8
         payload.memory_window = 20
         payload.backend_type = 'openclaw'  // required but unused for internal
+        payload.associated_skills = form.associated_skills
+        payload.associated_tools = form.associated_tools
+        payload.associated_mcp_tools = form.associated_mcp_tools
       } else {
         // External agent fields
         payload.backend_type = form.backend_type
@@ -769,6 +828,11 @@ export default function Agents() {
                         style={{ ...inputStyle, color: 'var(--text-dim)' }} />
                     </div>
                   </div>
+
+                  {/* Skill / Tool / MCP-tool assignment */}
+                  <PoolPicker label="SKILLS" options={skillsPool} selected={form.associated_skills} onToggle={id => toggleId('associated_skills', id)} />
+                  <PoolPicker label="TOOLS" options={toolsPool} selected={form.associated_tools} onToggle={id => toggleId('associated_tools', id)} />
+                  <PoolPicker label="MCP TOOLS" options={mcpToolsPool} selected={form.associated_mcp_tools} onToggle={id => toggleId('associated_mcp_tools', id)} />
                 </>
               )}
 
