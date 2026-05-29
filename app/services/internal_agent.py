@@ -13,6 +13,7 @@ from sqlalchemy import select
 from app.core.database import AsyncSessionLocal
 from app.models.conversation import Conversation
 from app.services.llm_router import get_llm_router
+from app.services.tool_executor import execute_tool
 
 
 # --- Tunables (aligned with QwenPaw's ReActAgent behaviours) ---------------
@@ -62,6 +63,7 @@ class InternalAgentRunner:
         self.associated_skills: List[int] = config.get("associated_skills") or []
         meta = config.get("metadata_json") or {}
         self.mcp_tool_ids: List[int] = meta.get("mcp_tool_ids") or []
+        self.pool_tool_ids: List[int] = meta.get("tool_ids") or []
         self.permission_level: str = config.get("permission_level") or "medium"
 
     # -------- Memory --------
@@ -176,8 +178,44 @@ class InternalAgentRunner:
             })
         return out
 
+    async def _load_pool_tools(self):
+        """Load executable Tool-pool rows referenced by metadata_json.tool_ids."""
+        if not self.pool_tool_ids:
+            return []
+        from app.models.skill import Tool
+        async with AsyncSessionLocal() as s:
+            result = await s.execute(
+                select(Tool).where(Tool.id.in_(self.pool_tool_ids),
+                                   Tool.is_active == True,
+                                   Tool.command_template.isnot(None))
+            )
+            return list(result.scalars().all())
+
     async def _build_tools(self) -> List[Dict[str, Any]]:
+        self._pool_tools_by_name: Dict[str, Any] = {}
         tools = await self._load_mcp_tools()
+
+        # Append executable pool Tools (MCP names win on collision)
+        mcp_names = {t["function"]["name"] for t in tools}
+        for pt in await self._load_pool_tools():
+            if pt.name in mcp_names:
+                continue  # MCP name wins; skip colliding pool tool
+            try:
+                schema = json.loads(pt.input_schema_json) if pt.input_schema_json else {}
+            except json.JSONDecodeError:
+                schema = {}
+            if not isinstance(schema, dict):
+                schema = {}
+            self._pool_tools_by_name[pt.name] = pt
+            tools.append({
+                "type": "function",
+                "function": {
+                    "name": pt.name,
+                    "description": pt.description or "",
+                    "parameters": schema or {"type": "object", "properties": {}},
+                },
+            })
+
         if self.knowledge_base_id:
             tools.append({
                 "type": "function",
@@ -228,6 +266,16 @@ class InternalAgentRunner:
                 return json.dumps(chunks, ensure_ascii=False, default=str)
             except Exception as e:
                 return f"ERROR: kb_search failed: {e}"
+
+        # 3. Executable pool Tool
+        if getattr(self, "_pool_tools_by_name", None) and name in self._pool_tools_by_name:
+            tool_row = self._pool_tools_by_name[name]
+            if (tool_row.permission_level or "medium") == "high":
+                return f"ERROR: tool {name!r} requires approval (high permission)"
+            res = await execute_tool(tool_row, args, user_id=getattr(self, "_user_id", 0))
+            if res.get("status") == "completed":
+                return res.get("stdout", "") or "(no output)"
+            return f"ERROR: tool {name!r}: {res.get('error') or res.get('stderr') or res}"
 
         return f"ERROR: unknown tool {name!r}"
 
@@ -335,6 +383,7 @@ class InternalAgentRunner:
                       user_id: int) -> Dict[str, Any]:
         """Run the tool-call loop. Returns same shape as SubAgentWrapper.execute()."""
         start = time.monotonic()
+        self._user_id = user_id
 
         # 1. Permission gate
         if self.permission_level == "high":

@@ -340,3 +340,37 @@ async def test_agent_executor_routes_internal_kind(monkeypatch):
     async with AsyncSessionLocal() as s:
         await s.execute(AgentConfig.__table__.delete().where(AgentConfig.id == agent_id))
         await s.commit()
+
+
+@pytest.mark.asyncio
+async def test_internal_agent_dispatches_pool_tool(monkeypatch):
+    from app.services import internal_agent as ia_mod
+    from app.services.internal_agent import InternalAgentRunner
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    def tc(name, cid):
+        return SimpleNamespace(id=cid, function=SimpleNamespace(
+            name=name, arguments='{"msg": "hi"}'))
+    step1 = SimpleNamespace(content="", tool_calls=[tc("echo_test", "1")])
+    fake_router = SimpleNamespace(chat=AsyncMock(side_effect=[step1, "done"]))
+    monkeypatch.setattr(ia_mod, "get_llm_router", lambda: fake_router)
+
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "s", "llm_provider_id": 1,
+           "llm_model": "m", "tool_loop_max_steps": 4, "memory_window": 0,
+           "associated_skills": [], "metadata_json": {"tool_ids": [42]},
+           "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+
+    fake_tool = SimpleNamespace(id=42, name="echo_test", description="d",
+                                input_schema_json='{"type":"object","properties":{"msg":{}}}',
+                                command_template="echo {msg}", permission_level="medium",
+                                required_permission=None, timeout_seconds=30)
+    async def fake_load_pool_tools(): return [fake_tool]
+    monkeypatch.setattr(runner, "_load_pool_tools", fake_load_pool_tools)
+    monkeypatch.setattr(ia_mod, "execute_tool",
+                        AsyncMock(return_value={"status": "completed", "stdout": "hi"}))
+
+    res = await runner.execute(task="go", conversation_id=None, user_id=1)
+    assert res["status"] == "completed"
+    assert any(c["name"] == "echo_test" for c in res["tool_calls"])
