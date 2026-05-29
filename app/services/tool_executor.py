@@ -5,6 +5,7 @@ it in the isolated tool-runner container. See:
 import json
 import os
 import shlex
+import uuid
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -55,3 +56,70 @@ def build_argv(command_template: str, input_schema: Optional[Dict[str, Any]],
         else:
             argv.append(tok)
     return argv
+
+
+def _truncate(text: str) -> str:
+    if text and len(text) > OUTPUT_MAX_CHARS:
+        return text[:OUTPUT_MAX_CHARS] + f"\n…[truncated {len(text) - OUTPUT_MAX_CHARS} chars]"
+    return text or ""
+
+
+async def _create_approval(tool, args: Dict[str, Any], user_id: int) -> None:
+    from app.services.approval_service import ApprovalService
+    await ApprovalService().create_request(
+        request_id=str(uuid.uuid4()),
+        user_id=user_id,
+        action_type="tool.execute",
+        action_description=f"Execute tool {getattr(tool, 'name', '?')}",
+        payload={"tool": getattr(tool, "name", None), "args": args},
+        risk_level="high",
+    )
+
+
+async def execute_tool(tool, args: Dict[str, Any], user_id: int, *,
+                       approved: bool = False,
+                       caller_permissions: Optional[set] = None) -> Dict[str, Any]:
+    """Validate args, gate on RBAC/approval, run in the tool-runner. JSON-safe result."""
+    # RBAC: only enforced when caller_permissions is provided (API path). The
+    # internal-agent path passes None — assignment to the agent is the authorization.
+    req = getattr(tool, "required_permission", None)
+    if req and caller_permissions is not None and req not in caller_permissions:
+        return {"status": "error", "error": f"missing required permission: {req}"}
+
+    # Approval gate for high-permission tools.
+    if getattr(tool, "permission_level", "medium") == "high" and not approved:
+        await _create_approval(tool, args, user_id)
+        return {"status": "needs_approval",
+                "error": "High-permission tool requires approval"}
+
+    try:
+        schema = json.loads(tool.input_schema_json) if tool.input_schema_json else {}
+    except json.JSONDecodeError:
+        schema = {}
+    try:
+        argv = build_argv(tool.command_template or "", schema, args)
+    except ToolArgError as e:
+        return {"status": "error", "error": str(e)}
+
+    timeout = int(getattr(tool, "timeout_seconds", 60) or 60)
+    try:
+        async with httpx.AsyncClient(timeout=timeout + 10) as client:
+            r = await client.post(
+                f"{TOOL_RUNNER_URL}/run",
+                json={"argv": argv, "timeout": timeout},
+                headers={"X-Runner-Token": RUNNER_TOKEN},
+            )
+    except Exception as e:
+        return {"status": "error", "error": f"tool-runner unreachable: {e}"}
+
+    if r.status_code != 200:
+        return {"status": "error", "error": f"tool-runner {r.status_code}: {r.text[:200]}"}
+    data = r.json()
+    return {
+        "status": "completed",
+        "stdout": _truncate(data.get("stdout", "")),
+        "stderr": _truncate(data.get("stderr", "")),
+        "exit_code": data.get("exit_code"),
+        "duration_ms": data.get("duration_ms"),
+        "timed_out": data.get("timed_out", False),
+    }
