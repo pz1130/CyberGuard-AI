@@ -22,14 +22,35 @@ Sequence: `001_initial → 002_openclaw_gateway → 003_pgvector_knowledge → 0
 
 ---
 
-## Session 2026-05-29 — Scheduled-tasks model export + WebUI port
+## Session 2026-05-29 — Scheduled-tasks model export + WebUI port + conversations-table hotfix
 
 Small follow-up changes on `feat/internal-agents`:
 
-- **`app/models/__init__.py`** — export `ScheduledTask` from the `app.models` package (import + `__all__`). The `scheduled_tasks` model and `/api/v1/schedule` CRUD router already existed and are wired in `app/main.py`, but the model was not re-exported through the package, so it was not registered alongside the other models. This makes `from app.models import ScheduledTask` work and keeps the model discoverable for metadata.
+- **`app/models/__init__.py`** — export `ScheduledTask` and `Conversation` from the `app.models` package (import + `__all__`). Both models existed and were used (the `/api/v1/schedule` CRUD router and the conversations router import them directly), but neither was re-exported through the package, so `from app.models import ScheduledTask`/`Conversation` failed. Tables are migration-driven, so this did not affect table creation — only the package import surface.
 - **`docker-compose.yml`** — WebUI host port `3000 → 3001` (host port only; container still serves on `80`) to avoid a local port collision.
 
 > ⚠️ The schedule feature remains **CRUD-only**: there is no Alembic migration for the `scheduled_tasks` table and no Celery-beat executor, so stored cron expressions are persisted but not yet executed. Tracked under "Not yet implemented".
+
+### Hotfix — missing `conversations` table / orphaned Alembic revision
+
+Login landing page returned `{"detail":"Internal server error"}`. Root cause was **not** auth — the page creates a conversation on load and the insert failed with `UndefinedTableError: relation "conversations" does not exist`.
+
+Diagnosis: the DB `alembic_version` was stamped to **`e6977c6f81d8`** — an orphaned revision id that exists in **no** migration file. Earlier in development that revision (the "agent kind" migration) added the `agent_configs` columns but did **not** create `conversations`; it was later renamed to `010_agent_kind_and_internal` and gained the `CREATE TABLE IF NOT EXISTS conversations` guard. Because the DB stayed pinned to the orphaned hash, Alembic believed it was already at head and `010` never re-ran, so `conversations` was never created (while `agent_configs` already had the new columns).
+
+Fix applied directly to the dev DB in one transaction (NOT a `stamp 009 + upgrade` — that would re-`ADD COLUMN` the already-present `agent_configs` columns and fail):
+
+```sql
+BEGIN;
+-- create conversations in its final 010 shape (11 base cols + agent_id + parent_conversation_id + ix_conv_agent + FKs)
+CREATE TABLE IF NOT EXISTS conversations ( ... );
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS agent_id INTEGER REFERENCES agent_configs(id) ON DELETE CASCADE;
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS parent_conversation_id INTEGER REFERENCES conversations(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS ix_conv_agent ON conversations (agent_id, parent_conversation_id);
+UPDATE alembic_version SET version_num = '010_agent_kind_and_internal';
+COMMIT;
+```
+
+Verified: `alembic current` → `010`; real admin login → `POST /api/v1/conversations` 201, `GET` 200. Fresh installs are unaffected (010 runs cleanly from 001). Only DBs pinned to the orphaned revision need this one-time realignment.
 
 ---
 

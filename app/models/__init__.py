@@ -17,6 +17,7 @@ from app.models.governance import (
     RequirementAssessment, Evidence,
 )
 from app.models.schedule import ScheduledTask
+from app.models.conversation import Conversation
 
 __all__ = [
     "User", "RoleModel",
@@ -35,4 +36,5 @@ __all__ = [
     "Framework", "Requirement", "ComplianceAssessment",
     "RequirementAssessment", "Evidence",
     "ScheduledTask",
+    "Conversation",
 ]
