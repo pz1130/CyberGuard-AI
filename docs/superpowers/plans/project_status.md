@@ -22,6 +22,35 @@ Sequence: `001_initial → 002_openclaw_gateway → 003_pgvector_knowledge → 0
 
 ---
 
+## Session 2026-05-29 — Unified pool assignment + tags (QwenPaw alignment, subproject ②)
+
+Shipped subproject ② (spec `docs/superpowers/specs/2026-05-29-pool-assignment-tags-design.md`,
+plan `docs/superpowers/plans/2026-05-29-pool-assignment-tags.md`):
+
+- **Migration 012** — `AgentConfig` gains `associated_tools` + `associated_mcp_tools`
+  JSON columns (joining `associated_skills`); `Skill`/`Tool`/`MCPTool` gain `tags`.
+  Data migration moves `metadata_json.tool_ids`/`mcp_tool_ids` into the new columns
+  and removes those keys; reversible downgrade.
+- **Read points** — `InternalAgentRunner` resolves ids column-first with a
+  `metadata_json` fallback; `AgentExecutor` threads the columns into `config_dict`.
+- **API** — agent + pool CRUD round-trip the new fields automatically (create via
+  `hasattr` filter, update via `setattr`, pool create via `model_dump`); `?tag=`
+  filter on `/skills`, `/tools`, `/mcp/tools/all` (post-filter `total`).
+- **WebUI** — internal-agent form gets Skills/Tools/MCP multi-select assignment
+  pickers (`PoolPicker`); Skills/Tools pages get a tags editor; all three pool
+  pages show tags (+ version on Skill/Tool) and a tag-filter box. MCP tools have
+  no tags editor (server-discovered, not user-created) — tags settable via API.
+
+Executed via subagent-driven development (6 tasks, two-stage review each, plus a
+final whole-implementation review + a stale-`total` follow-up fix). The ①
+temporary `metadata_json.tool_ids` wiring is superseded by `associated_tools`
+(fallback retained).
+
+**Deferred to ③:** external agents using the pools (payload delivery + gateway
+callbacks); `get_mcp_tools_for_agent` refactor to read `associated_mcp_tools`.
+
+---
+
 ## Session 2026-05-29 — Executable Tool pool (QwenPaw alignment, subproject ①)
 
 Shipped subproject ① of aligning the skill/tool/mcp pools with QwenPaw (spec

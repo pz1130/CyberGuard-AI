@@ -3,7 +3,7 @@ name: pool-assignment-tags-design
 description: Subproject ② of the QwenPaw pool alignment — unify skill/tool/mcp assignment on AgentConfig as three first-class columns, add tags to the three pools, and give internal agents a WebUI assignment panel.
 type: design
 date: 2026-05-29
-status: approved-pending-review
+status: implemented (2026-05-29, feat/internal-agents)
 ---
 
 # Unified Pool Assignment + Tags (subproject ②)
