@@ -147,6 +147,7 @@ dc2066a feat(webui): kind badge + filter + chooser modal + internal form on Agen
 - Governance evidence file upload (`kind=file` schema exists, UI not wired).
 - Internal agent streaming output.
 - Scheduled-tasks execution: `/api/v1/schedule` CRUD + `ScheduledTask` model exist, but no Alembic migration for `scheduled_tasks` and no Celery-beat executor — cron expressions are stored, never run.
+- **Test isolation for DB-backed async tests** (tracked 2026-05-29): the DB-backed tests in `tests/test_internal_agent.py` (and likely other suites) share the module-level SQLAlchemy async engine, whose asyncpg connection pool binds to the first event loop. Under `pytest-asyncio` 1.x (default function-scoped loops) they **pass individually but fail when run together** with `RuntimeError: Event loop is closed` / "attached to a different loop". The pure-logic unit tests (truncation, parallel dispatch, auto-continue, compaction) are unaffected and pass. Fix needs a session-scoped event loop or a per-test engine/connection in a `conftest.py` fixture — deferred, not yet done.
 
 ## Operational notes
 
