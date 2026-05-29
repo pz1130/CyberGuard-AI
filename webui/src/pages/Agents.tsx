@@ -483,9 +483,12 @@ export default function Agents() {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
           {items.filter(a => kindFilter === 'all' || (a.kind || 'external') === kindFilter).map(a => {
-            const bc = BACKEND_COLORS[a.backend_type || 'custom']
-            const isOpenClaw = a.backend_type === 'openclaw'
             const isInternal = (a.kind || 'external') === 'internal'
+            const bc = isInternal ? '#60a5fa' : BACKEND_COLORS[a.backend_type || 'custom']
+            // Internal agents run in-process; the OpenClaw online/offline +
+            // poll concept never applies to them (even though their stored
+            // backend_type is 'openclaw' as an unused placeholder).
+            const isOpenClaw = !isInternal && a.backend_type === 'openclaw'
             const online = a.is_online || false
             const thisRegenKey = regenKey[a.id!]
 
@@ -509,6 +512,16 @@ export default function Agents() {
                     </div>
                   </div>
                 </div>
+
+                {/* Internal agents run in-process — always ready, no poll */}
+                {isInternal && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                    <Cpu size={13} style={{ color: '#60a5fa' }} />
+                    <span style={{ fontSize: 13, letterSpacing: '0.1em', color: '#60a5fa' }}>
+                      READY · 进程内运行
+                    </span>
+                  </div>
+                )}
 
                 {/* Online status (OpenClaw only) */}
                 {isOpenClaw && (

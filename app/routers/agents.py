@@ -17,6 +17,7 @@ from app.schemas.agent import (
     AgentConfigListResponse, AgentTestResponse,
 )
 from app.models.agent import AgentConfig
+from app.models.provider import Provider
 
 router = APIRouter()
 
@@ -302,6 +303,7 @@ async def test_agent_connection(
 ):
     """测试 Sub-Agent 连通性。
 
+    - 内部模式：在系统进程内运行，无网络连通性可测；校验所配置的 LLM Provider。
     - OpenClaw 模式：检查节点最近一次 poll/heartbeat 时间，判断是否在线。
     - 其他模式：向 endpoint_url/health 发 GET 请求。
     """
@@ -309,6 +311,19 @@ async def test_agent_connection(
     agent = result.scalar_one_or_none()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+
+    if agent.kind == "internal":
+        # 内部 Agent 在系统进程内运行，没有外部连通性概念（offline/poll）。
+        # 唯一会"断"的是其 LLM Provider，所以校验它即可。
+        if not agent.llm_provider_id:
+            return AgentTestResponse(success=False, error="内部 Agent 未配置 LLM Provider")
+        prov = await db.execute(select(Provider).where(Provider.id == agent.llm_provider_id))
+        p = prov.scalar_one_or_none()
+        if p is None:
+            return AgentTestResponse(success=False, error="所配置的 LLM Provider 不存在")
+        if not p.is_active:
+            return AgentTestResponse(success=False, error=f"LLM Provider「{p.name}」已禁用")
+        return AgentTestResponse(success=True, error=f"就绪 · 进程内运行（LLM Provider：{p.name}）")
 
     if agent.backend_type == "openclaw":
         if not agent.api_key_hash:
