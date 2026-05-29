@@ -55,7 +55,7 @@ export const api = {
   regenAgentApiKey: (id: string) => request(`/agents/${id}/api-key`, { method: 'POST' }),
 
   // Skills
-  getSkills: () => request('/skills'),
+  getSkills: (qs = '') => request('/skills' + qs),
   createSkill: (body: any) => request('/skills', { method: 'POST', body: JSON.stringify(body) }),
   updateSkill: (id: string, body: any) => request(`/skills/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteSkill: (id: string) => request(`/skills/${id}`, { method: 'DELETE' }),
@@ -222,7 +222,7 @@ export const api = {
   startMCPServer: (id: number) => request(`/mcp/servers/${id}/start`, { method: 'POST' }),
   stopMCPServer: (id: number) => request(`/mcp/servers/${id}/stop`, { method: 'POST' }),
   getMCPServerTools: (serverId: number) => request(`/mcp/servers/${serverId}/tools`),
-  getAllMcpTools: () => request('/mcp/tools/all'),
+  getAllMcpTools: (qs = '') => request('/mcp/tools/all' + qs),
 
   // MCP Tools
   createMCPTool: (body: any) => request('/mcp/tools', { method: 'POST', body: JSON.stringify(body) }),
@@ -326,7 +326,7 @@ export const api = {
     request(`/prompt-templates/${id}`, { method: 'DELETE' }),
 
   // ---- Tools (executable tool pool) ----
-  getTools: () => request('/tools'),
+  getTools: (qs = '') => request('/tools' + qs),
   createTool: (body: any) => request('/tools', { method: 'POST', body: JSON.stringify(body) }),
   updateTool: (id: number, body: any) => request(`/tools/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteTool: (id: number) => request(`/tools/${id}`, { method: 'DELETE' }),

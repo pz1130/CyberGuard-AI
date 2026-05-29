@@ -16,6 +16,8 @@ interface Tool {
   required_permission?: string
   md_content?: string
   metadata_json?: Record<string, any>
+  tags?: string[]
+  tagsText?: string
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -52,6 +54,7 @@ export default function Tools() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<number | null>(null)
+  const [tagFilter, setTagFilter] = useState('')
   const [form, setForm] = useState<Tool>({
     name: '',
     category: 'tool',
@@ -63,11 +66,12 @@ export default function Tools() {
     timeout_seconds: 60,
     required_permission: '',
     md_content: '',
+    tagsText: '',
   })
 
   const load = async () => {
     try {
-      const data = await api.getTools() as Tool[] | { tools?: Tool[] }
+      const data = await api.getTools(tagFilter ? `?tag=${encodeURIComponent(tagFilter)}` : '') as Tool[] | { tools?: Tool[] }
       setItems(Array.isArray(data) ? data : data?.tools || [])
     } catch { setItems([]) } finally { setLoading(false) }
   }
@@ -84,6 +88,7 @@ export default function Tools() {
     timeout_seconds: 60,
     required_permission: '',
     md_content: '',
+    tagsText: '',
   })
 
   const submit = async () => {
@@ -97,6 +102,8 @@ export default function Tools() {
         input_schema_json: form.input_schema_json || undefined,
         required_permission: form.required_permission || undefined,
         md_content: form.md_content || undefined,
+        tags: (form.tagsText || '').split(',').map(s => s.trim()).filter(Boolean),
+        tagsText: undefined,
       }
       if (editing != null) await api.updateTool(editing, payload)
       else await api.createTool(payload)
@@ -119,6 +126,7 @@ export default function Tools() {
       timeout_seconds: t.timeout_seconds ?? 60,
       required_permission: t.required_permission || '',
       md_content: (t as any).md_content || '',
+      tagsText: (t.tags || []).join(', '),
     })
     setShowForm(true)
   }
@@ -238,6 +246,13 @@ export default function Tools() {
                 placeholder={"# Tool notes\n\nDescribe usage, caveats, examples..."}
                 style={{ width: '100%', padding: '8px 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 13, letterSpacing: '0.05em', fontFamily: 'var(--font-mono)', resize: 'vertical' }} />
             </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={labelStyle}>TAGS (comma-separated)</label>
+              <input value={form.tagsText || ''}
+                onChange={e => setForm(f => ({ ...f, tagsText: e.target.value }))}
+                placeholder="recon, threat-intel"
+                style={inputStyle} />
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 20 }}>
             <button onClick={() => { setShowForm(false); setEditing(null) }}
@@ -251,6 +266,14 @@ export default function Tools() {
           </div>
         </div>
       )}
+
+      {/* Tag Filter */}
+      <div style={{ marginBottom: 16 }}>
+        <input value={tagFilter} onChange={e => setTagFilter(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') load() }}
+          placeholder="filter by tag…"
+          style={inputStyle} />
+      </div>
 
       {/* Loading */}
       {loading && (
@@ -303,6 +326,9 @@ export default function Tools() {
                   <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     $ {t.command_template}
                   </div>
+                )}
+                {t.tags && t.tags.length > 0 && (
+                  <span style={{ fontSize: 11, color: '#60a5fa' }}>{t.tags.join(', ')}</span>
                 )}
                 {t.version && (
                   <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', marginBottom: 4 }}>v{t.version}</div>

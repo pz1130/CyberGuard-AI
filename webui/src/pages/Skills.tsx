@@ -11,6 +11,8 @@ interface Skill {
   permission_level?: string
   is_active?: boolean
   metadata_json?: Record<string, any>
+  tags?: string[]
+  tagsText?: string
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -44,7 +46,8 @@ export default function Skills() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<string | null>(null)
-  const [form, setForm] = useState<Skill>({ name: '', category: 'tool', description: '', version: '1.0.0', permission_level: 'medium' })
+  const [tagFilter, setTagFilter] = useState('')
+  const [form, setForm] = useState<Skill>({ name: '', category: 'tool', description: '', version: '1.0.0', permission_level: 'medium', tagsText: '' })
   const [mdContent, setMdContent] = useState('')
   const [showInstallUrl, setShowInstallUrl] = useState(false)
   const [showImport, setShowImport] = useState(false)
@@ -55,7 +58,7 @@ export default function Skills() {
 
   const load = async () => {
     try {
-      const data = await api.getSkills() as Skill[] | { skills?: Skill[] }
+      const data = await api.getSkills(tagFilter ? `?tag=${encodeURIComponent(tagFilter)}` : '') as Skill[] | { skills?: Skill[] }
       setItems(Array.isArray(data) ? data : data?.skills || [])
     } catch { setItems([]) } finally { setLoading(false) }
   }
@@ -64,11 +67,16 @@ export default function Skills() {
   const submit = async () => {
     if (!form.name) return
     try {
-      const payload = { ...form, md_content: mdContent }
+      const payload = {
+        ...form,
+        md_content: mdContent,
+        tags: (form.tagsText || '').split(',').map(s => s.trim()).filter(Boolean),
+        tagsText: undefined,
+      }
       if (editing) await api.updateSkill(editing, payload)
       else await api.createSkill(payload)
       setShowForm(false); setEditing(null)
-      setForm({ name: '', category: 'tool', description: '', version: '1.0.0', permission_level: 'medium' })
+      setForm({ name: '', category: 'tool', description: '', version: '1.0.0', permission_level: 'medium', tagsText: '' })
       setMdContent('')
       load()
     } catch (e: any) { alert(e.message) }
@@ -76,7 +84,7 @@ export default function Skills() {
 
   const openEdit = (s: Skill) => {
     setEditing(String(s.id))
-    setForm({ name: s.name, category: s.category || 'tool', description: s.description || '', version: s.version || '1.0.0', permission_level: s.permission_level || 'medium' })
+    setForm({ name: s.name, category: s.category || 'tool', description: s.description || '', version: s.version || '1.0.0', permission_level: s.permission_level || 'medium', tagsText: (s.tags || []).join(', ') })
     setMdContent((s as any).md_content || '')
     setShowForm(true)
   }
@@ -132,7 +140,7 @@ export default function Skills() {
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', height: 36, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
             <Upload size={12} /> IMPORT
           </button>
-          <button onClick={() => { setShowForm(true); setEditing(null); setForm({ name: '', category: 'tool', description: '', version: '1.0.0', permission_level: 'medium' }); setMdContent('') }}
+          <button onClick={() => { setShowForm(true); setEditing(null); setForm({ name: '', category: 'tool', description: '', version: '1.0.0', permission_level: 'medium', tagsText: '' }); setMdContent('') }}
             style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 36, background: 'var(--accent)', border: '1px solid var(--accent-border)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer', fontFamily: 'var(--font-mono)', boxShadow: '0 0 16px rgba(0,255,65,0.15)' }}>
             <Plus size={13} /> NEW SKILL
           </button>
@@ -251,6 +259,13 @@ export default function Skills() {
                 placeholder={"# Skill Name\n\nDescribe what this skill does..."}
                 style={{ width: '100%', padding: '8px 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 13, letterSpacing: '0.05em', fontFamily: 'var(--font-mono)', resize: 'vertical' }} />
             </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>TAGS (comma-separated)</label>
+              <input value={form.tagsText || ''}
+                onChange={e => setForm(f => ({ ...f, tagsText: e.target.value }))}
+                placeholder="recon, threat-intel"
+                style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em', fontFamily: 'var(--font-mono)' }} />
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 20 }}>
             <button onClick={() => { setShowForm(false); setEditing(null) }}
@@ -264,6 +279,14 @@ export default function Skills() {
           </div>
         </div>
       )}
+
+      {/* Tag Filter */}
+      <div style={{ marginBottom: 16 }}>
+        <input value={tagFilter} onChange={e => setTagFilter(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') load() }}
+          placeholder="filter by tag…"
+          style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em', fontFamily: 'var(--font-mono)' }} />
+      </div>
 
       {/* Loading */}
       {loading && (
@@ -305,6 +328,9 @@ export default function Skills() {
                   </div>
                 </div>
                 <p style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6, marginBottom: 8 }}>{s.description || '—'}</p>
+                {s.tags && s.tags.length > 0 && (
+                  <span style={{ fontSize: 11, color: '#60a5fa' }}>{s.tags.join(', ')}</span>
+                )}
                 {s.version && (
                   <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', marginBottom: 4 }}>v{s.version}</div>
                 )}

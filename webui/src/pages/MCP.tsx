@@ -22,6 +22,7 @@ interface MCPTool {
   category?: string
   is_active?: boolean
   use_count?: number
+  tags?: string[]
 }
 
 interface ServerForm {
@@ -57,6 +58,7 @@ export default function MCP() {
   const [showServerForm, setShowServerForm] = useState(false)
   const [editingServer, setEditingServer] = useState<MCPServer | null>(null)
   const [serverForm, setServerForm] = useState<ServerForm>(emptyServerForm)
+  const [tagFilter, setTagFilter] = useState('')
 
   const loadServers = async () => {
     try {
@@ -80,6 +82,13 @@ export default function MCP() {
     }
     setTools(all)
     setServerTools(map)
+  }
+
+  const loadAllTools = async () => {
+    try {
+      const data = await api.getAllMcpTools(tagFilter ? `?tag=${encodeURIComponent(tagFilter)}` : '') as MCPTool[] | { tools?: MCPTool[] }
+      setTools(Array.isArray(data) ? data : data?.tools || [])
+    } catch { setTools([]) }
   }
 
   useEffect(() => { loadServers() }, [])
@@ -310,31 +319,42 @@ export default function MCP() {
 
       {/* Tools Tab */}
       {tab === 'tools' && (
-        tools.length === 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 0', gap: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
-            <Wrench size={28} style={{ color: 'var(--text-dim)' }} />
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>NO MCP TOOLS FOUND</div>
-            <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>REGISTER AND START A SERVER FIRST</div>
+        <>
+          <div style={{ marginBottom: 16 }}>
+            <input value={tagFilter} onChange={e => setTagFilter(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') loadAllTools() }}
+              placeholder="filter by tag…"
+              style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em', fontFamily: 'var(--font-mono)' }} />
           </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-            {tools.map(t => (
-              <div key={t.id} style={{ padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <div style={{ fontSize: 14, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', letterSpacing: '0.05em' }}>{t.tool_name}</div>
-                  <span style={{ padding: '2px 6px', border: `1px solid ${CATEGORY_COLORS[t.category || 'general']}`, color: CATEGORY_COLORS[t.category || 'general'], fontSize: 10, letterSpacing: '0.15em', background: 'var(--bg-base)' }}>
-                    {(t.category || 'general').toUpperCase()}
-                  </span>
+          {tools.length === 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 0', gap: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
+              <Wrench size={28} style={{ color: 'var(--text-dim)' }} />
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>NO MCP TOOLS FOUND</div>
+              <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>REGISTER AND START A SERVER FIRST</div>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              {tools.map(t => (
+                <div key={t.id} style={{ padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <div style={{ fontSize: 14, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', letterSpacing: '0.05em' }}>{t.tool_name}</div>
+                    <span style={{ padding: '2px 6px', border: `1px solid ${CATEGORY_COLORS[t.category || 'general']}`, color: CATEGORY_COLORS[t.category || 'general'], fontSize: 10, letterSpacing: '0.15em', background: 'var(--bg-base)' }}>
+                      {(t.category || 'general').toUpperCase()}
+                    </span>
+                  </div>
+                  {t.description && <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6, marginBottom: 10 }}>{t.description}</div>}
+                  {t.tags && t.tags.length > 0 && (
+                    <span style={{ fontSize: 11, color: '#60a5fa' }}>{t.tags.join(', ')}</span>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+                    <Activity size={10} style={{ color: 'var(--text-dim)' }} />
+                    <span style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>{t.use_count ?? 0} CALLS</span>
+                  </div>
                 </div>
-                {t.description && <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6, marginBottom: 10 }}>{t.description}</div>}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
-                  <Activity size={10} style={{ color: 'var(--text-dim)' }} />
-                  <span style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>{t.use_count ?? 0} CALLS</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   )
