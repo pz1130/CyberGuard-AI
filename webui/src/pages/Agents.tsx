@@ -36,6 +36,13 @@ interface FormState {
   llm_model: string
 }
 
+interface ProviderOption {
+  id: number
+  name: string
+  provider_type?: string
+  models?: { name: string; model_type?: string }[]
+}
+
 const BACKEND_COLORS: Record<string, string> = {
   openclaw: 'var(--accent)',
   hermes: '#f59e0b',
@@ -302,6 +309,7 @@ export default function Agents() {
   const [regenKey, setRegenKey] = useState<Record<string, string>>({})
   const [kindFilter, setKindFilter] = useState<string>('all')
   const [showKindPicker, setShowKindPicker] = useState(false)
+  const [providers, setProviders] = useState<ProviderOption[]>([])
 
   const load = async () => {
     try {
@@ -311,7 +319,17 @@ export default function Agents() {
     } catch { setItems([]) } finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [])
+  const loadProviders = async () => {
+    try {
+      const data = await api.getProviders() as any
+      const list: ProviderOption[] = Array.isArray(data) ? data : (data?.providers || [])
+      setProviders(list)
+    } catch { setProviders([]) }
+  }
+
+  useEffect(() => { load(); loadProviders() }, [])
+
+  const selectedProvider = providers.find(p => String(p.id) === form.llm_provider_id)
 
   const openCreate = (isInternal = false) => {
     setEditing(null)
@@ -691,18 +709,35 @@ export default function Agents() {
                   {/* LLM Provider + Model */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     <div>
-                      {label('LLM PROVIDER ID *')}
-                      <input value={form.llm_provider_id || ''}
-                        onChange={e => setForm(f => ({ ...f, llm_provider_id: e.target.value }))}
-                        placeholder="Provider ID (e.g. 1)"
-                        style={inputStyle} />
+                      {label('LLM PROVIDER *')}
+                      <select value={form.llm_provider_id || ''}
+                        onChange={e => setForm(f => ({ ...f, llm_provider_id: e.target.value, llm_model: '' }))}
+                        style={{ ...inputStyle, height: 38 }}>
+                        <option value="">— 选择 Provider —</option>
+                        {providers.map(p => (
+                          <option key={p.id} value={String(p.id)}>
+                            {p.name}{p.provider_type ? ` (${p.provider_type})` : ''}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       {label('LLM MODEL')}
-                      <input value={form.llm_model || ''}
-                        onChange={e => setForm(f => ({ ...f, llm_model: e.target.value }))}
-                        placeholder="auto / gpt-4o / etc."
-                        style={inputStyle} />
+                      {selectedProvider?.models?.length ? (
+                        <select value={form.llm_model || ''}
+                          onChange={e => setForm(f => ({ ...f, llm_model: e.target.value }))}
+                          style={{ ...inputStyle, height: 38 }}>
+                          <option value="">AUTO（Provider 默认）</option>
+                          {selectedProvider.models.map(m => (
+                            <option key={m.name} value={m.name}>{m.name}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input value={form.llm_model || ''}
+                          onChange={e => setForm(f => ({ ...f, llm_model: e.target.value }))}
+                          placeholder="auto / gpt-4o / etc."
+                          style={inputStyle} />
+                      )}
                     </div>
                   </div>
 
