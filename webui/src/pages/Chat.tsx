@@ -155,21 +155,9 @@ export default function Chat() {
     loadPromptTemplates()
   }, [])
 
-  // Auto-create a new conversation when entering Chat without an active one.
-  // The guard ref prevents creating multiple if React re-runs in StrictMode
-  // or if user switches conversations after mount.
-  useEffect(() => {
-    if (autoCreateGuardRef.current) return
-    // Don't auto-create if we're resuming a task from a previous session
-    if (localStorage.getItem('activeChatTaskId')) return
-    if (activeConvId != null) {
-      autoCreateGuardRef.current = true
-      return
-    }
-    autoCreateGuardRef.current = true
-    createConversation()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // (Active-conversation selection is handled in loadConversations once the
+  // list is known, so refreshing reuses the latest conversation instead of
+  // creating a new empty one each time.)
 
   const loadPromptTemplates = async () => {
     try {
@@ -199,7 +187,23 @@ export default function Chat() {
   const loadConversations = async () => {
     try {
       const data = await api.getConversations() as Conversation[]
-      setConversations(data || [])
+      const list = data || []
+      setConversations(list)
+      // On first load, decide the active conversation exactly once: resume
+      // nothing if a task is pending, keep an already-active one, otherwise
+      // select the most recent existing conversation — and only create a new
+      // one when the user has none at all. This stops every page refresh from
+      // spawning an empty "新对话".
+      if (autoCreateGuardRef.current) return
+      autoCreateGuardRef.current = true
+      if (localStorage.getItem('activeChatTaskId')) return
+      if (activeConvId != null) return
+      if (list.length > 0) {
+        const newest = list.reduce((a, b) => (b.id > a.id ? b : a))
+        selectConversation(newest.id)
+      } else {
+        createConversation()
+      }
     } catch { setConversations([]) }
   }
 
