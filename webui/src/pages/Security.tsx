@@ -46,8 +46,8 @@ export default function Security() {
           {icon}
         </div>
         <div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em', marginBottom: 4 }}>{title}</div>
-          <div style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>{desc}</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em', marginBottom: 4 }}>{title}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>{desc}</div>
         </div>
       </div>
       <Toggle enabled={enabled} onToggle={onToggle} color={color} />
@@ -59,8 +59,8 @@ export default function Security() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>ZERO TRUST ARCHITECTURE</div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>SECURITY CONFIG</h1>
+          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>ZERO TRUST ARCHITECTURE</div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>SECURITY CONFIG</h1>
         </div>
       </div>
 
@@ -94,7 +94,7 @@ export default function Security() {
 
         {/* Numeric settings */}
         <div style={{ padding: 20, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', marginBottom: 12 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
             THRESHOLD CONFIGURATION
           </div>
           {[
@@ -103,14 +103,14 @@ export default function Security() {
             { key: 'api_key_rotation_days', label: 'API KEY ROTATION (DAYS)', min: 7, max: 365 },
           ].map(({ key, label, min, max }) => (
             <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.08em' }}>{label}</span>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.08em' }}>{label}</span>
               <input type="number" min={min} max={max}
                 value={(settings as any)[key]}
                 onChange={e => update(key, parseInt(e.target.value))}
                 style={{
                   width: 80, height: 32, padding: '0 10px', textAlign: 'right',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 11, fontFamily: 'var(--font-mono)',
+                  color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-mono)',
                 }} />
             </div>
           ))}

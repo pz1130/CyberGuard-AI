@@ -1,7 +1,7 @@
-import { MessageSquare, Cpu, Plug, Wrench, BookOpen, Users, Clock, Settings, Shield, Coins, Database, FileText, UserCog, GitBranch, Webhook, ScrollText, ClipboardCheck } from 'lucide-react'
+import { MessageSquare, Cpu, Plug, Wrench, BookOpen, Users, Clock, Settings, Shield, Coins, Database, FileText, UserCog, GitBranch, Webhook, ScrollText, ClipboardCheck, Terminal } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-export type Tab = 'chat' | 'agents' | 'providers' | 'skills' | 'knowledge' | 'groupchat' | 'schedule' | 'mcp' | 'envvars' | 'security' | 'token' | 'backup' | 'audit' | 'users' | 'settings' | 'n8n' | 'webhooks' | 'prompts' | 'governance'
+export type Tab = 'chat' | 'agents' | 'providers' | 'skills' | 'tools' | 'knowledge' | 'groupchat' | 'schedule' | 'mcp' | 'envvars' | 'security' | 'token' | 'backup' | 'audit' | 'users' | 'settings' | 'n8n' | 'webhooks' | 'prompts' | 'governance'
 
 type NavItem = { key: Tab; labelKey: string; icon: React.ReactNode; group: string }
 const NAV_ITEMS: NavItem[] = [
@@ -9,6 +9,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'agents', labelKey: 'nav.agents', icon: <Cpu size={13} />, group: 'AGENTS' },
   { key: 'providers', labelKey: 'nav.providers', icon: <Plug size={13} />, group: 'AGENTS' },
   { key: 'skills', labelKey: 'nav.skills', icon: <Wrench size={13} />, group: 'FEATURES' },
+  { key: 'tools', labelKey: 'nav.tools', icon: <Terminal size={13} />, group: 'FEATURES' },
   { key: 'prompts', labelKey: 'nav.prompts', icon: <ScrollText size={13} />, group: 'FEATURES' },
   { key: 'knowledge', labelKey: 'nav.knowledge', icon: <BookOpen size={13} />, group: 'FEATURES' },
   { key: 'groupchat', labelKey: 'nav.groupchat', icon: <Users size={13} />, group: 'FEATURES' },
@@ -52,11 +53,11 @@ export default function Sidebar({ tab, setTab }: Props) {
         padding: '0 16px', marginBottom: 16,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
-        <span style={{ fontSize: 9, letterSpacing: '0.25em', color: 'var(--text-dim)' }}>
+        <span style={{ fontSize: 11, letterSpacing: '0.25em', color: 'var(--text-dim)' }}>
           ◆ CYBERGUARD OS v1.0.0
         </span>
         <span style={{
-          fontSize: 9, letterSpacing: '0.15em', color: 'var(--accent)',
+          fontSize: 11, letterSpacing: '0.15em', color: 'var(--accent)',
           background: 'var(--accent-dim)',
           padding: '2px 6px',
           border: '1px solid var(--accent-border)',
@@ -73,7 +74,7 @@ export default function Sidebar({ tab, setTab }: Props) {
             {/* Group label */}
             <div style={{
               padding: '8px 16px 4px',
-              fontSize: 9, letterSpacing: '0.2em',
+              fontSize: 11, letterSpacing: '0.2em',
               color: 'var(--text-dim)', fontWeight: 600,
               borderTop: '1px solid var(--border)',
               marginTop: items[0]?.group === 'CORE' ? 0 : 8,
@@ -94,7 +95,7 @@ export default function Sidebar({ tab, setTab }: Props) {
                     background: active ? 'var(--accent-dim)' : 'transparent',
                     borderLeft: active ? '2px solid var(--accent)' : '2px solid transparent',
                     color: active ? 'var(--accent)' : 'var(--text-muted)',
-                    fontSize: 11, letterSpacing: '0.08em', fontWeight: active ? 600 : 400,
+                    fontSize: 13, letterSpacing: '0.08em', fontWeight: active ? 600 : 400,
                     cursor: 'pointer', transition: 'all 0.15s',
                     fontFamily: 'var(--font-mono)',
                   }}
@@ -134,7 +135,7 @@ export default function Sidebar({ tab, setTab }: Props) {
         borderTop: '1px solid var(--border)',
         padding: '12px 16px', marginTop: 16,
       }}>
-        <div style={{ fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.15em', lineHeight: 1.8 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.15em', lineHeight: 1.8 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span>SYS</span>
             <span style={{ color: 'var(--accent)' }}>NOMINAL</span>

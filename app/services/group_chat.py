@@ -30,6 +30,7 @@ class GroupChatSession:
     current_round: int = 0
     created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
     status: str = "active"  # active, completed, cancelled
+    parent_conversation_id: Optional[int] = None
 
 
 class GroupChatService:
@@ -49,28 +50,31 @@ class GroupChatService:
         agent_ids: List[int],
         initial_message: str,
         max_rounds: int = 5,
+        parent_conversation_id: Optional[int] = None,
     ) -> str:
         """
         Create a new group chat session.
-        
+
         Args:
             user_id: ID of the user initiating the chat
             agent_ids: List of agent IDs to include
             initial_message: The starting message/prompt
             max_rounds: Maximum discussion rounds before concluding
-            
+            parent_conversation_id: Parent conversation ID for internal agent memory slices
+
         Returns:
             Session ID string
         """
         import uuid
-        
+
         session_id = str(uuid.uuid4())
-        
+
         session = GroupChatSession(
             session_id=session_id,
             user_id=user_id,
             agent_ids=agent_ids,
             max_rounds=max_rounds,
+            parent_conversation_id=parent_conversation_id,
         )
         
         # Add initial user message
@@ -153,6 +157,7 @@ class GroupChatService:
                     agent_id=agent_id,
                     task=f"Group chat response to: {latest_message}",
                     user_id=session.user_id,
+                    context={"conversation_id": session.parent_conversation_id},
                 )
                 
                 agent_message = GroupChatMessage(

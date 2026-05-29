@@ -83,8 +83,8 @@ export default function EnvVars() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>SYSTEM CONFIGURATION</div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>ENVIRONMENT VARIABLES</h1>
+          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>SYSTEM CONFIGURATION</div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>ENVIRONMENT VARIABLES</h1>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={load}
@@ -92,7 +92,7 @@ export default function EnvVars() {
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '0 12px', height: 36,
               border: '1px solid var(--border-bright)', background: 'transparent',
-              color: 'var(--text-muted)', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer',
+              color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer',
               fontFamily: 'var(--font-mono)',
             }}>
             <RefreshCw size={11} /> REFRESH
@@ -102,7 +102,7 @@ export default function EnvVars() {
               display: 'flex', alignItems: 'center', gap: 8,
               padding: '0 16px', height: 36,
               background: 'var(--accent)', border: '1px solid var(--accent-border)',
-              color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.15em', cursor: 'pointer',
+              color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer',
               fontFamily: 'var(--font-mono)',
             }}>
             <Lock size={11} /> NEW VAR
@@ -117,7 +117,7 @@ export default function EnvVars() {
         display: 'flex', alignItems: 'flex-start', gap: 10,
       }}>
         <Lock size={13} style={{ color: 'var(--amber)', marginTop: 1, flexShrink: 0 }} />
-        <div style={{ fontSize: 10, color: 'var(--amber)', letterSpacing: '0.05em', lineHeight: 1.6 }}>
+        <div style={{ fontSize: 12, color: 'var(--amber)', letterSpacing: '0.05em', lineHeight: 1.6 }}>
           VALUES ARE AES-256 ENCRYPTED IN TRANSIT AND AT REST. DECRYPTION REQUIRES ADMIN PERMISSIONS.
         </div>
       </div>
@@ -125,50 +125,50 @@ export default function EnvVars() {
       {/* Add New Form */}
       {showNew && (
         <div style={{ marginBottom: 20, padding: 20, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 16 }}>NEW ENVIRONMENT VARIABLE</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 16 }}>NEW ENVIRONMENT VARIABLE</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
             <div>
-              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>KEY</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>KEY</label>
               <input value={newKey} onChange={e => setNewKey(e.target.value.toUpperCase())}
                 placeholder="VARIABLE_NAME"
                 style={{
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
+                  color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
                   fontFamily: 'var(--font-mono)',
                 }} />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>VALUE</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>VALUE</label>
               <input value={newVal} onChange={e => setNewVal(e.target.value)}
                 placeholder="VALUE (ENCRYPTED)"
                 style={{
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
+                  color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
                   fontFamily: 'var(--font-mono)',
                 }} />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>TYPE</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>TYPE</label>
               <select value={newType} onChange={e => setNewType(e.target.value as 'text' | 'secret')}
                 style={{
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)',
+                  color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-mono)',
                 }}>
                 <option value="text">TEXT</option>
                 <option value="secret">SECRET</option>
               </select>
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>DESCRIPTION (OPTIONAL)</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>DESCRIPTION (OPTIONAL)</label>
               <input value={newDesc} onChange={e => setNewDesc(e.target.value)}
                 placeholder="PURPOSE / USAGE..."
                 style={{
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
+                  color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
                   fontFamily: 'var(--font-mono)',
                 }} />
             </div>
@@ -178,7 +178,7 @@ export default function EnvVars() {
               style={{
                 padding: '0 14px', height: 34,
                 border: '1px solid var(--border-bright)', background: 'transparent',
-                color: 'var(--text-muted)', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer',
+                color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer',
                 fontFamily: 'var(--font-mono)',
               }}>
               CANCEL
@@ -187,7 +187,7 @@ export default function EnvVars() {
               style={{
                 padding: '0 14px', height: 34,
                 background: 'var(--accent)', border: '1px solid var(--accent-border)',
-                color: '#000', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', cursor: 'pointer',
+                color: '#000', fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', cursor: 'pointer',
                 fontFamily: 'var(--font-mono)',
               }}>
               ADD
@@ -199,11 +199,11 @@ export default function EnvVars() {
       {/* List */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {loading ? (
-          <div style={{ padding: '40px 0', textAlign: 'center', fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>LOADING...</div>
+          <div style={{ padding: '40px 0', textAlign: 'center', fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>LOADING...</div>
         ) : vars.length === 0 ? (
           <div style={{ padding: '40px 0', textAlign: 'center' }}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.1em', marginBottom: 8 }}>NO ENVIRONMENT VARIABLES</div>
-            <div style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>CLICK "NEW VAR" TO CREATE ONE</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.1em', marginBottom: 8 }}>NO ENVIRONMENT VARIABLES</div>
+            <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>CLICK "NEW VAR" TO CREATE ONE</div>
           </div>
         ) : vars.map(v => (
           <div key={v.id} style={{
@@ -213,12 +213,12 @@ export default function EnvVars() {
           }}>
             {/* Key */}
             <div style={{ width: 200, flexShrink: 0 }}>
-              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--accent)', letterSpacing: '0.05em' }}>{v.key}</span>
+              <span style={{ fontSize: 14, fontFamily: 'var(--font-mono)', color: 'var(--accent)', letterSpacing: '0.05em' }}>{v.key}</span>
               <span style={{
                 marginLeft: 8, padding: '1px 5px',
                 border: `1px solid ${v.value_type === 'secret' ? 'var(--amber)' : 'var(--border)'}`,
                 color: v.value_type === 'secret' ? 'var(--amber)' : 'var(--text-muted)',
-                fontSize: 8, letterSpacing: '0.1em', background: 'var(--bg-base)',
+                fontSize: 10, letterSpacing: '0.1em', background: 'var(--bg-base)',
               }}>
                 {v.value_type === 'secret' && <Lock size={8} style={{ display: 'inline', marginRight: 2 }} />}
                 {v.value_type === 'secret' ? 'SECRET' : 'TEXT'}
@@ -229,7 +229,7 @@ export default function EnvVars() {
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
               {v.value_type === 'secret' ? (
                 <>
-                  <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
+                  <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
                     {displayValue(v)}
                   </span>
                   {v.is_active && (
@@ -248,12 +248,12 @@ export default function EnvVars() {
                   )}
                 </>
               ) : (
-                <span style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.05em', fontStyle: 'italic' }}>TEXT TYPE — NOT PREVIEWABLE</span>
+                <span style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.05em', fontStyle: 'italic' }}>TEXT TYPE — NOT PREVIEWABLE</span>
               )}
             </div>
 
             {/* Description */}
-            <div style={{ flex: 1, fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div style={{ flex: 1, fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {v.description || '—'}
             </div>
 
@@ -265,7 +265,7 @@ export default function EnvVars() {
                 border: `1px solid ${v.is_active ? 'var(--green)' : 'var(--border)'}`,
                 background: v.is_active ? 'rgba(0,255,65,0.05)' : 'transparent',
                 color: v.is_active ? 'var(--green)' : 'var(--text-dim)',
-                fontSize: 9, letterSpacing: '0.1em', cursor: 'pointer',
+                fontSize: 11, letterSpacing: '0.1em', cursor: 'pointer',
                 fontFamily: 'var(--font-mono)',
               }}>
               {v.is_active ? 'ACTIVE' : 'INACTIVE'}

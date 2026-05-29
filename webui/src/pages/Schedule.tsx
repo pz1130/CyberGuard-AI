@@ -69,8 +69,8 @@ export default function Schedule() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>AUTOMATION</div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>SCHEDULED TASKS</h1>
+          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>AUTOMATION</div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>SCHEDULED TASKS</h1>
         </div>
         <button
           onClick={() => { setShowForm(true); setEditing(null); setForm({ name: '', task_type: 'agent_execution', cron_expression: '', is_active: true, task_config: {} }) }}
@@ -78,7 +78,7 @@ export default function Schedule() {
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '0 16px', height: 36,
             background: 'var(--accent)', border: '1px solid var(--accent-border)',
-            color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.15em',
+            color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em',
             cursor: 'pointer', fontFamily: 'var(--font-mono)',
             boxShadow: '0 0 16px rgba(0,255,65,0.15)',
           }}>
@@ -93,7 +93,7 @@ export default function Schedule() {
           background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-            <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>{editing ? 'EDIT TASK' : 'NEW TASK'}</h3>
+            <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>{editing ? 'EDIT TASK' : 'NEW TASK'}</h3>
             <button onClick={() => { setShowForm(false); setEditing(null) }}
               style={{ color: 'var(--text-muted)', cursor: 'pointer', background: 'none', border: 'none', padding: 4 }}>
               <X size={14} />
@@ -101,23 +101,23 @@ export default function Schedule() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
-              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>TASK NAME</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>TASK NAME</label>
               <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                 placeholder="e.g. Log Analysis"
                 style={{
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
+                  color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
                   fontFamily: 'var(--font-mono)',
                 }} />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>TYPE</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>TYPE</label>
               <select value={form.task_type} onChange={e => setForm(f => ({ ...f, task_type: e.target.value }))}
                 style={{
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)',
+                  color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-mono)',
                 }}>
                 <option value="agent_execution">AGENT EXECUTION</option>
                 <option value="backup">BACKUP</option>
@@ -125,24 +125,24 @@ export default function Schedule() {
               </select>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>CRON EXPRESSION</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>CRON EXPRESSION</label>
               <input value={form.cron_expression || ''} onChange={e => setForm(f => ({ ...f, cron_expression: e.target.value }))}
                 placeholder="0 * * * * (every hour)"
                 style={{
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
+                  color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
                   fontFamily: 'var(--font-mono)',
                 }} />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>AGENT ID</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>AGENT ID</label>
               <input value={form.agent_id ?? ''} onChange={e => setForm(f => ({ ...f, agent_id: e.target.value ? Number(e.target.value) : undefined }))}
                 placeholder="optional"
                 style={{
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
+                  color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
                   fontFamily: 'var(--font-mono)',
                 }} />
             </div>
@@ -152,7 +152,7 @@ export default function Schedule() {
               style={{
                 padding: '0 16px', height: 36,
                 border: '1px solid var(--border-bright)', background: 'transparent',
-                color: 'var(--text-muted)', fontSize: 11, letterSpacing: '0.15em', cursor: 'pointer',
+                color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer',
                 fontFamily: 'var(--font-mono)',
               }}>
               CANCEL
@@ -161,7 +161,7 @@ export default function Schedule() {
               style={{
                 padding: '0 16px', height: 36,
                 border: '1px solid var(--accent-border)', background: 'var(--accent)',
-                color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.15em', cursor: 'pointer',
+                color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer',
                 fontFamily: 'var(--font-mono)',
               }}>
               {editing ? 'SAVE CHANGES' : 'CREATE TASK'}
@@ -173,7 +173,7 @@ export default function Schedule() {
       {loading && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 0', gap: 12 }}>
           <Loader2 size={18} style={{ color: 'var(--accent)', animation: 'spin 1s linear infinite' }} />
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>LOADING...</span>
+          <span style={{ fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>LOADING...</span>
         </div>
       )}
 
@@ -182,7 +182,7 @@ export default function Schedule() {
           <div style={{ width: 48, height: 48, border: '1px solid var(--border-bright)', background: 'var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Clock size={18} style={{ color: 'var(--text-dim)' }} />
           </div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>NO SCHEDULED TASKS</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>NO SCHEDULED TASKS</div>
         </div>
       )}
 
@@ -199,17 +199,17 @@ export default function Schedule() {
                 </div>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>{t.name}</span>
-                    <span style={{ display: 'inline-block', padding: '2px 6px', border: '1px solid var(--border)', color: 'var(--cyan)', fontSize: 8, letterSpacing: '0.15em', background: 'var(--bg-base)' }}>{t.task_type.toUpperCase()}</span>
+                    <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>{t.name}</span>
+                    <span style={{ display: 'inline-block', padding: '2px 6px', border: '1px solid var(--border)', color: 'var(--cyan)', fontSize: 10, letterSpacing: '0.15em', background: 'var(--bg-base)' }}>{t.task_type.toUpperCase()}</span>
                     {t.is_active ? (
-                      <span style={{ display: 'inline-block', padding: '2px 6px', border: '1px solid var(--green)', color: 'var(--green)', fontSize: 8, letterSpacing: '0.15em', background: 'rgba(0,255,65,0.05)' }}>ACTIVE</span>
+                      <span style={{ display: 'inline-block', padding: '2px 6px', border: '1px solid var(--green)', color: 'var(--green)', fontSize: 10, letterSpacing: '0.15em', background: 'rgba(0,255,65,0.05)' }}>ACTIVE</span>
                     ) : (
-                      <span style={{ display: 'inline-block', padding: '2px 6px', border: '1px solid var(--border)', color: 'var(--text-dim)', fontSize: 8, letterSpacing: '0.15em', background: 'var(--bg-base)' }}>INACTIVE</span>
+                      <span style={{ display: 'inline-block', padding: '2px 6px', border: '1px solid var(--border)', color: 'var(--text-dim)', fontSize: 10, letterSpacing: '0.15em', background: 'var(--bg-base)' }}>INACTIVE</span>
                     )}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    {t.cron_expression && <span style={{ fontSize: 10, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em' }}>{t.cron_expression}</span>}
-                    {t.next_run_at && <span style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>NEXT: {t.next_run_at}</span>}
+                    {t.cron_expression && <span style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em' }}>{t.cron_expression}</span>}
+                    {t.next_run_at && <span style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>NEXT: {t.next_run_at}</span>}
                   </div>
                 </div>
               </div>

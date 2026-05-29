@@ -21,7 +21,17 @@ class AgentConfig(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     permission_level = Column(String(20), default="medium")  # low, medium, high
     associated_skills = Column(JSON, nullable=True)  # List of skill IDs
+    associated_tools = Column(JSON, nullable=True)       # List of Tool IDs
+    associated_mcp_tools = Column(JSON, nullable=True)   # List of MCPTool IDs
     metadata_json = Column(JSON, nullable=True)
+    # Kind discriminator: 'external' (HTTP / OpenClaw) or 'internal' (in-app)
+    kind = Column(String(20), nullable=False, default="external", index=True)
+    # Internal-agent only fields (nullable for external rows)
+    llm_provider_id = Column(Integer, ForeignKey("providers.id", ondelete="SET NULL"), nullable=True)
+    llm_model = Column(String(100), nullable=True)
+    tool_loop_max_steps = Column(Integer, nullable=False, default=8)
+    memory_window = Column(Integer, nullable=False, default=20)
+    knowledge_base_id = Column(Integer, ForeignKey("knowledge_bases.id", ondelete="SET NULL"), nullable=True)
     # OpenClaw Gateway fields
     api_key_hash = Column(String(128), nullable=True)      # SHA-256 of the oc-xxx key
     openclaw_last_seen = Column(DateTime, nullable=True)   # last poll/heartbeat time

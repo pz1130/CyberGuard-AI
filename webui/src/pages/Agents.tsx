@@ -6,6 +6,7 @@ interface Agent {
   id?: string
   agent_name?: string
   name?: string
+  kind?: string
   backend_type?: string
   description?: string
   endpoint_url?: string
@@ -16,6 +17,14 @@ interface Agent {
   is_online?: boolean
   openclaw_last_seen?: string
   metadata_json?: Record<string, any>
+  llm_provider_id?: number | null
+  llm_model?: string | null
+  tool_loop_max_steps?: number
+  memory_window?: number
+  knowledge_base_id?: number | null
+  associated_skills?: number[]
+  associated_tools?: number[]
+  associated_mcp_tools?: number[]
 }
 
 interface FormState {
@@ -25,6 +34,19 @@ interface FormState {
   endpoint_url: string
   system_prompt: string
   permission_level: string
+  // Internal-agent-only fields (kept distinct from external endpoint_url/system_prompt)
+  llm_provider_id: string
+  llm_model: string
+  associated_skills: number[]
+  associated_tools: number[]
+  associated_mcp_tools: number[]
+}
+
+interface ProviderOption {
+  id: number
+  name: string
+  provider_type?: string
+  models?: { name: string; model_type?: string }[]
 }
 
 const BACKEND_COLORS: Record<string, string> = {
@@ -34,7 +56,7 @@ const BACKEND_COLORS: Record<string, string> = {
 }
 
 const label = (text: string) => (
-  <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>
+  <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>
     {text}
   </label>
 )
@@ -42,7 +64,7 @@ const label = (text: string) => (
 const inputStyle: React.CSSProperties = {
   width: '100%', height: 38, padding: '0 12px',
   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-  color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
+  color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
   fontFamily: 'var(--font-mono)', boxSizing: 'border-box',
 }
 
@@ -136,7 +158,7 @@ Check CyberGuard inbox using the cyberguard_sync skill and process any pending t
 ✅ 已接入 CyberGuard（skill 已创建、heartbeat 已配置、连通性已验证）
 `
 
-  const dimText: React.CSSProperties = { fontSize: 11, color: 'var(--text-dim)', lineHeight: 1.7 }
+  const dimText: React.CSSProperties = { fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.7 }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
@@ -145,7 +167,7 @@ Check CyberGuard inbox using the cyberguard_sync skill and process any pending t
         padding: '10px 14px',
         background: 'rgba(0,255,65,0.04)',
         border: '1px solid var(--accent-border)', borderBottom: 'none',
-        fontSize: 10, color: 'var(--accent)', letterSpacing: '0.12em', fontWeight: 700,
+        fontSize: 12, color: 'var(--accent)', letterSpacing: '0.12em', fontWeight: 700,
       }}>
         ◆ OPENCLAW 一键接入
       </div>
@@ -157,7 +179,7 @@ Check CyberGuard inbox using the cyberguard_sync skill and process any pending t
       }}>
 
         {/* Intro */}
-        <div style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.7 }}>
+        <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.7 }}>
           复制下方一段提示词，粘贴到 OpenClaw 节点的对话窗口里。OpenClaw 会自动创建 skill、配置 heartbeat 并验证接入——你**无需手动建文件**。
         </div>
 
@@ -187,7 +209,7 @@ Check CyberGuard inbox using the cyberguard_sync skill and process any pending t
                   color: regenBusy ? 'var(--text-dim)' : '#000',
                   cursor: regenBusy ? 'wait' : 'pointer',
                   display: 'flex', alignItems: 'center', gap: 6,
-                  fontSize: 10, letterSpacing: '0.1em', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap',
+                  fontSize: 12, letterSpacing: '0.1em', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap',
                   fontWeight: 700,
                 }}>
                 {regenBusy ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Key size={11} />}
@@ -217,7 +239,7 @@ Check CyberGuard inbox using the cyberguard_sync skill and process any pending t
               <div style={{
                 flex: 1, padding: '6px 10px',
                 background: 'rgba(0,255,65,0.06)', border: '1px solid var(--accent-border)',
-                fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent)',
+                fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--accent)',
                 wordBreak: 'break-all',
               }}>{apiKey}</div>
               <button onClick={() => cp(apiKey, 'key')} style={{
@@ -225,7 +247,7 @@ Check CyberGuard inbox using the cyberguard_sync skill and process any pending t
                 background: copied === 'key' ? 'var(--accent)' : 'transparent',
                 color: copied === 'key' ? '#000' : 'var(--accent)',
                 cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
-                fontSize: 10, letterSpacing: '0.1em', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap',
+                fontSize: 12, letterSpacing: '0.1em', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap',
               }}>
                 <Copy size={11} /> {copied === 'key' ? 'COPIED' : 'COPY KEY'}
               </button>
@@ -253,7 +275,7 @@ function CodeBlock({ text, onCopy, copied }: { text: string; onCopy: (t: string)
       <pre style={{
         margin: 0, padding: '10px 40px 10px 12px',
         background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-        fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-primary)',
+        fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-primary)',
         whiteSpace: 'pre-wrap', wordBreak: 'break-all', lineHeight: 1.7,
         maxHeight: 300, overflowY: 'auto',
       }}>
@@ -266,11 +288,39 @@ function CodeBlock({ text, onCopy, copied }: { text: string; onCopy: (t: string)
           padding: '3px 8px', border: '1px solid var(--border)',
           background: copied ? 'var(--accent)' : 'var(--bg-base)',
           color: copied ? '#000' : 'var(--text-dim)',
-          fontSize: 9, cursor: 'pointer', fontFamily: 'var(--font-mono)',
+          fontSize: 11, cursor: 'pointer', fontFamily: 'var(--font-mono)',
           letterSpacing: '0.1em', transition: 'all 0.15s',
         }}>
         {copied ? 'COPIED' : 'COPY'}
       </button>
+    </div>
+  )
+}
+
+// ── PoolPicker: reusable checkbox list for skills / tools / mcp-tools ────────
+function PoolPicker({ label: lbl, options, selected, onToggle }: {
+  label: string
+  options: { id: number; name?: string; tool_name?: string; tags?: string[]; version?: string }[]
+  selected: number[]
+  onToggle: (id: number) => void
+}) {
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>{lbl}</label>
+      <div style={{ maxHeight: 140, overflowY: 'auto', border: '1px solid var(--border-bright)', background: 'var(--bg-base)', padding: 8 }}>
+        {options.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>— none —</div>}
+        {options.map(o => {
+          const name = o.name || o.tool_name || `#${o.id}`
+          return (
+            <label key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', fontSize: 13, cursor: 'pointer' }}>
+              <input type="checkbox" checked={selected.includes(o.id)} onChange={() => onToggle(o.id)} />
+              <span style={{ color: 'var(--text-primary)' }}>{name}</span>
+              {o.version && <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>v{o.version}</span>}
+              {o.tags && o.tags.length > 0 && <span style={{ fontSize: 11, color: '#60a5fa' }}>{o.tags.join(', ')}</span>}
+            </label>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -285,11 +335,19 @@ export default function Agents() {
   const [form, setForm] = useState<FormState>({
     agent_name: '', backend_type: 'openclaw', description: '',
     endpoint_url: '', system_prompt: '', permission_level: 'medium',
+    llm_provider_id: '', llm_model: '',
+    associated_skills: [], associated_tools: [], associated_mcp_tools: [],
   })
   const [testing, setTesting] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<Record<string, { ok: boolean; msg: string }>>({})
   const [regenLoading, setRegenLoading] = useState<string | null>(null)
   const [regenKey, setRegenKey] = useState<Record<string, string>>({})
+  const [kindFilter, setKindFilter] = useState<string>('all')
+  const [showKindPicker, setShowKindPicker] = useState(false)
+  const [providers, setProviders] = useState<ProviderOption[]>([])
+  const [skillsPool, setSkillsPool] = useState<any[]>([])
+  const [toolsPool, setToolsPool] = useState<any[]>([])
+  const [mcpToolsPool, setMcpToolsPool] = useState<any[]>([])
 
   const load = async () => {
     try {
@@ -299,25 +357,60 @@ export default function Agents() {
     } catch { setItems([]) } finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [])
+  const loadProviders = async () => {
+    try {
+      const data = await api.getProviders() as any
+      const list: ProviderOption[] = Array.isArray(data) ? data : (data?.providers || [])
+      setProviders(list)
+    } catch { setProviders([]) }
+  }
 
-  const openCreate = () => {
+  const loadPools = async () => {
+    try {
+      const s = await api.getSkills() as any
+      setSkillsPool(Array.isArray(s) ? s : (s?.skills || []))
+      const t = await api.getTools() as any
+      setToolsPool(Array.isArray(t) ? t : (t?.tools || []))
+      const m = await api.getAllMcpTools() as any
+      setMcpToolsPool(Array.isArray(m) ? m : (m?.tools || []))
+    } catch { /* leave pools empty */ }
+  }
+
+  useEffect(() => { load(); loadProviders(); loadPools() }, [])
+
+  const selectedProvider = providers.find(p => String(p.id) === form.llm_provider_id)
+
+  const toggleId = (key: 'associated_skills' | 'associated_tools' | 'associated_mcp_tools', id: number) =>
+    setForm(f => ({ ...f, [key]: f[key].includes(id) ? f[key].filter(x => x !== id) : [...f[key], id] }))
+
+  const openCreate = (isInternal = false) => {
     setEditing(null)
     setCreatedApiKey(null)
-    setForm({ agent_name: '', backend_type: 'openclaw', description: '', endpoint_url: '', system_prompt: '', permission_level: 'medium' })
+    setForm({
+      agent_name: '', backend_type: isInternal ? '__internal__' : 'openclaw',
+      description: '', endpoint_url: '', system_prompt: '', permission_level: 'medium',
+      llm_provider_id: '', llm_model: '',
+      associated_skills: [], associated_tools: [], associated_mcp_tools: [],
+    })
     setShowForm(true)
   }
 
   const openEdit = (a: Agent) => {
     setEditing(a.id!)
     setCreatedApiKey(null)
+    const isInternal = (a.kind || 'external') === 'internal'
     setForm({
       agent_name: a.agent_name || a.name || '',
-      backend_type: a.backend_type || 'openclaw',
+      backend_type: isInternal ? '__internal__' : (a.backend_type || 'openclaw'),
       description: a.description || '',
       endpoint_url: a.endpoint_url || '',
       system_prompt: a.system_prompt || '',
       permission_level: a.permission_level || 'medium',
+      llm_provider_id: isInternal ? String(a.llm_provider_id || '') : '',
+      llm_model: isInternal ? (a.llm_model || '') : '',
+      associated_skills: a.associated_skills || [],
+      associated_tools: a.associated_tools || [],
+      associated_mcp_tools: a.associated_mcp_tools || [],
     })
     setShowForm(true)
   }
@@ -325,16 +418,35 @@ export default function Agents() {
   const submit = async () => {
     if (!form.agent_name) return
     try {
+      const isInternal = form.backend_type === '__internal__'
       const payload: Record<string, any> = {
         agent_name: form.agent_name,
-        backend_type: form.backend_type,
+        kind: isInternal ? 'internal' : 'external',
         description: form.description || undefined,
-        system_prompt: form.system_prompt || undefined,
         permission_level: form.permission_level,
       }
-      // endpoint_url 仅非 OpenClaw 后端需要
-      if (form.backend_type !== 'openclaw' && form.endpoint_url) {
-        payload.endpoint_url = form.endpoint_url
+
+      if (isInternal) {
+        // Internal agent fields — runs in-app, no external endpoint
+        const llmProviderId = parseInt(form.llm_provider_id || '0', 10)
+        if (llmProviderId) payload.llm_provider_id = llmProviderId
+        const model = form.llm_model?.trim()
+        if (model) payload.llm_model = model
+        const sysPrompt = form.system_prompt?.trim()
+        if (sysPrompt) payload.system_prompt = sysPrompt
+        payload.tool_loop_max_steps = 8
+        payload.memory_window = 20
+        payload.backend_type = 'openclaw'  // required but unused for internal
+        payload.associated_skills = form.associated_skills
+        payload.associated_tools = form.associated_tools
+        payload.associated_mcp_tools = form.associated_mcp_tools
+      } else {
+        // External agent fields
+        payload.backend_type = form.backend_type
+        payload.system_prompt = form.system_prompt || undefined
+        if (form.backend_type !== 'openclaw' && form.endpoint_url) {
+          payload.endpoint_url = form.endpoint_url
+        }
       }
 
       if (editing) {
@@ -342,10 +454,8 @@ export default function Agents() {
         setShowForm(false)
       } else {
         const res = await api.createAgent(payload) as any
-        // 如果是 OpenClaw，显示一次性 API Key
-        if (res?.api_key) {
+        if (!isInternal && res?.api_key) {
           setCreatedApiKey(res.api_key)
-          // 不关闭弹窗，让用户看到并复制 Key
         } else {
           setShowForm(false)
         }
@@ -386,18 +496,34 @@ export default function Agents() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>AGENT INFRASTRUCTURE</div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>SUB-AGENTS</h1>
+          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>AGENT INFRASTRUCTURE</div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>SUB-AGENTS</h1>
         </div>
-        <button onClick={openCreate} style={{
+        <button onClick={() => setShowKindPicker(true)} style={{
           display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 36,
           background: 'var(--accent)', border: '1px solid var(--accent-border)',
-          color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.15em',
+          color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em',
           cursor: 'pointer', fontFamily: 'var(--font-mono)',
           boxShadow: '0 0 16px rgba(0,255,65,0.15)',
         }}>
           <Plus size={13} /> NEW AGENT
         </button>
+      </div>
+
+      {/* Kind filter */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        {['all', 'external', 'internal'].map(k => (
+          <button key={k} onClick={() => setKindFilter(k)}
+            style={{
+              padding: '4px 12px', border: `1px solid ${kindFilter === k ? 'var(--accent)' : 'var(--border)'}`,
+              background: kindFilter === k ? 'var(--accent)' : 'transparent',
+              color: kindFilter === k ? '#000' : 'var(--text-muted)',
+              fontSize: 11, letterSpacing: '0.1em', cursor: 'pointer',
+              fontFamily: 'var(--font-mono)', fontWeight: 700,
+            }}>
+            {k === 'all' ? 'ALL' : k.toUpperCase()}
+          </button>
+        ))}
       </div>
 
       {/* Grid */}
@@ -408,16 +534,20 @@ export default function Agents() {
       ) : items.length === 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 0', gap: 12 }}>
           <Cpu size={24} style={{ color: 'var(--text-dim)' }} />
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>NO ACTIVE AGENTS</div>
-          <button onClick={openCreate} style={{ fontSize: 10, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', letterSpacing: '0.1em' }}>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>NO ACTIVE AGENTS</div>
+          <button onClick={() => setShowKindPicker(true)} style={{ fontSize: 12, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', letterSpacing: '0.1em' }}>
             + DEPLOY FIRST AGENT
           </button>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
-          {items.map(a => {
-            const bc = BACKEND_COLORS[a.backend_type || 'custom']
-            const isOpenClaw = a.backend_type === 'openclaw'
+          {items.filter(a => kindFilter === 'all' || (a.kind || 'external') === kindFilter).map(a => {
+            const isInternal = (a.kind || 'external') === 'internal'
+            const bc = isInternal ? '#60a5fa' : BACKEND_COLORS[a.backend_type || 'custom']
+            // Internal agents run in-process; the OpenClaw online/offline +
+            // poll concept never applies to them (even though their stored
+            // backend_type is 'openclaw' as an unused placeholder).
+            const isOpenClaw = !isInternal && a.backend_type === 'openclaw'
             const online = a.is_online || false
             const thisRegenKey = regenKey[a.id!]
 
@@ -427,18 +557,30 @@ export default function Agents() {
                 border: '1px solid var(--border-bright)',
                 borderLeft: `3px solid ${bc}`,
               }}>
-                {/* Name + badge */}
+                {/* Name + kind badge */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>
                     {agentName(a)}
                   </div>
-                  <div style={{
-                    padding: '2px 7px', border: `1px solid ${bc}`,
-                    fontSize: 8, letterSpacing: '0.15em', color: bc, background: 'var(--bg-base)',
-                  }}>
-                    {(a.backend_type || 'CUSTOM').toUpperCase()}
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <div style={{
+                      padding: '2px 7px', border: `1px solid ${isInternal ? '#60a5fa' : bc}`,
+                      fontSize: 10, letterSpacing: '0.15em', color: isInternal ? '#60a5fa' : bc, background: 'var(--bg-base)',
+                    }}>
+                      {isInternal ? 'INTERNAL' : (a.backend_type || 'CUSTOM').toUpperCase()}
+                    </div>
                   </div>
                 </div>
+
+                {/* Internal agents run in-process — always ready, no poll */}
+                {isInternal && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                    <Cpu size={13} style={{ color: '#60a5fa' }} />
+                    <span style={{ fontSize: 13, letterSpacing: '0.1em', color: '#60a5fa' }}>
+                      READY · 进程内运行
+                    </span>
+                  </div>
+                )}
 
                 {/* Online status (OpenClaw only) */}
                 {isOpenClaw && (
@@ -446,16 +588,16 @@ export default function Agents() {
                     {online
                       ? <Wifi size={11} style={{ color: 'var(--accent)' }} />
                       : <WifiOff size={11} style={{ color: 'var(--text-dim)' }} />}
-                    <span style={{ fontSize: 9, letterSpacing: '0.1em', color: online ? 'var(--accent)' : 'var(--text-dim)' }}>
+                    <span style={{ fontSize: 11, letterSpacing: '0.1em', color: online ? 'var(--accent)' : 'var(--text-dim)' }}>
                       {online ? 'ONLINE' : 'OFFLINE'}
                     </span>
                     {a.openclaw_last_seen && (
-                      <span style={{ fontSize: 9, color: 'var(--text-dim)', marginLeft: 4 }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-dim)', marginLeft: 4 }}>
                         · 最近: {new Date(a.openclaw_last_seen).toLocaleTimeString()}
                       </span>
                     )}
                     {!a.has_api_key && (
-                      <span style={{ marginLeft: 'auto', fontSize: 9, color: '#f59e0b', letterSpacing: '0.08em' }}>
+                      <span style={{ marginLeft: 'auto', fontSize: 11, color: '#f59e0b', letterSpacing: '0.08em' }}>
                         ⚠ NO KEY
                       </span>
                     )}
@@ -463,7 +605,7 @@ export default function Agents() {
                 )}
 
                 {a.description && (
-                  <div style={{ fontSize: 10, color: 'var(--text-dim)', lineHeight: 1.6, marginBottom: 10 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6, marginBottom: 10 }}>
                     {a.description}
                   </div>
                 )}
@@ -473,7 +615,7 @@ export default function Agents() {
                   <div style={{
                     padding: '8px 10px', marginBottom: 10,
                     background: 'rgba(0,255,65,0.06)', border: '1px solid var(--accent-border)',
-                    fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--accent)',
+                    fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--accent)',
                     wordBreak: 'break-all', lineHeight: 1.7,
                   }}>
                     <div style={{ marginBottom: 4, letterSpacing: '0.1em' }}>⚠ NEW KEY — COPY NOW:</div>
@@ -486,7 +628,7 @@ export default function Agents() {
                   <div style={{
                     padding: '6px 10px', marginBottom: 10,
                     background: 'var(--bg-base)', border: `1px solid ${testResult[a.id!].ok ? 'var(--accent-border)' : 'rgba(255,60,60,0.3)'}`,
-                    fontSize: 10, color: testResult[a.id!].ok ? 'var(--accent)' : '#f87171',
+                    fontSize: 12, color: testResult[a.id!].ok ? 'var(--accent)' : '#f87171',
                     fontFamily: 'var(--font-mono)', letterSpacing: '0.03em',
                   }}>
                     {testResult[a.id!].ok ? '✓' : '✗'} {testResult[a.id!].msg}
@@ -499,7 +641,7 @@ export default function Agents() {
                     style={{
                       padding: '0 10px', height: 28, border: '1px solid var(--border-bright)',
                       background: 'transparent', color: testing === a.id ? 'var(--text-dim)' : 'var(--accent)',
-                      fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer',
+                      fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer',
                       fontFamily: 'var(--font-mono)',
                     }}>
                     {testing === a.id ? '…' : 'TEST'}
@@ -512,7 +654,7 @@ export default function Agents() {
                         display: 'flex', alignItems: 'center', gap: 4,
                         padding: '0 10px', height: 28, border: '1px solid var(--border-bright)',
                         background: 'transparent', color: 'var(--text-muted)',
-                        fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer',
+                        fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer',
                         fontFamily: 'var(--font-mono)',
                       }}>
                       {regenLoading === a.id
@@ -536,6 +678,62 @@ export default function Agents() {
         </div>
       )}
 
+      {/* Kind chooser modal */}
+      {showKindPicker && (
+        <div
+          onClick={e => e.target === e.currentTarget && setShowKindPicker(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 101, overflowY: 'auto', padding: '40px 20px' }}>
+          <div style={{
+            width: '100%', maxWidth: 480, background: 'var(--bg-surface)',
+            border: '1px solid var(--border-bright)',
+          }}>
+            <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 4 }}>NEW AGENT</div>
+              <h3 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)', margin: 0 }}>
+                CHOOSE AGENT KIND
+              </h3>
+            </div>
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <button
+                onClick={() => { setShowKindPicker(false); openCreate(false) }}
+                style={{
+                  padding: '18px 20px', border: '1px solid var(--border-bright)',
+                  background: 'var(--bg-base)', cursor: 'pointer', textAlign: 'left',
+                }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 6 }}>EXTERNAL AGENT</div>
+                <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6 }}>
+                  OpenClaw, Hermes, or Custom HTTP endpoint. Deploy a separate process and connect via protocol.
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  setShowKindPicker(false)
+                  openCreate(true)
+                }}
+                style={{
+                  padding: '18px 20px', border: '1px solid rgba(96,165,250,0.4)',
+                  background: 'rgba(96,165,250,0.04)', cursor: 'pointer', textAlign: 'left',
+                }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#60a5fa', letterSpacing: '0.1em', marginBottom: 6 }}>INTERNAL AGENT</div>
+                <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6 }}>
+                  Configured fully in-app. Select system prompt, LLM provider, skills, MCP tools, and optional knowledge base.
+                </div>
+              </button>
+            </div>
+            <div style={{ padding: '12px 24px', borderTop: '1px solid var(--border)' }}>
+              <button onClick={() => setShowKindPicker(false)} style={{
+                padding: '0 16px', height: 32, border: '1px solid var(--border-bright)',
+                background: 'transparent', color: 'var(--text-muted)',
+                fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer',
+                fontFamily: 'var(--font-mono)',
+              }}>
+                CANCEL
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Form Modal */}
       {showForm && (
         <div
@@ -547,15 +745,15 @@ export default function Agents() {
           }}>
             {/* Modal header */}
             <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 4 }}>AGENT CONFIGURATION</div>
-              <h3 style={{ fontSize: 16, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)', margin: 0 }}>
-                {editing ? 'EDIT AGENT' : 'DEPLOY NEW AGENT'}
+              <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 4 }}>AGENT CONFIGURATION</div>
+              <h3 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)', margin: 0 }}>
+                {editing ? 'EDIT AGENT' : form.backend_type === '__internal__' ? 'DEPLOY INTERNAL AGENT' : 'DEPLOY EXTERNAL AGENT'}
               </h3>
             </div>
 
             <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-              {/* Name + Backend */}
+              {/* Name + Kind/Backend */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   {label('AGENT NAME *')}
@@ -564,6 +762,82 @@ export default function Agents() {
                     placeholder="e.g. Threat Intel Agent"
                     style={inputStyle} />
                 </div>
+                <div>
+                  {label('AGENT KIND')}
+                  <div style={{
+                    height: 38, padding: '0 12px', display: 'flex', alignItems: 'center',
+                    background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+                    fontSize: 14, fontFamily: 'var(--font-mono)', letterSpacing: '0.05em',
+                    color: form.backend_type === '__internal__' ? '#60a5fa' : 'var(--accent)',
+                  }}>
+                    {form.backend_type === '__internal__' ? 'INTERNAL' : 'EXTERNAL'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Internal agent fields */}
+              {form.backend_type === '__internal__' && (
+                <>
+                  {/* LLM Provider + Model */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                      {label('LLM PROVIDER *')}
+                      <select value={form.llm_provider_id || ''}
+                        onChange={e => setForm(f => ({ ...f, llm_provider_id: e.target.value, llm_model: '' }))}
+                        style={{ ...inputStyle, height: 38 }}>
+                        <option value="">— 选择 Provider —</option>
+                        {providers.map(p => (
+                          <option key={p.id} value={String(p.id)}>
+                            {p.name}{p.provider_type ? ` (${p.provider_type})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      {label('LLM MODEL')}
+                      {selectedProvider?.models?.length ? (
+                        <select value={form.llm_model || ''}
+                          onChange={e => setForm(f => ({ ...f, llm_model: e.target.value }))}
+                          style={{ ...inputStyle, height: 38 }}>
+                          <option value="">AUTO（Provider 默认）</option>
+                          {selectedProvider.models.map(m => (
+                            <option key={m.name} value={m.name}>{m.name}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input value={form.llm_model || ''}
+                          onChange={e => setForm(f => ({ ...f, llm_model: e.target.value }))}
+                          placeholder="auto / gpt-4o / etc."
+                          style={inputStyle} />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Tool loop settings */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                      {label('TOOL LOOP MAX STEPS')}
+                      <input type="number" value="8"
+                        readOnly
+                        style={{ ...inputStyle, color: 'var(--text-dim)' }} />
+                    </div>
+                    <div>
+                      {label('MEMORY WINDOW')}
+                      <input type="number" value="20"
+                        readOnly
+                        style={{ ...inputStyle, color: 'var(--text-dim)' }} />
+                    </div>
+                  </div>
+
+                  {/* Skill / Tool / MCP-tool assignment */}
+                  <PoolPicker label="SKILLS" options={skillsPool} selected={form.associated_skills} onToggle={id => toggleId('associated_skills', id)} />
+                  <PoolPicker label="TOOLS" options={toolsPool} selected={form.associated_tools} onToggle={id => toggleId('associated_tools', id)} />
+                  <PoolPicker label="MCP TOOLS" options={mcpToolsPool} selected={form.associated_mcp_tools} onToggle={id => toggleId('associated_mcp_tools', id)} />
+                </>
+              )}
+
+              {/* Backend Type (external only) */}
+              {form.backend_type !== '__internal__' && (
                 <div>
                   {label('BACKEND TYPE')}
                   <select value={form.backend_type}
@@ -574,7 +848,7 @@ export default function Agents() {
                     <option value="custom">CUSTOM</option>
                   </select>
                 </div>
-              </div>
+              )}
 
               {/* Description */}
               <div>
@@ -586,14 +860,14 @@ export default function Agents() {
               </div>
 
               {/* Endpoint URL — 仅非 OpenClaw */}
-              {form.backend_type !== 'openclaw' && (
+              {form.backend_type !== 'openclaw' && form.backend_type !== '__internal__' && (
                 <div>
                   {label('ENDPOINT URL *')}
                   <input value={form.endpoint_url}
                     onChange={e => setForm(f => ({ ...f, endpoint_url: e.target.value }))}
                     placeholder="http://your-agent-host:8001"
                     style={inputStyle} />
-                  <div style={{ marginTop: 4, fontSize: 9, color: 'var(--text-dim)' }}>
+                  <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-dim)' }}>
                     需要暴露 POST /execute 和 GET /health 端点
                   </div>
                 </div>
@@ -645,7 +919,7 @@ export default function Agents() {
                   style={{
                     flex: 1, height: 40, border: '1px solid var(--accent-border)',
                     background: 'var(--accent)', color: '#000',
-                    fontWeight: 700, fontSize: 11, letterSpacing: '0.15em', cursor: 'pointer',
+                    fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer',
                     fontFamily: 'var(--font-mono)',
                   }}>
                   我已保存 KEY，关闭
@@ -656,7 +930,7 @@ export default function Agents() {
                     style={{
                       flex: 1, height: 40, border: '1px solid var(--border-bright)',
                       background: 'transparent', color: 'var(--text-muted)',
-                      fontSize: 11, letterSpacing: '0.15em', cursor: 'pointer',
+                      fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer',
                       fontFamily: 'var(--font-mono)',
                     }}>
                     CANCEL
@@ -665,7 +939,7 @@ export default function Agents() {
                     style={{
                       flex: 1, height: 40, border: '1px solid var(--accent-border)',
                       background: 'var(--accent)', color: '#000',
-                      fontWeight: 700, fontSize: 11, letterSpacing: '0.15em', cursor: 'pointer',
+                      fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer',
                       fontFamily: 'var(--font-mono)',
                     }}>
                     {editing ? 'SAVE CHANGES' : 'DEPLOY AGENT'}

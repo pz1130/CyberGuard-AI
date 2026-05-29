@@ -45,6 +45,7 @@ class MCPTool(Base):
     description = Column(String(500), nullable=True)
     input_schema_json = Column(Text, nullable=True)  # JSON Schema string
     category = Column(String(50), nullable=True)  # threat, log, vuln, etc.
+    tags = Column(JSON, nullable=True)  # List[str]
     # P2-2: Per-tool RBAC permission requirement (e.g. "knowledge:write", "admin:all")
     # Empty/null = any authenticated user with TASK_EXECUTE may execute it.
     required_permission = Column(String(100), nullable=True, index=True)

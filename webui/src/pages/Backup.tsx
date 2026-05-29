@@ -93,8 +93,8 @@ export default function Backup() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>DATA RESILIENCE</div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>BACKUP & RESTORE</h1>
+          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>DATA RESILIENCE</div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>BACKUP & RESTORE</h1>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={exportConfig}
@@ -102,7 +102,7 @@ export default function Backup() {
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '0 14px', height: 36,
               border: '1px solid var(--border-bright)', background: 'transparent',
-              color: 'var(--text-muted)', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer',
+              color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer',
               fontFamily: 'var(--font-mono)',
             }}>
             <Download size={11} /> EXPORT CONFIG
@@ -114,7 +114,7 @@ export default function Backup() {
               background: creating ? 'var(--bg-elevated)' : 'var(--accent)',
               border: '1px solid var(--accent-border)',
               color: creating ? 'var(--text-dim)' : '#000',
-              fontWeight: 700, fontSize: 11, letterSpacing: '0.15em', cursor: creating ? 'not-allowed' : 'pointer',
+              fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: creating ? 'not-allowed' : 'pointer',
               fontFamily: 'var(--font-mono)',
             }}>
             {creating ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Plus size={11} />}
@@ -127,7 +127,7 @@ export default function Backup() {
       <div style={{
         padding: '12px 16px', marginBottom: 24,
         background: 'var(--cyan-dim)', border: '1px solid rgba(0,245,255,0.1)',
-        fontSize: 10, color: 'var(--cyan)', letterSpacing: '0.05em', lineHeight: 1.8,
+        fontSize: 12, color: 'var(--cyan)', letterSpacing: '0.05em', lineHeight: 1.8,
       }}>
         PG_DUMP + AES-256 ENCRYPTION · S3/OSS UPLOAD OPTIONAL · CONFIGURE S3_ENDPOINT AND S3_ACCESS_KEY TO ENABLE REMOTE BACKUP
       </div>
@@ -136,7 +136,7 @@ export default function Backup() {
       {loading && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 0', gap: 12 }}>
           <Loader2 size={18} style={{ color: 'var(--accent)', animation: 'spin 1s linear infinite' }} />
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>LOADING...</span>
+          <span style={{ fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>LOADING...</span>
         </div>
       )}
 
@@ -147,8 +147,8 @@ export default function Backup() {
           background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', gap: 12,
         }}>
           <Database size={28} style={{ color: 'var(--text-dim)' }} />
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>NO BACKUPS AVAILABLE</div>
-          <button onClick={create} style={{ fontSize: 10, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', letterSpacing: '0.1em' }}>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>NO BACKUPS AVAILABLE</div>
+          <button onClick={create} style={{ fontSize: 12, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', letterSpacing: '0.1em' }}>
             + CREATE FIRST BACKUP
           </button>
         </div>
@@ -172,18 +172,18 @@ export default function Backup() {
                 </div>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>{b.name}</span>
+                    <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>{b.name}</span>
                     <span style={{
                       padding: '2px 6px', border: '1px solid var(--border)',
-                      color: 'var(--cyan)', fontSize: 8, letterSpacing: '0.15em', background: 'var(--bg-base)',
+                      color: 'var(--cyan)', fontSize: 10, letterSpacing: '0.15em', background: 'var(--bg-base)',
                     }}>
                       {(b.type || 'FULL').replace(/\.AES$/i, '').toUpperCase()}
                     </span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    {b.size && <span style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>{b.size}</span>}
-                    {b.created_at && <span style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>{b.created_at}</span>}
-                    {b.status && <span style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>{b.status.toUpperCase()}</span>}
+                    {b.size && <span style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>{b.size}</span>}
+                    {b.created_at && <span style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>{b.created_at}</span>}
+                    {b.status && <span style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>{b.status.toUpperCase()}</span>}
                   </div>
                 </div>
               </div>
@@ -194,7 +194,7 @@ export default function Backup() {
                     padding: '0 12px', height: 32,
                     border: '1px solid var(--border-bright)', background: 'transparent',
                     color: restoring === b.id ? 'var(--text-dim)' : 'var(--text-muted)',
-                    fontSize: 10, letterSpacing: '0.1em', cursor: restoring === b.id ? 'not-allowed' : 'pointer',
+                    fontSize: 12, letterSpacing: '0.1em', cursor: restoring === b.id ? 'not-allowed' : 'pointer',
                     fontFamily: 'var(--font-mono)',
                   }}>
                   <RefreshCw size={10} style={restoring === b.id ? { animation: 'spin 1s linear infinite' } : {}} />

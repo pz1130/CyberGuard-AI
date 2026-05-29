@@ -7,6 +7,7 @@ import Chat from './pages/Chat'
 import Providers from './pages/Providers'
 import Agents from './pages/Agents'
 import Skills from './pages/Skills'
+import Tools from './pages/Tools'
 import Knowledge from './pages/Knowledge'
 import GroupChat from './pages/GroupChat'
 import Schedule from './pages/Schedule'
@@ -29,6 +30,7 @@ const PAGES: Record<Tab, { labelKey: string; component: React.ReactNode }> = {
   agents: { labelKey: 'nav.agents', component: <Agents /> },
   providers: { labelKey: 'nav.providers', component: <Providers /> },
   skills: { labelKey: 'nav.skills', component: <Skills /> },
+  tools: { labelKey: 'nav.tools', component: <Tools /> },
   knowledge: { labelKey: 'nav.knowledge', component: <Knowledge /> },
   groupchat: { labelKey: 'nav.groupchat', component: <GroupChat /> },
   schedule: { labelKey: 'nav.schedule', component: <Schedule /> },
@@ -93,12 +95,12 @@ export default function App() {
             width: 40, height: 40,
             border: '1px solid var(--accent-border)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 20, color: 'var(--accent)',
+            fontSize: 22, color: 'var(--accent)',
             animation: 'accent-pulse 2s ease-in-out infinite',
           }}>
             ⬡
           </div>
-          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: 13, letterSpacing: '0.2em', color: 'var(--text-muted)' }}>
             INITIALIZING CYBERGUARD OS...
           </div>
           <div style={{

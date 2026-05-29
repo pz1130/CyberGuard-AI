@@ -1,6 +1,7 @@
 """Agent configuration and management router."""
 import hashlib
 import json
+import os
 import secrets
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -8,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from app.core.dependencies import get_db, require_permission
+from app.core.database import AsyncSessionLocal
 from app.core.rbac import Permission
 from app.core.security import encrypt_data, decrypt_data
 from app.schemas.agent import (
@@ -15,8 +17,69 @@ from app.schemas.agent import (
     AgentConfigListResponse, AgentTestResponse,
 )
 from app.models.agent import AgentConfig
+from app.models.provider import Provider
 
 router = APIRouter()
+
+
+# ---------------------------------------------------------------------------
+# Startup seed
+# ---------------------------------------------------------------------------
+
+SEED_FLAG = "SEED_EXAMPLE_INTERNAL_AGENTS"
+
+
+async def seed_example_internal_agents() -> None:
+    """Idempotent — runs on startup only when SEED_EXAMPLE_INTERNAL_AGENTS=true."""
+    if os.getenv(SEED_FLAG, "false").lower() != "true":
+        return
+
+    async with AsyncSessionLocal() as s:
+        existing = await s.execute(select(AgentConfig).where(
+            AgentConfig.agent_name.in_(["triage_analyst", "policy_writer"])
+        ))
+        already = {r.agent_name for r in existing.scalars().all()}
+        if len(already) >= 2:
+            return
+
+        providers = await s.execute(select(AgentConfig).where(
+            AgentConfig.kind == "internal"
+        ))
+        # Find a provider id to use — try first internal agent's provider or skip
+        provider_id = None
+        for ag in providers.scalars().all():
+            if ag.llm_provider_id:
+                provider_id = ag.llm_provider_id
+                break
+
+        to_create = []
+        if "triage_analyst" not in already:
+            to_create.append(AgentConfig(
+                agent_name="triage_analyst",
+                kind="internal",
+                backend_type="openclaw",
+                system_prompt="You are a SOC triage analyst. Use available tools to gather threat intelligence, enrich alerts with CVE data, and produce concise incident summaries.",
+                permission_level="medium",
+                llm_provider_id=provider_id,
+                tool_loop_max_steps=8,
+                memory_window=20,
+            ))
+        if "policy_writer" not in already:
+            to_create.append(AgentConfig(
+                agent_name="policy_writer",
+                kind="internal",
+                backend_type="openclaw",
+                system_prompt="You are a security policy writer. Help draft and review security policies, map controls to frameworks (ISO 27001, NIST), and ensure policies are actionable and measurable.",
+                permission_level="low",
+                llm_provider_id=provider_id,
+                tool_loop_max_steps=8,
+                memory_window=20,
+            ))
+        for ag in to_create:
+            s.add(ag)
+        await s.commit()
+        for ag in to_create:
+            await s.refresh(ag)
 
 
 # ---------------------------------------------------------------------------
@@ -39,6 +102,29 @@ def _build_metadata(fields: dict, existing: dict | None = None) -> dict:
         if raw and raw != "******":
             meta["api_key_encrypted"] = encrypt_data(raw)
     return meta
+
+
+# ---------------------------------------------------------------------------
+# Kind-aware validation
+# ---------------------------------------------------------------------------
+
+def _validate_agent_payload(body) -> None:
+    """Enforce kind-specific constraints before persisting."""
+    kind = (body.kind or "external").lower()
+    if kind not in ("external", "internal"):
+        raise HTTPException(status_code=400, detail=f"invalid kind: {body.kind!r}")
+    if kind == "external":
+        if not body.backend_type:
+            raise HTTPException(status_code=400, detail="external agent requires backend_type")
+        if body.backend_type in ("hermes", "custom") and not body.endpoint_url:
+            raise HTTPException(status_code=400, detail=f"{body.backend_type} requires endpoint_url")
+    else:  # internal
+        if not body.llm_provider_id:
+            raise HTTPException(status_code=400, detail="internal agent requires llm_provider_id")
+        if body.endpoint_url:
+            raise HTTPException(status_code=400, detail="internal agent must not set endpoint_url")
+        if body.backend_type and body.backend_type != "openclaw":
+            raise HTTPException(status_code=400, detail="internal agent must not set backend_type")
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +161,11 @@ async def create_agent(
 
     **其他模式**（hermes / custom）：
     - 填写 `endpoint_url`，CyberGuard 会主动 POST 到该地址。
+
+    **内部 Agent**（kind="internal"）：
+    - 配置 LLM Provider，系统通过 Tool-Call 循环执行。
     """
+    _validate_agent_payload(body)
     existing = await db.execute(select(AgentConfig).where(AgentConfig.agent_name == body.agent_name))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Agent name already exists")
@@ -130,6 +220,8 @@ async def update_agent(
     agent = result.scalar_one_or_none()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+
+    _validate_agent_payload(body)
 
     body_dict = body.model_dump(exclude_unset=True)
 
@@ -211,6 +303,7 @@ async def test_agent_connection(
 ):
     """测试 Sub-Agent 连通性。
 
+    - 内部模式：在系统进程内运行，无网络连通性可测；校验所配置的 LLM Provider。
     - OpenClaw 模式：检查节点最近一次 poll/heartbeat 时间，判断是否在线。
     - 其他模式：向 endpoint_url/health 发 GET 请求。
     """
@@ -218,6 +311,19 @@ async def test_agent_connection(
     agent = result.scalar_one_or_none()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+
+    if agent.kind == "internal":
+        # 内部 Agent 在系统进程内运行，没有外部连通性概念（offline/poll）。
+        # 唯一会"断"的是其 LLM Provider，所以校验它即可。
+        if not agent.llm_provider_id:
+            return AgentTestResponse(success=False, error="内部 Agent 未配置 LLM Provider")
+        prov = await db.execute(select(Provider).where(Provider.id == agent.llm_provider_id))
+        p = prov.scalar_one_or_none()
+        if p is None:
+            return AgentTestResponse(success=False, error="所配置的 LLM Provider 不存在")
+        if not p.is_active:
+            return AgentTestResponse(success=False, error=f"LLM Provider「{p.name}」已禁用")
+        return AgentTestResponse(success=True, error=f"就绪 · 进程内运行（LLM Provider：{p.name}）")
 
     if agent.backend_type == "openclaw":
         if not agent.api_key_hash:

@@ -322,6 +322,7 @@ class MasterAgent:
                     agent_id=agent_id,
                     task=task_desc,
                     user_id=user_id,
+                    context={"conversation_id": state.get("conversation_id")},
                 )
                 return str(agent_id), result
 
@@ -338,6 +339,7 @@ class MasterAgent:
                         agent_id=agent["id"],
                         task=task_desc,
                         user_id=user_id,
+                        context={"conversation_id": state.get("conversation_id")},
                     )
                     return agent_name, result
 
@@ -349,6 +351,7 @@ class MasterAgent:
                         agent_id=agent["id"],
                         task=task_desc,
                         user_id=user_id,
+                        context={"conversation_id": state.get("conversation_id")},
                     )
                     return agent_type, result
 
@@ -428,6 +431,7 @@ class MasterAgent:
                 agent_id=agent_id,
                 task=f"Group chat response to: {user_input}",
                 user_id=user_id,
+                context={"conversation_id": state.get("conversation_id")},
             )
 
             messages.append({

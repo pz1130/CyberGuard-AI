@@ -1,9 +1,11 @@
 """Skill and Tool pool management router."""
 import tempfile
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.dependencies import get_db, require_permission
-from app.core.rbac import Permission
+from app.core.dependencies import get_db, require_permission, get_current_user
+from app.core.rbac import Permission, Role, ROLE_PERMISSIONS
+from app.services.tool_executor import execute_tool
 from app.schemas.skill import (
     SkillCreate, SkillRead, SkillUpdate, SkillListResponse,
     ToolCreate, ToolRead, ToolUpdate, ToolListResponse,
@@ -17,11 +19,14 @@ router = APIRouter()
 
 # --- Skills ---
 @router.get("/skills", response_model=SkillListResponse)
-async def list_skills(skip: int = 0, limit: int = 50, db: AsyncSession = Depends(get_db), _=Depends(require_permission(Permission.SKILL_READ))):
+async def list_skills(skip: int = 0, limit: int = 50, tag: Optional[str] = None, db: AsyncSession = Depends(get_db), _=Depends(require_permission(Permission.SKILL_READ))):
     total_result = await db.execute(select(func.count(Skill.id)))
     total = total_result.scalar()
     result = await db.execute(select(Skill).offset(skip).limit(limit))
     skills = result.scalars().all()
+    if tag:
+        skills = [s for s in skills if tag in (s.tags or [])]
+        total = len(skills)
     return SkillListResponse(total=total, skills=[SkillRead.model_validate(s) for s in skills])
 
 
@@ -144,11 +149,14 @@ async def import_skill_file(
 
 # --- Tools ---
 @router.get("/tools", response_model=ToolListResponse)
-async def list_tools(skip: int = 0, limit: int = 50, db: AsyncSession = Depends(get_db), _=Depends(require_permission(Permission.SKILL_READ))):
+async def list_tools(skip: int = 0, limit: int = 50, tag: Optional[str] = None, db: AsyncSession = Depends(get_db), _=Depends(require_permission(Permission.SKILL_READ))):
     total_result = await db.execute(select(func.count(Tool.id)))
     total = total_result.scalar()
     result = await db.execute(select(Tool).offset(skip).limit(limit))
     tools = result.scalars().all()
+    if tag:
+        tools = [t for t in tools if tag in (t.tags or [])]
+        total = len(tools)
     return ToolListResponse(total=total, tools=[ToolRead.model_validate(t) for t in tools])
 
 
@@ -194,3 +202,26 @@ async def delete_tool(tool_id: int, db: AsyncSession = Depends(get_db), _=Depend
         raise HTTPException(status_code=404, detail="Tool not found")
     await db.delete(tool)
     await db.commit()
+
+
+@router.post("/tools/{tool_id}/execute")
+async def execute_pool_tool(
+    tool_id: int,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+    _=Depends(require_permission(Permission.TASK_EXECUTE)),
+):
+    """Run an executable Tool with the supplied args (manual test / direct call)."""
+    result = await db.execute(select(Tool).where(Tool.id == tool_id))
+    tool = result.scalar_one_or_none()
+    if not tool:
+        raise HTTPException(status_code=404, detail="Tool not found")
+    if not tool.command_template:
+        raise HTTPException(status_code=400, detail="Tool is not executable (no command_template)")
+    # ROLE_PERMISSIONS is keyed by Role enum; current_user.role is a string
+    perms = {p.value for p in ROLE_PERMISSIONS.get(Role(current_user.role), [])}
+    return await execute_tool(
+        tool, body.get("args") or {}, user_id=current_user.user_id,
+        caller_permissions=perms,
+    )

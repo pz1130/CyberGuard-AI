@@ -1,6 +1,7 @@
 """LLM model routing service."""
 import json
 import re
+from types import SimpleNamespace
 from typing import Dict, Any, Optional, List
 from openai import AsyncOpenAI
 
@@ -627,12 +628,19 @@ Examples:
         provider_id: Optional[int] = None,
         model_override: Optional[str] = None,
         temperature_override: Optional[float] = None,
-    ) -> str:
-        """General chat completion."""
+        tools: Optional[List[Dict[str, Any]]] = None,
+    ):
+        """General chat completion.
+
+        Returns:
+            - str (final text) when `tools` is None — backward-compatible.
+            - openai ChatCompletionMessage when `tools` is provided, so callers
+              can inspect `.tool_calls`.
+        """
         from app.core.telemetry import get_tracer
         tracer = get_tracer()
 
-        # Determine active model: explicit model param > provider model > default
+        # Determine active model
         active_model = model_override or model
         active_provider_id = provider_id
         if not active_model and provider_id:
@@ -641,13 +649,15 @@ Examples:
                 active_model = config["models"][0]
         active_model = active_model or settings.MASTER_AGENT_MODEL
 
-        # Load master config for temperature
         master_config = await self._load_master_config()
 
         # Mock mode — return a simple acknowledgment
         if settings.MOCK_MODE:
             last_msg = messages[-1]["content"] if messages else ""
-            return f"🛡️ **CyberGuard (Mock Mode)**\n\n已收到您的消息：\"{last_msg[:100]}\"\n\n当前运行在 Mock 模式下，请配置真实的 AI Provider（Providers 页面）以获得实际的安全分析能力。"
+            mock_text = f"🛡️ **CyberGuard (Mock Mode)**\n\n已收到您的消息：\"{last_msg[:100]}\"\n\n当前运行在 Mock 模式下，请配置真实的 AI Provider（Providers 页面）以获得实际的安全分析能力。"
+            if tools:
+                return SimpleNamespace(content=mock_text, tool_calls=None)
+            return mock_text
 
         client = await self.get_client_async(provider_id=provider_id)
 
@@ -657,22 +667,29 @@ Examples:
                 "llm.model": active_model,
                 "llm.operation": "chat",
                 "llm.num_messages": len(messages),
+                "llm.has_tools": bool(tools),
             },
         ) as span:
-            response = await client.chat.completions.create(
-                model=active_model,
-                messages=messages,
-                temperature=temperature_override if temperature_override is not None else (master_config.get("temperature") or settings.MASTER_AGENT_TEMPERATURE),
-            )
-            raw_content = response.choices[0].message.content or ""
+            kwargs = {
+                "model": active_model,
+                "messages": messages,
+                "temperature": temperature_override if temperature_override is not None else (master_config.get("temperature") or settings.MASTER_AGENT_TEMPERATURE),
+            }
+            if tools:
+                kwargs["tools"] = tools
+                kwargs["tool_choice"] = "auto"
+
+            response = await client.chat.completions.create(**kwargs)
+            message = response.choices[0].message
+            raw_content = message.content or ""
             strip_think = await self._should_strip_think(provider_id)
             content = self._strip_think_blocks(raw_content) if strip_think else raw_content
             span.set_attribute("llm.response_length", len(content))
             span.set_attribute("llm.finish_reason", response.choices[0].finish_reason)
-
-            # Record token usage
             await self._record_token_usage(active_model, active_provider_id, response)
 
+            if tools:
+                return SimpleNamespace(content=content, tool_calls=message.tool_calls)
             return content
 
     async def stream_chat(
