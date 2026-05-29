@@ -3,7 +3,7 @@ name: tool-pool-executable-design
 description: Subproject ① of the QwenPaw pool alignment — turn the Tool pool from a doc-only table into executable, parameterised host-tool commands run in an isolated tool-runner container, wired into the internal agent.
 type: design
 date: 2026-05-29
-status: approved-pending-review
+status: implemented (2026-05-29, feat/internal-agents)
 ---
 
 # Tool Pool → Executable (subproject ①)

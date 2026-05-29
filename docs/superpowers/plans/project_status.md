@@ -22,6 +22,39 @@ Sequence: `001_initial → 002_openclaw_gateway → 003_pgvector_knowledge → 0
 
 ---
 
+## Session 2026-05-29 — Executable Tool pool (QwenPaw alignment, subproject ①)
+
+Shipped subproject ① of aligning the skill/tool/mcp pools with QwenPaw (spec
+`docs/superpowers/specs/2026-05-29-tool-pool-executable-design.md`, plan
+`docs/superpowers/plans/2026-05-29-tool-pool-executable.md`). The Tool pool went
+from doc-only to **executable**:
+
+- **Tool model** (migration 011) gains `command_template`, `input_schema_json`,
+  `timeout_seconds`, `required_permission`; `md_content` now optional.
+- **`tool_executor.py`** — injection-safe argv builder (shlex-split template,
+  placeholders → single argv tokens, no shell; type/enum validation) +
+  `execute_tool` (RBAC + high-permission approval + dispatch).
+- **`tool-runner`** — new isolated container (docker-compose), FastAPI `/run`
+  runs argv via `create_subprocess_exec` (no shell), `start_new_session` +
+  process-group kill on timeout, `X-Runner-Token` auth (fails fast if unset),
+  no host port.
+- **API** — `POST /api/v1/tools/{id}/execute` (TASK_EXECUTE + per-tool RBAC).
+- **Internal agent** — executable Tools are callable via temporary
+  `metadata_json.tool_ids` (becomes `associated_tools` in subproject ②);
+  high-permission tools create an approval request.
+- **WebUI** — new **Tools** page (`webui/src/pages/Tools.tsx`) with executable
+  form fields + EXECUTABLE badge + TEST button.
+
+Executed via subagent-driven development (8 tasks, two-stage review each, plus a
+final whole-implementation review). Tests: `tests/test_tool_executor.py` (13) +
+internal-agent pool-tool test pass.
+
+**Deferred to ②/③:** unified `associated_tools` assignment + tags/version on the
+pools (②); external agents using the pools via payload delivery + gateway
+callbacks (③).
+
+---
+
 ## Session 2026-05-29 — Scheduled-tasks model export + WebUI port + conversations-table hotfix
 
 Small follow-up changes on `feat/internal-agents`:
