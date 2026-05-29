@@ -65,8 +65,8 @@ class InternalAgentRunner:
         self.knowledge_base_id: Optional[int] = config.get("knowledge_base_id")
         self.associated_skills: List[int] = config.get("associated_skills") or []
         meta = config.get("metadata_json") or {}
-        self.mcp_tool_ids: List[int] = meta.get("mcp_tool_ids") or []
-        self.pool_tool_ids: List[int] = meta.get("tool_ids") or []
+        self.mcp_tool_ids: List[int] = config.get("associated_mcp_tools") or meta.get("mcp_tool_ids") or []
+        self.pool_tool_ids: List[int] = config.get("associated_tools") or meta.get("tool_ids") or []
         self.permission_level: str = config.get("permission_level") or "medium"
 
     # -------- Memory --------

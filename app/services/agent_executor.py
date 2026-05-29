@@ -339,6 +339,8 @@ class AgentExecutor:
                 "memory_window": agent_obj.memory_window,
                 "knowledge_base_id": agent_obj.knowledge_base_id,
                 "associated_skills": agent_obj.associated_skills,
+                "associated_tools": agent_obj.associated_tools,
+                "associated_mcp_tools": agent_obj.associated_mcp_tools,
                 "metadata_json": agent_obj.metadata_json,
                 # OpenClaw-specific fields (from metadata_json if not set directly)
                 "api_key": getattr(agent_obj, "api_key", "") or "",

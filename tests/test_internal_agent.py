@@ -374,3 +374,25 @@ async def test_internal_agent_dispatches_pool_tool(monkeypatch):
     res = await runner.execute(task="go", conversation_id=None, user_id=1)
     assert res["status"] == "completed"
     assert any(c["name"] == "echo_test" for c in res["tool_calls"])
+
+
+def test_runner_prefers_assignment_columns_over_metadata():
+    from app.services.internal_agent import InternalAgentRunner
+    cfg = {"id": 1, "agent_name": "x", "associated_skills": [1],
+           "associated_tools": [2], "associated_mcp_tools": [3],
+           "metadata_json": {"tool_ids": [9], "mcp_tool_ids": [8]},
+           "permission_level": "medium"}
+    r = InternalAgentRunner(cfg)
+    assert r.associated_skills == [1]
+    assert r.pool_tool_ids == [2]
+    assert r.mcp_tool_ids == [3]
+
+
+def test_runner_falls_back_to_metadata_when_columns_absent():
+    from app.services.internal_agent import InternalAgentRunner
+    cfg = {"id": 1, "agent_name": "x",
+           "metadata_json": {"tool_ids": [9], "mcp_tool_ids": [8]},
+           "permission_level": "medium"}
+    r = InternalAgentRunner(cfg)
+    assert r.pool_tool_ids == [9]
+    assert r.mcp_tool_ids == [8]
