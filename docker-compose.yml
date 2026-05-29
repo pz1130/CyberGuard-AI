@@ -44,6 +44,8 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       MOCK_MODE: ${MOCK_MODE:-false}
       AUTO_APPROVE: ${AUTO_APPROVE:-false}
+      TOOL_RUNNER_URL: http://tool-runner:9000
+      RUNNER_TOKEN: ${RUNNER_TOKEN:-changeme-runner-token}
     depends_on:
       postgres:
         condition: service_healthy
@@ -51,6 +53,15 @@ services:
         condition: service_healthy
     volumes:
       - ./app:/app/app
+
+  tool-runner:
+    build:
+      context: .
+      dockerfile: tool-runner/Dockerfile
+    environment:
+      RUNNER_TOKEN: ${RUNNER_TOKEN:-changeme-runner-token}
+    # No host port: only reachable on the compose network as tool-runner:9000.
+    restart: unless-stopped
 
   celery_worker:
     build:
