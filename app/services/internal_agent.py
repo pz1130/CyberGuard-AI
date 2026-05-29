@@ -3,6 +3,7 @@
 Runs an inline tool-call loop against the LLM Router. See:
   docs/superpowers/specs/2026-05-28-internal-agents-design.md
 """
+import asyncio
 import json
 import time
 from typing import Any, Dict, List, Optional
@@ -12,6 +13,21 @@ from sqlalchemy import select
 from app.core.database import AsyncSessionLocal
 from app.models.conversation import Conversation
 from app.services.llm_router import get_llm_router
+
+
+# --- Tunables (aligned with QwenPaw's ReActAgent behaviours) ---------------
+# Truncate oversized tool outputs so a single noisy tool can't blow the
+# context window (cf. QwenPaw LightContextManager._prune_tool_result).
+TOOL_RESULT_MAX_CHARS = 8000
+# When the model answers with text but never used a tool, nudge it to either
+# call a tool or confirm completion — bounded to avoid loops / runaway cost
+# (cf. QwenPaw _auto_continue_if_text_only).
+AUTO_CONTINUE_MAX = 2
+# Compact older history once the running message buffer exceeds this size
+# (~6k tokens at ~4 chars/token), keeping the most recent turns verbatim
+# (cf. QwenPaw _compact_context / context_compact_threshold).
+CONTEXT_COMPACT_CHARS = 24000
+CONTEXT_KEEP_RECENT = 6
 
 
 # ---------------------------------------------------------------------------
@@ -230,6 +246,89 @@ class InternalAgentRunner:
             for tool, server in result.all():
                 self._mcp_by_name[tool.tool_name] = (tool, server)
 
+    # -------- Tool-result pruning + context compaction --------
+
+    @staticmethod
+    def _truncate_tool_result(text: str) -> str:
+        """Cap a single tool result so noisy tools can't blow the context."""
+        if text is None:
+            return ""
+        if len(text) <= TOOL_RESULT_MAX_CHARS:
+            return text
+        dropped = len(text) - TOOL_RESULT_MAX_CHARS
+        return text[:TOOL_RESULT_MAX_CHARS] + f"\n…[truncated {dropped} chars]"
+
+    @staticmethod
+    def _estimate_chars(messages: List[Dict[str, Any]]) -> int:
+        total = 0
+        for m in messages:
+            total += len(str(m.get("content") or ""))
+            for tc in (m.get("tool_calls") or []):
+                fn = tc.get("function", {}) if isinstance(tc, dict) else {}
+                total += len(str(fn.get("arguments") or "")) + len(str(fn.get("name") or ""))
+        return total
+
+    @staticmethod
+    def _messages_to_text(messages: List[Dict[str, Any]]) -> str:
+        lines = []
+        for m in messages:
+            role = m.get("role", "?")
+            content = str(m.get("content") or "")
+            for tc in (m.get("tool_calls") or []):
+                fn = tc.get("function", {}) if isinstance(tc, dict) else {}
+                content += f" [tool_call {fn.get('name')}({fn.get('arguments')})]"
+            lines.append(f"{role}: {content}")
+        return "\n".join(lines)
+
+    async def _maybe_compact(self, messages: List[Dict[str, Any]], router) -> List[Dict[str, Any]]:
+        """Summarise older messages when the buffer grows too large.
+
+        Keeps the leading system message and the last CONTEXT_KEEP_RECENT
+        messages verbatim; replaces the middle with an LLM-produced summary.
+        On any failure falls back to simply dropping the middle.
+        """
+        if self._estimate_chars(messages) <= CONTEXT_COMPACT_CHARS:
+            return messages
+        if len(messages) <= CONTEXT_KEEP_RECENT + 2:
+            return messages  # too few to bother
+
+        system = messages[0]
+        recent = messages[-CONTEXT_KEEP_RECENT:]
+        # A 'tool' message must follow its assistant tool_calls; if the recent
+        # window starts mid tool-exchange, drop the orphaned leading tool msgs.
+        while recent and recent[0].get("role") == "tool":
+            recent = recent[1:]
+        middle = messages[1:len(messages) - len(recent)]
+        if not middle:
+            return messages
+
+        summary_prompt = [
+            {"role": "system", "content":
+                "You compress conversation history for an AI agent. Produce a concise "
+                "summary that preserves facts, user intent, decisions, and key tool "
+                "results. Use markdown with ## section headers."},
+            {"role": "user", "content":
+                "Summarize the conversation so far:\n\n" + self._messages_to_text(middle)},
+        ]
+        try:
+            summary = await router.chat(
+                messages=summary_prompt,
+                provider_id=self.llm_provider_id,
+                model=self.llm_model,
+                tools=None,
+            )
+            if not isinstance(summary, str):
+                summary = getattr(summary, "content", None) or ""
+            summary = summary.strip()
+            if not summary:
+                raise ValueError("empty summary")
+            digest = {"role": "system",
+                      "content": "## 对话摘要（早期消息已压缩）\n" + summary}
+            return [system, digest] + recent
+        except Exception:
+            # Fallback: drop the middle entirely rather than fail the turn.
+            return [system] + recent
+
     # -------- Public entry point --------
 
     async def execute(self, task: str, conversation_id: Optional[int],
@@ -264,8 +363,13 @@ class InternalAgentRunner:
 
         router = get_llm_router()
         final_text: Optional[str] = None
+        tool_used_ever = False
+        auto_continue_used = 0
 
         for step in range(self.max_steps):
+            # Compact older history if the running buffer grew too large.
+            messages = await self._maybe_compact(messages, router)
+
             try:
                 msg = await router.chat(
                     messages=messages,
@@ -283,18 +387,35 @@ class InternalAgentRunner:
                     "execution_time": round(time.monotonic() - start, 2),
                 }
 
-            # router.chat returns a plain str when tools is None/empty (Task 4 contract)
+            # router.chat returns a plain str when tools is None/empty (Task 4
+            # contract); otherwise a message object with optional .tool_calls.
             if isinstance(msg, str):
-                final_text = msg
+                tool_calls = None
+                text_only = True
+                candidate_text = msg
+            else:
+                tool_calls = getattr(msg, "tool_calls", None)
+                text_only = not tool_calls
+                candidate_text = getattr(msg, "content", None) or ""
+
+            if text_only:
+                # Auto-continue: a tool-equipped agent that answered without
+                # ever calling a tool gets a bounded nudge to use tools or
+                # confirm completion (cf. QwenPaw _auto_continue_if_text_only).
+                # The nudge is intentionally NOT persisted to memory.
+                if tools and not tool_used_ever and auto_continue_used < AUTO_CONTINUE_MAX:
+                    auto_continue_used += 1
+                    messages.append({
+                        "role": "user",
+                        "content": "如果任务尚未完成，请调用相应工具继续；"
+                                   "如果确认已完成，请直接给出最终答复。",
+                    })
+                    continue
+                final_text = candidate_text
                 new_messages.append({"role": "assistant", "content": final_text})
                 break
 
-            tool_calls = getattr(msg, "tool_calls", None)
-            if not tool_calls:
-                final_text = getattr(msg, "content", None) or ""
-                new_messages.append({"role": "assistant", "content": final_text})
-                break
-
+            tool_used_ever = True
             # Append assistant message that requested tools
             assistant_msg = {
                 "role": "assistant",
@@ -311,8 +432,12 @@ class InternalAgentRunner:
             messages.append(assistant_msg)
             new_messages.append(assistant_msg)
 
-            for call in tool_calls:
-                result_str = await self._dispatch(call)
+            # Execute this step's tool calls concurrently (cf. QwenPaw's
+            # asyncio.gather over a reasoning step's tool_calls). _dispatch
+            # catches its own errors and returns an error string.
+            results = await asyncio.gather(*[self._dispatch(c) for c in tool_calls])
+            for call, result_str in zip(tool_calls, results):
+                result_str = self._truncate_tool_result(result_str)
                 tool_call_log.append({"name": call.function.name,
                                        "arguments": call.function.arguments,
                                        "result_preview": result_str[:200]})

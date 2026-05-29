@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 import pytest_asyncio
 
@@ -10,13 +12,19 @@ from app.services.internal_agent import InternalAgentRunner
 
 @pytest_asyncio.fixture
 async def parent_conv_and_internal_agent():
-    """Create a user, an internal agent config, a parent conversation; yield ids."""
+    """Create a user, an internal agent config, a parent conversation; yield ids.
+
+    Uses a unique username/agent name per run so the shared (non-transactional)
+    test DB can't trip unique constraints when a prior run left residue.
+    """
+    uid = uuid.uuid4().hex[:8]
     async with AsyncSessionLocal() as s:
-        u = User(username="ia_test", email="ia_test@x", hashed_password="x",
+        u = User(username=f"ia_test_{uid}", email=f"ia_test_{uid}@x", hashed_password="x",
                  role="admin", is_active=True)
         s.add(u); await s.commit(); await s.refresh(u)
 
-        ag = AgentConfig(agent_name="ia_test_agent", kind="internal",
+        ag = AgentConfig(agent_name=f"ia_test_agent_{uid}", kind="internal",
+                          backend_type="openclaw",
                           system_prompt="you are helpful", is_active=True,
                           permission_level="medium", tool_loop_max_steps=4, memory_window=10)
         s.add(ag); await s.commit(); await s.refresh(ag)
@@ -154,6 +162,150 @@ async def test_execute_loop_terminates_on_final_message(monkeypatch):
     assert res["output"] == "final answer"
 
 
+def test_truncate_tool_result():
+    from app.services.internal_agent import InternalAgentRunner, TOOL_RESULT_MAX_CHARS
+    short = "ok"
+    assert InternalAgentRunner._truncate_tool_result(short) == short
+    big = "x" * (TOOL_RESULT_MAX_CHARS + 500)
+    out = InternalAgentRunner._truncate_tool_result(big)
+    assert len(out) < len(big)
+    assert "truncated 500 chars" in out
+
+
+@pytest.mark.asyncio
+async def test_parallel_dispatch_runs_all_tools(monkeypatch):
+    """A reasoning step with multiple tool_calls dispatches them all and feeds
+    every result back before the next reasoning step."""
+    from app.services import internal_agent as ia_mod
+    from app.services.internal_agent import InternalAgentRunner
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    def tc(name, cid):
+        return SimpleNamespace(id=cid, function=SimpleNamespace(name=name, arguments="{}"))
+
+    step1 = SimpleNamespace(content="", tool_calls=[tc("a", "1"), tc("b", "2")])
+    step2 = "all done"
+    fake_router = SimpleNamespace(chat=AsyncMock(side_effect=[step1, step2]))
+    monkeypatch.setattr(ia_mod, "get_llm_router", lambda: fake_router)
+
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
+           "llm_model": "m", "tool_loop_max_steps": 4, "memory_window": 0,
+           "associated_skills": [], "metadata_json": {"mcp_tool_ids": []},
+           "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+
+    dispatched = []
+    async def fake_dispatch(call):
+        dispatched.append(call.function.name)
+        return f"result-{call.function.name}"
+    monkeypatch.setattr(runner, "_dispatch", fake_dispatch)
+
+    res = await runner.execute(task="hi", conversation_id=None, user_id=1)
+    assert res["status"] == "completed"
+    assert res["output"] == "all done"
+    assert sorted(dispatched) == ["a", "b"]            # both tools ran
+    assert len(res["tool_calls"]) == 2                  # both logged
+
+
+@pytest.mark.asyncio
+async def test_auto_continue_nudges_text_only(monkeypatch):
+    """A tool-equipped agent that answers without ever calling a tool is nudged
+    up to AUTO_CONTINUE_MAX times before the text is accepted as final."""
+    from app.services import internal_agent as ia_mod
+    from app.services.internal_agent import InternalAgentRunner, AUTO_CONTINUE_MAX
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    # Always text-only (tool_calls=None) so every pass triggers a nudge.
+    reply = SimpleNamespace(content="answer", tool_calls=None)
+    chat = AsyncMock(return_value=reply)
+    fake_router = SimpleNamespace(chat=chat)
+    monkeypatch.setattr(ia_mod, "get_llm_router", lambda: fake_router)
+
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
+           "llm_model": "m", "tool_loop_max_steps": 8, "memory_window": 0,
+           "associated_skills": [], "metadata_json": {}, "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+    # Give the agent a (fake) tool so auto-continue is eligible.
+    async def fake_tools(): return [{"type": "function", "function": {"name": "t"}}]
+    monkeypatch.setattr(runner, "_build_tools", fake_tools)
+
+    res = await runner.execute(task="hi", conversation_id=None, user_id=1)
+    assert res["status"] == "completed"
+    assert res["output"] == "answer"
+    # AUTO_CONTINUE_MAX nudges + 1 final acceptance = MAX + 1 chat calls.
+    assert chat.await_count == AUTO_CONTINUE_MAX + 1
+
+
+@pytest.mark.asyncio
+async def test_no_auto_continue_without_tools(monkeypatch):
+    """An agent with no tools accepts a text-only answer immediately."""
+    from app.services import internal_agent as ia_mod
+    from app.services.internal_agent import InternalAgentRunner
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    chat = AsyncMock(return_value="just an answer")
+    monkeypatch.setattr(ia_mod, "get_llm_router", lambda: SimpleNamespace(chat=chat))
+
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
+           "llm_model": "m", "tool_loop_max_steps": 8, "memory_window": 0,
+           "associated_skills": [], "metadata_json": {"mcp_tool_ids": []},
+           "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+    res = await runner.execute(task="hi", conversation_id=None, user_id=1)
+    assert res["status"] == "completed"
+    assert chat.await_count == 1                        # no nudges
+
+
+@pytest.mark.asyncio
+async def test_maybe_compact_summarizes_when_oversized(monkeypatch):
+    from app.services.internal_agent import (
+        InternalAgentRunner, CONTEXT_COMPACT_CHARS, CONTEXT_KEEP_RECENT,
+    )
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "", "llm_provider_id": 1,
+           "llm_model": "m", "associated_skills": [], "metadata_json": {},
+           "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+
+    # Build an oversized buffer: system + many big user/assistant turns.
+    big = "y" * 2000
+    messages = [{"role": "system", "content": "SYS"}]
+    for i in range(20):
+        messages.append({"role": "user", "content": big})
+        messages.append({"role": "assistant", "content": big})
+    assert runner._estimate_chars(messages) > CONTEXT_COMPACT_CHARS
+
+    chat = AsyncMock(return_value="## Summary\ncondensed history")
+    out = await runner._maybe_compact(messages, SimpleNamespace(chat=chat))
+
+    assert chat.await_count == 1                        # summarizer invoked
+    assert out[0]["content"] == "SYS"                   # system kept
+    assert "## 对话摘要" in out[1]["content"]           # digest inserted
+    assert "condensed history" in out[1]["content"]
+    assert len(out) <= 2 + CONTEXT_KEEP_RECENT          # system + digest + recent
+    assert runner._estimate_chars(out) < runner._estimate_chars(messages)
+
+
+@pytest.mark.asyncio
+async def test_maybe_compact_noop_when_small():
+    from app.services.internal_agent import InternalAgentRunner
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "", "associated_skills": [],
+           "metadata_json": {}, "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+    messages = [{"role": "system", "content": "s"}, {"role": "user", "content": "hi"}]
+    chat = AsyncMock()
+    out = await runner._maybe_compact(messages, SimpleNamespace(chat=chat))
+    assert out is messages                              # untouched
+    assert chat.await_count == 0                        # summarizer not called
+
+
 @pytest.mark.asyncio
 async def test_agent_executor_routes_internal_kind(monkeypatch):
     from app.services.agent_executor import AgentExecutor
@@ -161,7 +313,8 @@ async def test_agent_executor_routes_internal_kind(monkeypatch):
     from app.models.agent import AgentConfig
 
     async with AsyncSessionLocal() as s:
-        ag = AgentConfig(agent_name="exec_test_int", kind="internal",
+        ag = AgentConfig(agent_name=f"exec_test_int_{uuid.uuid4().hex[:8]}", kind="internal",
+                          backend_type="openclaw",
                           system_prompt="sys", is_active=True,
                           permission_level="medium", tool_loop_max_steps=1)
         s.add(ag); await s.commit(); await s.refresh(ag)
