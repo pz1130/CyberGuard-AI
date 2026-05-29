@@ -31,6 +31,9 @@ interface FormState {
   endpoint_url: string
   system_prompt: string
   permission_level: string
+  // Internal-agent-only fields (kept distinct from external endpoint_url/system_prompt)
+  llm_provider_id: string
+  llm_model: string
 }
 
 const BACKEND_COLORS: Record<string, string> = {
@@ -291,6 +294,7 @@ export default function Agents() {
   const [form, setForm] = useState<FormState>({
     agent_name: '', backend_type: 'openclaw', description: '',
     endpoint_url: '', system_prompt: '', permission_level: 'medium',
+    llm_provider_id: '', llm_model: '',
   })
   const [testing, setTesting] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<Record<string, { ok: boolean; msg: string }>>({})
@@ -309,13 +313,13 @@ export default function Agents() {
 
   useEffect(() => { load() }, [])
 
-  const openCreate = () => {
+  const openCreate = (isInternal = false) => {
     setEditing(null)
     setCreatedApiKey(null)
-    const isInternal = form.backend_type === '__internal__'
     setForm({
       agent_name: '', backend_type: isInternal ? '__internal__' : 'openclaw',
       description: '', endpoint_url: '', system_prompt: '', permission_level: 'medium',
+      llm_provider_id: '', llm_model: '',
     })
     setShowForm(true)
   }
@@ -328,9 +332,11 @@ export default function Agents() {
       agent_name: a.agent_name || a.name || '',
       backend_type: isInternal ? '__internal__' : (a.backend_type || 'openclaw'),
       description: a.description || '',
-      endpoint_url: isInternal ? String(a.llm_provider_id || '') : (a.endpoint_url || ''),
-      system_prompt: isInternal ? (a.llm_model || '') : (a.system_prompt || ''),
+      endpoint_url: a.endpoint_url || '',
+      system_prompt: a.system_prompt || '',
       permission_level: a.permission_level || 'medium',
+      llm_provider_id: isInternal ? String(a.llm_provider_id || '') : '',
+      llm_model: isInternal ? (a.llm_model || '') : '',
     })
     setShowForm(true)
   }
@@ -347,11 +353,13 @@ export default function Agents() {
       }
 
       if (isInternal) {
-        // Internal agent fields
-        const llmProviderId = parseInt(form.endpoint_url || '0', 10)
+        // Internal agent fields — runs in-app, no external endpoint
+        const llmProviderId = parseInt(form.llm_provider_id || '0', 10)
         if (llmProviderId) payload.llm_provider_id = llmProviderId
-        const model = form.system_prompt?.trim()
+        const model = form.llm_model?.trim()
         if (model) payload.llm_model = model
+        const sysPrompt = form.system_prompt?.trim()
+        if (sysPrompt) payload.system_prompt = sysPrompt
         payload.tool_loop_max_steps = 8
         payload.memory_window = 20
         payload.backend_type = 'openclaw'  // required but unused for internal
@@ -450,7 +458,7 @@ export default function Agents() {
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 0', gap: 12 }}>
           <Cpu size={24} style={{ color: 'var(--text-dim)' }} />
           <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>NO ACTIVE AGENTS</div>
-          <button onClick={openCreate} style={{ fontSize: 10, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', letterSpacing: '0.1em' }}>
+          <button onClick={() => setShowKindPicker(true)} style={{ fontSize: 10, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', letterSpacing: '0.1em' }}>
             + DEPLOY FIRST AGENT
           </button>
         </div>
@@ -597,7 +605,7 @@ export default function Agents() {
             </div>
             <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
               <button
-                onClick={() => { setShowKindPicker(false); openCreate() }}
+                onClick={() => { setShowKindPicker(false); openCreate(false) }}
                 style={{
                   padding: '18px 20px', border: '1px solid var(--border-bright)',
                   background: 'var(--bg-base)', cursor: 'pointer', textAlign: 'left',
@@ -610,8 +618,7 @@ export default function Agents() {
               <button
                 onClick={() => {
                   setShowKindPicker(false)
-                  setForm(f => ({ ...f, backend_type: '__internal__' }))
-                  openCreate()
+                  openCreate(true)
                 }}
                 style={{
                   padding: '18px 20px', border: '1px solid rgba(96,165,250,0.4)',
@@ -685,15 +692,15 @@ export default function Agents() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     <div>
                       {label('LLM PROVIDER ID *')}
-                      <input value={form.endpoint_url || ''}
-                        onChange={e => setForm(f => ({ ...f, endpoint_url: e.target.value }))}
+                      <input value={form.llm_provider_id || ''}
+                        onChange={e => setForm(f => ({ ...f, llm_provider_id: e.target.value }))}
                         placeholder="Provider ID (e.g. 1)"
                         style={inputStyle} />
                     </div>
                     <div>
                       {label('LLM MODEL')}
-                      <input value={form.system_prompt || ''}
-                        onChange={e => setForm(f => ({ ...f, system_prompt: e.target.value }))}
+                      <input value={form.llm_model || ''}
+                        onChange={e => setForm(f => ({ ...f, llm_model: e.target.value }))}
                         placeholder="auto / gpt-4o / etc."
                         style={inputStyle} />
                     </div>
@@ -741,7 +748,7 @@ export default function Agents() {
               </div>
 
               {/* Endpoint URL — 仅非 OpenClaw */}
-              {form.backend_type !== 'openclaw' && (
+              {form.backend_type !== 'openclaw' && form.backend_type !== '__internal__' && (
                 <div>
                   {label('ENDPOINT URL *')}
                   <input value={form.endpoint_url}
