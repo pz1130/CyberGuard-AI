@@ -65,11 +65,15 @@ class ToolBase(BaseModel):
     permission_level: str = "medium"
     requires_approval: bool = False
     is_active: bool = True
+    command_template: Optional[str] = None
+    input_schema_json: Optional[str] = None
+    timeout_seconds: int = 60
+    required_permission: Optional[str] = None
 
 
 class ToolCreate(ToolBase):
     """Tool creation schema."""
-    md_content: str = Field(..., min_length=1)
+    md_content: Optional[str] = None
     version: str = "1.0.0"
     metadata_json: Optional[Dict[str, Any]] = None
 
@@ -84,6 +88,10 @@ class ToolUpdate(BaseModel):
     requires_approval: Optional[bool] = None
     is_active: Optional[bool] = None
     metadata_json: Optional[Dict[str, Any]] = None
+    command_template: Optional[str] = None
+    input_schema_json: Optional[str] = None
+    timeout_seconds: Optional[int] = None
+    required_permission: Optional[str] = None
 
 
 class ToolResponse(BaseModel):
@@ -97,6 +105,10 @@ class ToolResponse(BaseModel):
     requires_approval: bool
     is_active: bool
     metadata_json: Optional[Dict[str, Any]]
+    command_template: Optional[str] = None
+    input_schema_json: Optional[str] = None
+    timeout_seconds: int = 60
+    required_permission: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
