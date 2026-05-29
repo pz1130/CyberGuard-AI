@@ -2,8 +2,9 @@
 import tempfile
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.dependencies import get_db, require_permission
-from app.core.rbac import Permission
+from app.core.dependencies import get_db, require_permission, get_current_user
+from app.core.rbac import Permission, Role, ROLE_PERMISSIONS
+from app.services.tool_executor import execute_tool
 from app.schemas.skill import (
     SkillCreate, SkillRead, SkillUpdate, SkillListResponse,
     ToolCreate, ToolRead, ToolUpdate, ToolListResponse,
@@ -194,3 +195,26 @@ async def delete_tool(tool_id: int, db: AsyncSession = Depends(get_db), _=Depend
         raise HTTPException(status_code=404, detail="Tool not found")
     await db.delete(tool)
     await db.commit()
+
+
+@router.post("/tools/{tool_id}/execute")
+async def execute_pool_tool(
+    tool_id: int,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+    _=Depends(require_permission(Permission.TASK_EXECUTE)),
+):
+    """Run an executable Tool with the supplied args (manual test / direct call)."""
+    result = await db.execute(select(Tool).where(Tool.id == tool_id))
+    tool = result.scalar_one_or_none()
+    if not tool:
+        raise HTTPException(status_code=404, detail="Tool not found")
+    if not tool.command_template:
+        raise HTTPException(status_code=400, detail="Tool is not executable (no command_template)")
+    # ROLE_PERMISSIONS is keyed by Role enum; current_user.role is a string
+    perms = {p.value for p in ROLE_PERMISSIONS.get(Role(current_user.role), [])}
+    return await execute_tool(
+        tool, body.get("args") or {}, user_id=current_user.user_id,
+        caller_permissions=perms,
+    )
