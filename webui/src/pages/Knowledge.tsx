@@ -160,19 +160,19 @@ export default function Knowledge() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>SEMANTIC SEARCH</div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>KNOWLEDGE BASE</h1>
+          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>SEMANTIC SEARCH</div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>KNOWLEDGE BASE</h1>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 9, letterSpacing: '0.15em', color: 'var(--text-dim)' }}>EMBEDDING</span>
+            <span style={{ fontSize: 11, letterSpacing: '0.15em', color: 'var(--text-dim)' }}>EMBEDDING</span>
             <select
               value={providerId ?? ''}
               onChange={e => setProviderId(Number(e.target.value) || null)}
               style={{
                 height: 30, padding: '0 8px',
                 background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                color: 'var(--text-primary)', fontSize: 10, fontFamily: 'var(--font-mono)',
+                color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)',
               }}>
               {providers.length === 0 && <option value="">NOT CONFIGURED</option>}
               {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -184,7 +184,7 @@ export default function Knowledge() {
               display: 'flex', alignItems: 'center', gap: 8,
               padding: '0 16px', height: 36,
               background: 'var(--accent)', border: '1px solid var(--accent-border)',
-              color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.15em',
+              color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em',
               cursor: 'pointer', fontFamily: 'var(--font-mono)',
               boxShadow: '0 0 16px rgba(0,255,65,0.15)',
             }}>
@@ -200,25 +200,25 @@ export default function Knowledge() {
           background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-            <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>NEW KNOWLEDGE BASE</h3>
+            <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>NEW KNOWLEDGE BASE</h3>
             <button onClick={() => setShowKBForm(false)} style={{ color: 'var(--text-muted)', cursor: 'pointer', background: 'none', border: 'none', padding: 4 }}>
               <X size={14} />
             </button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
-              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>NAME *</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>NAME *</label>
               <input value={kbForm.name || ''} onChange={e => setKBForm(f => ({ ...f, name: e.target.value }))}
                 placeholder="e.g. Threat Intel DB"
                 style={{
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
+                  color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
                   fontFamily: 'var(--font-mono)',
                 }} />
             </div>
             <div>
-              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>
+              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>
                 <span>EMBEDDING MODEL</span>
                 <span style={{ color: 'var(--accent)' }}>DIM: {kbForm.embedding_dim || 1536}</span>
               </label>
@@ -230,7 +230,7 @@ export default function Knowledge() {
                 style={{
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
+                  color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
                   fontFamily: 'var(--font-mono)',
                 }}>
                 <option value="">— None —</option>
@@ -238,17 +238,17 @@ export default function Knowledge() {
                   <option key={m.name} value={m.name}>{m.name}</option>
                 ))}
               </select>
-              <div style={{ marginTop: 4, fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.02em' }}>
+              <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.02em' }}>
                 创建后维度不可改。3-large=3072，其他=1536。
               </div>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>RERANK MODEL</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>RERANK MODEL</label>
               <select value={kbForm.rerank_model || ''} onChange={e => setKBForm(f => ({ ...f, rerank_model: e.target.value }))}
                 style={{
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
+                  color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
                   fontFamily: 'var(--font-mono)',
                 }}>
                 <option value="">— None —</option>
@@ -258,12 +258,12 @@ export default function Knowledge() {
               </select>
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>DESCRIPTION</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>DESCRIPTION</label>
               <input value={kbForm.description || ''} onChange={e => setKBForm(f => ({ ...f, description: e.target.value }))}
                 style={{
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
+                  color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
                   fontFamily: 'var(--font-mono)',
                 }} />
             </div>
@@ -273,7 +273,7 @@ export default function Knowledge() {
               style={{
                 padding: '0 16px', height: 36,
                 border: '1px solid var(--border-bright)', background: 'transparent',
-                color: 'var(--text-muted)', fontSize: 11, letterSpacing: '0.15em', cursor: 'pointer',
+                color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer',
                 fontFamily: 'var(--font-mono)',
               }}>
               CANCEL
@@ -282,7 +282,7 @@ export default function Knowledge() {
               style={{
                 padding: '0 16px', height: 36,
                 border: '1px solid var(--accent-border)', background: 'var(--accent)',
-                color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.15em', cursor: 'pointer',
+                color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer',
                 fontFamily: 'var(--font-mono)',
               }}>
               CREATE
@@ -294,13 +294,13 @@ export default function Knowledge() {
       <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 16 }}>
         {/* Sidebar: KB list */}
         <div>
-          <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>KNOWLEDGE BASES</div>
+          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>KNOWLEDGE BASES</div>
           {loadingKB ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '20px 0' }}>
               <Loader2 size={14} style={{ color: 'var(--accent)', animation: 'spin 1s linear infinite' }} />
             </div>
           ) : bases.length === 0 ? (
-            <div style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>NO BASES DEFINED</div>
+            <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>NO BASES DEFINED</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {bases.map(k => (
@@ -317,9 +317,9 @@ export default function Knowledge() {
                   }}>
                   <Database size={12} style={{ color: selected?.id === k.id ? 'var(--accent)' : 'var(--text-muted)', flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 11, color: selected?.id === k.id ? 'var(--accent)' : 'var(--text-primary)', letterSpacing: '0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k.name}</div>
+                    <div style={{ fontSize: 13, color: selected?.id === k.id ? 'var(--accent)' : 'var(--text-primary)', letterSpacing: '0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k.name}</div>
                     {(k.embedding_model || k.embedding_dim) && (
-                      <div style={{ fontSize: 9, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {k.embedding_model || '—'}{k.embedding_dim ? ` · ${k.embedding_dim}d` : ''}
                       </div>
                     )}
@@ -344,7 +344,7 @@ export default function Knowledge() {
               gap: 12,
             }}>
               <Database size={28} style={{ color: 'var(--text-dim)' }} />
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>SELECT OR CREATE A KNOWLEDGE BASE</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>SELECT OR CREATE A KNOWLEDGE BASE</div>
             </div>
           ) : (
             <>
@@ -352,10 +352,10 @@ export default function Knowledge() {
               <div style={{ padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em', marginBottom: 4 }}>{selected.name}</div>
-                    {selected.description && <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>{selected.description}</div>}
+                    <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em', marginBottom: 4 }}>{selected.name}</div>
+                    {selected.description && <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>{selected.description}</div>}
                   </div>
-                  <div style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>{docs.length} DOCS</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>{docs.length} DOCS</div>
                 </div>
               </div>
 
@@ -363,7 +363,7 @@ export default function Knowledge() {
               <div style={{ padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                   <Search size={13} style={{ color: 'var(--accent)' }} />
-                  <span style={{ fontSize: 11, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>SEMANTIC SEARCH</span>
+                  <span style={{ fontSize: 13, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>SEMANTIC SEARCH</span>
                 </div>
                 <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                   <input value={query} onChange={e => setQuery(e.target.value)}
@@ -372,7 +372,7 @@ export default function Knowledge() {
                     style={{
                       flex: 1, height: 36, padding: '0 12px',
                       background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                      color: 'var(--text-primary)', fontSize: 11, letterSpacing: '0.05em',
+                      color: 'var(--text-primary)', fontSize: 13, letterSpacing: '0.05em',
                       fontFamily: 'var(--font-mono)',
                     }} />
                   <input type="number" min={1} max={20} value={topK}
@@ -381,7 +381,7 @@ export default function Knowledge() {
                     style={{
                       width: 60, height: 36, padding: '0 8px',
                       background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                      color: 'var(--text-primary)', fontSize: 11, textAlign: 'center',
+                      color: 'var(--text-primary)', fontSize: 13, textAlign: 'center',
                       fontFamily: 'var(--font-mono)',
                     }} />
                   <button onClick={search} disabled={querying || docs.length === 0}
@@ -390,7 +390,7 @@ export default function Knowledge() {
                       background: querying ? 'var(--bg-elevated)' : 'var(--accent)',
                       border: '1px solid var(--accent-border)',
                       color: querying ? 'var(--text-dim)' : '#000',
-                      fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', cursor: querying ? 'not-allowed' : 'pointer',
+                      fontSize: 13, fontWeight: 700, letterSpacing: '0.1em', cursor: querying ? 'not-allowed' : 'pointer',
                       fontFamily: 'var(--font-mono)',
                     }}>
                     {querying ? 'SEARCHING...' : 'SEARCH'}
@@ -405,22 +405,22 @@ export default function Knowledge() {
                         borderLeft: '2px solid var(--accent)',
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                          <span style={{ fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>{r.filename} · CHUNK #{r.chunk_index}</span>
+                          <span style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>{r.filename} · CHUNK #{r.chunk_index}</span>
                           <span style={{
                             display: 'inline-block', padding: '1px 6px',
                             background: 'var(--accent-dim)', border: '1px solid var(--accent-border)',
-                            color: 'var(--accent)', fontSize: 9, letterSpacing: '0.1em',
+                            color: 'var(--accent)', fontSize: 11, letterSpacing: '0.1em',
                           }}>
                             {(r.score * 100).toFixed(1)}%
                           </span>
                         </div>
-                        <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{r.text}</p>
+                        <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{r.text}</p>
                       </div>
                     ))}
                   </div>
                 )}
                 {docs.length === 0 && (
-                  <div style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.1em', textAlign: 'center', padding: '8px 0' }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.1em', textAlign: 'center', padding: '8px 0' }}>
                     UPLOAD DOCUMENTS BEFORE SEARCHING
                   </div>
                 )}
@@ -431,7 +431,7 @@ export default function Knowledge() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <FileText size={13} style={{ color: 'var(--accent)' }} />
-                    <span style={{ fontSize: 11, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>DOCUMENTS</span>
+                    <span style={{ fontSize: 13, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>DOCUMENTS</span>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <input
@@ -446,7 +446,7 @@ export default function Knowledge() {
                         display: 'flex', alignItems: 'center', gap: 6,
                         padding: '0 10px', height: 30,
                         border: '1px solid var(--border-bright)', background: 'transparent',
-                        color: 'var(--text-muted)', fontSize: 10, letterSpacing: '0.1em', cursor: ingesting ? 'not-allowed' : 'pointer',
+                        color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.1em', cursor: ingesting ? 'not-allowed' : 'pointer',
                         fontFamily: 'var(--font-mono)',
                       }}>
                       <Upload size={10} /> UPLOAD FILE
@@ -456,7 +456,7 @@ export default function Knowledge() {
                         display: 'flex', alignItems: 'center', gap: 6,
                         padding: '0 10px', height: 30,
                         background: 'var(--accent)', border: '1px solid var(--accent-border)',
-                        color: '#000', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', cursor: 'pointer',
+                        color: '#000', fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', cursor: 'pointer',
                         fontFamily: 'var(--font-mono)',
                       }}>
                       <Plus size={10} /> PASTE TEXT
@@ -473,7 +473,7 @@ export default function Knowledge() {
                       style={{
                         width: '100%', height: 34, padding: '0 10px',
                         background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                        color: 'var(--text-primary)', fontSize: 11, letterSpacing: '0.05em',
+                        color: 'var(--text-primary)', fontSize: 13, letterSpacing: '0.05em',
                         fontFamily: 'var(--font-mono)',
                       }} />
                     <textarea
@@ -484,7 +484,7 @@ export default function Knowledge() {
                       style={{
                         width: '100%', padding: '8px 10px',
                         background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                        color: 'var(--text-primary)', fontSize: 11, letterSpacing: '0.05em',
+                        color: 'var(--text-primary)', fontSize: 13, letterSpacing: '0.05em',
                         fontFamily: 'var(--font-mono)', resize: 'none',
                       }} />
                     <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -492,7 +492,7 @@ export default function Knowledge() {
                         style={{
                           padding: '0 12px', height: 30,
                           border: '1px solid var(--border-bright)', background: 'transparent',
-                          color: 'var(--text-muted)', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer',
+                          color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer',
                           fontFamily: 'var(--font-mono)',
                         }}>
                         CANCEL
@@ -501,7 +501,7 @@ export default function Knowledge() {
                         style={{
                           padding: '0 12px', height: 30,
                           background: 'var(--accent)', border: '1px solid var(--accent-border)',
-                          color: '#000', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', cursor: ingesting ? 'not-allowed' : 'pointer',
+                          color: '#000', fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', cursor: ingesting ? 'not-allowed' : 'pointer',
                           fontFamily: 'var(--font-mono)',
                         }}>
                         {ingesting ? 'IMPORTING...' : 'IMPORT'}
@@ -515,7 +515,7 @@ export default function Knowledge() {
                     <Loader2 size={14} style={{ color: 'var(--accent)', animation: 'spin 1s linear infinite' }} />
                   </div>
                 ) : docs.length === 0 ? (
-                  <div style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.1em', textAlign: 'center', padding: '20px 0' }}>NO DOCUMENTS — UPLOAD OR PASTE CONTENT</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.1em', textAlign: 'center', padding: '20px 0' }}>NO DOCUMENTS — UPLOAD OR PASTE CONTENT</div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {docs.map(d => (
@@ -526,8 +526,8 @@ export default function Knowledge() {
                       }}>
                         <FileText size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 11, color: 'var(--text-primary)', letterSpacing: '0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.filename}</div>
-                          <div style={{ fontSize: 9, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+                          <div style={{ fontSize: 13, color: 'var(--text-primary)', letterSpacing: '0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.filename}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
                             {d.metadata_json?.chunk_count ?? 0} CHUNKS
                             {d.file_size != null && ` · ${(d.file_size / 1024).toFixed(1)} KB`}
                           </div>

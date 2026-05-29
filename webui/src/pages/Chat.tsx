@@ -519,7 +519,7 @@ export default function Chat() {
           display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)',
         }}>
           <div style={{ padding: '12px 12px 8px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)' }}>CONVERSATIONS</span>
+            <span style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)' }}>CONVERSATIONS</span>
             <button onClick={createConversation} style={{ padding: 4, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none' }}>
               <Plus size={13} />
             </button>
@@ -543,7 +543,7 @@ export default function Chat() {
                         else if (e.key === 'Escape') cancelEditTitle()
                       }}
                       autoFocus
-                      style={{ flex: 1, height: 24, padding: '0 6px', background: 'var(--bg-base)', border: '1px solid var(--accent)', color: 'var(--text-primary)', fontSize: 11, fontFamily: 'var(--font-mono)' }}
+                      style={{ flex: 1, height: 24, padding: '0 6px', background: 'var(--bg-base)', border: '1px solid var(--accent)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-mono)' }}
                       onClick={e => e.stopPropagation()}
                     />
                     <button onClick={(e) => { e.stopPropagation(); saveEditTitle() }} style={{ padding: 2, color: 'var(--accent)', background: 'none', border: 'none' }}><Check size={10} /></button>
@@ -552,8 +552,8 @@ export default function Chat() {
                 ) : (
                   <>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 11, color: activeConvId === conv.id ? 'var(--accent)' : 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{conv.title}</div>
-                      {conv.updated_at && <div style={{ fontSize: 9, color: 'var(--text-dim)', marginTop: 2 }}>{formatTime(conv.updated_at)}</div>}
+                      <div style={{ fontSize: 13, color: activeConvId === conv.id ? 'var(--accent)' : 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{conv.title}</div>
+                      {conv.updated_at && <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>{formatTime(conv.updated_at)}</div>}
                     </div>
                     <button onClick={(e) => startEditTitle(conv, e)} style={{ padding: 2, color: 'var(--text-dim)', background: 'none', border: 'none', flexShrink: 0 }}><Edit2 size={10} /></button>
                     <button onClick={(e) => deleteConversation(conv.id, e)} style={{ padding: 2, color: 'var(--red)', background: 'none', border: 'none', flexShrink: 0 }}><Trash2 size={10} /></button>
@@ -562,7 +562,7 @@ export default function Chat() {
               </div>
             ))}
             {conversations.length === 0 && (
-              <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-dim)', fontSize: 10, letterSpacing: '0.1em' }}>
+              <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-dim)', fontSize: 12, letterSpacing: '0.1em' }}>
                 NO CONVERSATIONS
               </div>
             )}
@@ -585,7 +585,7 @@ export default function Chat() {
               <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/>
             </svg>
           </button>
-          <span style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)' }}>MODE</span>
+          <span style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)' }}>MODE</span>
           <div style={{ display: 'flex', border: '1px solid var(--border-bright)' }}>
             {(['normal','fast','expert'] as const).map(m => {
               const active = chatMode === m
@@ -605,7 +605,7 @@ export default function Chat() {
                     color: active ? '#000' : 'var(--text-muted)',
                     border: 'none',
                     borderRight: m !== 'expert' ? '1px solid var(--border-bright)' : 'none',
-                    fontSize: 10, letterSpacing: '0.1em', fontFamily: 'var(--font-mono)',
+                    fontSize: 12, letterSpacing: '0.1em', fontFamily: 'var(--font-mono)',
                     fontWeight: active ? 700 : 400,
                     cursor: 'pointer',
                   }}>
@@ -614,18 +614,18 @@ export default function Chat() {
               )
             })}
           </div>
-          <span style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)' }}>MODEL</span>
+          <span style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)' }}>MODEL</span>
           <select value={providerModel} onChange={e => { localStorage.setItem('lastProviderModel', e.target.value); setProviderModel(e.target.value) }}
             style={{
               height: 26, padding: '0 8px',
               background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-              color: 'var(--text-primary)', fontSize: 10, letterSpacing: '0.05em',
+              color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
               fontFamily: 'var(--font-mono)',
             }}>
             <option value="auto">AUTO</option>
             {availableModels.map(m => <option key={`${m.provider_id}:${m.model}`} value={`${m.provider_id}:${m.model}`}>{m.provider_name} / {m.model}</option>)}
           </select>
-          <span style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)' }}>AGENT</span>
+          <span style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)' }}>AGENT</span>
           <select
             value={selectedAgentId}
             onChange={e => {
@@ -640,7 +640,7 @@ export default function Chat() {
               background: selectedAgentId ? 'rgba(0,255,65,0.08)' : 'var(--bg-base)',
               border: `1px solid ${selectedAgentId ? 'var(--accent-border)' : 'var(--border-bright)'}`,
               color: selectedAgentId ? 'var(--accent)' : 'var(--text-primary)',
-              fontSize: 10, letterSpacing: '0.05em',
+              fontSize: 12, letterSpacing: '0.05em',
               fontFamily: 'var(--font-mono)',
             }}>
             <option value="">MASTER (AUTO ROUTE)</option>
@@ -654,7 +654,7 @@ export default function Chat() {
           {activeConvId && (
             <>
               <button onClick={() => setShowConvSettings(s => !s)} style={{
-                padding: '4px 10px', fontSize: 10, letterSpacing: '0.1em',
+                padding: '4px 10px', fontSize: 12, letterSpacing: '0.1em',
                 border: '1px solid var(--border-bright)', background: showConvSettings ? 'var(--accent-dim)' : 'transparent',
                 color: showConvSettings ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer', fontFamily: 'var(--font-mono)',
                 display: 'flex', alignItems: 'center', gap: 4,
@@ -662,7 +662,7 @@ export default function Chat() {
                 <Settings size={10} /> SESSION
               </button>
               <button onClick={clearChat} style={{
-                padding: '4px 12px', fontSize: 10, letterSpacing: '0.1em',
+                padding: '4px 12px', fontSize: 12, letterSpacing: '0.1em',
                 border: '1px solid var(--border-bright)', background: 'transparent',
                 color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'var(--font-mono)',
               }}>
@@ -683,28 +683,28 @@ export default function Chat() {
             gap: 16,
           }}>
             <div>
-              <div style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 8 }}>KNOWLEDGE BASE</div>
+              <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 8 }}>KNOWLEDGE BASE</div>
               <select
                 value={convSettings.knowledge_base_id ?? ''}
                 onChange={e => setConvSettings(s => ({ ...s, knowledge_base_id: e.target.value ? Number(e.target.value) : null }))}
                 style={{
                   width: '100%', height: 32, padding: '0 8px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 11, fontFamily: 'var(--font-mono)',
+                  color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-mono)',
                 }}>
                 <option value="">— None —</option>
                 {availableKBs.map(kb => <option key={kb.id} value={kb.id}>{kb.name}</option>)}
               </select>
             </div>
             <div>
-              <div style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 8 }}>MODEL OVERRIDE</div>
+              <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 8 }}>MODEL OVERRIDE</div>
               <select
                 value={convSettings.model_override}
                 onChange={e => setConvSettings(s => ({ ...s, model_override: e.target.value }))}
                 style={{
                   width: '100%', height: 32, padding: '0 8px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 11, fontFamily: 'var(--font-mono)',
+                  color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-mono)',
                 }}>
                 <option value="">— Global Default —</option>
                 {availableModels.map(m => <option key={`${m.provider_id}:${m.model}`} value={m.model}>{m.provider_name} / {m.model}</option>)}
@@ -715,9 +715,9 @@ export default function Chat() {
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 marginBottom: 8, gap: 12,
               }}>
-                <div style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--text-muted)' }}>CUSTOM SYSTEM PROMPT</div>
+                <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-muted)' }}>CUSTOM SYSTEM PROMPT</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 9, letterSpacing: '0.15em', color: 'var(--text-dim)' }}>TEMPLATE</span>
+                  <span style={{ fontSize: 11, letterSpacing: '0.15em', color: 'var(--text-dim)' }}>TEMPLATE</span>
                   <select
                     value=""
                     onChange={e => {
@@ -738,7 +738,7 @@ export default function Chat() {
                     style={{
                       height: 24, padding: '0 8px',
                       background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                      color: 'var(--text-primary)', fontSize: 10, fontFamily: 'var(--font-mono)',
+                      color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)',
                       minWidth: 180,
                     }}
                   >
@@ -764,7 +764,7 @@ export default function Chat() {
                       onClick={() => setConvSettings(s => ({ ...s, system_prompt_override: '' }))}
                       title="Clear"
                       style={{
-                        height: 24, padding: '0 8px', fontSize: 9, letterSpacing: '0.1em',
+                        height: 24, padding: '0 8px', fontSize: 11, letterSpacing: '0.1em',
                         background: 'transparent', border: '1px solid var(--border-bright)',
                         color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'var(--font-mono)',
                       }}>CLEAR</button>
@@ -779,7 +779,7 @@ export default function Chat() {
                 style={{
                   width: '100%', padding: '8px 10px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 11, lineHeight: 1.5,
+                  color: 'var(--text-primary)', fontSize: 13, lineHeight: 1.5,
                   fontFamily: 'var(--font-mono)', resize: 'vertical',
                 }}
               />
@@ -788,7 +788,7 @@ export default function Chat() {
               <button
                 onClick={() => setShowConvSettings(false)}
                 style={{
-                  padding: '6px 14px', fontSize: 10, letterSpacing: '0.1em',
+                  padding: '6px 14px', fontSize: 12, letterSpacing: '0.1em',
                   border: '1px solid var(--border-bright)', background: 'transparent',
                   color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'var(--font-mono)',
                 }}>
@@ -813,7 +813,7 @@ export default function Chat() {
                   } catch (e: any) { alert(e.message) }
                 }}
                 style={{
-                  padding: '6px 14px', fontSize: 10, letterSpacing: '0.1em',
+                  padding: '6px 14px', fontSize: 12, letterSpacing: '0.1em',
                   background: 'var(--accent)', border: '1px solid var(--accent-border)',
                   color: '#000', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontWeight: 700,
                 }}>
@@ -827,18 +827,18 @@ export default function Chat() {
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
           {!activeConvId ? (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, color: 'var(--text-dim)' }}>
-              <div style={{ fontSize: 32, color: 'var(--accent)', opacity: 0.5 }}>⬡</div>
-              <div style={{ fontSize: 11, letterSpacing: '0.2em' }}>SELECT OR CREATE A CONVERSATION</div>
+              <div style={{ fontSize: 34, color: 'var(--accent)', opacity: 0.5 }}>⬡</div>
+              <div style={{ fontSize: 13, letterSpacing: '0.2em' }}>SELECT OR CREATE A CONVERSATION</div>
               <button onClick={createConversation} style={{
-                padding: '8px 20px', fontSize: 10, letterSpacing: '0.15em',
+                padding: '8px 20px', fontSize: 12, letterSpacing: '0.15em',
                 background: 'var(--accent)', border: 'none', color: '#000',
                 cursor: 'pointer', fontFamily: 'var(--font-mono)', fontWeight: 700,
               }}>+ NEW CONVERSATION</button>
             </div>
           ) : messages.length === 0 ? (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: 'var(--text-dim)' }}>
-              <div style={{ fontSize: 24, opacity: 0.3 }}>⬡</div>
-              <div style={{ fontSize: 10, letterSpacing: '0.15em' }}>READY — SEND A MESSAGE</div>
+              <div style={{ fontSize: 26, opacity: 0.3 }}>⬡</div>
+              <div style={{ fontSize: 12, letterSpacing: '0.15em' }}>READY — SEND A MESSAGE</div>
             </div>
           ) : (
             messages.map((msg, i) => (
@@ -846,7 +846,7 @@ export default function Chat() {
                 display: 'flex', flexDirection: 'column',
                 alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
               }}>
-                <div style={{ fontSize: 9, letterSpacing: '0.15em', color: 'var(--text-dim)', marginBottom: 4 }}>
+                <div style={{ fontSize: 11, letterSpacing: '0.15em', color: 'var(--text-dim)', marginBottom: 4 }}>
                   {msg.role === 'user' ? '◆ OPERATOR' : msg.role === 'assistant' ? '◆ CYBERGUARD' : '◆ SYSTEM'}
                 </div>
                 <div style={{
@@ -854,7 +854,7 @@ export default function Chat() {
                   background: msg.role === 'user' ? 'var(--accent)' : msg.role === 'system' ? 'var(--amber-dim)' : 'var(--bg-elevated)',
                   border: `1px solid ${msg.role === 'user' ? 'var(--accent-border)' : 'var(--border)'}`,
                   color: msg.role === 'user' ? '#000' : 'var(--text-primary)',
-                  fontSize: 13, lineHeight: 1.6,
+                  fontSize: 15, lineHeight: 1.6,
                   fontFamily: 'var(--font-mono)',
                 }}>
                   {msg.role === 'assistant' ? (
@@ -882,7 +882,7 @@ export default function Chat() {
           display: 'flex', alignItems: 'center', gap: 4,
           padding: '4px 8px',
           border: '1px solid var(--accent-border)',
-          fontSize: 10, fontFamily: 'var(--font-mono)',
+          fontSize: 12, fontFamily: 'var(--font-mono)',
           color: 'var(--text-muted)',
         }}>
           <FileText size={10} />
@@ -892,12 +892,12 @@ export default function Chat() {
     )}
   </div>
 )}
-{msg.created_at && <div style={{ fontSize: 9, color: 'var(--text-dim)', marginTop: 3 }}>{formatTime(msg.created_at)}</div>}
+{msg.created_at && <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3 }}>{formatTime(msg.created_at)}</div>}
               </div>
             ))
           )}
           {pollingStatus && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', color: 'var(--text-muted)', fontSize: 11, letterSpacing: '0.1em' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.1em' }}>
               <div style={{ width: 12, height: 12, border: '1px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
               {pollingStatus}
             </div>
@@ -946,7 +946,7 @@ export default function Chat() {
                   padding: '4px 8px',
                   border: '1px solid var(--accent-border)',
                   background: 'var(--accent-dim)',
-                  fontSize: 10,
+                  fontSize: 12,
                   fontFamily: 'var(--font-mono)',
                   color: 'var(--text-primary)',
                 }}>
@@ -995,7 +995,7 @@ export default function Chat() {
             style={{
               flex: 1, padding: '10px 12px',
               background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-              color: 'var(--text-primary)', fontSize: 13,
+              color: 'var(--text-primary)', fontSize: 15,
               fontFamily: 'var(--font-mono)', resize: 'none', maxHeight: 120,
               opacity: activeConvId ? 1 : 0.5,
             }}
@@ -1054,7 +1054,7 @@ export default function Chat() {
                 padding: 8, background: 'var(--bg-elevated)',
                 border: '1px solid var(--border-bright)',
                 color: 'var(--text-primary)', cursor: 'pointer',
-                fontSize: 11, fontFamily: 'var(--font-mono)',
+                fontSize: 13, fontFamily: 'var(--font-mono)',
               }}>
               CLOSE
             </button>

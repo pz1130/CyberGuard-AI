@@ -119,7 +119,7 @@ export default function Settings() {
     const val = config[key] as string | number
     return (
       <div key={key} style={{ marginBottom: 20 }}>
-        <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase' }}>{label}</label>
+        <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase' }}>{label}</label>
         {extra?.type === 'textarea' ? (
           <textarea
             value={val as string}
@@ -128,7 +128,7 @@ export default function Settings() {
             style={{
               width: '100%', padding: '10px 12px',
               background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-              color: 'var(--text-primary)', fontSize: 12, lineHeight: 1.6,
+              color: 'var(--text-primary)', fontSize: 14, lineHeight: 1.6,
               fontFamily: 'var(--font-mono)', resize: 'vertical',
             }}
           />
@@ -143,7 +143,7 @@ export default function Settings() {
               onChange={e => setConfig(c => ({ ...c, [key]: parseFloat(e.target.value) }))}
               style={{ flex: 1 }}
             />
-            <span style={{ fontSize: 12, color: 'var(--accent)', minWidth: 40 }}>{val as number}</span>
+            <span style={{ fontSize: 14, color: 'var(--accent)', minWidth: 40 }}>{val as number}</span>
           </div>
         ) : extra?.type === 'number' ? (
           <input
@@ -155,7 +155,7 @@ export default function Settings() {
             style={{
               width: 120, height: 36, padding: '0 12px',
               background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-              color: 'var(--text-primary)', fontSize: 12,
+              color: 'var(--text-primary)', fontSize: 14,
               fontFamily: 'var(--font-mono)',
             }}
           />
@@ -167,7 +167,7 @@ export default function Settings() {
             style={{
               width: '100%', height: 36, padding: '0 12px',
               background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-              color: 'var(--text-primary)', fontSize: 12,
+              color: 'var(--text-primary)', fontSize: 14,
               fontFamily: 'var(--font-mono)',
             }}
           />
@@ -180,15 +180,15 @@ export default function Settings() {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>SYSTEM CONFIGURATION</div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>SETTINGS</h1>
+          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>SYSTEM CONFIGURATION</div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>SETTINGS</h1>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={reset} style={{
             display: 'flex', alignItems: 'center', gap: 6,
             padding: '0 14px', height: 36,
             border: '1px solid var(--border-bright)', background: 'transparent',
-            color: 'var(--text-muted)', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer',
+            color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer',
             fontFamily: 'var(--font-mono)',
           }}>
             <RotateCcw size={11} /> RESET
@@ -198,7 +198,7 @@ export default function Settings() {
             padding: '0 16px', height: 36,
             background: saved ? 'var(--green)' : 'var(--accent)',
             border: '1px solid var(--accent-border)',
-            color: '#000', fontWeight: 700, fontSize: 10, letterSpacing: '0.15em',
+            color: '#000', fontWeight: 700, fontSize: 12, letterSpacing: '0.15em',
             cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)',
           }}>
             <Save size={11} /> {saving ? 'SAVING...' : saved ? 'SAVED!' : 'SAVE CHANGES'}
@@ -211,29 +211,29 @@ export default function Settings() {
         {(['master', 'about'] as const).map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)} style={{
             padding: '8px 20px', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid var(--accent)' : '2px solid transparent',
-            color: activeTab === tab ? 'var(--accent)' : 'var(--text-muted)', fontSize: 11, letterSpacing: '0.1em',
+            color: activeTab === tab ? 'var(--accent)' : 'var(--text-muted)', fontSize: 13, letterSpacing: '0.1em',
             cursor: 'pointer', fontFamily: 'var(--font-mono)', textTransform: 'uppercase',
           }}>{tab === 'master' ? 'MASTER AGENT' : 'ABOUT'}</button>
         ))}
       </div>
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 11, letterSpacing: '0.1em' }}>LOADING...</div>
+        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.1em' }}>LOADING...</div>
       ) : activeTab === 'master' ? (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
           <div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
               MODEL CONFIGURATION
             </div>
             <div style={{ marginBottom: 20 }}>
-              <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase' }}>MODEL</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase' }}>MODEL</label>
               <select
                 value={config.model}
                 onChange={e => setConfig(c => ({ ...c, model: e.target.value }))}
                 style={{
                   width: '100%', height: 36, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 12,
+                  color: 'var(--text-primary)', fontSize: 14,
                   fontFamily: 'var(--font-mono)',
                 }}>
                 {availableModels.length === 0 && <option value={config.model}>{config.model} (无法加载 Provider)</option>}
@@ -249,7 +249,7 @@ export default function Settings() {
             {field('auto_approve_threshold', 'AUTO APPROVE THRESHOLD (0=never)', { type: 'number', min: 0, max: 100 })}
           </div>
           <div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
               PROMPT CONFIGURATION
             </div>
             {field('system_prompt', 'SYSTEM PROMPT', { type: 'textarea', rows: 6 })}
@@ -258,13 +258,13 @@ export default function Settings() {
           </div>
         </div>
       ) : (
-        <div style={{ padding: '20px 0', color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.8 }}>
+        <div style={{ padding: '20px 0', color: 'var(--text-muted)', fontSize: 14, lineHeight: 1.8 }}>
           <div style={{ marginBottom: 16 }}>
             <span style={{ color: 'var(--accent)', letterSpacing: '0.1em' }}>CYBERGUARD OS</span>
             <span style={{ marginLeft: 12 }}>Version 1.0.0</span>
           </div>
           <div>Enterprise Security Operations Platform</div>
-          <div style={{ marginTop: 16, color: 'var(--text-dim)', fontSize: 11 }}>
+          <div style={{ marginTop: 16, color: 'var(--text-dim)', fontSize: 13 }}>
             Multi-agent orchestration with LangGraph · MCP tool protocol · Real-time group chat · Knowledge base RAG · Full audit trail
           </div>
         </div>

@@ -140,13 +140,13 @@ export default function Prompts() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontSize: 18, letterSpacing: '0.15em', color: 'var(--text-primary)' }}>PROMPT TEMPLATES</div>
-          <div style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--text-dim)', marginTop: 4 }}>
+          <div style={{ fontSize: 20, letterSpacing: '0.15em', color: 'var(--text-primary)' }}>PROMPT TEMPLATES</div>
+          <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-dim)', marginTop: 4 }}>
             预定义可复用的 system prompt，会话中可一键填入
           </div>
         </div>
         <button onClick={openCreate} style={{
-          padding: '8px 16px', fontSize: 11, letterSpacing: '0.15em',
+          padding: '8px 16px', fontSize: 13, letterSpacing: '0.15em',
           background: 'var(--accent)', border: '1px solid var(--accent-border)',
           color: '#000', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontWeight: 700,
           display: 'flex', alignItems: 'center', gap: 6,
@@ -157,12 +157,12 @@ export default function Prompts() {
 
       {/* Filter */}
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginRight: 4 }}>FILTER</span>
+        <span style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginRight: 4 }}>FILTER</span>
         {(['all', 'system', 'intent_parser', 'summarizer', 'general'] as const).map(f => {
           const active = filter === f
           return (
             <button key={f} onClick={() => setFilter(f)} style={{
-              padding: '4px 10px', fontSize: 10, letterSpacing: '0.1em',
+              padding: '4px 10px', fontSize: 12, letterSpacing: '0.1em',
               background: active ? 'var(--accent-dim)' : 'transparent',
               border: `1px solid ${active ? 'var(--accent-border)' : 'var(--border-bright)'}`,
               color: active ? 'var(--accent)' : 'var(--text-muted)',
@@ -176,12 +176,12 @@ export default function Prompts() {
 
       {/* List */}
       {loading ? (
-        <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-dim)', fontSize: 11, letterSpacing: '0.15em' }}>
+        <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-dim)', fontSize: 13, letterSpacing: '0.15em' }}>
           LOADING...
         </div>
       ) : filtered.length === 0 ? (
         <div style={{
-          padding: 40, textAlign: 'center', color: 'var(--text-dim)', fontSize: 11, letterSpacing: '0.15em',
+          padding: 40, textAlign: 'center', color: 'var(--text-dim)', fontSize: 13, letterSpacing: '0.15em',
           border: '1px dashed var(--border-bright)', background: 'var(--bg-surface)',
         }}>
           NO TEMPLATES — CLICK "NEW TEMPLATE" TO CREATE ONE
@@ -197,14 +197,14 @@ export default function Prompts() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
                   <span style={{
-                    fontSize: 9, letterSpacing: '0.12em', padding: '2px 6px',
+                    fontSize: 11, letterSpacing: '0.12em', padding: '2px 6px',
                     border: `1px solid ${CATEGORY_COLORS[item.category]}`,
                     color: CATEGORY_COLORS[item.category],
                   }}>
                     {CATEGORY_LABELS[item.category]}
                   </span>
                   <span style={{
-                    fontSize: 13, color: 'var(--text-primary)', fontWeight: 600,
+                    fontSize: 15, color: 'var(--text-primary)', fontWeight: 600,
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                   }}>{item.name}</span>
                 </div>
@@ -224,10 +224,10 @@ export default function Prompts() {
                 </div>
               </div>
               {item.description && (
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.5 }}>{item.description}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>{item.description}</div>
               )}
               <div style={{
-                fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5,
+                fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5,
                 fontFamily: 'var(--font-mono)', background: 'var(--bg-base)',
                 border: '1px solid var(--border)', padding: '8px 10px',
                 maxHeight: 96, overflow: 'hidden',
@@ -258,7 +258,7 @@ export default function Prompts() {
               padding: '14px 18px', borderBottom: '1px solid var(--border)',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
-              <span style={{ fontSize: 12, letterSpacing: '0.15em', color: 'var(--accent)' }}>
+              <span style={{ fontSize: 14, letterSpacing: '0.15em', color: 'var(--accent)' }}>
                 {edit.id == null ? '+ NEW PROMPT TEMPLATE' : '◆ EDIT PROMPT TEMPLATE'}
               </span>
               <button onClick={() => !saving && setEditorOpen(false)} disabled={saving}
@@ -269,14 +269,14 @@ export default function Prompts() {
             <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
                 <div>
-                  <div style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 6 }}>NAME</div>
+                  <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 6 }}>NAME</div>
                   <input value={edit.name} onChange={e => setEdit(s => ({ ...s, name: e.target.value }))}
                     placeholder="e.g. Security Auditor"
                     style={inputStyle}
                   />
                 </div>
                 <div>
-                  <div style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 6 }}>CATEGORY</div>
+                  <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 6 }}>CATEGORY</div>
                   <select value={edit.category} onChange={e => setEdit(s => ({ ...s, category: e.target.value as Category }))} style={inputStyle}>
                     <option value="system">System Prompt</option>
                     <option value="intent_parser">Intent Parser</option>
@@ -286,21 +286,21 @@ export default function Prompts() {
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 6 }}>DESCRIPTION (OPTIONAL)</div>
+                <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 6 }}>DESCRIPTION (OPTIONAL)</div>
                 <input value={edit.description} onChange={e => setEdit(s => ({ ...s, description: e.target.value }))}
                   placeholder="Short note shown next to the name"
                   style={inputStyle}
                 />
               </div>
               <div>
-                <div style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 6 }}>CONTENT</div>
+                <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 6 }}>CONTENT</div>
                 <textarea value={edit.content} onChange={e => setEdit(s => ({ ...s, content: e.target.value }))}
                   rows={14}
                   placeholder="The full prompt text. Will be applied verbatim."
                   style={{ ...inputStyle, height: 'auto', minHeight: 280, resize: 'vertical', lineHeight: 1.6 }}
                 />
               </div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-muted)', cursor: 'pointer' }}>
                 <input type="checkbox" checked={edit.is_active} onChange={e => setEdit(s => ({ ...s, is_active: e.target.checked }))} />
                 <span style={{ letterSpacing: '0.1em' }}>ACTIVE (shown in Chat picker)</span>
               </label>
@@ -311,7 +311,7 @@ export default function Prompts() {
             }}>
               <button onClick={() => setEditorOpen(false)} disabled={saving}
                 style={{
-                  padding: '8px 16px', fontSize: 11, letterSpacing: '0.1em',
+                  padding: '8px 16px', fontSize: 13, letterSpacing: '0.1em',
                   border: '1px solid var(--border-bright)', background: 'transparent',
                   color: 'var(--text-muted)', cursor: saving ? 'not-allowed' : 'pointer',
                   fontFamily: 'var(--font-mono)',
@@ -320,7 +320,7 @@ export default function Prompts() {
               </button>
               <button onClick={save} disabled={saving}
                 style={{
-                  padding: '8px 16px', fontSize: 11, letterSpacing: '0.1em',
+                  padding: '8px 16px', fontSize: 13, letterSpacing: '0.1em',
                   background: 'var(--accent)', border: '1px solid var(--accent-border)',
                   color: '#000', cursor: saving ? 'not-allowed' : 'pointer',
                   fontFamily: 'var(--font-mono)', fontWeight: 700,
@@ -340,6 +340,6 @@ export default function Prompts() {
 const inputStyle: React.CSSProperties = {
   width: '100%', height: 32, padding: '0 10px',
   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-  color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)',
+  color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-mono)',
   outline: 'none',
 }

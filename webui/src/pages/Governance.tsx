@@ -116,8 +116,8 @@ export default function Governance() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontSize: 18, letterSpacing: '0.15em', color: 'var(--text-primary)' }}>GOVERNANCE</div>
-          <div style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--text-dim)', marginTop: 4 }}>
+          <div style={{ fontSize: 20, letterSpacing: '0.15em', color: 'var(--text-primary)' }}>GOVERNANCE</div>
+          <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-dim)', marginTop: 4 }}>
             合规框架 · 审计 · 证据 · AI 评估
           </div>
         </div>
@@ -198,13 +198,13 @@ function FrameworksList() {
           {items.map(f => (
             <div key={f.id} style={card()}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>{f.name}</div>
+                <div style={{ fontSize: 15, color: 'var(--text-primary)', fontWeight: 600 }}>{f.name}</div>
                 <button onClick={() => remove(f)} style={iconButton('var(--red)')}><Trash2 size={12} /></button>
               </div>
-              {f.version && <div style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>VERSION {f.version}</div>}
-              <div style={{ fontSize: 10, color: 'var(--accent)', letterSpacing: '0.1em' }}>{f.requirement_count} REQUIREMENTS</div>
-              {f.description && <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>{f.description}</div>}
-              <div style={{ fontSize: 9, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>{f.urn}</div>
+              {f.version && <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>VERSION {f.version}</div>}
+              <div style={{ fontSize: 12, color: 'var(--accent)', letterSpacing: '0.1em' }}>{f.requirement_count} REQUIREMENTS</div>
+              {f.description && <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>{f.description}</div>}
+              <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>{f.urn}</div>
             </div>
           ))}
         </div>
@@ -212,7 +212,7 @@ function FrameworksList() {
 
       {importing && (
         <Modal onClose={() => setImporting(false)} title="+ IMPORT FRAMEWORK (JSON)">
-          <div style={{ fontSize: 10, color: 'var(--text-dim)', marginBottom: 8 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 8 }}>
             Required: <code>{`{ urn, name, requirements: [{ ref_id, name, parent_ref_id? }] }`}</code>.
             Use <code>"replace_existing": true</code> to overwrite by urn.
           </div>
@@ -304,10 +304,10 @@ function AssessmentsList({ onOpen }: { onOpen: (id: number) => void }) {
             }}>
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>{a.name}</span>
+                  <span style={{ fontSize: 16, color: 'var(--text-primary)', fontWeight: 600 }}>{a.name}</span>
                   <span style={statusBadge(a.status)}>{ASMT_STATUS_LABELS[a.status]}</span>
                 </div>
-                <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>
                   {a.framework_name} {a.scope ? `· ${a.scope}` : ''}
                 </div>
                 <ProgressBar progress={a.progress} />
@@ -428,16 +428,16 @@ function AssessmentDetail({ assessmentId, onBack }: { assessmentId: number; onBa
       {/* Header card */}
       <div style={{ ...card(), padding: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-          <span style={{ fontSize: 16, color: 'var(--text-primary)', fontWeight: 600 }}>{summary.name}</span>
+          <span style={{ fontSize: 18, color: 'var(--text-primary)', fontWeight: 600 }}>{summary.name}</span>
           <span style={statusBadge(summary.status)}>{ASMT_STATUS_LABELS[summary.status]}</span>
         </div>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
           {summary.framework_name} {summary.scope ? `· ${summary.scope}` : ''}
         </div>
-        {summary.description && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>{summary.description}</div>}
+        {summary.description && <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 6 }}>{summary.description}</div>}
         <div style={{ marginTop: 10 }}><ProgressBar progress={p} /></div>
         {p && (
-          <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 6, letterSpacing: '0.05em' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 6, letterSpacing: '0.05em' }}>
             ✅ {p.compliant} · ◐ {p.partially_compliant} · ✗ {p.non_compliant} · — {p.not_applicable} · ◌ {p.not_assessed}
           </div>
         )}
@@ -450,13 +450,13 @@ function AssessmentDetail({ assessmentId, onBack }: { assessmentId: number; onBa
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginRight: 4 }}>FILTER</span>
+        <span style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginRight: 4 }}>FILTER</span>
         {(['all', 'not_assessed', 'compliant', 'partially_compliant', 'non_compliant', 'not_applicable'] as const).map(f => (
           <button key={f} onClick={() => setFilter(f)} style={chipButton(filter === f)}>
             {f === 'all' ? 'ALL' : STATUS_LABELS[f as ReqStatus]}
           </button>
         ))}
-        <span style={{ marginLeft: 'auto', fontSize: 9, color: 'var(--text-dim)' }}>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-dim)' }}>
           {filtered.length}/{items.length}
         </span>
       </div>
@@ -480,13 +480,13 @@ function AssessmentDetail({ assessmentId, onBack }: { assessmentId: number; onBa
           {reportLoading ? (
             <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>
               <div style={{ display: 'inline-block', width: 14, height: 14, border: '1px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-              <div style={{ marginTop: 12, fontSize: 11, letterSpacing: '0.15em' }}>GENERATING...</div>
+              <div style={{ marginTop: 12, fontSize: 13, letterSpacing: '0.15em' }}>GENERATING...</div>
             </div>
           ) : (
             <div style={{
               maxHeight: '60vh', overflowY: 'auto',
               background: 'var(--bg-base)', border: '1px solid var(--border)',
-              padding: 16, fontSize: 12, lineHeight: 1.7,
+              padding: 16, fontSize: 14, lineHeight: 1.7,
             }}>
               <ReactMarkdown>{reportMd}</ReactMarkdown>
             </div>
@@ -601,10 +601,10 @@ function RequirementRow({
           style={iconButton('var(--text-muted)')}>
           {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         </button>
-        <span style={{ fontSize: 10, color: 'var(--accent)', fontFamily: 'var(--font-mono)', minWidth: 70 }}>{req.ref_id}</span>
-        <span style={{ flex: 1, fontSize: 12, color: 'var(--text-primary)' }}>{req.name}</span>
+        <span style={{ fontSize: 12, color: 'var(--accent)', fontFamily: 'var(--font-mono)', minWidth: 70 }}>{req.ref_id}</span>
+        <span style={{ flex: 1, fontSize: 14, color: 'var(--text-primary)' }}>{req.name}</span>
         {ra.evidences.length > 0 && (
-          <span style={{ fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>{ra.evidences.length} EVIDENCE</span>
+          <span style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>{ra.evidences.length} EVIDENCE</span>
         )}
         <span style={{ ...statusBadge(ra.status, true), color: STATUS_COLORS[ra.status], borderColor: STATUS_COLORS[ra.status] }}>
           {STATUS_LABELS[ra.status]}
@@ -615,7 +615,7 @@ function RequirementRow({
       {expanded && (
         <div style={{ padding: '0 14px 14px 14px', display: 'flex', flexDirection: 'column', gap: 10, borderTop: '1px solid var(--border)' }}>
           {req.description && (
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, marginTop: 10 }}>{req.description}</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, marginTop: 10 }}>{req.description}</div>
           )}
 
           {/* Standard evidence checklist (from framework definition) */}
@@ -625,14 +625,14 @@ function RequirementRow({
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 marginBottom: 6,
               }}>
-                <span style={{ fontSize: 10, letterSpacing: '0.15em', color: 'var(--text-muted)' }}>
+                <span style={{ fontSize: 12, letterSpacing: '0.15em', color: 'var(--text-muted)' }}>
                   ◆ STANDARD EVIDENCE CHECKLIST
                 </span>
-                <span style={{ fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>
+                <span style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>
                   FROM FRAMEWORK
                 </span>
               </div>
-              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.7 }}>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.7 }}>
                 {req.typical_evidence.map((s, i) => (
                   <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: 2 }}>
                     <span style={{ flex: 1 }}>{s}</span>
@@ -643,7 +643,7 @@ function RequirementRow({
                       }}
                       title="Pre-fill 'Add evidence' with this item"
                       style={{
-                        padding: '0 6px', fontSize: 9, letterSpacing: '0.1em',
+                        padding: '0 6px', fontSize: 11, letterSpacing: '0.1em',
                         background: 'transparent', border: '1px solid var(--border-bright)',
                         color: 'var(--text-dim)', cursor: 'pointer', fontFamily: 'var(--font-mono)',
                         height: 18, flexShrink: 0,
@@ -657,7 +657,7 @@ function RequirementRow({
 
           {/* Status / observation editor */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
-            <span style={{ fontSize: 9, letterSpacing: '0.15em', color: 'var(--text-dim)' }}>STATUS</span>
+            <span style={{ fontSize: 11, letterSpacing: '0.15em', color: 'var(--text-dim)' }}>STATUS</span>
             <select value={editing ? draft.status : ra.status}
               disabled={!editing}
               onChange={e => setDraft(d => ({ ...d, status: e.target.value as ReqStatus }))}
@@ -666,7 +666,7 @@ function RequirementRow({
                 <option key={s} value={s}>{STATUS_LABELS[s]}</option>
               )}
             </select>
-            <span style={{ fontSize: 9, letterSpacing: '0.15em', color: 'var(--text-dim)' }}>SCORE</span>
+            <span style={{ fontSize: 11, letterSpacing: '0.15em', color: 'var(--text-dim)' }}>SCORE</span>
             <input type="number" min={0} max={100}
               disabled={!editing}
               value={editing ? (draft.score ?? '') : (ra.score ?? '')}
@@ -700,7 +700,7 @@ function RequirementRow({
             padding: '8px 10px', border: '1px dashed var(--accent-border)', background: 'var(--accent-dim)',
           }}>
             <Wand2 size={12} style={{ color: 'var(--accent)' }} />
-            <span style={{ fontSize: 10, color: 'var(--accent)', letterSpacing: '0.1em' }}>AI</span>
+            <span style={{ fontSize: 12, color: 'var(--accent)', letterSpacing: '0.1em' }}>AI</span>
             <button onClick={aiSuggest} disabled={aiLoading !== null}
               title="Ask the LLM for additional, context-aware evidence ideas beyond the standard checklist above"
               style={{ ...ghostButton(), opacity: aiLoading ? 0.5 : 1 }}>
@@ -718,8 +718,8 @@ function RequirementRow({
 
           {suggestions.length > 0 && (
             <div style={{ padding: '8px 10px', border: '1px solid var(--accent-border)', background: 'var(--bg-base)' }}>
-              <div style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--accent)', marginBottom: 6 }}>◆ AI-GENERATED SUGGESTIONS (CONTEXT-AWARE)</div>
-              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.7 }}>
+              <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--accent)', marginBottom: 6 }}>◆ AI-GENERATED SUGGESTIONS (CONTEXT-AWARE)</div>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.7 }}>
                 {suggestions.map((s, i) => <li key={i}>{s}</li>)}
               </ul>
             </div>
@@ -727,15 +727,15 @@ function RequirementRow({
 
           {ra.ai_recommendation && (
             <div style={{ padding: '8px 10px', border: '1px solid var(--accent-border)', background: 'var(--bg-base)' }}>
-              <div style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--accent)', marginBottom: 6 }}>LAST AI VERDICT</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{ra.ai_recommendation}</div>
+              <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--accent)', marginBottom: 6 }}>LAST AI VERDICT</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{ra.ai_recommendation}</div>
             </div>
           )}
 
           {/* Evidence */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ fontSize: 10, letterSpacing: '0.15em', color: 'var(--text-dim)' }}>EVIDENCE</span>
+              <span style={{ fontSize: 12, letterSpacing: '0.15em', color: 'var(--text-dim)' }}>EVIDENCE</span>
               <button onClick={() => setAddingEv(v => !v)} style={ghostButton()}>
                 {addingEv ? <X size={11} /> : <Plus size={11} />}
                 {addingEv ? ' CLOSE' : ' ADD'}
@@ -766,14 +766,14 @@ function RequirementRow({
             )}
 
             {ra.evidences.length === 0 ? (
-              <div style={{ fontSize: 10, color: 'var(--text-dim)', padding: 6 }}>No evidence yet.</div>
+              <div style={{ fontSize: 12, color: 'var(--text-dim)', padding: 6 }}>No evidence yet.</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {ra.evidences.map(ev => (
                   <div key={ev.id} style={{
                     display: 'flex', alignItems: 'flex-start', gap: 8,
                     padding: '6px 10px', border: '1px solid var(--border)',
-                    background: 'var(--bg-base)', fontSize: 11,
+                    background: 'var(--bg-base)', fontSize: 13,
                   }}>
                     <FileText size={11} style={{ color: 'var(--accent)', marginTop: 2, flexShrink: 0 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -803,7 +803,7 @@ function RequirementRow({
 
 function ProgressBar({ progress }: { progress: AssessmentSummary['progress'] }) {
   if (!progress || progress.total === 0) return (
-    <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>NO REQUIREMENTS</div>
+    <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>NO REQUIREMENTS</div>
   )
   const widthOf = (n: number) => `${(n / progress.total) * 100}%`
   return (
@@ -816,7 +816,7 @@ function ProgressBar({ progress }: { progress: AssessmentSummary['progress'] }) 
         <div style={{ width: widthOf(progress.non_compliant), background: STATUS_COLORS.non_compliant }} />
         <div style={{ width: widthOf(progress.not_applicable), background: STATUS_COLORS.not_applicable }} />
       </div>
-      <div style={{ fontSize: 9, color: 'var(--text-dim)', marginTop: 4, letterSpacing: '0.05em' }}>
+      <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 4, letterSpacing: '0.05em' }}>
         {progress.percent}% ASSESSED ({progress.assessed}/{progress.total})
       </div>
     </div>
@@ -838,7 +838,7 @@ function Modal({ title, children, onClose, wide }: { title: string; children: Re
           padding: '12px 16px', borderBottom: '1px solid var(--border)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
-          <span style={{ fontSize: 12, letterSpacing: '0.15em', color: 'var(--accent)' }}>{title}</span>
+          <span style={{ fontSize: 14, letterSpacing: '0.15em', color: 'var(--accent)' }}>{title}</span>
           <button onClick={onClose} style={iconButton('var(--text-dim)')}><X size={14} /></button>
         </div>
         <div style={{ padding: 16, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -852,19 +852,19 @@ function Modal({ title, children, onClose, wide }: { title: string; children: Re
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
       {children}
     </div>
   )
 }
 
 const Loading = () => (
-  <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-dim)', fontSize: 11, letterSpacing: '0.15em' }}>LOADING...</div>
+  <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-dim)', fontSize: 13, letterSpacing: '0.15em' }}>LOADING...</div>
 )
 
 const Empty = ({ hint }: { hint: string }) => (
   <div style={{
-    padding: 40, textAlign: 'center', color: 'var(--text-dim)', fontSize: 11, letterSpacing: '0.15em',
+    padding: 40, textAlign: 'center', color: 'var(--text-dim)', fontSize: 13, letterSpacing: '0.15em',
     border: '1px dashed var(--border-bright)', background: 'var(--bg-surface)',
   }}>{hint}</div>
 )
@@ -873,7 +873,7 @@ const Empty = ({ hint }: { hint: string }) => (
 const inputStyle = (): React.CSSProperties => ({
   width: '100%', height: 32, padding: '0 10px',
   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-  color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)', outline: 'none',
+  color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-mono)', outline: 'none',
 })
 const textareaStyle = (): React.CSSProperties => ({
   ...inputStyle(), height: 'auto', padding: '8px 10px', lineHeight: 1.5, resize: 'vertical',
@@ -883,19 +883,19 @@ const card = (): React.CSSProperties => ({
   padding: 12, display: 'flex', flexDirection: 'column', gap: 6,
 })
 const primaryButton = (): React.CSSProperties => ({
-  padding: '6px 12px', fontSize: 10, letterSpacing: '0.1em',
+  padding: '6px 12px', fontSize: 12, letterSpacing: '0.1em',
   background: 'var(--accent)', border: '1px solid var(--accent-border)',
   color: '#000', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontWeight: 700,
   display: 'inline-flex', alignItems: 'center', gap: 4,
 })
 const ghostButton = (): React.CSSProperties => ({
-  padding: '6px 12px', fontSize: 10, letterSpacing: '0.1em',
+  padding: '6px 12px', fontSize: 12, letterSpacing: '0.1em',
   background: 'transparent', border: '1px solid var(--border-bright)',
   color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'var(--font-mono)',
   display: 'inline-flex', alignItems: 'center', gap: 4,
 })
 const tabButton = (active: boolean): React.CSSProperties => ({
-  padding: '6px 14px', fontSize: 10, letterSpacing: '0.1em',
+  padding: '6px 14px', fontSize: 12, letterSpacing: '0.1em',
   background: active ? 'var(--accent-dim)' : 'transparent',
   border: `1px solid ${active ? 'var(--accent-border)' : 'var(--border-bright)'}`,
   color: active ? 'var(--accent)' : 'var(--text-muted)',
@@ -903,7 +903,7 @@ const tabButton = (active: boolean): React.CSSProperties => ({
   display: 'inline-flex', alignItems: 'center', gap: 4,
 })
 const chipButton = (active: boolean): React.CSSProperties => ({
-  padding: '4px 10px', fontSize: 10, letterSpacing: '0.1em',
+  padding: '4px 10px', fontSize: 12, letterSpacing: '0.1em',
   background: active ? 'var(--accent-dim)' : 'transparent',
   border: `1px solid ${active ? 'var(--accent-border)' : 'var(--border-bright)'}`,
   color: active ? 'var(--accent)' : 'var(--text-muted)',
@@ -921,7 +921,7 @@ const statusBadge = (status: string, outlined?: boolean): React.CSSProperties =>
   }
   const c = map[status] || 'var(--text-muted)'
   return {
-    fontSize: 9, letterSpacing: '0.12em', padding: '2px 6px',
+    fontSize: 11, letterSpacing: '0.12em', padding: '2px 6px',
     border: `1px solid ${c}`,
     color: outlined ? c : c,
     background: outlined ? 'transparent' : 'transparent',

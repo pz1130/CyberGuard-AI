@@ -116,22 +116,22 @@ function MultiAgentChat() {
         background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
         display: 'flex', flexDirection: 'column', padding: 12,
       }}>
-        <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>SELECT AGENTS</div>
+        <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>SELECT AGENTS</div>
         {agents.length === 0 && (
-          <div style={{ fontSize: 10, color: 'var(--text-dim)', padding: '8px 0' }}>No agents configured</div>
+          <div style={{ fontSize: 12, color: 'var(--text-dim)', padding: '8px 0' }}>No agents configured</div>
         )}
         {agents.map(a => (
           <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 4px', cursor: session ? 'not-allowed' : 'pointer' }}>
             <input type="checkbox" checked={selectedAgentIds.includes(a.id)} onChange={() => toggleAgent(a.id)}
               disabled={!!session} style={{ width: 14, height: 14, accentColor: 'var(--accent)' }} />
-            <span style={{ fontSize: 11, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', letterSpacing: '0.03em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: 13, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', letterSpacing: '0.03em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {a.agent_name}
             </span>
           </label>
         ))}
 
         {session && (
-          <div style={{ marginTop: 16, padding: '10px', background: 'var(--bg-base)', border: '1px solid var(--border)', fontSize: 10, color: 'var(--text-dim)', lineHeight: 1.8 }}>
+          <div style={{ marginTop: 16, padding: '10px', background: 'var(--bg-base)', border: '1px solid var(--border)', fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.8 }}>
             <div style={{ color: 'var(--text-muted)', letterSpacing: '0.1em', marginBottom: 4 }}>SESSION</div>
             <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>Round {session.current_round}/{session.max_rounds}</div>
             <div style={{ color: session.status === 'active' ? 'var(--green)' : 'var(--text-dim)' }}>{session.status.toUpperCase()}</div>
@@ -143,13 +143,13 @@ function MultiAgentChat() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', minHeight: 0 }}>
         {/* Chat header */}
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>MULTI-AGENT DISCUSSION</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>MULTI-AGENT DISCUSSION</span>
           {session && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 10, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
                 ROUND {session.current_round}/{session.max_rounds}
               </span>
-              <span style={{ fontSize: 10, padding: '2px 8px', border: '1px solid var(--green)', color: 'var(--green)' }}>
+              <span style={{ fontSize: 12, padding: '2px 8px', border: '1px solid var(--green)', color: 'var(--green)' }}>
                 {session.status.toUpperCase()}
               </span>
             </div>
@@ -161,10 +161,10 @@ function MultiAgentChat() {
           {!session && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
               <Users size={28} style={{ color: 'var(--text-dim)' }} />
-              <div style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.1em', textAlign: 'center', lineHeight: 1.8 }}>
+              <div style={{ fontSize: 13, color: 'var(--text-dim)', letterSpacing: '0.1em', textAlign: 'center', lineHeight: 1.8 }}>
                 Select agents → Write a prompt → Launch discussion
               </div>
-              <div style={{ fontSize: 10, color: 'var(--text-dim)', maxWidth: 300, textAlign: 'center', lineHeight: 1.6 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-dim)', maxWidth: 300, textAlign: 'center', lineHeight: 1.6 }}>
                 Each agent will respond in sequence. Results are streamed back as agents reply.
               </div>
             </div>
@@ -178,10 +178,10 @@ function MultiAgentChat() {
                 ) : (
                   <User size={10} style={{ color: 'var(--accent)' }} />
                 )}
-                <span style={{ fontSize: 9, color: roleColor(m.role), letterSpacing: '0.1em', fontWeight: 600 }}>
+                <span style={{ fontSize: 11, color: roleColor(m.role), letterSpacing: '0.1em', fontWeight: 600 }}>
                   {m.role === 'agent' ? (m.agent_name || `AGENT-${m.agent_id}`).toUpperCase() : 'USER'}
                 </span>
-                <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>
+                <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>
                   {new Date(m.timestamp).toLocaleTimeString()}
                 </span>
               </div>
@@ -190,7 +190,7 @@ function MultiAgentChat() {
                 background: m.role === 'user' ? 'var(--accent-dim)' : 'var(--bg-elevated)',
                 border: `1px solid ${m.role === 'user' ? 'var(--accent-border)' : 'var(--border-bright)'}`,
                 borderLeft: `2px solid ${roleColor(m.role)}`,
-                fontSize: 12, color: 'var(--text-primary)', letterSpacing: '0.02em', lineHeight: 1.6,
+                fontSize: 14, color: 'var(--text-primary)', letterSpacing: '0.02em', lineHeight: 1.6,
                 whiteSpace: 'pre-wrap',
               }}>
                 {m.content}
@@ -209,16 +209,16 @@ function MultiAgentChat() {
                 onChange={e => setInitialMessage(e.target.value)}
                 placeholder="Initial prompt for the group discussion..."
                 rows={3}
-                style={{ width: '100%', padding: '8px 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 11, letterSpacing: '0.05em', fontFamily: 'var(--font-mono)', resize: 'none' }}
+                style={{ width: '100%', padding: '8px 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 13, letterSpacing: '0.05em', fontFamily: 'var(--font-mono)', resize: 'none' }}
               />
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>MAX ROUNDS</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>MAX ROUNDS</span>
                   <input type="number" value={maxRounds} onChange={e => setMaxRounds(Number(e.target.value))} min={1} max={20}
-                    style={{ width: 50, height: 28, padding: '0 8px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 11, fontFamily: 'var(--font-mono)', textAlign: 'center' }} />
+                    style={{ width: 50, height: 28, padding: '0 8px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-mono)', textAlign: 'center' }} />
                 </div>
                 <button onClick={createAndRun} disabled={running || selectedAgentIds.length === 0 || !initialMessage.trim()}
-                  style={{ height: 34, padding: '0 18px', background: running ? 'var(--bg-elevated)' : 'var(--accent)', border: '1px solid var(--accent-border)', color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.15em', cursor: running ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  style={{ height: 34, padding: '0 18px', background: running ? 'var(--bg-elevated)' : 'var(--accent)', border: '1px solid var(--accent-border)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: running ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: 6 }}>
                   {running ? 'STARTING...' : <><Play size={11} /> START DISCUSSION</>}
                 </button>
               </div>
@@ -228,23 +228,23 @@ function MultiAgentChat() {
               {session.status === 'active' && (
                 <>
                   <button onClick={runRound} disabled={runningRound}
-                    style={{ flex: 1, height: 36, border: '1px solid var(--accent-border)', background: runningRound ? 'var(--bg-elevated)' : 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.1em', cursor: runningRound ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    style={{ flex: 1, height: 36, border: '1px solid var(--accent-border)', background: runningRound ? 'var(--bg-elevated)' : 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.1em', cursor: runningRound ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                     {runningRound ? 'RUNNING...' : <><ChevronRight size={11} /> NEXT ROUND</>}
                   </button>
                   <button onClick={runToComplete} disabled={runningRound}
-                    style={{ height: 36, padding: '0 16px', border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 11, letterSpacing: '0.1em', cursor: runningRound ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    style={{ height: 36, padding: '0 16px', border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.1em', cursor: runningRound ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: 6 }}>
                     AUTO
                   </button>
                 </>
               )}
               <button onClick={cancelSession}
-                style={{ height: 36, padding: '0 14px', border: '1px solid var(--red)', background: 'transparent', color: 'var(--red)', fontSize: 11, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                style={{ height: 36, padding: '0 14px', border: '1px solid var(--red)', background: 'transparent', color: 'var(--red)', fontSize: 13, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Square size={11} /> END
               </button>
             </div>
           )}
           {loadError && (
-            <div style={{ padding: '6px 10px', background: 'rgba(255,0,0,0.1)', border: '1px solid var(--red)', fontSize: 10, color: 'var(--red)', fontFamily: 'var(--font-mono)' }}>
+            <div style={{ padding: '6px 10px', background: 'rgba(255,0,0,0.1)', border: '1px solid var(--red)', fontSize: 12, color: 'var(--red)', fontFamily: 'var(--font-mono)' }}>
               {loadError}
             </div>
           )}
@@ -266,8 +266,8 @@ export default function GroupChat() {
             <Radio size={15} />
           </div>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>GROUP CHAT</div>
-            <div style={{ fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>MULTI-AGENT PANEL DISCUSSION</div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>GROUP CHAT</div>
+            <div style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>MULTI-AGENT PANEL DISCUSSION</div>
           </div>
         </div>
       </div>

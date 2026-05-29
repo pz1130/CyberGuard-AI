@@ -93,12 +93,12 @@ export default function App() {
             width: 40, height: 40,
             border: '1px solid var(--accent-border)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 20, color: 'var(--accent)',
+            fontSize: 22, color: 'var(--accent)',
             animation: 'accent-pulse 2s ease-in-out infinite',
           }}>
             ⬡
           </div>
-          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: 13, letterSpacing: '0.2em', color: 'var(--text-muted)' }}>
             INITIALIZING CYBERGUARD OS...
           </div>
           <div style={{

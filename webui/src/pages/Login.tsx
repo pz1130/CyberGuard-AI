@@ -63,15 +63,15 @@ export default function Login() {
             width: 40, height: 40,
             border: '1px solid var(--accent-border)',
             background: 'var(--accent-dim)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24,
           }}>
             <span style={{ color: 'var(--accent)' }}>⬡</span>
           </div>
           <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, letterSpacing: '0.15em' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 20, letterSpacing: '0.15em' }}>
               CYBERGUARD
             </div>
-            <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.2em' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.2em' }}>
               AI AGENT PLATFORM · AUTH GATE
             </div>
           </div>
@@ -82,7 +82,7 @@ export default function Login() {
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <div>
             <label style={{
-              display: 'block', fontSize: 10, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 8,
+              display: 'block', fontSize: 12, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 8,
             }}>
               USERNAME
             </label>
@@ -96,7 +96,7 @@ export default function Login() {
                 width: '100%', height: 40, padding: '0 12px',
                 background: 'var(--bg-base)',
                 border: '1px solid var(--border-bright)',
-                color: 'var(--text-primary)', fontSize: 13,
+                color: 'var(--text-primary)', fontSize: 15,
                 fontFamily: 'var(--font-mono)', letterSpacing: '0.05em',
                 transition: 'border-color 0.15s',
               }}
@@ -106,7 +106,7 @@ export default function Login() {
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: 10, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 8 }}>
+            <label style={{ display: 'block', fontSize: 12, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 8 }}>
               PASSWORD
             </label>
             <input
@@ -119,7 +119,7 @@ export default function Login() {
                 width: '100%', height: 40, padding: '0 12px',
                 background: 'var(--bg-base)',
                 border: '1px solid var(--border-bright)',
-                color: 'var(--text-primary)', fontSize: 13,
+                color: 'var(--text-primary)', fontSize: 15,
                 fontFamily: 'var(--font-mono)', letterSpacing: '0.1em',
                 transition: 'border-color 0.15s',
               }}
@@ -133,7 +133,7 @@ export default function Login() {
               padding: '10px 12px',
               background: 'var(--red-dim)',
               border: '1px solid rgba(255,59,48,0.3)',
-              fontSize: 10, letterSpacing: '0.1em', color: 'var(--red)',
+              fontSize: 12, letterSpacing: '0.1em', color: 'var(--red)',
             }}>
               {error}
             </div>
@@ -147,7 +147,7 @@ export default function Login() {
               background: loading ? 'var(--bg-elevated)' : 'var(--accent)',
               border: '1px solid var(--accent-border)',
               color: loading ? 'var(--text-muted)' : '#000',
-              fontWeight: 700, fontSize: 12, letterSpacing: '0.2em',
+              fontWeight: 700, fontSize: 14, letterSpacing: '0.2em',
               cursor: loading ? 'not-allowed' : 'pointer',
               transition: 'all 0.15s', fontFamily: 'var(--font-mono)',
               boxShadow: loading ? 'none' : '0 0 20px rgba(0,255,65,0.2)',
@@ -157,7 +157,7 @@ export default function Login() {
           </button>
         </form>
 
-        <div style={{ marginTop: 24, fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.1em', textAlign: 'center' }}>
+        <div style={{ marginTop: 24, fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.1em', textAlign: 'center' }}>
           SECURE · ENCRYPTED · ZERO-TRUST
         </div>
       </div>

@@ -54,15 +54,15 @@ export default function Header({ dark, toggleDark, toggleLang }: Props) {
           border: '1px solid var(--accent-border)',
           background: 'var(--accent-dim)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontFamily: 'var(--font-mono)', fontSize: 18,
+          fontFamily: 'var(--font-mono)', fontSize: 20,
         }}>
           <span style={{ color: 'var(--accent)' }}>⬡</span>
         </div>
         <div>
-          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 17, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>
             CYBERGUARD
           </div>
-          <div style={{ fontSize: 9, color: 'var(--accent)', letterSpacing: '0.2em', opacity: 0.7 }}>
+          <div style={{ fontSize: 11, color: 'var(--accent)', letterSpacing: '0.2em', opacity: 0.7 }}>
             AI AGENT PLATFORM v1.0
           </div>
         </div>
@@ -83,13 +83,13 @@ export default function Header({ dark, toggleDark, toggleLang }: Props) {
             background: 'var(--bg-surface)',
             border: '1px solid var(--border-bright)',
             paddingLeft: 36, paddingRight: 12,
-            fontSize: 12, letterSpacing: '0.05em',
+            fontSize: 14, letterSpacing: '0.05em',
             color: 'var(--text-primary)',
           }}
         />
         <span style={{
           position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-          fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.1em', pointerEvents: 'none'
+          fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.1em', pointerEvents: 'none'
         }}>
           CTRL+K
         </span>
@@ -100,7 +100,7 @@ export default function Header({ dark, toggleDark, toggleLang }: Props) {
         {/* Status */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '0 12px', height: 28, border: '1px solid var(--border-bright)' }}>
           <div className="status-dot online" style={{ color: 'var(--accent)' }} />
-          <span style={{ fontSize: 10, letterSpacing: '0.15em', color: 'var(--accent)', opacity: 0.8 }}>
+          <span style={{ fontSize: 12, letterSpacing: '0.15em', color: 'var(--accent)', opacity: 0.8 }}>
             SYS ONLINE
           </span>
         </div>
@@ -112,7 +112,7 @@ export default function Header({ dark, toggleDark, toggleLang }: Props) {
             height: 28, padding: '0 10px',
             background: 'transparent',
             border: '1px solid var(--border-bright)',
-            color: 'var(--text-muted)', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer',
+            color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer',
             transition: 'all 0.15s',
           }}
           onMouseEnter={e => { (e.target as HTMLElement).style.borderColor = 'var(--accent-border)'; (e.target as HTMLElement).style.color = 'var(--accent)'; }}
@@ -130,7 +130,7 @@ export default function Header({ dark, toggleDark, toggleLang }: Props) {
             background: 'transparent',
             border: '1px solid var(--border-bright)',
             color: dark ? 'var(--amber)' : 'var(--cyan)',
-            fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer',
+            fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer',
             transition: 'all 0.15s',
           }}
           onMouseEnter={e => { (e.target as HTMLElement).style.borderColor = dark ? 'var(--amber)' : 'var(--cyan)'; }}
@@ -157,13 +157,13 @@ export default function Header({ dark, toggleDark, toggleLang }: Props) {
               background: 'var(--accent-dim)',
               border: '1px solid var(--accent-border)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 10, fontWeight: 700, color: 'var(--accent)',
+              fontSize: 12, fontWeight: 700, color: 'var(--accent)',
             }}>
               {username[0]}
             </div>
             <div style={{ textAlign: 'left' }}>
-              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em' }}>{username}</div>
-              <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>{role}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.1em' }}>{username}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>{role}</div>
             </div>
             <div
               className="blink"
@@ -186,8 +186,8 @@ export default function Header({ dark, toggleDark, toggleLang }: Props) {
                 animation: 'fade-in-up 0.15s ease',
               }}>
                 <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)' }}>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>SIGNED IN AS</div>
-                  <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 2, letterSpacing: '0.1em' }}>{username}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>SIGNED IN AS</div>
+                  <div style={{ fontSize: 14, color: 'var(--accent)', marginTop: 2, letterSpacing: '0.1em' }}>{username}</div>
                 </div>
                 <button
                   onClick={logout}
@@ -195,7 +195,7 @@ export default function Header({ dark, toggleDark, toggleLang }: Props) {
                     display: 'flex', alignItems: 'center', gap: 8,
                     width: '100%', padding: '10px 12px',
                     background: 'none', border: 'none',
-                    color: 'var(--red)', fontSize: 11, letterSpacing: '0.1em', cursor: 'pointer',
+                    color: 'var(--red)', fontSize: 13, letterSpacing: '0.1em', cursor: 'pointer',
                     transition: 'background 0.15s',
                   }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'var(--red-dim)')}

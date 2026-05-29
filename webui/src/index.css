@@ -3,8 +3,8 @@
 
 /* ── Design Tokens ── Industrial Terminal / Cyberpunk Ops ── */
 :root {
-  --sidebar-width: 288px;
-  --header-height: 56px;
+  --sidebar-width: 300px;
+  --header-height: 64px;
 
   /* Core palette */
   --bg-base: #050505;
@@ -81,10 +81,6 @@ body {
   color: var(--text-primary);
   font-family: var(--font-mono);
   font-size: 16px;
-  /* Scale the whole UI up one notch — most type is hard-coded px, so a
-     global zoom enlarges fonts and spacing together (and is fixed-position
-     friendly, unlike transform: scale). */
-  zoom: 1.1;
 }
 
 /* ── Grid background texture ── */

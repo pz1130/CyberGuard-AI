@@ -68,7 +68,7 @@ function Avatar({ name, color }: { name: string; color?: string }) {
       background: `${bg}22`,
       border: `1.5px solid ${bg}66`,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: 16, fontWeight: 800, color: bg,
+      fontSize: 18, fontWeight: 800, color: bg,
       fontFamily: 'var(--font-mono)',
     }}>
       {letter}
@@ -81,7 +81,7 @@ function StatusDot({ status }: { status: 'ready' | 'partial' | 'unconfigured' })
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 5,
-      fontSize: 9, letterSpacing: '0.12em', color: c,
+      fontSize: 11, letterSpacing: '0.12em', color: c,
     }}>
       <span style={{
         width: 6, height: 6, borderRadius: '50%', background: c,
@@ -95,13 +95,13 @@ function StatusDot({ status }: { status: 'ready' | 'partial' | 'unconfigured' })
 const inp: React.CSSProperties = {
   width: '100%', height: 38, padding: '0 12px',
   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-  color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.04em',
+  color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.04em',
   fontFamily: 'var(--font-mono)', boxSizing: 'border-box',
 }
 const lbl = (text: string, sub?: string) => (
   <div style={{ marginBottom: 6 }}>
-    <label style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)' }}>{text}</label>
-    {sub && <span style={{ fontSize: 9, color: 'var(--text-dim)', marginLeft: 8 }}>{sub}</span>}
+    <label style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)' }}>{text}</label>
+    {sub && <span style={{ fontSize: 11, color: 'var(--text-dim)', marginLeft: 8 }}>{sub}</span>}
   </div>
 )
 
@@ -209,8 +209,8 @@ function SettingsModal({
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: '1px solid var(--border-bright)', background: 'var(--bg-base)' }}>
             <div>
-              <div style={{ fontSize: 10, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>保留 &lt;think&gt; 标签</div>
-              <div style={{ fontSize: 9, color: 'var(--text-dim)', marginTop: 2 }}>适用于 DeepSeek-R1 / QwQ 等思维链模型</div>
+              <div style={{ fontSize: 12, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>保留 &lt;think&gt; 标签</div>
+              <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>适用于 DeepSeek-R1 / QwQ 等思维链模型</div>
             </div>
             <input type="checkbox" checked={preserveThink} onChange={e => setPreserveThink(e.target.checked)}
               style={{ width: 16, height: 16, accentColor: 'var(--accent)' }} />
@@ -219,7 +219,7 @@ function SettingsModal({
           {testMsg && (
             <div style={{
               padding: '8px 12px', border: `1px solid ${testMsg.ok ? 'var(--accent-border)' : 'rgba(248,113,113,0.3)'}`,
-              background: 'var(--bg-base)', fontSize: 10,
+              background: 'var(--bg-base)', fontSize: 12,
               color: testMsg.ok ? 'var(--accent)' : '#f87171', fontFamily: 'var(--font-mono)',
             }}>
               {testMsg.ok ? '✓ ' : '✗ '}{testMsg.msg}
@@ -228,15 +228,15 @@ function SettingsModal({
         </div>
         <ModalFooter>
           <button onClick={testConn} disabled={testing || (!baseUrl && !provider)}
-            style={{ padding: '0 14px', height: 38, border: '1px solid var(--border-bright)', background: 'transparent', color: testing ? 'var(--text-dim)' : 'var(--text-muted)', fontSize: 10, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+            style={{ padding: '0 14px', height: 38, border: '1px solid var(--border-bright)', background: 'transparent', color: testing ? 'var(--text-dim)' : 'var(--text-muted)', fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
             {testing ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : 'TEST'}
           </button>
           <Spacer />
-          <button onClick={onClose} style={{ padding: '0 14px', height: 38, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 10, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+          <button onClick={onClose} style={{ padding: '0 14px', height: 38, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
             CANCEL
           </button>
           <button onClick={save} disabled={saving || !name}
-            style={{ padding: '0 20px', height: 38, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 10, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+            style={{ padding: '0 20px', height: 38, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
             {saving ? '...' : 'SAVE'}
           </button>
         </ModalFooter>
@@ -330,18 +330,18 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
           {/* Discover button */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <button onClick={discover} disabled={fetching}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', height: 34, border: '1px solid var(--accent-border)', background: 'var(--accent-dim)', color: fetching ? 'var(--text-dim)' : 'var(--accent)', fontSize: 10, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', height: 34, border: '1px solid var(--accent-border)', background: 'var(--accent-dim)', color: fetching ? 'var(--text-dim)' : 'var(--accent)', fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
               {fetching ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Zap size={11} />}
               {fetching ? 'FETCHING...' : '自动发现模型'}
             </button>
-            <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>从 /v1/models 接口拉取列表</span>
+            <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>从 /v1/models 接口拉取列表</span>
           </div>
-          {fetchErr && <div style={{ fontSize: 9, color: '#f87171' }}>{fetchErr}</div>}
+          {fetchErr && <div style={{ fontSize: 11, color: '#f87171' }}>{fetchErr}</div>}
 
           {/* Model list */}
           <div style={{ border: '1px solid var(--border-bright)', overflow: 'hidden' }}>
             {models.length === 0 ? (
-              <div style={{ padding: '24px 0', textAlign: 'center', fontSize: 10, color: 'var(--text-dim)' }}>
+              <div style={{ padding: '24px 0', textAlign: 'center', fontSize: 12, color: 'var(--text-dim)' }}>
                 暂无模型 — 点击"自动发现"或手动添加
               </div>
             ) : (
@@ -350,16 +350,16 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
                 return (
                   <div key={m.name} style={{ display: 'flex', alignItems: 'center', padding: '9px 14px', borderBottom: '1px solid var(--border)', gap: 10 }}>
                     {/* Type badge */}
-                    <span style={{ fontSize: 8, padding: '2px 5px', border: `1px solid ${typeColor[m.model_type]}`, color: typeColor[m.model_type], fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    <span style={{ fontSize: 10, padding: '2px 5px', border: `1px solid ${typeColor[m.model_type]}`, color: typeColor[m.model_type], fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', whiteSpace: 'nowrap', flexShrink: 0 }}>
                       {m.model_type.toUpperCase()}
                     </span>
                     {/* Model name */}
-                    <span style={{ flex: 1, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ flex: 1, fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {m.name}
                     </span>
                     {/* Test result */}
                     {r && (
-                      <span style={{ fontSize: 9, color: r.ok ? 'var(--accent)' : '#f87171', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
+                      <span style={{ fontSize: 11, color: r.ok ? 'var(--accent)' : '#f87171', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
                         {r.ok ? `✓ ${r.ms}ms` : '✗ FAILED'}
                       </span>
                     )}
@@ -367,14 +367,14 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
                     <select
                       value={m.model_type}
                       onChange={e => setModels(prev => prev.map(x => x.name === m.name ? { ...x, model_type: e.target.value as any } : x))}
-                      style={{ height: 24, padding: '0 4px', background: 'var(--bg-base)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 9, fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
+                      style={{ height: 24, padding: '0 4px', background: 'var(--bg-base)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 11, fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
                       <option value="chat">chat</option>
                       <option value="embedding">embed</option>
                       <option value="rerank">rerank</option>
                     </select>
                     {/* Test button */}
                     <button onClick={() => testModel(m.name)} disabled={testing === m.name}
-                      style={{ fontSize: 9, letterSpacing: '0.1em', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-mono)', padding: '0 4px', flexShrink: 0 }}>
+                      style={{ fontSize: 11, letterSpacing: '0.1em', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-mono)', padding: '0 4px', flexShrink: 0 }}>
                       {testing === m.name ? '…' : 'TEST'}
                     </button>
                     {/* Remove */}
@@ -393,23 +393,23 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
               value={newName} onChange={e => setNewName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && add()}
               placeholder="模型名称，如 gpt-4o"
-              style={{ flex: 1, height: 34, padding: '0 10px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 11, fontFamily: 'var(--font-mono)' }}
+              style={{ flex: 1, height: 34, padding: '0 10px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-mono)' }}
             />
             <select value={newType} onChange={e => setNewType(e.target.value as any)}
-              style={{ width: 90, height: 34, padding: '0 6px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 10, fontFamily: 'var(--font-mono)' }}>
+              style={{ width: 90, height: 34, padding: '0 6px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)' }}>
               <option value="chat">chat</option>
               <option value="embedding">embed</option>
               <option value="rerank">rerank</option>
             </select>
-            <button onClick={add} style={{ padding: '0 14px', height: 34, border: '1px solid var(--accent-border)', background: 'var(--accent-dim)', color: 'var(--accent)', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+            <button onClick={add} style={{ padding: '0 14px', height: 34, border: '1px solid var(--accent-border)', background: 'var(--accent-dim)', color: 'var(--accent)', fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
               + 添加
             </button>
           </div>
         </div>
         <ModalFooter>
-          <button onClick={onClose} style={{ padding: '0 14px', height: 38, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 10, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>CANCEL</button>
+          <button onClick={onClose} style={{ padding: '0 14px', height: 38, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>CANCEL</button>
           <button onClick={save} disabled={saving}
-            style={{ padding: '0 20px', height: 38, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 10, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+            style={{ padding: '0 20px', height: 38, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
             {saving ? '...' : 'SAVE MODELS'}
           </button>
         </ModalFooter>
@@ -448,7 +448,7 @@ function ProviderCard({
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <Avatar name={provider.name} color={color} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.06em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.06em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {provider.name}
           </div>
           <div style={{ marginTop: 3 }}>
@@ -458,7 +458,7 @@ function ProviderCard({
       </div>
 
       {/* Meta row */}
-      <div style={{ display: 'flex', gap: 12, fontSize: 9, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+      <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
         <span style={{ color: sc }}>{modelCount} MODEL{modelCount !== 1 ? 'S' : ''}</span>
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {provider.base_url || '(default endpoint)'}
@@ -468,11 +468,11 @@ function ProviderCard({
       {/* Action buttons */}
       <div style={{ display: 'flex', gap: 8, marginTop: 'auto' }}>
         <button onClick={onSettings}
-          style={{ flex: 1, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+          style={{ flex: 1, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
           <Settings2 size={11} /> SETTINGS
         </button>
         <button onClick={onModels}
-          style={{ flex: 1, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, border: `1px solid ${status === 'unconfigured' ? 'var(--border)' : 'var(--accent-border)'}`, background: status === 'unconfigured' ? 'transparent' : 'var(--accent-dim)', color: status === 'unconfigured' ? 'var(--text-dim)' : 'var(--accent)', fontSize: 10, letterSpacing: '0.1em', cursor: status === 'unconfigured' ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)' }}
+          style={{ flex: 1, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, border: `1px solid ${status === 'unconfigured' ? 'var(--border)' : 'var(--accent-border)'}`, background: status === 'unconfigured' ? 'transparent' : 'var(--accent-dim)', color: status === 'unconfigured' ? 'var(--text-dim)' : 'var(--accent)', fontSize: 12, letterSpacing: '0.1em', cursor: status === 'unconfigured' ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)' }}
           disabled={status === 'unconfigured'} title={status === 'unconfigured' ? '请先配置 API Key' : ''}>
           <Database size={11} /> MODELS
         </button>
@@ -498,15 +498,15 @@ function PresetCard({ preset, onAdd }: { preset: Preset; onAdd: () => void }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <Avatar name={preset.name} color={preset.color} />
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>{preset.name}</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>{preset.name}</div>
           <div style={{ marginTop: 3 }}><StatusDot status="unconfigured" /></div>
         </div>
       </div>
-      <div style={{ fontSize: 9, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {preset.base_url || 'Custom endpoint'}
       </div>
       <button onClick={onAdd}
-        style={{ height: 32, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+        style={{ height: 32, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
         + 配置
       </button>
     </div>
@@ -530,8 +530,8 @@ function ModalHeader({ icon, title, sub, onClose }: { icon: React.ReactNode; tit
     <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
       <span style={{ color: 'var(--accent)' }}>{icon}</span>
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{title}</div>
-        <div style={{ fontSize: 9, color: 'var(--text-dim)', marginTop: 2 }}>{sub}</div>
+        <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{title}</div>
+        <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>{sub}</div>
       </div>
       <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-dim)', padding: 4 }}>
         <X size={14} />
@@ -593,15 +593,15 @@ export default function Providers() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
-          <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>AI INFRASTRUCTURE</div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>AI PROVIDERS</h1>
+          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>AI INFRASTRUCTURE</div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>AI PROVIDERS</h1>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={load} title="刷新" style={{ width: 36, height: 36, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <RefreshCw size={13} />
           </button>
           <button onClick={() => setSettingsTarget({})}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 36, background: 'var(--accent)', border: '1px solid var(--accent-border)', color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.15em', cursor: 'pointer', fontFamily: 'var(--font-mono)', boxShadow: '0 0 16px rgba(0,255,65,0.15)' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 36, background: 'var(--accent)', border: '1px solid var(--accent-border)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer', fontFamily: 'var(--font-mono)', boxShadow: '0 0 16px rgba(0,255,65,0.15)' }}>
             <Plus size={13} /> 自定义 PROVIDER
           </button>
         </div>
@@ -613,7 +613,7 @@ export default function Providers() {
         <input
           value={search} onChange={e => setSearch(e.target.value)}
           placeholder="搜索 Provider…"
-          style={{ width: '100%', height: 38, paddingLeft: 36, paddingRight: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)', boxSizing: 'border-box' }}
+          style={{ width: '100%', height: 38, paddingLeft: 36, paddingRight: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-mono)', boxSizing: 'border-box' }}
         />
       </div>
 
@@ -626,7 +626,7 @@ export default function Providers() {
           {/* Configured providers */}
           {sortedProviders.length > 0 && (
             <div style={{ marginBottom: 28 }}>
-              <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 12 }}>已配置 · {sortedProviders.length}</div>
+              <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 12 }}>已配置 · {sortedProviders.length}</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
                 {sortedProviders.map(p => (
                   <ProviderCard
@@ -644,7 +644,7 @@ export default function Providers() {
           {/* Preset (unconfigured) providers */}
           {filteredPresets.length > 0 && (
             <div>
-              <div style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 12 }}>可添加的 Provider · {filteredPresets.length}</div>
+              <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 12 }}>可添加的 Provider · {filteredPresets.length}</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
                 {filteredPresets.map(preset => (
                   <PresetCard
@@ -658,7 +658,7 @@ export default function Providers() {
           )}
 
           {sortedProviders.length === 0 && filteredPresets.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--text-dim)', fontSize: 11 }}>
+            <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--text-dim)', fontSize: 13 }}>
               未找到匹配的 Provider
             </div>
           )}

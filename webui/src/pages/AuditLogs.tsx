@@ -57,8 +57,8 @@ export default function AuditLogs() {
             <FileText size={15} />
           </div>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>AUDIT LOG</div>
-            <div style={{ fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>COMPLETE OPERATION RECORDS · SIEM EXPORT</div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>AUDIT LOG</div>
+            <div style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>COMPLETE OPERATION RECORDS · SIEM EXPORT</div>
           </div>
         </div>
         <button onClick={exportLogs}
@@ -66,7 +66,7 @@ export default function AuditLogs() {
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '0 16px', height: 36,
             background: 'var(--accent)', border: '1px solid var(--accent-border)',
-            color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.15em', cursor: 'pointer',
+            color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer',
             fontFamily: 'var(--font-mono)',
           }}>
           <Download size={11} /> EXPORT
@@ -82,7 +82,7 @@ export default function AuditLogs() {
             style={{
               width: '100%', height: 36, paddingLeft: 36, paddingRight: 12,
               background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-              color: 'var(--text-primary)', fontSize: 11, letterSpacing: '0.05em',
+              color: 'var(--text-primary)', fontSize: 13, letterSpacing: '0.05em',
               fontFamily: 'var(--font-mono)',
             }} />
         </div>
@@ -90,7 +90,7 @@ export default function AuditLogs() {
           style={{
             height: 36, padding: '0 10px',
             background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-            color: 'var(--text-primary)', fontSize: 11, fontFamily: 'var(--font-mono)',
+            color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-mono)',
           }}>
           <option value={20}>20 RECORDS</option>
           <option value={50}>50 RECORDS</option>
@@ -101,7 +101,7 @@ export default function AuditLogs() {
           style={{
             height: 36, padding: '0 14px',
             border: '1px solid var(--border-bright)', background: 'transparent',
-            color: 'var(--text-muted)', fontSize: 11, letterSpacing: '0.1em', cursor: 'pointer',
+            color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.1em', cursor: 'pointer',
             fontFamily: 'var(--font-mono)',
           }}>
           REFRESH
@@ -114,7 +114,7 @@ export default function AuditLogs() {
           <thead>
             <tr style={{ background: 'var(--bg-base)', borderBottom: '1px solid var(--border-bright)' }}>
               {['TIMESTAMP', 'USER', 'ACTION', 'REQUEST ID'].map((h, i) => (
-                <th key={i} style={{ padding: '12px 16px', textAlign: i === 0 ? 'left' : 'left', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
+                <th key={i} style={{ padding: '12px 16px', textAlign: i === 0 ? 'left' : 'left', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -127,18 +127,18 @@ export default function AuditLogs() {
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={4} style={{ textAlign: 'center', padding: 40, fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>NO LOG RECORDS</td>
+                <td colSpan={4} style={{ textAlign: 'center', padding: 40, fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>NO LOG RECORDS</td>
               </tr>
             ) : filtered.map((log, i) => (
               <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
-                <td style={{ padding: '14px 16px', fontSize: 10, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                <td style={{ padding: '14px 16px', fontSize: 12, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                   {log.timestamp ? new Date(log.timestamp).toLocaleString('zh-CN') : '—'}
                 </td>
-                <td style={{ padding: '14px 16px', fontSize: 11, color: 'var(--text-muted)' }}>
+                <td style={{ padding: '14px 16px', fontSize: 13, color: 'var(--text-muted)' }}>
                   {log.user_id ?? '—'}
                 </td>
-                <td style={{ padding: '14px 16px', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--cyan)', letterSpacing: '0.05em' }}>{log.action}</td>
-                <td style={{ padding: '14px 16px', fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-dim)' }}>{log.request_id ?? '—'}</td>
+                <td style={{ padding: '14px 16px', fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--cyan)', letterSpacing: '0.05em' }}>{log.action}</td>
+                <td style={{ padding: '14px 16px', fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-dim)' }}>{log.request_id ?? '—'}</td>
               </tr>
             ))}
           </tbody>
