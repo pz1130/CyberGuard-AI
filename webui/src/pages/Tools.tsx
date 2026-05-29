@@ -124,7 +124,10 @@ export default function Tools() {
   }
 
   const del = async (id: number) => {
-    if (confirm('CONFIRM DELETION?')) { await api.deleteTool(id); load() }
+    if (confirm('CONFIRM DELETION?')) {
+      try { await api.deleteTool(id); load() }
+      catch (e: any) { alert(e.message) }
+    }
   }
 
   const testTool = async (t: Tool) => {
@@ -261,7 +264,7 @@ export default function Tools() {
             <Terminal size={18} style={{ color: 'var(--text-dim)' }} />
           </div>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>NO TOOLS DEPLOYED</div>
-          <button onClick={() => setShowForm(true)} style={{ fontSize: 12, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', letterSpacing: '0.1em' }}>
+          <button onClick={() => { setShowForm(true); setEditing(null); resetForm() }} style={{ fontSize: 12, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', letterSpacing: '0.1em' }}>
             + DEPLOY FIRST TOOL
           </button>
         </div>
