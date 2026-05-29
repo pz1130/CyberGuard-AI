@@ -30,8 +30,8 @@
 
   /* Text — dark mode: high contrast */
   --text-primary: #ffffff;
-  --text-muted: #b4b4b4;
-  --text-dim: #888888;
+  --text-muted: #d2d2d2;
+  --text-dim: #ababab;
   --text-accent: #00ff41;
 
   /* Borders */
@@ -58,8 +58,8 @@
   --red: #dc2626;
   --cyan: #0891b2;
   --text-primary: #0a0a0a;
-  --text-muted: #444444;
-  --text-dim: #666666;
+  --text-muted: #242424;
+  --text-dim: #404040;
   --text-accent: #009922;
   --border: #cccccc;
   --border-bright: #aaaaaa;
@@ -81,6 +81,10 @@ body {
   color: var(--text-primary);
   font-family: var(--font-mono);
   font-size: 16px;
+  /* Scale the whole UI up one notch — most type is hard-coded px, so a
+     global zoom enlarges fonts and spacing together (and is fixed-position
+     friendly, unlike transform: scale). */
+  zoom: 1.1;
 }
 
 /* ── Grid background texture ── */
