@@ -16,6 +16,7 @@ from app.models.governance import (
     Framework, Requirement, ComplianceAssessment,
     RequirementAssessment, Evidence,
 )
+from app.models.schedule import ScheduledTask
 
 __all__ = [
     "User", "RoleModel",
@@ -33,4 +34,5 @@ __all__ = [
     "PromptTemplate",
     "Framework", "Requirement", "ComplianceAssessment",
     "RequirementAssessment", "Evidence",
+    "ScheduledTask",
 ]

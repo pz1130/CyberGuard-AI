@@ -1,10 +1,10 @@
 ---
 name: project_status
-description: CyberGuard platform implementation status — last updated 2026-05-28 (internal agents shipped)
+description: CyberGuard platform implementation status — last updated 2026-05-29 (scheduled-tasks model export + webui port)
 type: project
 ---
 
-# CyberGuard Project Status — 2026-05-28
+# CyberGuard Project Status — 2026-05-29
 
 ## Milestones (1-5 complete)
 
@@ -19,6 +19,17 @@ type: project
 `010_agent_kind_and_internal` (latest)
 
 Sequence: `001_initial → 002_openclaw_gateway → 003_pgvector_knowledge → 004_multi_dim_embeddings → 005_drop_room_chat → 006_webhooks → 007_prompt_templates → 008_governance → 009_req_typical_evidence → 010_agent_kind_and_internal`
+
+---
+
+## Session 2026-05-29 — Scheduled-tasks model export + WebUI port
+
+Small follow-up changes on `feat/internal-agents`:
+
+- **`app/models/__init__.py`** — export `ScheduledTask` from the `app.models` package (import + `__all__`). The `scheduled_tasks` model and `/api/v1/schedule` CRUD router already existed and are wired in `app/main.py`, but the model was not re-exported through the package, so it was not registered alongside the other models. This makes `from app.models import ScheduledTask` work and keeps the model discoverable for metadata.
+- **`docker-compose.yml`** — WebUI host port `3000 → 3001` (host port only; container still serves on `80`) to avoid a local port collision.
+
+> ⚠️ The schedule feature remains **CRUD-only**: there is no Alembic migration for the `scheduled_tasks` table and no Celery-beat executor, so stored cron expressions are persisted but not yet executed. Tracked under "Not yet implemented".
 
 ---
 
@@ -114,6 +125,7 @@ dc2066a feat(webui): kind badge + filter + chooser modal + internal form on Agen
 - OCR for scanned-image PDFs (text-only works via pypdf).
 - Governance evidence file upload (`kind=file` schema exists, UI not wired).
 - Internal agent streaming output.
+- Scheduled-tasks execution: `/api/v1/schedule` CRUD + `ScheduledTask` model exist, but no Alembic migration for `scheduled_tasks` and no Celery-beat executor — cron expressions are stored, never run.
 
 ## Operational notes
 
