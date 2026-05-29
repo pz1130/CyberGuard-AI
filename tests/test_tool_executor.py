@@ -91,3 +91,20 @@ async def test_execute_tool_rbac_denied():
                                 {"msg": "x"}, user_id=1, caller_permissions=set())
     assert res["status"] == "error"
     assert "permission" in res["error"].lower()
+
+
+def test_build_argv_rejects_non_enum_value():
+    schema = {"type": "object", "properties": {"mode": {"enum": ["a", "b"]}}, "required": []}
+    with pytest.raises(ToolArgError):
+        build_argv("run {mode}", schema, {"mode": "c"})
+
+
+def test_build_argv_rejects_non_integer():
+    schema = {"type": "object", "properties": {"n": {"type": "integer"}}, "required": []}
+    with pytest.raises(ToolArgError):
+        build_argv("run {n}", schema, {"n": "abc"})
+
+
+def test_build_argv_accepts_valid_integer_string():
+    schema = {"type": "object", "properties": {"n": {"type": "integer"}}, "required": []}
+    assert build_argv("run {n}", schema, {"n": "42"}) == ["run", "42"]

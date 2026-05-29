@@ -225,8 +225,11 @@ export default function Tools() {
             <div>
               <label style={labelStyle}>REQUIRED PERMISSION (optional)</label>
               <input value={form.required_permission || ''} onChange={e => setForm(f => ({ ...f, required_permission: e.target.value }))}
-                placeholder="tool:exec"
+                placeholder="admin:all"
                 style={inputStyle} />
+              <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 4, letterSpacing: '0.05em' }}>
+                Use a real permission value (e.g. admin:all). Custom strings will deny all callers.
+              </div>
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={labelStyle}>NOTES (optional)</label>

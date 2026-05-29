@@ -1,6 +1,7 @@
 """Isolated tool-runner: executes a given argv with no shell. Driven only by api."""
 import asyncio
 import os
+import signal
 import time
 
 from fastapi import FastAPI, Header, HTTPException
@@ -8,6 +9,8 @@ from fastapi import FastAPI, Header, HTTPException
 app = FastAPI(title="tool-runner")
 
 RUNNER_TOKEN = os.environ.get("RUNNER_TOKEN", "")
+if not RUNNER_TOKEN:
+    raise RuntimeError("RUNNER_TOKEN must be set for the tool-runner")
 OUTPUT_MAX_BYTES = 64_000
 
 
@@ -18,7 +21,7 @@ async def health():
 
 @app.post("/run")
 async def run(body: dict, x_runner_token: str = Header(default="")):
-    if RUNNER_TOKEN and x_runner_token != RUNNER_TOKEN:
+    if x_runner_token != RUNNER_TOKEN:
         raise HTTPException(status_code=401, detail="bad runner token")
     argv = body.get("argv") or []
     timeout = int(body.get("timeout") or 60)
@@ -28,7 +31,8 @@ async def run(body: dict, x_runner_token: str = Header(default="")):
     t0 = time.monotonic()
     try:
         proc = await asyncio.create_subprocess_exec(
-            *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            start_new_session=True)
     except FileNotFoundError:
         return {"stdout": "", "stderr": f"command not found: {argv[0]}",
                 "exit_code": 127, "duration_ms": 0, "timed_out": False}
@@ -37,7 +41,10 @@ async def run(body: dict, x_runner_token: str = Header(default="")):
     try:
         out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
     except asyncio.TimeoutError:
-        proc.kill()
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except ProcessLookupError:
+            proc.kill()
         out, err = await proc.communicate()
         timed_out = True
     return {

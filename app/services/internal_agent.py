@@ -5,8 +5,11 @@ Runs an inline tool-call loop against the LLM Router. See:
 """
 import asyncio
 import json
+import logging
 import time
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy import select
 
@@ -199,6 +202,7 @@ class InternalAgentRunner:
         mcp_names = {t["function"]["name"] for t in tools}
         for pt in await self._load_pool_tools():
             if pt.name in mcp_names:
+                logger.warning("pool Tool %r skipped: name collides with an MCP tool", pt.name)
                 continue  # MCP name wins; skip colliding pool tool
             try:
                 schema = json.loads(pt.input_schema_json) if pt.input_schema_json else {}
@@ -270,11 +274,12 @@ class InternalAgentRunner:
         # 3. Executable pool Tool
         if getattr(self, "_pool_tools_by_name", None) and name in self._pool_tools_by_name:
             tool_row = self._pool_tools_by_name[name]
-            if (tool_row.permission_level or "medium") == "high":
-                return f"ERROR: tool {name!r} requires approval (high permission)"
             res = await execute_tool(tool_row, args, user_id=getattr(self, "_user_id", 0))
             if res.get("status") == "completed":
                 return res.get("stdout", "") or "(no output)"
+            if res.get("status") == "needs_approval":
+                return (f"NEEDS_APPROVAL: tool {name!r} is high-permission; "
+                        f"an approval request was created for a human to review.")
             return f"ERROR: tool {name!r}: {res.get('error') or res.get('stderr') or res}"
 
         return f"ERROR: unknown tool {name!r}"

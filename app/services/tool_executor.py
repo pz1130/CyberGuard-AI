@@ -39,6 +39,24 @@ def build_argv(command_template: str, input_schema: Optional[Dict[str, Any]],
         if k not in args:
             raise ToolArgError(f"missing required argument: {k!r}")
 
+    for k, v in args.items():
+        prop = props.get(k, {})
+        enum = prop.get("enum")
+        if enum is not None and v not in enum:
+            raise ToolArgError(f"argument {k!r}={v!r} not in enum {enum}")
+        t = prop.get("type")
+        if t == "integer":
+            ok = (isinstance(v, int) and not isinstance(v, bool)) or (isinstance(v, str) and v.lstrip("-").isdigit())
+            if not ok:
+                raise ToolArgError(f"argument {k!r} must be an integer, got {v!r}")
+        elif t == "number":
+            ok = (isinstance(v, (int, float)) and not isinstance(v, bool))
+            if not ok and isinstance(v, str):
+                try: float(v); ok = True
+                except ValueError: ok = False
+            if not ok:
+                raise ToolArgError(f"argument {k!r} must be a number, got {v!r}")
+
     if not command_template:
         raise ToolArgError("tool has no command_template")
 
