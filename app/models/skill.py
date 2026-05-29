@@ -34,7 +34,11 @@ class Tool(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), unique=True, nullable=False, index=True)
     description = Column(String(500), nullable=True)
-    md_content = Column(Text, nullable=False)
+    md_content = Column(Text, nullable=True)  # now optional human notes/docs
+    command_template = Column(Text, nullable=True)  # e.g. "nmap -sV -p {ports} {target}"
+    input_schema_json = Column(Text, nullable=True)  # JSON Schema for params
+    timeout_seconds = Column(Integer, default=60, nullable=False)
+    required_permission = Column(String(100), nullable=True, index=True)
     version = Column(String(20), default="1.0.0")
     category = Column(String(50), nullable=True)
     permission_level = Column(String(20), default="medium")
