@@ -21,6 +21,8 @@ class AgentConfig(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     permission_level = Column(String(20), default="medium")  # low, medium, high
     associated_skills = Column(JSON, nullable=True)  # List of skill IDs
+    associated_tools = Column(JSON, nullable=True)       # List of Tool IDs
+    associated_mcp_tools = Column(JSON, nullable=True)   # List of MCPTool IDs
     metadata_json = Column(JSON, nullable=True)
     # Kind discriminator: 'external' (HTTP / OpenClaw) or 'internal' (in-app)
     kind = Column(String(20), nullable=False, default="external", index=True)

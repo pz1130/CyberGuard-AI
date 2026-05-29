@@ -19,6 +19,7 @@ class Skill(Base):
     requires_approval = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True, nullable=False)
     metadata_json = Column(JSON, nullable=True)
+    tags = Column(JSON, nullable=True)  # List[str]
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -45,6 +46,7 @@ class Tool(Base):
     requires_approval = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True, nullable=False)
     metadata_json = Column(JSON, nullable=True)
+    tags = Column(JSON, nullable=True)  # List[str]
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
