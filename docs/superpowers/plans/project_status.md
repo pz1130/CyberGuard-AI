@@ -1,18 +1,20 @@
 ---
 name: project_status
-description: CyberGuard platform implementation status — last updated 2026-05-29 (QwenPaw pool alignment ① + ② shipped & merged to main; ③ next)
+description: CyberGuard platform implementation status — last updated 2026-05-30 (QwenPaw pool alignment ①②③ shipped as PR #2; test-infra event-loop isolation fixed)
 type: project
 ---
 
-# CyberGuard Project Status — 2026-05-29
+# CyberGuard Project Status — 2026-05-30
 
 ## ▶ Resume point (next session)
 
-- **Branch:** `feat/internal-agents` (PR #1 **merged to `main`** via merge commit `0b04f33`; branch kept for further work). Local checkout is still on `feat/internal-agents`; `origin/main` already contains everything.
-- **Just finished:** QwenPaw pool alignment **subproject ① (executable Tool pool)** and **② (unified pool assignment + tags)** — both implemented via subagent-driven dev, reviewed, merged.
-- **Next up — subproject ③: external agents using the pools.** Spec not yet written. Scope (agreed during brainstorming): when dispatching a task to an external agent (OpenClaw/Custom), deliver the assigned skills (md) + tool/mcp manifests in the task payload, and let the agent call back to execute tools/mcp via gateway endpoints (e.g. `/gateway/tool-exec`, `/gateway/mcp-exec`) with API-key + RBAC. Also refactor `app/services/agent_executor.py::get_mcp_tools_for_agent` to read the new `associated_mcp_tools` column. Start with brainstorming → spec → plan → subagent execution (same as ①/②).
-- **Also pending (not blocking ③):** test-infra fix for the pytest-asyncio event-loop isolation issue (see "Not yet implemented") so DB-backed tests can run together.
-- **Local resync if continuing on main:** `git checkout main && git pull` (currently on `feat/internal-agents`).
+- **Branch:** `feat/internal-agents` — PR #2 open (subproject ③ + test-infra fix). Not yet merged to `main`.
+- **Just finished:** QwenPaw pool alignment **subproject ③ (external agents use pools)** via subagent-driven dev + test-infra event-loop isolation fix (greenlet dep, session-scope loop, conftest engine disposal).
+- **Next up:** Merge PR #2, then decide M6 scope. Remaining known issues (pre-existing, not blocking):
+  - 6 integration test failures in `test_integration.py` — `ConnectionManager` import error (groupchat refactor) and guardrail scoring logic changes; unrelated to our work
+  - `test_smoke_api.py` needs a running server (`SMOKE_BASE_URL`)
+  - WebUI: Custom agents don't show API key in UI (API-only for now)
+  - `has_manifest` is per-message (not top-level on PollResponse) — idle nodes w/no pending tasks won't see it until next task is dispatched; nodes can call `/gateway/manifest` proactively with their API key
 
 ## Milestones (1-5 complete)
 
@@ -21,7 +23,7 @@ type: project
 - **M3** — Sub-Agent System: external (OpenClaw/Hermes/Custom) + internal (in-app) ✅
 - **M4** — WebUI: React + Vite + TypeScript ✅
 - **M5** — Agent Collaboration: Multi-agent routing + group chat panel ✅
-- **QwenPaw pool alignment** — ① executable Tool pool ✅ · ② unified assignment + tags ✅ · ③ external agents use pools ⏳ (next)
+- **QwenPaw pool alignment** — ① executable Tool pool ✅ · ② unified assignment + tags ✅ · ③ external agents use pools ✅ (PR #2)
 
 ## Alembic head
 
