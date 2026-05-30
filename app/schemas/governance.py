@@ -1,7 +1,7 @@
 """Pydantic schemas for governance / GRC endpoints."""
 from datetime import datetime
 from typing import Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ---------------------------------------------------------------------------
@@ -21,8 +21,7 @@ class RequirementRead(BaseModel):
     is_assessable: bool
     typical_evidence: list[str] | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FrameworkRead(BaseModel):
@@ -38,8 +37,7 @@ class FrameworkRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FrameworkWithRequirements(FrameworkRead):
@@ -90,8 +88,7 @@ class EvidenceRead(BaseModel):
     size_bytes: int | None = None
     uploaded_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class EvidenceCreate(BaseModel):
@@ -116,8 +113,7 @@ class RequirementAssessmentRead(BaseModel):
     evidences: list[EvidenceRead] = []
     requirement: RequirementRead | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RequirementAssessmentUpdate(BaseModel):
@@ -141,8 +137,7 @@ class ComplianceAssessmentRead(BaseModel):
     updated_at: datetime
     progress: dict | None = None  # {total, assessed, compliant, ...}
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ComplianceAssessmentCreate(BaseModel):

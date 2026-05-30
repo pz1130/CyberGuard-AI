@@ -611,7 +611,7 @@ export default function Agents() {
                 )}
 
                 {/* Regenerated key display */}
-                {isOpenClaw && thisRegenKey && (
+                {!isInternal && thisRegenKey && (
                   <div style={{
                     padding: '8px 10px', marginBottom: 10,
                     background: 'rgba(0,255,65,0.06)', border: '1px solid var(--accent-border)',
@@ -647,7 +647,7 @@ export default function Agents() {
                     {testing === a.id ? '…' : 'TEST'}
                   </button>
 
-                  {isOpenClaw && (
+                  {!isInternal && (
                     <button onClick={() => regenApiKey(a.id!)} disabled={regenLoading === a.id}
                       title="重新生成 API Key"
                       style={{
@@ -908,6 +908,71 @@ export default function Agents() {
                     }
                   } : undefined}
                 />
+              )}
+
+              {/* Hermes / Custom — key panel: shown after creation (key visible) or when editing (regen only) */}
+              {form.backend_type !== '__internal__' && form.backend_type !== 'openclaw' && (createdApiKey || editing) && (
+                <div style={{
+                  padding: '14px 16px',
+                  background: 'rgba(0,255,65,0.04)',
+                  border: '1px solid var(--accent-border)',
+                  display: 'flex', flexDirection: 'column', gap: 10,
+                }}>
+                  <div style={{ fontSize: 12, color: 'var(--accent)', letterSpacing: '0.12em', fontWeight: 700 }}>
+                    ◆ GATEWAY API KEY
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.7 }}>
+                    外部节点使用此 Key 通过 <code style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>X-Api-Key</code> 请求头调用{' '}
+                    <code style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>/gateway/manifest</code>、
+                    <code style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>/gateway/poll</code> 等接口。
+                  </div>
+                  {createdApiKey ? (
+                    <>
+                      <div style={{ fontSize: 11, color: '#f59e0b', letterSpacing: '0.08em' }}>⚠ 只显示一次，请立即保存</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{
+                          flex: 1, padding: '6px 10px',
+                          background: 'rgba(0,255,65,0.06)', border: '1px solid var(--accent-border)',
+                          fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--accent)',
+                          wordBreak: 'break-all',
+                        }}>{createdApiKey}</div>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(createdApiKey)}
+                          style={{
+                            padding: '6px 12px', border: '1px solid var(--accent-border)',
+                            background: 'transparent', color: 'var(--accent)',
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                            fontSize: 12, letterSpacing: '0.1em', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap',
+                          }}>
+                          <Copy size={11} /> COPY KEY
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+                      Key 已存在（明文不可查看）。如需更换，点下方按钮重新签发。
+                    </div>
+                  )}
+                  {editing && (
+                    <button
+                      onClick={async () => {
+                        if (!confirm('重新签发 API Key？旧 Key 立即失效。')) return
+                        try {
+                          const res = await (api as any).regenAgentApiKey(editing) as { api_key?: string }
+                          if (res?.api_key) setCreatedApiKey(res.api_key)
+                        } catch (e: any) { alert(e?.message || '生成 Key 失败') }
+                      }}
+                      style={{
+                        alignSelf: 'flex-start', padding: '6px 12px',
+                        border: '1px solid var(--accent-border)', background: 'transparent',
+                        color: 'var(--accent)', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        fontSize: 12, letterSpacing: '0.1em', fontFamily: 'var(--font-mono)',
+                      }}>
+                      <Key size={11} /> GENERATE NEW KEY
+                    </button>
+                  )}
+                </div>
               )}
 
             </div>

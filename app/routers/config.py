@@ -52,10 +52,10 @@ async def export_config(
         for kb in kbs_result.scalars().all()
     ]
 
-    from datetime import datetime
+    from datetime import datetime, timezone
     config = {
         "version": "1.0.0",
-        "exported_at": datetime.utcnow().isoformat(),
+        "exported_at": datetime.now(timezone.utc).isoformat(),
         "agents": agents,
         "skills": skills,
         "tools": tools,

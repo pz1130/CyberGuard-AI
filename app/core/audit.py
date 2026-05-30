@@ -2,7 +2,7 @@
 import asyncio
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Any
 from app.core.redis_client import get_redis
 from app.models.audit import AuditLog
@@ -39,7 +39,7 @@ async def log_audit(
         output_data: Output data (will be hashed)
         request_id: Optional request tracking ID
     """
-    timestamp = datetime.utcnow()
+    timestamp = datetime.now(timezone.utc)
     entry = {
         "user_id": user_id,
         "agent_id": agent_id,

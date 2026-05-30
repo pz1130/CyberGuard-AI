@@ -1,5 +1,5 @@
 """Authentication router."""
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -81,7 +81,7 @@ async def logout(credentials: Optional[HTTPAuthorizationCredentials] = Depends(b
             jti = payload.get("jti")
             exp = payload.get("exp", 0)
             if jti and exp:
-                remaining = max(0, exp - int(datetime.utcnow().timestamp()))
+                remaining = max(0, exp - int(datetime.now(timezone.utc).timestamp()))
                 await revoke_token(jti, remaining)
         except JWTError:
             pass  # Invalid token already — nothing to revoke

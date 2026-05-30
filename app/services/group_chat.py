@@ -1,7 +1,7 @@
 """Group chat service for multi-agent discussions."""
 import json
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 
@@ -16,7 +16,7 @@ class GroupChatMessage:
     content: str
     agent_id: Optional[int] = None
     agent_name: Optional[str] = None
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 @dataclass
@@ -28,7 +28,7 @@ class GroupChatSession:
     messages: List[GroupChatMessage] = field(default_factory=list)
     max_rounds: int = 5
     current_round: int = 0
-    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     status: str = "active"  # active, completed, cancelled
     parent_conversation_id: Optional[int] = None
 
@@ -347,7 +347,7 @@ class GroupChatService:
             max_rounds=data.get("max_rounds", 5),
             current_round=data.get("current_round", 0),
             status=data.get("status", "active"),
-            created_at=data.get("created_at", datetime.utcnow().isoformat()),
+            created_at=data.get("created_at", datetime.now(timezone.utc).isoformat()),
         )
         
         session.messages = [
@@ -356,7 +356,7 @@ class GroupChatService:
                 content=m["content"],
                 agent_id=m.get("agent_id"),
                 agent_name=m.get("agent_name"),
-                timestamp=m.get("timestamp", datetime.utcnow().isoformat()),
+                timestamp=m.get("timestamp", datetime.now(timezone.utc).isoformat()),
             )
             for m in data.get("messages", [])
         ]

@@ -1,7 +1,7 @@
 """Pydantic schemas for webhook configuration."""
 from datetime import datetime
 from typing import List, Literal, Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # Events that outgoing webhooks may subscribe to. Keep this list as the
@@ -112,8 +112,7 @@ class WebhookRead(BaseModel):
     # Set only on create / regenerate to deliver plaintext token once.
     plaintext_token: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
     @classmethod
     def from_orm_with_url(cls, obj, base_url: str = "") -> "WebhookRead":

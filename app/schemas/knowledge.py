@@ -1,5 +1,5 @@
 """Pydantic schemas for knowledge base and document management."""
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
 
@@ -60,8 +60,7 @@ class KnowledgeBaseResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class KnowledgeBaseListResponse(BaseModel):
@@ -101,8 +100,7 @@ class DocumentResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DocumentUploadResponse(BaseModel):

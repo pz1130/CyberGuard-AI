@@ -3,7 +3,7 @@ import httpx
 import json
 import re
 from typing import Dict, Any, Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 from app.config import settings
@@ -111,7 +111,7 @@ class SubAgentWrapper:
         return {
             "Content-Type": "application/json",
             "X-Agent-ID": str(self.agent_id),
-            "X-Timestamp": datetime.utcnow().isoformat(),
+            "X-Timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     async def execute(self, task: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -142,7 +142,7 @@ class SubAgentWrapper:
             "task": task,
             "context": context or {},
             "env_vars": self.env_vars,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         if settings.BASE_URL:
             payload["manifest_url"] = (
@@ -385,7 +385,7 @@ class AgentExecutor:
 
         result["agent_id"] = agent_id
         result["agent_name"] = config_dict.get("agent_name")
-        result["timestamp"] = datetime.utcnow().isoformat()
+        result["timestamp"] = datetime.now(timezone.utc).isoformat()
         return result
 
     async def _execute_openclaw(self, config: Dict[str, Any], task: str) -> Dict[str, Any]:

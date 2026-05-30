@@ -6,7 +6,7 @@ the "CUSTOM SYSTEM PROMPT" / intent-parser / summarizer override fields.
 import logging
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
@@ -32,8 +32,7 @@ class PromptTemplateRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PromptTemplateCreate(BaseModel):

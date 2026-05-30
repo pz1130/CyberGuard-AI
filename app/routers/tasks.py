@@ -64,8 +64,8 @@ async def cancel_task(
     execution = result.scalar_one_or_none()
     if execution:
         execution.status = "cancelled"
-        from datetime import datetime
-        execution.completed_at = datetime.utcnow()
+        from datetime import datetime, timezone
+        execution.completed_at = datetime.now(timezone.utc)
         await db.commit()
 
     return {"task_id": task_id, "status": "cancelled"}

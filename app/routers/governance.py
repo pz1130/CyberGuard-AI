@@ -18,7 +18,7 @@ AI-assisted endpoints (leverage CyberGuard's master LLM):
 import json
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -642,10 +642,10 @@ async def ai_assess(
     observation = str(data.get("observation") or "").strip()
 
     ra.ai_recommendation = (
-        f"[{datetime.utcnow().isoformat(timespec='seconds')}Z] "
+        f"[{datetime.now(timezone.utc).isoformat(timespec='seconds')}Z] "
         f"status={status} score={score}\n{observation}"
     )
-    ra.ai_assessed_at = datetime.utcnow()
+    ra.ai_assessed_at = datetime.now(timezone.utc)
 
     applied = False
     if body.apply:

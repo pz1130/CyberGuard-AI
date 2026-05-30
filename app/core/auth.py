@@ -1,5 +1,5 @@
 """Authentication utilities and JWT handling."""
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -24,10 +24,10 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     """Create a JWT access token."""
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire, "iat": datetime.utcnow()})
+        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire, "iat": datetime.now(timezone.utc)})
     # Generate unique jti for revocation support
     import uuid
     to_encode["jti"] = str(uuid.uuid4())
@@ -86,10 +86,10 @@ async def decode_access_token(token: str) -> Dict[str, Any]:
 
 def create_refresh_token(data: Dict[str, Any]) -> str:
     """Create a JWT refresh token with 7-day expiration."""
-    expire = datetime.utcnow() + timedelta(days=7)
+    expire = datetime.now(timezone.utc) + timedelta(days=7)
     to_encode = data.copy()
     import uuid
-    to_encode.update({"exp": expire, "iat": datetime.utcnow(), "type": "refresh", "jti": str(uuid.uuid4())})
+    to_encode.update({"exp": expire, "iat": datetime.now(timezone.utc), "type": "refresh", "jti": str(uuid.uuid4())})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
 
 
