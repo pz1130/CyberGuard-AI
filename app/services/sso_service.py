@@ -91,12 +91,27 @@ def secret_configured() -> bool:
     return bool(settings.AZURE_CLIENT_SECRET)
 
 
+async def _get_secret(db: AsyncSession, cfg: SsoConfig) -> Optional[str]:
+    """Resolve the Azure client secret from a DB EnvVar or the env var."""
+    # Prefer the DB EnvVar reference
+    if cfg.secret_env_var_id:
+        from app.models.envvar import EnvVar
+        from app.core.security import decrypt_data
+        result = await db.execute(select(EnvVar).where(EnvVar.id == cfg.secret_env_var_id))
+        env_var = result.scalar_one_or_none()
+        if env_var and env_var.is_active:
+            return decrypt_data(env_var.value_encrypted)
+    # Fallback to environment variable
+    return settings.AZURE_CLIENT_SECRET or None
+
+
 async def is_enabled(db: AsyncSession) -> bool:
     """SSO is usable only when toggled on AND fully configured."""
     cfg = await get_config(db)
+    secret = await _get_secret(db, cfg)
     return bool(
         cfg.enabled
-        and secret_configured()
+        and secret
         and cfg.tenant_id
         and cfg.client_id
         and cfg.redirect_uri
@@ -164,19 +179,19 @@ async def provision_or_link_user(db: AsyncSession, claims: Dict[str, Any]) -> Us
 
 # ---- MSAL / OIDC wrappers (lazy import) -----------------------------------
 
-def _build_msal_app(cfg: SsoConfig):
+def _build_msal_app(cfg: SsoConfig, secret: str):
     import msal  # lazy — keeps pure logic importable without the dependency
 
     authority = f"https://login.microsoftonline.com/{cfg.tenant_id}"
     return msal.ConfidentialClientApplication(
         client_id=cfg.client_id,
         authority=authority,
-        client_credential=settings.AZURE_CLIENT_SECRET,
+        client_credential=secret,
     )
 
 
-def build_auth_url(cfg: SsoConfig, state: str, nonce: str) -> str:
-    app = _build_msal_app(cfg)
+def build_auth_url(cfg: SsoConfig, state: str, nonce: str, secret: str) -> str:
+    app = _build_msal_app(cfg, secret)
     return app.get_authorization_request_url(
         _ROLE_SCOPES,
         state=state,
@@ -185,9 +200,9 @@ def build_auth_url(cfg: SsoConfig, state: str, nonce: str) -> str:
     )
 
 
-def exchange_code(cfg: SsoConfig, code: str, nonce: str) -> Dict[str, Any]:
+def exchange_code(cfg: SsoConfig, code: str, nonce: str, secret: str) -> Dict[str, Any]:
     """Exchange an auth code for tokens and return normalized id_token claims."""
-    app = _build_msal_app(cfg)
+    app = _build_msal_app(cfg, secret)
     result = app.acquire_token_by_authorization_code(
         code,
         scopes=_ROLE_SCOPES,

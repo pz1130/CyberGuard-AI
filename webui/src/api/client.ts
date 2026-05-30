@@ -53,6 +53,7 @@ export const api = {
   createSsoRoleMapping: (body: { azure_key: string; app_role: string; priority?: number }) =>
     request('/sso/role-mappings', { method: 'POST', body: JSON.stringify(body) }),
   deleteSsoRoleMapping: (id: number) => request(`/sso/role-mappings/${id}`, { method: 'DELETE' }),
+  getSecretEnvVars: () => request('/sso/secret-envvars'),
 
   // Users
   getUsers: () => request('/users'),

@@ -1,11 +1,12 @@
 """SSO (Azure AD / Entra ID) configuration models.
 
-The client secret is intentionally NOT stored here — it is read from the
-AZURE_CLIENT_SECRET environment variable. Only non-secret configuration lives in
-the DB so it can be managed from the WebUI.
+The client secret is intentionally NOT stored here — it is resolved from
+a DB EnvVar record (``secret_env_var_id``) so the UI can manage it like
+any other encrypted environment variable.  Only non-secret configuration
+lives in the DB row.
 """
 from datetime import datetime
-from sqlalchemy import Boolean, Column, DateTime, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
 from app.core.database import Base
 
 
@@ -21,6 +22,8 @@ class SsoConfig(Base):
     redirect_uri = Column(String(512), nullable=True)
     default_role = Column(String(50), default="viewer", nullable=False)
     allow_jit = Column(Boolean, default=True, nullable=False)
+    # FK to env_vars.id — stores which DB EnvVar holds the Azure client secret
+    secret_env_var_id = Column(Integer, ForeignKey("env_vars.id"), nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 

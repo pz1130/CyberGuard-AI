@@ -26,6 +26,7 @@ export default function Users() {
   const [ssoMappings, setSsoMappings] = useState<any[]>([])
   const [ssoSaving, setSsoSaving] = useState(false)
   const [newMapping, setNewMapping] = useState({ azure_key: '', app_role: 'viewer', priority: 10 })
+  const [secretEnvVars, setSecretEnvVars] = useState<{id: number; key: string; description?: string}[]>([])
 
   const load = async () => {
     try {
@@ -79,8 +80,12 @@ export default function Users() {
   // SSO data loading & mutation
   const loadSso = async () => {
     try {
-      const [cfg, mappings] = await Promise.all([api.getSsoConfig(), api.getSsoRoleMappings()])
-      setSsoCfg(cfg); setSsoMappings(mappings || [])
+      const [cfg, mappings, envvars] = await Promise.all([
+        api.getSsoConfig(),
+        api.getSsoRoleMappings(),
+        api.getSecretEnvVars(),
+      ])
+      setSsoCfg(cfg); setSsoMappings(mappings || []); setSecretEnvVars(envvars || [])
     } catch { /* admin-only, let tabs gate access */ }
   }
 
@@ -89,6 +94,8 @@ export default function Users() {
     try {
       const updated = await api.updateSsoConfig(patch)
       setSsoCfg(updated)
+    } catch (e: any) {
+      alert(e?.message || 'Failed to save SSO config')
     } finally { setSsoSaving(false) }
   }
 
@@ -159,10 +166,27 @@ export default function Users() {
             {!ssoCfg ? <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>LOADING…</div> : (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <SsoField label="ENABLED" checked={!!ssoCfg.enabled} onChange={v => saveSsoConfig({ enabled: v })} saving={ssoSaving} />
-                <SsoField label="CLIENT SECRET (ENV)" value={ssoCfg.secret_configured ? 'CONFIGURED ✓' : 'NOT SET'} saved />
-                <SsoField label="TENANT ID" value={ssoCfg.tenant_id || '—'} saved />
-                <SsoField label="CLIENT ID" value={ssoCfg.client_id || '—'} saved />
-                <div style={{ gridColumn: '1 / -1' }}><SsoField label="REDIRECT URI" value={ssoCfg.redirect_uri || '—'} saved /></div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>CLIENT SECRET (ENV)</label>
+                  <select
+                    value={ssoCfg.secret_env_var_id ?? ''}
+                    onChange={e => saveSsoConfig({ secret_env_var_id: e.target.value ? parseInt(e.target.value) : null })}
+                    style={{ width: '100%', height: 36, padding: '0 10px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 13 }}
+                  >
+                    <option value="">— NOT SET —</option>
+                    {secretEnvVars.map(v => <option key={v.id} value={v.id}>{v.key}</option>)}
+                  </select>
+                  {ssoCfg.secret_env_var_id ? (
+                    <div style={{ fontSize: 11, color: 'var(--green)', marginTop: 4, letterSpacing: '0.05em' }}>✓ Configured via EnvVar</div>
+                  ) : (
+                    <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 4, letterSpacing: '0.05em' }}>Add a secret EnvVar first</div>
+                  )}
+                </div>
+              <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <SsoInput label="TENANT ID" value={ssoCfg.tenant_id || ''} onChange={v => saveSsoConfig({ tenant_id: v || null })} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+                <SsoInput label="CLIENT ID" value={ssoCfg.client_id || ''} onChange={v => saveSsoConfig({ client_id: v || null })} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+                <div style={{ gridColumn: '1 / -1' }}><SsoInput label="REDIRECT URI" value={ssoCfg.redirect_uri || ''} onChange={v => saveSsoConfig({ redirect_uri: v || null })} placeholder="https://your-domain/api/v1/auth/sso/callback" /></div>
+              </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>DEFAULT ROLE</label>
                   <select value={ssoCfg.default_role} onChange={e => saveSsoConfig({ default_role: e.target.value })} style={{ width: '100%', height: 36, padding: '0 10px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>

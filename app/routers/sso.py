@@ -19,6 +19,7 @@ from app.core.auth import create_access_token
 from app.core.dependencies import get_db, require_role
 from app.core.rbac import Role
 from app.core.redis_client import cache
+from app.models.envvar import EnvVar
 from app.models.sso import SsoConfig, SsoRoleMapping
 from app.services import sso_service
 from app.services.sso_service import SsoError
@@ -42,15 +43,16 @@ async def sso_status(db: AsyncSession = Depends(get_db)):
 @router.get("/auth/sso/login", tags=["SSO"])
 async def sso_login(db: AsyncSession = Depends(get_db)):
     """Begin the OIDC Authorization Code flow — 302 to Microsoft."""
-    if not await sso_service.is_enabled(db):
+    cfg = await sso_service.get_config(db)
+    secret = await sso_service._get_secret(db, cfg)
+    if not (cfg.enabled and secret and cfg.tenant_id and cfg.client_id and cfg.redirect_uri):
         return RedirectResponse(url="/?error=sso_unavailable")
 
-    cfg = await sso_service.get_config(db)
     state = secrets.token_urlsafe(32)
     nonce = secrets.token_urlsafe(32)
     await cache.set_json(f"sso:state:{state}", {"nonce": nonce}, expire=_STATE_TTL)
 
-    auth_url = sso_service.build_auth_url(cfg, state=state, nonce=nonce)
+    auth_url = sso_service.build_auth_url(cfg, state=state, nonce=nonce, secret=secret)
     return RedirectResponse(url=auth_url)
 
 
@@ -71,12 +73,16 @@ async def sso_callback(
         return RedirectResponse(url="/?error=sso_state")
     await cache.delete(f"sso:state:{state}")
 
-    if not await sso_service.is_enabled(db):
+    cfg = await sso_service.get_config(db)
+    secret = await sso_service._get_secret(db, cfg)
+    if not (cfg.enabled and secret and cfg.tenant_id and cfg.client_id and cfg.redirect_uri):
+        return RedirectResponse(url="/?error=sso_unavailable")
+    secret = await sso_service._get_secret(db, cfg)
+    if not (cfg.enabled and secret and cfg.tenant_id and cfg.client_id and cfg.redirect_uri):
         return RedirectResponse(url="/?error=sso_unavailable")
 
-    cfg = await sso_service.get_config(db)
     try:
-        claims = sso_service.exchange_code(cfg, code, nonce=stored["nonce"])
+        claims = sso_service.exchange_code(cfg, code, nonce=stored["nonce"], secret=secret)
         user = await sso_service.provision_or_link_user(db, claims)
     except SsoError as e:
         return RedirectResponse(url=f"/?error={e.code}")
@@ -103,6 +109,7 @@ class SsoConfigResponse(BaseModel):
     redirect_uri: Optional[str] = None
     default_role: str
     allow_jit: bool
+    secret_env_var_id: Optional[int] = None
     secret_configured: bool
 
     model_config = ConfigDict(from_attributes=True)
@@ -115,6 +122,7 @@ class SsoConfigUpdate(BaseModel):
     redirect_uri: Optional[str] = None
     default_role: Optional[str] = None
     allow_jit: Optional[bool] = None
+    secret_env_var_id: Optional[int] = None
 
 
 class RoleMappingCreate(BaseModel):
@@ -132,7 +140,7 @@ class RoleMappingResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-def _config_response(cfg: SsoConfig) -> SsoConfigResponse:
+def _config_response(cfg: SsoConfig, secret: str) -> SsoConfigResponse:
     return SsoConfigResponse(
         id=cfg.id,
         enabled=cfg.enabled,
@@ -141,7 +149,8 @@ def _config_response(cfg: SsoConfig) -> SsoConfigResponse:
         redirect_uri=cfg.redirect_uri,
         default_role=cfg.default_role,
         allow_jit=cfg.allow_jit,
-        secret_configured=sso_service.secret_configured(),
+        secret_env_var_id=cfg.secret_env_var_id,
+        secret_configured=bool(secret),
     )
 
 
@@ -151,7 +160,8 @@ async def get_sso_config(
     _=Depends(require_role(Role.ADMIN)),
 ):
     cfg = await sso_service.get_config(db)
-    return _config_response(cfg)
+    secret = await sso_service._get_secret(db, cfg)
+    return _config_response(cfg, secret)
 
 
 @router.put("/sso/config", response_model=SsoConfigResponse, tags=["SSO"])
@@ -165,7 +175,8 @@ async def update_sso_config(
         setattr(cfg, key, value)
     await db.commit()
     await db.refresh(cfg)
-    return _config_response(cfg)
+    secret = await sso_service._get_secret(db, cfg)
+    return _config_response(cfg, secret)
 
 
 @router.get("/sso/role-mappings", response_model=list[RoleMappingResponse], tags=["SSO"])
@@ -193,6 +204,18 @@ async def create_role_mapping(
     await db.commit()
     await db.refresh(mapping)
     return mapping
+
+
+@router.get("/sso/secret-envvars", tags=["SSO"])
+async def list_secret_envvars(
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_role(Role.ADMIN)),
+):
+    """List EnvVars of type 'secret' — usable as Azure client secret source."""
+    result = await db.execute(
+        select(EnvVar).where(EnvVar.value_type == "secret", EnvVar.is_active.is_(True))
+    )
+    return [{"id": v.id, "key": v.key, "description": v.description} for v in result.scalars()]
 
 
 @router.delete("/sso/role-mappings/{mapping_id}", status_code=204, tags=["SSO"])
