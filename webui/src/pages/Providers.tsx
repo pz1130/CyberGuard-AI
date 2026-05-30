@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useContext } from 'react'
 import { api } from '../api/client'
 import { Plus, Loader2, Search, X, RefreshCw, Zap, Settings2, Database } from 'lucide-react'
+import { SearchContext } from '../context/SearchContext'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -438,7 +439,7 @@ function ProviderCard({
   const modelCount = provider.models?.length || 0
 
   return (
-    <div style={{
+    <div data-item-id={provider.id} style={{
       padding: 18, background: 'var(--bg-surface)',
       border: '1px solid var(--border-bright)',
       borderLeft: `3px solid ${sc}`,
@@ -554,6 +555,21 @@ export default function Providers() {
   const [search, setSearch] = useState('')
   const [settingsTarget, setSettingsTarget] = useState<{ provider?: Provider; preset?: Preset } | null>(null)
   const [modelsTarget, setModelsTarget] = useState<Provider | null>(null)
+
+  const { searchTarget, setSearchTarget } = useContext(SearchContext)
+
+  useEffect(() => {
+    if (!searchTarget || searchTarget.tab !== 'providers') return
+    const el = document.querySelector(`[data-item-id="${searchTarget.id}"]`)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.classList.add('search-highlight')
+    const timer = setTimeout(() => {
+      el.classList.remove('search-highlight')
+      setSearchTarget(null)
+    }, 2000)
+    return () => clearTimeout(timer)
+  }, [searchTarget, setSearchTarget])
 
   const load = async () => {
     try {
