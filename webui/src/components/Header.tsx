@@ -145,7 +145,7 @@ export default function Header({ dark, toggleDark, toggleLang }: Props) {
             onClick={() => setMenuOpen(v => !v)}
             style={{
               display: 'flex', alignItems: 'center', gap: 8,
-              padding: '0 10px', height: 34,
+              padding: '0 10px', height: 28,
               background: 'var(--bg-elevated)',
               border: menuOpen ? '1px solid var(--accent-border)' : '1px solid var(--border-bright)',
               color: 'var(--text-primary)', cursor: 'pointer',
