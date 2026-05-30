@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useContext } from 'react'
 import { api } from '../api/client'
 import { Trash2, Plus, Edit2, ChevronDown, ChevronRight, Server, Activity, Wrench } from 'lucide-react'
+import { SearchContext } from '../context/SearchContext'
 
 interface MCPServer {
   id?: number
@@ -59,6 +60,21 @@ export default function MCP() {
   const [editingServer, setEditingServer] = useState<MCPServer | null>(null)
   const [serverForm, setServerForm] = useState<ServerForm>(emptyServerForm)
   const [tagFilter, setTagFilter] = useState('')
+
+  const { searchTarget, setSearchTarget } = useContext(SearchContext)
+
+  useEffect(() => {
+    if (!searchTarget || searchTarget.tab !== 'mcp') return
+    const el = document.querySelector(`[data-item-id="${searchTarget.id}"]`)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.classList.add('search-highlight')
+    const timer = setTimeout(() => {
+      el.classList.remove('search-highlight')
+      setSearchTarget(null)
+    }, 2000)
+    return () => clearTimeout(timer)
+  }, [searchTarget, setSearchTarget])
 
   const loadServers = async () => {
     try {
@@ -257,7 +273,7 @@ export default function MCP() {
               const sTools = (s.id && serverTools[s.id]) || []
               const expanded = expandedServer === s.id
               return (
-                <div key={s.id} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', overflow: 'hidden' }}>
+                <div key={s.id} data-item-id={s.id} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', overflow: 'hidden' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px' }}>
                     <button onClick={() => s.id && toggleExpand(s.id)}
                       style={{ padding: 4, color: 'var(--text-muted)', cursor: 'pointer', background: 'none', border: 'none' }}>
