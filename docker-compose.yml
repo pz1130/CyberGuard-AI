@@ -46,6 +46,7 @@ services:
       AUTO_APPROVE: ${AUTO_APPROVE:-false}
       TOOL_RUNNER_URL: http://tool-runner:9000
       RUNNER_TOKEN: ${RUNNER_TOKEN:-changeme-runner-token}
+      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
     depends_on:
       postgres:
         condition: service_healthy
