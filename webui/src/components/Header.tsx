@@ -44,7 +44,7 @@ export default function Header({ dark, toggleDark, toggleLang, onSearchOpen }: P
   useEffect(() => {
     const check = () => {
       const token = localStorage.getItem('token')
-      fetch('/api/v1/health/ready', token ? { headers: { Authorization: `Bearer ${token}` } } : undefined)
+      fetch('/health/ready', token ? { headers: { Authorization: `Bearer ${token}` } } : undefined)
         .then(r => {
           if (r.ok) setSysStatus('online')
           else if (r.status === 503) setSysStatus('degraded')
