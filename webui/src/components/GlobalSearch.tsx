@@ -1,5 +1,6 @@
 // webui/src/components/GlobalSearch.tsx
 import { useState, useEffect, useRef, useCallback } from 'react'
+import type { ReactNode } from 'react'
 import { api } from '../api/client'
 import { useSearch } from '../context/SearchContext'
 import type { Tab } from './Sidebar'
@@ -96,7 +97,7 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
 
       if (knowledge.status === 'fulfilled') {
         const d = knowledge.value as any
-        const list = d?.bases || []
+        const list = Array.isArray(d) ? d : (d?.bases || [])
         list.forEach((k: any) => items.push({
           id: k.id, name: k.name,
           subtitle: 'KNOWLEDGE BASE',
@@ -278,7 +279,7 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
                 const currentIdx = itemIndexMap.get(item)!
                 const isSelected = selectedIndex === currentIdx
                 const nameQ = item.name.toLowerCase().indexOf(q)
-                const nameDisplay: React.ReactNode = nameQ >= 0 ? (
+                const nameDisplay: ReactNode = nameQ >= 0 ? (
                   <>
                     {item.name.slice(0, nameQ)}
                     <span style={{ color: 'var(--accent)', fontWeight: 700 }}>
