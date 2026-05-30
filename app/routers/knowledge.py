@@ -1,4 +1,5 @@
 """Knowledge base and document management router."""
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -128,7 +129,7 @@ async def ingest_text_document(
 async def upload_document(
     kb_id: int,
     file: UploadFile = File(...),
-    provider_id: int | None = Form(default=None),
+    provider_id: Optional[int] = Form(default=None),
     db: AsyncSession = Depends(get_db),
     _=Depends(require_permission(Permission.KNOWLEDGE_WRITE)),
 ):

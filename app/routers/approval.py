@@ -1,4 +1,5 @@
 """Approval requests REST API + SSE push."""
+from typing import Optional
 import asyncio
 import json
 import logging
@@ -182,7 +183,7 @@ async def decide_approval(
     return ApprovalRequestResponse.model_validate(updated)
 
 
-async def _notify_decision(record: ApprovalRequest, decision: str, comment: str | None):
+async def _notify_decision(record: ApprovalRequest, decision: str, comment: Optional[str]):
     """Fire-and-forget email when an approval decision is made."""
     try:
         from app.services.email_service import notify_approval_decided
