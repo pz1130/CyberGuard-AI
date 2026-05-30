@@ -121,10 +121,11 @@ def _validate_s3_endpoint(endpoint: str) -> str:
     import ipaddress
     try:
         ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        pass  # Not an IP address, hostname-based checks above suffice
+    else:
         if ip.is_private or ip.is_loopback or ip.is_reserved:
             raise ValueError(f"Disallowed private IP: {hostname}")
-    except ValueError:
-        pass  # Not an IP address, allow it
     
     return endpoint
 
@@ -197,7 +198,7 @@ async def _upload_to_s3_multipart(data: bytes, bucket: str, key: str) -> str:
             aws_secret_access_key=s3_secret_key,
             region_name=s3_region,
         )
-        md5_hash = hashlib.md5(chunk).hexdigest()
+        md5_hash = __import__('base64').b64encode(hashlib.md5(chunk).digest()).decode()
         return client.upload_part(
             Bucket=bucket,
             Key=key,
