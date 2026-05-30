@@ -28,6 +28,7 @@ interface GCSession {
   max_rounds: number
   messages: GCMessage[]
   created_at: string
+  running?: boolean
 }
 
 function MultiAgentChat() {
@@ -40,15 +41,37 @@ function MultiAgentChat() {
   const [runningRound, setRunningRound] = useState(false)
   const [loadError, setLoadError] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
+  // Token for the active completion poller, so we can stop it on cancel/unmount.
+  const pollRef = useRef<{ cancelled: boolean } | null>(null)
 
   useEffect(() => {
     api.getAgents().then((data: any) => {
       const list = Array.isArray(data) ? data : data?.agents || []
-      setAgents(list.filter((a: any) => (a.kind || 'external') !== 'internal'))
+      setAgents(list)
     }).catch(() => {})
   }, [])
 
+  // Stop any in-flight poller when the component unmounts.
+  useEffect(() => () => { if (pollRef.current) pollRef.current.cancelled = true }, [])
+
   useEffect(() => { bottomRef.current?.scrollIntoView() }, [session?.messages])
+
+  // Completion now runs in a background task on the server; poll the session
+  // until the server clears `running` (or it reaches a terminal status).
+  const pollUntilDone = async (id: string) => {
+    if (pollRef.current) pollRef.current.cancelled = true  // supersede any prior poll
+    const token = { cancelled: false }
+    pollRef.current = token
+    for (let i = 0; i < 600 && !token.cancelled; i++) {
+      let result: any
+      try { result = await api.getGroupChatSession(id) }
+      catch (e: any) { setLoadError(e.message); return }
+      if (token.cancelled) return
+      setSession(result)
+      if (!result.running) return
+      await new Promise(r => setTimeout(r, 2000))
+    }
+  }
 
   const toggleAgent = (id: number) => {
     setSelectedAgentIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
@@ -64,9 +87,10 @@ function MultiAgentChat() {
         max_rounds: maxRounds,
       })
       setSession(result)
-      // Auto-run first round
-      await api.runGroupChatRound(result.session_id)
-      refreshSession(result.session_id)
+      // Kick off the discussion (returns immediately) then poll for progress.
+      const started: any = await api.runGroupChatComplete(result.session_id)
+      setSession(started)
+      await pollUntilDone(result.session_id)
     } catch (e: any) { setLoadError(e.message) }
     finally { setRunning(false) }
   }
@@ -85,14 +109,16 @@ function MultiAgentChat() {
     if (!session) return
     setRunningRound(true)
     try {
-      const result: any = await api.runGroupChatComplete(session.session_id)
-      setSession(result)
+      const started: any = await api.runGroupChatComplete(session.session_id)
+      setSession(started)
+      await pollUntilDone(session.session_id)
     } catch (e: any) { setLoadError(e.message) }
     finally { setRunningRound(false) }
   }
 
   const cancelSession = async () => {
     if (!session) return
+    if (pollRef.current) pollRef.current.cancelled = true  // stop polling
     await api.cancelGroupChatSession(session.session_id)
     setSession(null)
   }

@@ -155,6 +155,9 @@ class AgentConfigRead(BaseModel):
         inst.openclaw_last_seen = last_seen
         if last_seen:
             from datetime import timezone
+            # DB stores naive UTC; make it aware so the subtraction works
+            if last_seen.tzinfo is None:
+                last_seen = last_seen.replace(tzinfo=timezone.utc)
             delta = (datetime.now(timezone.utc) - last_seen).total_seconds()
             inst.is_online = delta < 300
         return inst

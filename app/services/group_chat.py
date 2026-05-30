@@ -43,7 +43,58 @@ class GroupChatService:
     def __init__(self):
         self.executor = AgentExecutor()
         self._active_sessions: Dict[str, GroupChatSession] = {}
-    
+        # Background completion runs, keyed by session_id. A session is
+        # considered "running" iff it has an entry here. Running the whole
+        # discussion inside the HTTP request blocks the single uvicorn worker;
+        # start_completion() dispatches it here instead and returns immediately.
+        self._completion_tasks: Dict[str, asyncio.Task] = {}
+
+    def is_running(self, session_id: str) -> bool:
+        """Whether a background completion run is in flight for this session."""
+        return session_id in self._completion_tasks
+
+    async def start_completion(self, session_id: str) -> Dict[str, Any]:
+        """Dispatch run_to_completion as a background task and return immediately.
+
+        Idempotent: if a run is already in flight for this session, this is a
+        no-op (it also structurally prevents the concurrent double-run that
+        previously desynced run_to_completion's loop and pinned the event loop).
+        """
+        session = self._active_sessions.get(session_id)
+        if not session:
+            raise ValueError(f"Session {session_id} not found")
+
+        if session_id not in self._completion_tasks:
+            self._completion_tasks[session_id] = asyncio.create_task(
+                self._run_completion_safe(session_id)
+            )
+
+        return await self.get_session_summary(session_id)
+
+    async def _run_completion_safe(self, session_id: str) -> None:
+        """Run run_to_completion, surfacing failures as a system message.
+
+        CancelledError is intentionally not caught (it is a BaseException, not
+        Exception) so cancel_session() can stop an in-flight run. The finally
+        block always clears the task handle so is_running() flips back to false.
+        """
+        try:
+            await self.run_to_completion(session_id)
+        except Exception as e:  # noqa: BLE001 - log + surface, never crash the loop
+            import logging
+            logging.getLogger(__name__).warning(
+                f"Group chat completion failed for {session_id}: {e}"
+            )
+            session = self._active_sessions.get(session_id)
+            if session is not None:
+                session.messages.append(GroupChatMessage(
+                    role="system",
+                    content=f"⚠️ Group chat run failed: {e}",
+                ))
+                await self._persist_session(session)
+        finally:
+            self._completion_tasks.pop(session_id, None)
+
     async def create_session(
         self,
         user_id: int,
@@ -162,7 +213,7 @@ class GroupChatService:
                 
                 agent_message = GroupChatMessage(
                     role="agent",
-                    content=result.get("output", "No response"),
+                    content=result.get("output") or "No response",
                     agent_id=agent_id,
                     agent_name=result.get("agent_name"),
                 )
@@ -203,20 +254,49 @@ class GroupChatService:
         session = self._active_sessions.get(session_id)
         if not session:
             raise ValueError(f"Session {session_id} not found")
-        
-        while session.current_round < session.max_rounds and session.status == "active":
+
+        # NOTE: re-fetch the session at the top of every iteration. A concurrent
+        # request (e.g. a poll that calls load_session) could otherwise replace
+        # self._active_sessions[session_id] with a new object, leaving this loop
+        # reading a stale `current_round` that never advances — an infinite,
+        # non-yielding busy-loop that pins the event loop at 100% CPU and starves
+        # every other request (including login). See group-chat hang incident.
+        while True:
+            session = self._active_sessions.get(session_id)
+            if not session or session.status != "active":
+                break
+            if session.current_round >= session.max_rounds:
+                break
+
             round_result = await self.run_round(session_id)
-            
-            # Check for early termination (all agents agree)
-            if await self._check_consensus(session):
+            # run_round is the authority on whether rounds remain; if it reports
+            # the cap is reached, stop rather than trusting our local counter.
+            if round_result.get("status") == "max_rounds_reached":
+                break
+
+            # Check for early termination (all agents agree). Re-fetch first in
+            # case the object was swapped during the awaits above.
+            session = self._active_sessions.get(session_id)
+            if session and await self._check_consensus(session):
                 session.status = "completed"
                 break
-        
+
+            # Always yield to the event loop between rounds so no single run can
+            # monopolise the (single-worker) loop, even if a future round becomes
+            # CPU-bound rather than I/O-bound.
+            await asyncio.sleep(0)
+
+        session = self._active_sessions.get(session_id)
+        if session is None:
+            raise ValueError(f"Session {session_id} not found")
         if session.status == "active":
             session.status = "completed"
-        
+
+        # Generate a master-agent summary of the discussion
+        await self._generate_summary(session)
+
         await self._persist_session(session)
-        
+
         return await self.get_session_summary(session_id)
     
     async def _check_consensus(self, session: GroupChatSession) -> bool:
@@ -239,12 +319,12 @@ class GroupChatService:
         
         # Simple consensus: responses within 10% similarity (crude heuristic)
         # In production, use embedding similarity
-        first_response = agent_responses[0].lower()
+        first_response = (agent_responses[0] or "").lower()
         consensus_threshold = 0.7
-        
+
         similar_count = sum(
             1 for r in agent_responses[1:]
-            if self._text_similarity(first_response, r.lower()) > consensus_threshold
+            if self._text_similarity(first_response, (r or "").lower()) > consensus_threshold
         )
         
         return similar_count >= len(agent_responses) - 1
@@ -261,7 +341,65 @@ class GroupChatService:
         union = words1 | words2
         
         return len(intersection) / len(union)
-    
+
+    async def _generate_summary(self, session: GroupChatSession) -> None:
+        """Use the LLM to generate a master-agent summary of the discussion."""
+        try:
+            from app.services.llm_router import get_llm_router
+            from app.core.database import AsyncSessionLocal
+            from app.models.agent import AgentConfig
+            from sqlalchemy import select
+
+            # Build a transcript of all agent responses
+            transcript_lines: List[str] = []
+            for m in session.messages:
+                if m.role == "agent" and m.content:
+                    name = m.agent_name or f"Agent-{m.agent_id}"
+                    transcript_lines.append(f"[{name}]: {m.content}")
+
+            if not transcript_lines:
+                return
+
+            # Get provider_id from the first participating agent
+            provider_id = None
+            if session.agent_ids:
+                async with AsyncSessionLocal() as db:
+                    result = await db.execute(
+                        select(AgentConfig).where(AgentConfig.id == session.agent_ids[0])
+                    )
+                    agent_obj = result.scalar_one_or_none()
+                    if agent_obj:
+                        provider_id = agent_obj.llm_provider_id
+
+            transcript = "\n\n".join(transcript_lines)
+            prompt = (
+                "You are the Master Agent summarising a multi-agent group discussion. "
+                "Below are the responses from each participating agent.\n\n"
+                "--- TRANSCRIPT ---\n"
+                f"{transcript}\n"
+                "--- END ---\n\n"
+                "Please provide a concise synthesis:\n"
+                "1. Key points of agreement\n"
+                "2. Key differences or open questions\n"
+                "3. Recommended next steps\n\n"
+                "Keep it actionable and under 300 words."
+            )
+
+            router = get_llm_router()
+            summary_text = await router.chat(
+                messages=[{"role": "user", "content": prompt}],
+                provider_id=provider_id,
+            )
+
+            if summary_text:
+                session.messages.append(GroupChatMessage(
+                    role="system",
+                    content=f"📋 **Discussion Summary**\n\n{summary_text}",
+                ))
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to generate group chat summary: {e}")
+
     async def get_session_summary(self, session_id: str) -> Dict[str, Any]:
         """
         Get a summary of the session.
@@ -335,11 +473,20 @@ class GroupChatService:
         Returns:
             GroupChatSession if found, None otherwise
         """
+        # Prefer the live in-memory session — within a single worker it holds the
+        # freshest in-flight state (persist always writes memory -> Redis, never
+        # the reverse during an active run). Rebuilding from Redis here would
+        # reset an actively-running session AND swap the object out from under
+        # run_to_completion, desyncing its loop counter. See group-chat hang.
+        existing = self._active_sessions.get(session_id)
+        if existing is not None:
+            return existing
+
         data = await cache.get_json(f"groupchat:session:{session_id}")
-        
+
         if not data:
             return None
-        
+
         session = GroupChatSession(
             session_id=data["session_id"],
             user_id=data["user_id"],
@@ -377,9 +524,17 @@ class GroupChatService:
         session = self._active_sessions.get(session_id)
         if not session:
             return False
-        
+
         session.status = "cancelled"
         await self._persist_session(session)
+
+        # Stop any in-flight background completion run promptly. (run_to_completion
+        # also checks status == "active" each iteration, but cancelling the task
+        # avoids waiting for the current round to finish.)
+        task = self._completion_tasks.get(session_id)
+        if task is not None:
+            task.cancel()
+
         return True
 
 
