@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useContext } from 'react'
 import {
   Plus, Trash2, Sparkles, FileText, X, Save, Check,
   ChevronRight, ChevronDown, ArrowLeft, Wand2, BookOpen, ClipboardList,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { api } from '../api/client'
+import { SearchContext } from '../context/SearchContext'
 
 type ReqStatus = 'not_assessed' | 'compliant' | 'partially_compliant' | 'non_compliant' | 'not_applicable'
 type AsmtStatus = 'planning' | 'in_progress' | 'completed' | 'archived'
@@ -112,6 +113,22 @@ type View =
 export default function Governance() {
   const [view, setView] = useState<View>({ kind: 'list' })
 
+  const { searchTarget, setSearchTarget } = useContext(SearchContext)
+  useEffect(() => {
+    if (!searchTarget || searchTarget.tab !== 'governance') return
+    const targetView = searchTarget.subview === 'frameworks' ? 'frameworks' : 'list'
+    setView({ kind: targetView as View['kind'] })
+    const timer = setTimeout(() => {
+      const el = document.querySelector(`[data-item-id="${searchTarget.id}"]`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        el.classList.add('search-highlight')
+      }
+      setTimeout(() => setSearchTarget(null), 2000)
+    }, 100)
+    return () => clearTimeout(timer)
+  }, [searchTarget, setSearchTarget])
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -196,7 +213,7 @@ function FrameworksList() {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 12 }}>
           {items.map(f => (
-            <div key={f.id} style={card()}>
+            <div key={f.id} data-item-id={f.id} style={card()}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ fontSize: 15, color: 'var(--text-primary)', fontWeight: 600 }}>{f.name}</div>
                 <button onClick={() => remove(f)} style={iconButton('var(--red)')}><Trash2 size={12} /></button>
@@ -299,7 +316,7 @@ function AssessmentsList({ onOpen }: { onOpen: (id: number) => void }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {items.map(a => (
-            <div key={a.id} onClick={() => onOpen(a.id)} style={{
+            <div key={a.id} data-item-id={a.id} onClick={() => onOpen(a.id)} style={{
               ...card(), cursor: 'pointer', flexDirection: 'row', alignItems: 'center',
             }}>
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>

@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useContext } from 'react'
 import { api } from '../api/client'
 import { Plus, Webhook as WebhookIcon, Loader2, Trash, Pencil, Copy, Key, ArrowDown, ArrowUp } from 'lucide-react'
+import { SearchContext } from '../context/SearchContext'
 
 interface Webhook {
   id: number
@@ -73,6 +74,18 @@ export default function Webhooks() {
   }
 
   useEffect(() => { load() }, [])
+
+  const { searchTarget, setSearchTarget } = useContext(SearchContext)
+  useEffect(() => {
+    if (!searchTarget || searchTarget.tab !== 'webhooks') return
+    const el = document.querySelector(`[data-item-id="${searchTarget.id}"]`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el.classList.add('search-highlight')
+    }
+    const t = setTimeout(() => setSearchTarget(null), 2000)
+    return () => clearTimeout(t)
+  }, [searchTarget, setSearchTarget])
 
   const openCreate = () => {
     setEditing(null)
@@ -223,7 +236,7 @@ export default function Webhooks() {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 16 }}>
           {items.map(w => (
-            <div key={w.id} style={{
+            <div key={w.id} data-item-id={w.id} style={{
               padding: 16, background: 'var(--bg-surface)',
               border: '1px solid var(--border-bright)',
               borderLeft: `3px solid ${dirColor(w.direction)}`,

@@ -5,6 +5,7 @@ export interface SearchTarget {
   tab: Tab
   id: number | string
   name: string
+  subview?: string
 }
 
 interface SearchContextValue {

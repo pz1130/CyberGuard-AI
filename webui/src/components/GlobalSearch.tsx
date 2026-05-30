@@ -12,6 +12,7 @@ interface SearchItem {
   tab: Tab
   category: string
   icon: string
+  subview?: string
 }
 
 interface Props {
@@ -38,13 +39,15 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
   const [selectedIndex, setSelectedIndex] = useState(0)
   const { setSearchTarget } = useSearch()
   const inputRef = useRef<HTMLInputElement>(null)
-  const loadedRef = useRef(false)
+  const loadedAtRef = useRef(0)
+  const CACHE_TTL = 60_000
 
-  // Load all searchable data once on first open
+  // Load all searchable data; re-fetch when cache is stale (> 60s old)
   useEffect(() => {
-    if (!open || loadedRef.current) return
-    loadedRef.current = true
-    setLoadingData(true)
+    if (!open) return
+    const stale = Date.now() - loadedAtRef.current > CACHE_TTL
+    if (!stale) return
+    if (allItems.length === 0) setLoadingData(true)
     Promise.allSettled([
       api.getAgents(),
       api.getProviders(),
@@ -52,7 +55,11 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
       api.getTools(),
       api.getKnowledgeBases(),
       api.getMCPServers(),
-    ]).then(([agents, providers, skills, tools, knowledge, mcp]) => {
+      api.getScheduledTasks(),
+      api.getWebhooks(),
+      api.getFrameworks(),
+      api.getAssessments(),
+    ]).then(([agents, providers, skills, tools, knowledge, mcp, schedule, webhooks, frameworks, assessments]) => {
       const items: SearchItem[] = []
 
       if (agents.status === 'fulfilled') {
@@ -115,8 +122,51 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
         }))
       }
 
+      if (schedule.status === 'fulfilled') {
+        const d = schedule.value as any
+        const list = Array.isArray(d) ? d : (d?.tasks || d?.schedules || [])
+        list.forEach((t: any) => items.push({
+          id: t.task_id || t.id, name: t.name,
+          subtitle: (t.task_type || 'TASK').toUpperCase(),
+          tab: 'schedule', category: 'SCHEDULE', icon: '○',
+        }))
+      }
+
+      if (webhooks.status === 'fulfilled') {
+        const d = webhooks.value as any
+        const list = Array.isArray(d) ? d : (d?.webhooks || [])
+        list.forEach((w: any) => items.push({
+          id: w.id, name: w.name,
+          subtitle: (w.direction || 'WEBHOOK').toUpperCase(),
+          tab: 'webhooks', category: 'WEBHOOKS', icon: '⟳',
+        }))
+      }
+
+      if (frameworks.status === 'fulfilled') {
+        const d = frameworks.value as any
+        const list = Array.isArray(d) ? d : []
+        list.forEach((f: any) => items.push({
+          id: f.id, name: f.name,
+          subtitle: f.version ? `v${f.version}` : 'FRAMEWORK',
+          tab: 'governance', category: 'FRAMEWORKS', icon: '▦',
+          subview: 'frameworks',
+        }))
+      }
+
+      if (assessments.status === 'fulfilled') {
+        const d = assessments.value as any
+        const list = Array.isArray(d) ? d : []
+        list.forEach((a: any) => items.push({
+          id: a.id, name: a.name,
+          subtitle: a.framework_name || 'ASSESSMENT',
+          tab: 'governance', category: 'ASSESSMENTS', icon: '▧',
+          subview: 'list',
+        }))
+      }
+
       setAllItems(items)
       setLoadingData(false)
+      loadedAtRef.current = Date.now()
     })
   }, [open])
 
@@ -150,7 +200,7 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
   const select = useCallback((item: SearchItem) => {
     onClose()
     setTab(item.tab)
-    setSearchTarget({ tab: item.tab, id: item.id, name: item.name })
+    setSearchTarget({ tab: item.tab, id: item.id, name: item.name, subview: item.subview })
   }, [onClose, setTab, setSearchTarget])
 
   // Keyboard: ESC / ArrowUp / ArrowDown / Enter
@@ -212,7 +262,7 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
             ref={inputRef}
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="SEARCH AGENTS / SKILLS / TOOLS / PROVIDERS..."
+            placeholder="SEARCH AGENTS / SKILLS / TOOLS / WEBHOOKS / SCHEDULE..."
             style={{
               flex: 1, background: 'none', border: 'none', outline: 'none',
               color: 'var(--text-primary)', fontSize: 14,
@@ -259,7 +309,7 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
 
           {!loadingData && !q && recentTabs.length === 0 && (
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-dim)', fontSize: 12, letterSpacing: '0.1em' }}>
-              TYPE TO SEARCH ACROSS AGENTS, PROVIDERS, SKILLS, TOOLS, KNOWLEDGE, MCP
+              TYPE TO SEARCH ACROSS AGENTS, PROVIDERS, SKILLS, TOOLS, KNOWLEDGE, MCP, SCHEDULE, WEBHOOKS, GOVERNANCE
             </div>
           )}
 

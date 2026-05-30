@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useContext } from 'react'
 import { api } from '../api/client'
 import { Trash2, Plus, Edit2, Clock, X, Loader2 } from 'lucide-react'
+import { SearchContext } from '../context/SearchContext'
 
 interface Task {
   id?: number
@@ -36,6 +37,18 @@ export default function Schedule() {
     } catch { setItems([]) } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [])
+
+  const { searchTarget, setSearchTarget } = useContext(SearchContext)
+  useEffect(() => {
+    if (!searchTarget || searchTarget.tab !== 'schedule') return
+    const el = document.querySelector(`[data-item-id="${searchTarget.id}"]`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el.classList.add('search-highlight')
+    }
+    const t = setTimeout(() => setSearchTarget(null), 2000)
+    return () => clearTimeout(t)
+  }, [searchTarget, setSearchTarget])
 
   const submit = async () => {
     if (!form.name || !form.cron_expression) return
@@ -189,7 +202,7 @@ export default function Schedule() {
       {!loading && items.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {items.map(t => (
-            <div key={t.task_id || t.id} style={{
+            <div key={t.task_id || t.id} data-item-id={t.task_id || t.id} style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
             }}>
