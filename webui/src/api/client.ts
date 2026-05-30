@@ -28,6 +28,21 @@ export const api = {
   logout: () => request('/auth/logout', { method: 'POST' }),
   refresh: (body: { refresh_token: string }) =>
     request('/auth/refresh', { method: 'POST', body: JSON.stringify(body) }),
+  getAuthMe: () => request('/auth/me'),
+
+  // Liveness probe — hits the root /health/ready (NOT under /api/v1) and never
+  // triggers the 401 redirect; returns a coarse system status for the header.
+  healthStatus: async (): Promise<'online' | 'degraded' | 'offline'> => {
+    const token = localStorage.getItem('token')
+    try {
+      const res = await fetch('/health/ready', token ? { headers: { Authorization: `Bearer ${token}` } } : undefined)
+      if (res.ok) return 'online'
+      if (res.status === 503) return 'degraded'
+      return 'offline'
+    } catch {
+      return 'offline'
+    }
+  },
 
   // Users
   getUsers: () => request('/users'),
