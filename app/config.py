@@ -39,6 +39,13 @@ class Settings(BaseSettings):
     SUB_AGENT_TIMEOUT: int = 30
     SUB_AGENT_MAX_RETRIES: int = 2
 
+    # Tool Runner
+    RUNNER_TOKEN: str = "changeme-runner-token"
+
+    # Public base URL used to inject manifest_url into external agent payloads.
+    # Leave empty to disable manifest_url injection (safe default).
+    BASE_URL: str = ""
+
     # Environment
     ENVIRONMENT: str = "development"
 
