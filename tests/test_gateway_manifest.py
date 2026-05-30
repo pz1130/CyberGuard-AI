@@ -344,3 +344,94 @@ async def test_subagent_wrapper_omits_manifest_url_when_base_url_empty():
             await wrapper.execute(task="scan 10.0.0.1", context={"user_id": 1})
 
     assert "manifest_url" not in captured["payload"]
+
+
+# ---------------------------------------------------------------------------
+# Task 6 — get_mcp_tools_for_agent refactor
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_get_mcp_tools_reads_associated_column_first():
+    """Uses agent_associated_mcp_tools list, ignoring metadata fallback."""
+    from app.services.agent_executor import AgentExecutor
+
+    fake_mcp = SimpleNamespace(
+        id=5, tool_name="search_cve", description="CVE lookup",
+        input_schema_json='{"type": "object"}',
+    )
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = [fake_mcp]
+    mock_session.execute = AsyncMock(return_value=mock_result)
+
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("app.core.database.get_db_context", return_value=ctx):
+        executor = AgentExecutor()
+        tools = await executor.get_mcp_tools_for_agent(
+            agent_associated_mcp_tools=[5],
+            agent_metadata_json={"mcp_tool_ids": [99]},  # should be ignored
+        )
+
+    assert len(tools) == 1
+    assert tools[0]["name"] == "search_cve"
+    assert tools[0]["input_schema"] == {"type": "object"}
+
+
+@pytest.mark.asyncio
+async def test_get_mcp_tools_falls_back_to_metadata_when_column_is_none():
+    """Falls back to metadata_json.mcp_tool_ids when associated column is None."""
+    from app.services.agent_executor import AgentExecutor
+
+    fake_mcp = SimpleNamespace(
+        id=99, tool_name="old_tool", description="Legacy",
+        input_schema_json=None,
+    )
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = [fake_mcp]
+    mock_session.execute = AsyncMock(return_value=mock_result)
+
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("app.core.database.get_db_context", return_value=ctx):
+        executor = AgentExecutor()
+        tools = await executor.get_mcp_tools_for_agent(
+            agent_associated_mcp_tools=None,       # column not set
+            agent_metadata_json={"mcp_tool_ids": [99]},  # use this
+        )
+
+    assert len(tools) == 1
+    assert tools[0]["name"] == "old_tool"
+    assert tools[0]["input_schema"] == {}  # None schema becomes empty dict
+
+
+@pytest.mark.asyncio
+async def test_get_mcp_tools_returns_all_when_both_none():
+    """When both column and metadata are None, returns all active MCP tools."""
+    from app.services.agent_executor import AgentExecutor
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = []
+    mock_session.execute = AsyncMock(return_value=mock_result)
+
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("app.core.database.get_db_context", return_value=ctx):
+        executor = AgentExecutor()
+        tools = await executor.get_mcp_tools_for_agent(
+            agent_associated_mcp_tools=None,
+            agent_metadata_json=None,
+        )
+
+    # Verify query executed and returned empty list
+    assert tools == []

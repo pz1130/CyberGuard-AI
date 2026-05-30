@@ -255,22 +255,31 @@ class SubAgentWrapper:
 class AgentExecutor:
     """Service for managing sub-agent executions."""
 
-    async def get_mcp_tools_for_agent(self, agent_metadata_json: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-        """
-        Fetch active MCP tools and convert to OpenClaw tool format.
-        If agent metadata specifies mcp_tool_ids, only those tools are returned.
-        Otherwise all active MCP tools are returned.
+    async def get_mcp_tools_for_agent(
+        self,
+        agent_associated_mcp_tools: Optional[List[int]] = None,
+        agent_metadata_json: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Fetch active MCP tools for an agent and convert to OpenClaw tool format.
+
+        Priority:
+          1. agent_associated_mcp_tools (new column) — filter to these IDs
+          2. agent_metadata_json.mcp_tool_ids (legacy key) — filter to these IDs
+          3. Neither set — return all active MCP tools
         """
         from app.core.database import get_db_context
         from app.models.mcp import MCPTool
         from sqlalchemy import select
         import json
 
+        # Column-first, metadata fallback
+        tool_ids = agent_associated_mcp_tools
+        if tool_ids is None and agent_metadata_json:
+            tool_ids = agent_metadata_json.get("mcp_tool_ids")
+
         async with get_db_context() as session:
             query = select(MCPTool).where(MCPTool.is_active == True)
-            # Filter by selected tool IDs if specified in agent config
-            if agent_metadata_json and agent_metadata_json.get("mcp_tool_ids"):
-                tool_ids = agent_metadata_json["mcp_tool_ids"]
+            if tool_ids is not None:
                 query = query.where(MCPTool.id.in_(tool_ids))
             result = await session.execute(query)
             tools = result.scalars().all()
