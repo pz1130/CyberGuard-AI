@@ -52,7 +52,7 @@ async def _auth_agent(x_api_key: str) -> AgentConfig:
         result = await session.execute(
             select(AgentConfig).where(
                 AgentConfig.api_key_hash == key_hash,
-                AgentConfig.is_active == True,
+                AgentConfig.is_active.is_(True),
             )
         )
         agent = result.scalar_one_or_none()
@@ -278,7 +278,7 @@ async def manifest(x_api_key: str = Header(..., alias="X-Api-Key")):
         # When the id list is empty, the IN-clause returns no rows.
         rows = (await session.execute(
             select(Skill).where(
-                Skill.is_active == True,
+                Skill.is_active.is_(True),
                 Skill.id.in_(skill_ids) if skill_ids else Skill.id.is_(None),
             )
         )).scalars().all()
@@ -289,7 +289,7 @@ async def manifest(x_api_key: str = Header(..., alias="X-Api-Key")):
 
         trows = (await session.execute(
             select(Tool).where(
-                Tool.is_active == True,
+                Tool.is_active.is_(True),
                 Tool.id.in_(tool_ids) if tool_ids else Tool.id.is_(None),
             )
         )).scalars().all()
@@ -306,7 +306,7 @@ async def manifest(x_api_key: str = Header(..., alias="X-Api-Key")):
 
         mrows = (await session.execute(
             select(MCPTool).where(
-                MCPTool.is_active == True,
+                MCPTool.is_active.is_(True),
                 MCPTool.id.in_(mcp_ids) if mcp_ids else MCPTool.id.is_(None),
             )
         )).scalars().all()

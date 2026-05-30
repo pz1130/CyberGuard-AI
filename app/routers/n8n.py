@@ -126,9 +126,9 @@ async def create_connection(
     if body.is_default:
         # Unset default on other connections
         await db.execute(
-            select(N8NConnection).where(N8NConnection.is_default == True)
+            select(N8NConnection).where(N8NConnection.is_default.is_(True))
         )
-        for conn in (await db.execute(select(N8NConnection).where(N8NConnection.is_default == True))).scalars():
+        for conn in (await db.execute(select(N8NConnection).where(N8NConnection.is_default.is_(True)))).scalars():
             conn.is_default = False
 
     connection = N8NConnection(
@@ -173,7 +173,7 @@ async def update_connection(
 
     if body.is_default and not conn.is_default:
         # Unset default on other connections
-        for other in (await db.execute(select(N8NConnection).where(N8NConnection.is_default == True))).scalars():
+        for other in (await db.execute(select(N8NConnection).where(N8NConnection.is_default.is_(True)))).scalars():
             other.is_default = False
 
     update_data = body.model_dump(exclude_unset=True)
@@ -228,7 +228,7 @@ async def test_connection(
 async def _get_default_connection(db: AsyncSession) -> Optional[N8NConnection]:
     """Get the default N8N connection."""
     result = await db.execute(
-        select(N8NConnection).where(N8NConnection.is_default == True, N8NConnection.is_active == True)
+        select(N8NConnection).where(N8NConnection.is_default.is_(True), N8NConnection.is_active.is_(True))
     )
     return result.scalar_one_or_none()
 

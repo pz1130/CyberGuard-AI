@@ -20,7 +20,7 @@ from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.core.database import AsyncSessionLocal, get_sync_session
 from app.core.security import decrypt_data
@@ -118,23 +118,33 @@ def deliver_sync(
                 resp = client.post(wh.outgoing_url, content=body_bytes, headers=headers)
             latency_ms = round((time.monotonic() - t0) * 1000, 1)
             ok = 200 <= resp.status_code < 300
-            # Reload to write counters atomically with status code.
-            session.refresh(wh)
             if ok:
-                wh.success_count += 1
-                wh.last_error = None
+                session.execute(
+                    update(Webhook).where(Webhook.id == webhook_id).values(
+                        success_count=Webhook.success_count + 1,
+                        last_error=None,
+                    )
+                )
             else:
-                wh.failure_count += 1
-                wh.last_error = f"HTTP {resp.status_code}: {resp.text[:300]}"
+                err_text = f"HTTP {resp.status_code}: {resp.text[:300]}"
+                session.execute(
+                    update(Webhook).where(Webhook.id == webhook_id).values(
+                        failure_count=Webhook.failure_count + 1,
+                        last_error=err_text,
+                    )
+                )
             session.commit()
             return {"success": ok, "status_code": resp.status_code,
                     "latency_ms": latency_ms,
-                    "error": None if ok else wh.last_error}
+                    "error": None if ok else err_text}
         except Exception as e:
             latency_ms = round((time.monotonic() - t0) * 1000, 1)
-            session.refresh(wh)
-            wh.failure_count += 1
-            wh.last_error = str(e)[:500]
+            session.execute(
+                update(Webhook).where(Webhook.id == webhook_id).values(
+                    failure_count=Webhook.failure_count + 1,
+                    last_error=str(e)[:500],
+                )
+            )
             session.commit()
             return {"success": False, "status_code": None,
                     "latency_ms": latency_ms, "error": str(e)}
@@ -159,7 +169,7 @@ async def emit(event: str, payload: Dict[str, Any]) -> int:
             result = await session.execute(
                 select(Webhook).where(
                     Webhook.direction == "outgoing",
-                    Webhook.is_active == True,  # noqa: E712
+                    Webhook.is_active.is_(True),
                 )
             )
             webhooks = result.scalars().all()

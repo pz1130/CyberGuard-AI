@@ -110,22 +110,43 @@ def _build_metadata(fields: dict, existing: Optional[dict] = None) -> dict:
 # Kind-aware validation
 # ---------------------------------------------------------------------------
 
-def _validate_agent_payload(body) -> None:
-    """Enforce kind-specific constraints before persisting."""
-    kind = (body.kind or "external").lower()
+def _validate_agent_payload(body, existing: Optional[AgentConfig] = None) -> None:
+    """Enforce kind-specific constraints before persisting.
+
+    For updates (existing provided), merge unset Optional fields from the
+    existing row so partial payloads don't fail validation.
+    """
+    # Merge: use body value if set, else fall back to existing row
+    kind = getattr(body, "kind", None)
+    if kind is None and existing:
+        kind = existing.kind
+    kind = (kind or "external").lower()
+
+    backend_type = getattr(body, "backend_type", None)
+    if backend_type is None and existing:
+        backend_type = existing.backend_type
+
+    endpoint_url = getattr(body, "endpoint_url", None)
+    if endpoint_url is None and existing:
+        endpoint_url = existing.endpoint_url
+
+    llm_provider_id = getattr(body, "llm_provider_id", None)
+    if llm_provider_id is None and existing:
+        llm_provider_id = existing.llm_provider_id
+
     if kind not in ("external", "internal"):
-        raise HTTPException(status_code=400, detail=f"invalid kind: {body.kind!r}")
+        raise HTTPException(status_code=400, detail=f"invalid kind: {kind!r}")
     if kind == "external":
-        if not body.backend_type:
+        if not backend_type:
             raise HTTPException(status_code=400, detail="external agent requires backend_type")
-        if body.backend_type in ("hermes", "custom") and not body.endpoint_url:
-            raise HTTPException(status_code=400, detail=f"{body.backend_type} requires endpoint_url")
+        if backend_type in ("hermes", "custom") and not endpoint_url:
+            raise HTTPException(status_code=400, detail=f"{backend_type} requires endpoint_url")
     else:  # internal
-        if not body.llm_provider_id:
+        if not llm_provider_id:
             raise HTTPException(status_code=400, detail="internal agent requires llm_provider_id")
-        if body.endpoint_url:
+        if endpoint_url:
             raise HTTPException(status_code=400, detail="internal agent must not set endpoint_url")
-        if body.backend_type and body.backend_type != "openclaw":
+        if backend_type and backend_type != "openclaw":
             raise HTTPException(status_code=400, detail="internal agent must not set backend_type")
 
 
@@ -222,7 +243,7 @@ async def update_agent(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    _validate_agent_payload(body)
+    _validate_agent_payload(body, existing=agent)
 
     body_dict = body.model_dump(exclude_unset=True)
 

@@ -91,8 +91,7 @@ class InternalAgentRunner:
             messages_json="[]",
         )
         session.add(row)
-        await session.commit()
-        await session.refresh(row)
+        await session.flush()
         return row
 
     async def _load_memory(self, parent_conversation_id: Optional[int]) -> List[Dict[str, str]]:
@@ -135,7 +134,7 @@ class InternalAgentRunner:
         from app.models.skill import Skill
         async with AsyncSessionLocal() as s:
             result = await s.execute(select(Skill).where(Skill.id.in_(skill_ids),
-                                                          Skill.is_active == True))
+                                                          Skill.is_active.is_(True)))
             rows = result.scalars().all()
         return {r.id: (r.md_content or "") for r in rows}
 
@@ -160,7 +159,7 @@ class InternalAgentRunner:
         async with AsyncSessionLocal() as s:
             result = await s.execute(
                 select(MCPTool).where(MCPTool.id.in_(self.mcp_tool_ids),
-                                       MCPTool.is_active == True)
+                                       MCPTool.is_active.is_(True))
             )
             tools = result.scalars().all()
         out = []
@@ -189,7 +188,7 @@ class InternalAgentRunner:
         async with AsyncSessionLocal() as s:
             result = await s.execute(
                 select(Tool).where(Tool.id.in_(self.pool_tool_ids),
-                                   Tool.is_active == True,
+                                   Tool.is_active.is_(True),
                                    Tool.command_template.isnot(None))
             )
             return list(result.scalars().all())
@@ -294,7 +293,7 @@ class InternalAgentRunner:
             result = await s.execute(
                 select(MCPTool, MCPServer)
                 .join(MCPServer, MCPServer.id == MCPTool.server_id)
-                .where(MCPTool.id.in_(self.mcp_tool_ids), MCPTool.is_active == True)
+                .where(MCPTool.id.in_(self.mcp_tool_ids), MCPTool.is_active.is_(True))
             )
             for tool, server in result.all():
                 self._mcp_by_name[tool.tool_name] = (tool, server)

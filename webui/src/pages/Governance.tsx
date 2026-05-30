@@ -494,7 +494,7 @@ function AssessmentDetail({ assessmentId, onBack }: { assessmentId: number; onBa
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
             <button onClick={async () => {
               try { await navigator.clipboard.writeText(reportMd); alert('Copied') }
-              catch { /* ignore */ }
+              catch (e) { console.error('Failed to copy:', e) }
             }} style={ghostButton()} disabled={!reportMd}>COPY MARKDOWN</button>
             <button onClick={() => setReportOpen(false)} style={primaryButton()}>CLOSE</button>
           </div>

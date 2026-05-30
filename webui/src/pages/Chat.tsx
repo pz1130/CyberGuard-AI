@@ -256,7 +256,7 @@ export default function Chat() {
         temperature_override: conv.temperature_override ?? 0.7,
         knowledge_base_id: conv.knowledge_base_id ?? null,
       })
-    } catch { /* ignore */ }
+    } catch (e) { console.error('Failed to load conversation:', e) }
     localStorage.removeItem('activeChatTaskId')
   }
 

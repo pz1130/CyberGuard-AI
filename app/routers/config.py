@@ -85,6 +85,16 @@ async def import_config(
     # Import agents
     from sqlalchemy import select
     from app.models import AgentConfig
+    from app.routers.agents import _validate_agent_payload
+    from pydantic import BaseModel
+    from typing import Optional as _Opt
+
+    class _ImportAgentBody(BaseModel):
+        kind: str = "external"
+        backend_type: _Opt[str] = None
+        endpoint_url: _Opt[str] = None
+        llm_provider_id: _Opt[int] = None
+
     for agent_data in config.get("agents", []):
         try:
             existing = await db.execute(
@@ -92,12 +102,21 @@ async def import_config(
             )
             if existing.scalar_one_or_none():
                 continue  # skip existing
+            # Validate the imported agent config
+            _validate_agent_payload(_ImportAgentBody(
+                kind=agent_data.get("kind", "external"),
+                backend_type=agent_data.get("backend_type"),
+                endpoint_url=agent_data.get("endpoint_url"),
+                llm_provider_id=agent_data.get("llm_provider_id"),
+            ))
             agent = AgentConfig(
                 agent_name=agent_data.get("agent_name"),
+                kind=agent_data.get("kind", "external"),
                 backend_type=agent_data.get("backend_type", "custom"),
                 endpoint_url=agent_data.get("endpoint_url"),
                 description=agent_data.get("description"),
                 permission_level=agent_data.get("permission_level", "medium"),
+                llm_provider_id=agent_data.get("llm_provider_id"),
                 is_active=True,
             )
             db.add(agent)

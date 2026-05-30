@@ -44,7 +44,7 @@ function MultiAgentChat() {
   useEffect(() => {
     api.getAgents().then((data: any) => {
       const list = Array.isArray(data) ? data : data?.agents || []
-      setAgents(list.filter((a: any) => a.backend_type === 'openclaw' || a.backend_type === 'hermes' || a.backend_type === 'custom'))
+      setAgents(list.filter((a: any) => (a.kind || 'external') !== 'internal'))
     }).catch(() => {})
   }, [])
 

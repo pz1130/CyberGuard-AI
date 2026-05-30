@@ -11,6 +11,7 @@ Exporter configured via env:
     OTEL_EXPORTER_OTLP_ENDPOINT  — collector endpoint (e.g. http://localhost:4317)
     OTEL_SERVICE_NAME           — service identifier (default: cyberguard)
     OTEL_TRACES_SAMPLER          — always_on | traceidratio | parentbased_always_off
+    OTEL_INSECURE                — "true" (default) to disable TLS; set "false" for production
 
 No-op when env vars are absent (safe for local dev without an OTel backend).
 """
@@ -62,7 +63,8 @@ def setup_telemetry() -> None:
 
     resource = Resource(attributes={SERVICE_NAME: service_name})
     provider = TracerProvider(resource=resource, sampler=sampler)
-    processor = BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint, insecure=True))
+    insecure = _env("OTEL_INSECURE", "true").lower() in ("true", "1", "yes")
+    processor = BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint, insecure=insecure))
     provider.add_span_processor(processor)
     trace.set_tracer_provider(provider)
     _tracer_provider = provider

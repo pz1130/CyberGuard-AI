@@ -32,7 +32,7 @@ class SkillLoader:
         result = await session.execute(
             select(Skill).where(
                 Skill.category == agent_type,
-                Skill.is_active == True,
+                Skill.is_active.is_(True),
             )
         )
         skills = result.scalars().all()
@@ -68,7 +68,7 @@ class SkillLoader:
         from app.models.skill import Skill
 
         result = await session.execute(
-            select(Skill).where(Skill.is_active == True)
+            select(Skill).where(Skill.is_active.is_(True))
         )
         skills = result.scalars().all()
 
@@ -91,7 +91,7 @@ class SkillLoader:
 
         async with get_db_context() as session:
             result = await session.execute(
-                select(Skill).where(Skill.name == name, Skill.is_active == True)
+                select(Skill).where(Skill.name == name, Skill.is_active.is_(True))
             )
             skill = result.scalar_one_or_none()
             return skill.md_content if skill else None

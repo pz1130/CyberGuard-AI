@@ -183,7 +183,7 @@ class MasterAgent:
             try:
                 async with get_db_context() as session:
                     result = await session.execute(
-                        select(AgentConfig).where(AgentConfig.is_active == True)
+                        select(AgentConfig).where(AgentConfig.is_active.is_(True))
                     )
                     active = [
                         {"id": a.id, "agent_name": a.agent_name, "backend_type": a.backend_type}
@@ -294,7 +294,7 @@ class MasterAgent:
         remote_agents_by_name: Dict[str, Dict] = {}
         try:
             async with get_db_context() as session:
-                result = await session.execute(select(AgentConfig).where(AgentConfig.is_active == True))
+                result = await session.execute(select(AgentConfig).where(AgentConfig.is_active.is_(True)))
                 for agent_obj in result.scalars().all():
                     backend = getattr(agent_obj, "backend_type", "general")
                     agent_dict = {

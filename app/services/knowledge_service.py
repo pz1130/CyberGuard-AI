@@ -216,7 +216,7 @@ class KnowledgeService:
         doc = Document(
             kb_id=kb_id,
             filename=filename,
-            content_chunks_json=None,  # Deprecated — vectors now in document_chunks
+            content_chunks_json=None,  # Deprecated column — kept for schema compat; vectors live in document_chunks
             file_hash=file_hash,
             file_size=len(content.encode("utf-8")),
             mime_type=mime_type,

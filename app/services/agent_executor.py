@@ -115,6 +115,7 @@ class SubAgentWrapper:
                 f"{settings.BASE_URL.rstrip('/')}/api/v1/gateway/manifest"
             )
 
+        error_msg = "No attempts made"
         for attempt in range(self.max_retries):
             try:
                 # Enforce HTTPS; verify certs in production
@@ -244,7 +245,7 @@ class AgentExecutor:
             tool_ids = agent_metadata_json.get("mcp_tool_ids")
 
         async with get_db_context() as session:
-            query = select(MCPTool).where(MCPTool.is_active == True)
+            query = select(MCPTool).where(MCPTool.is_active.is_(True))
             if tool_ids is not None:
                 query = query.where(MCPTool.id.in_(tool_ids))
             result = await session.execute(query)

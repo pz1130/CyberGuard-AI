@@ -1,9 +1,13 @@
 """LLM model routing service."""
+import asyncio
 import json
+import logging
 import re
 from types import SimpleNamespace
 from typing import Dict, Any, Optional, List
 from openai import AsyncOpenAI
+
+logger = logging.getLogger(__name__)
 
 from app.config import settings
 
@@ -19,7 +23,6 @@ class LLMRouter:
     def __init__(self):
         self.providers = []
         self._client_cache: dict[int, AsyncOpenAI] = {}
-        self._client_cache_lock = __import__("asyncio").Lock()
         self._master_config: Optional[dict] = None
         self._load_providers()
 
@@ -84,7 +87,7 @@ class LLMRouter:
                         AgentConfig.endpoint_url,
                         AgentConfig.backend_type,
                         AgentConfig.description,
-                    ).where(AgentConfig.is_active == True)
+                    ).where(AgentConfig.is_active.is_(True))
                 )
                 rows = result.all()
                 return [(r[0], r[1], r[2], r[3]) for r in rows]

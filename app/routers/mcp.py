@@ -312,7 +312,7 @@ async def list_server_tools(
         await db.commit()
 
     result = await db.execute(
-        select(MCPTool).where(MCPTool.server_id == server_id, MCPTool.is_active == True)
+        select(MCPTool).where(MCPTool.server_id == server_id, MCPTool.is_active.is_(True))
     )
     tools = result.scalars().all()
     return MCPToolListResponse(total=len(tools), tools=[MCPToolRead.model_validate(t) for t in tools])
@@ -459,7 +459,7 @@ async def list_all_mcp_tools(
     result = await db.execute(
         select(MCPTool, MCPServer.name.label("server_name"))
         .join(MCPServer, MCPTool.server_id == MCPServer.id)
-        .where(MCPTool.is_active == True, MCPServer.is_active == True)
+        .where(MCPTool.is_active.is_(True), MCPServer.is_active.is_(True))
         .order_by(MCPServer.name, MCPTool.tool_name)
     )
     rows = result.all()

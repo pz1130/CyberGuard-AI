@@ -81,7 +81,7 @@ def sync_scheduled_jobs_task(self):
     SessionLocal = get_sync_session()
     with SessionLocal() as session:
         result = session.execute(
-            select(ScheduledTask).where(ScheduledTask.is_active == True)
+            select(ScheduledTask).where(ScheduledTask.is_active.is_(True))
         )
         tasks = result.scalars().all()
 

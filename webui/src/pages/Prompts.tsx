@@ -130,7 +130,7 @@ export default function Prompts() {
       await navigator.clipboard.writeText(item.content)
       setCopiedId(item.id)
       setTimeout(() => setCopiedId(c => c === item.id ? null : c), 1500)
-    } catch { /* ignore */ }
+    } catch (e) { console.error('Failed to copy:', e) }
   }
 
   const filtered = filter === 'all' ? items : items.filter(i => i.category === filter)

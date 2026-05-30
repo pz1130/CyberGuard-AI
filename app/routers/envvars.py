@@ -124,7 +124,7 @@ async def resolve_envvars(
     Returns a dict of key → plaintext value.
     """
     result = await db.execute(
-        select(EnvVar).where(EnvVar.key.in_(keys), EnvVar.is_active == True)
+        select(EnvVar).where(EnvVar.key.in_(keys), EnvVar.is_active.is_(True))
     )
     vars_ = result.scalars().all()
     return {v.key: decrypt_data(v.value_encrypted) for v in vars_}

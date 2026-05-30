@@ -211,22 +211,15 @@ async def execute_http_tool(server: MCPServer, tool_name: str, arguments: Dict[s
     """Execute a tool via HTTP POST to an MCP server endpoint."""
     import httpx
     from urllib.parse import urlparse
+    from app.core.ssrf import validate_outbound_url, SSRFError
 
-    # SSRF protection
     if not server.url:
         raise RuntimeError("MCP server has no URL configured")
+    try:
+        validate_outbound_url(server.url)
+    except SSRFError as e:
+        raise RuntimeError(f"SSRF blocked: {e}")
     parsed = urlparse(server.url)
-    if parsed.scheme not in ("http", "https"):
-        raise RuntimeError(f"Disallowed URL scheme: {parsed.scheme}")
-    hostname = parsed.hostname or ""
-    blocked = {"169.254.169.254", "metadata.google.internal", "metadata.internal",
-               "localhost", "127.0.0.1", "0.0.0.0"}
-    if hostname in blocked or hostname.startswith(("10.", "172.16.", "172.17.", "172.18.",
-                                                   "172.19.", "172.20.", "172.21.", "172.22.",
-                                                   "172.23.", "172.24.", "172.25.", "172.26.",
-                                                   "172.27.", "172.28.", "172.29.", "172.30.",
-                                                   "172.31.", "192.168.")):
-        raise RuntimeError(f"Disallowed host in URL: {hostname}")
 
     headers = dict(server.headers_json or {})
     if server.auth_token_encrypted:
