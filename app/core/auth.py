@@ -40,22 +40,24 @@ async def is_token_revoked(jti: str) -> bool:
     from app.core.redis_client import get_redis
     redis = await get_redis()
     if redis:
-        return await redis.sismember("token:blacklist", jti)
+        return await redis.exists(f"token:blacklist:{jti}")
     return False
 
 
 async def revoke_token(jti: str, remaining_ttl_seconds: int) -> None:
     """
     Add a token's JTI to the revocation blacklist.
-    Stores in Redis with TTL so the entry auto-expires when the token would have expired anyway.
+    Each JTI is stored as its own Redis key with independent TTL,
+    avoiding the race condition where a shared SET TTL could be
+    shortened by a short-lived token revocation.
     """
     from app.core.redis_client import get_redis
     redis = await get_redis()
     if redis:
         # TTL must be positive — don't bother storing if token is already expired
         if remaining_ttl_seconds > 0:
-            await redis.sadd("token:blacklist", jti)
-            await redis.expire("token:blacklist", remaining_ttl_seconds + 60)  # 60s grace period
+            ttl = remaining_ttl_seconds + 60  # 60s grace period
+            await redis.set(f"token:blacklist:{jti}", "1", ex=ttl)
 
 
 async def verify_token(token: str) -> Optional[Dict[str, Any]]:

@@ -139,6 +139,21 @@ async def chat_attachments(
         )
 
     # Validate file types and encode as base64
+    # Magic byte signatures for spoofing detection
+    _MAGIC_BYTES = {
+        "image/png": b"\x89PNG\r\n\x1a\n",
+        "image/jpeg": b"\xff\xd8\xff",
+        "image/gif": b"GIF8",
+        "image/webp": b"RIFF",
+        "application/pdf": b"%PDF",
+        "application/msword": b"\xd0\xcf\x11\xe0",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": b"PK",
+        "application/vnd.ms-excel": b"\xd0\xcf\x11\xe0",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": b"PK",
+        "application/vnd.ms-powerpoint": b"\xd0\xcf\x11\xe0",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation": b"PK",
+    }
+
     attachments = []
     for f in files:
         if f.content_type not in ALLOWED_ATTACHMENT_TYPES:
@@ -158,6 +173,14 @@ async def chat_attachments(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"File '{f.filename}' exceeds maximum size of {MAX_FILE_SIZE // (1024 * 1024)} MB",
             )
+        # Validate magic bytes against claimed content_type (anti-spoofing)
+        if f.content_type in _MAGIC_BYTES and len(content) >= 8:
+            expected = _MAGIC_BYTES[f.content_type]
+            if not content[:len(expected)].startswith(expected):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"File '{f.filename}' content does not match declared type '{f.content_type}'",
+                )
         attachments.append(
             {
                 "filename": f.filename,

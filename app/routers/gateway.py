@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.core.database import AsyncSessionLocal
@@ -84,7 +84,7 @@ class HeartbeatResponse(BaseModel):
     timestamp: str
 
 class SendMessageRequest(BaseModel):
-    content: str
+    content: str = Field(..., max_length=10000)
     target: Optional[str] = None  # 预留：指定目标用户或 Agent 名称
 
 class SendMessageResponse(BaseModel):
@@ -222,12 +222,16 @@ async def send_message(
     """OpenClaw 节点主动向 CyberGuard 发送消息（存入 gateway_messages 供 UI 查看）。"""
     agent = await _auth_agent(x_api_key)
 
+    # Sanitize content — HTML-escape to prevent stored XSS
+    import html
+    safe_content = html.escape(body.content)
+
     async with AsyncSessionLocal() as session:
         msg = GatewayMessage(
             agent_id=agent.id,
-            content=f"[来自 Agent] {body.content}",
+            content=f"[来自 Agent] {safe_content}",
             status="completed",          # 主动发送的消息无需等待执行
-            result=body.content,
+            result=safe_content,
             created_at=datetime.now(timezone.utc),
             completed_at=datetime.now(timezone.utc),
         )

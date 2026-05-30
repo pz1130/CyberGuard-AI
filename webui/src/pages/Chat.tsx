@@ -354,22 +354,10 @@ export default function Chat() {
       output = output.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
       const assistantMsg = { role: 'assistant' as const, content: output, created_at: new Date().toISOString() }
       setMessages(prev => [...prev, assistantMsg])
-      // Note: conversation persistence is handled by the backend worker
-      // (workers/tasks.py saves user + assistant messages after task completion).
-      // Only update the conversation title from the frontend.
-      if (activeConvId) {
-        // Update conversation title based on first user message
-        if (messages.filter(m => m.role === 'user').length === 1) {
-          const shortTitle = input.trim().slice(0, 30) + (input.trim().length > 30 ? '...' : '')
-          api.updateConversation(activeConvId, { title: shortTitle }).catch(() => {})
-        }
-      }
+      // Backend handles conversation persistence + auto-title
     } else if (task?.status === 'failed') {
       const errMsg = `⚠ TASK FAILED — ${task.error_message || 'UNKNOWN ERROR'}`
       setMessages(prev => [...prev, { role: 'assistant', content: errMsg, created_at: new Date().toISOString() }])
-      if (activeConvId) {
-        api.appendConversationMessage(activeConvId, { role: 'assistant', content: errMsg }).catch(() => {})
-      }
     } else {
       setMessages(prev => [...prev, { role: 'assistant', content: '⚠ TASK TIMED OUT', created_at: new Date().toISOString() }])
     }
@@ -468,12 +456,7 @@ export default function Chat() {
               return updated
             })
           }
-          // 'done' — stream finished, backend persists automatically
-        }
-        // Update conversation title on first message
-        if (activeConvId && messages.filter(m => m.role === 'user').length === 0 && userText) {
-          const shortTitle = userText.slice(0, 30) + (userText.length > 30 ? '...' : '')
-          api.updateConversation(activeConvId, { title: shortTitle }).catch(() => {})
+          // 'done' — stream finished, backend persists + auto-titles automatically
         }
       } catch (e: any) {
         setMessages(prev => {
@@ -917,7 +900,9 @@ export default function Chat() {
                   fontFamily: 'var(--font-mono)',
                 }}>
                   {msg.role === 'assistant' ? (
-                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    <ReactMarkdown
+                      urlTransform={(url) => /^https?:\/\//i.test(url) ? url : '#'}
+                    >{msg.content}</ReactMarkdown>
                   ) : msg.content}
                 </div>
                 {/* Render attachment previews for user messages */}

@@ -6,6 +6,7 @@ import json
 
 
 DEFAULT_KEY = "72afad1417e44d63d11975fd873f86e2dcf7e262a4c461ea4a0c43939868f5e4"
+DEFAULT_REDIS_PASSWORD = "cyberguard-redis-pass"
 
 
 class Settings(BaseSettings):
@@ -15,7 +16,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/cyberguard"
 
     # Redis
-    REDIS_PASSWORD: str = "cyberguard-redis-pass"
+    REDIS_PASSWORD: str = DEFAULT_REDIS_PASSWORD
     REDIS_URL: str = "redis://:${REDIS_PASSWORD}@redis:6379/0"
 
     # Security
@@ -54,13 +55,25 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_security_keys(self) -> "Settings":
-        """Ensure ENCRYPTION_KEY and SECRET_KEY are not using default values."""
+        """Ensure security keys are properly configured."""
+        errors = []
         if self.ENCRYPTION_KEY == DEFAULT_KEY or self.SECRET_KEY == DEFAULT_KEY:
-            raise ValueError(
+            errors.append(
                 "ENCRYPTION_KEY and SECRET_KEY must be configured with unique values. "
-                "Do not use the default insecure key in production. "
                 "Set the CYBERGUARD_ENCRYPTION_KEY and CYBERGUARD_SECRET_KEY environment variables."
             )
+        if self.ENCRYPTION_KEY == self.SECRET_KEY:
+            errors.append(
+                "ENCRYPTION_KEY and SECRET_KEY must be different. "
+                "Using the same key for AES encryption and JWT signing is a security risk."
+            )
+        if self.REDIS_PASSWORD == DEFAULT_REDIS_PASSWORD and self.ENVIRONMENT == "production":
+            errors.append(
+                "REDIS_PASSWORD is using the default value. "
+                "Set the CYBERGUARD_REDIS_PASSWORD environment variable."
+            )
+        if errors:
+            raise ValueError("\n".join(errors))
         return self
 
     @property

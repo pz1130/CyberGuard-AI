@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from app.core.dependencies import get_db, require_permission
+from app.core.auth import AuthenticatedUser
 from app.core.database import AsyncSessionLocal
 from app.core.rbac import Permission
 from app.core.security import encrypt_data, decrypt_data
@@ -369,11 +370,23 @@ async def test_agent_connection(
 async def execute_agent(
     agent_id: int,
     body: dict,
-    _=Depends(require_permission(Permission.TASK_EXECUTE)),
+    current_user: AuthenticatedUser = Depends(require_permission(Permission.TASK_EXECUTE)),
 ):
     """手动向指定 Sub-Agent 派发一个任务。"""
+    from app.core.guardrails import check_prompt_sync
     from app.services.agent_executor import AgentExecutor
     task = body.get("task", "")
     if not task:
         raise HTTPException(status_code=400, detail="'task' 字段不能为空")
-    return await AgentExecutor().execute(agent_id=agent_id, task=task, user_id=0)
+
+    # Guardrail check — same as /chat endpoint
+    gr = check_prompt_sync(task)
+    if gr.blocked:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Input blocked: {gr.message} (risk={gr.risk_level})",
+        )
+
+    return await AgentExecutor().execute(
+        agent_id=agent_id, task=task, user_id=current_user.user_id,
+    )
