@@ -362,6 +362,11 @@ export const api = {
   executeTool: (id: number, args: Record<string, any>) =>
     request(`/tools/${id}/execute`, { method: 'POST', body: JSON.stringify({ args }) }),
 
+  // ---- Security Settings ----
+  getSecuritySettings: () => request('/security-settings'),
+  updateSecuritySettings: (body: Record<string, unknown>) =>
+    request('/security-settings', { method: 'PUT', body: JSON.stringify(body) }),
+
   // ---- Token Usage ----
   getTokenUsageSummary: () => request('/token-usage/summary'),
 

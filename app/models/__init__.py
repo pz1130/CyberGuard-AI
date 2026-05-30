@@ -18,6 +18,7 @@ from app.models.governance import (
 )
 from app.models.schedule import ScheduledTask
 from app.models.conversation import Conversation
+from app.models.security_settings import SecuritySettings
 
 __all__ = [
     "User", "RoleModel",
@@ -37,4 +38,5 @@ __all__ = [
     "RequirementAssessment", "Evidence",
     "ScheduledTask",
     "Conversation",
+    "SecuritySettings",
 ]

@@ -1,27 +1,73 @@
-import { useState } from 'react'
-import { Key, Lock, AlertTriangle } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Key, Lock, AlertTriangle, Save, Loader2 } from 'lucide-react'
+import { api } from '../api/client'
+
+interface SecuritySettings {
+  encryption_enabled: boolean
+  rbac_enabled: boolean
+  audit_logging: boolean
+  max_login_attempts: number
+  session_timeout_minutes: number
+  api_key_rotation_days: number
+}
+
+const DEFAULT: SecuritySettings = {
+  encryption_enabled: true,
+  rbac_enabled: true,
+  audit_logging: true,
+  max_login_attempts: 5,
+  session_timeout_minutes: 30,
+  api_key_rotation_days: 90,
+}
 
 export default function Security() {
-  const [settings, setSettings] = useState({
-    encryption_enabled: true,
-    audit_logging: true,
-    rbac_enabled: true,
-    api_key_rotation_days: 90,
-    max_login_attempts: 5,
-    session_timeout_minutes: 30,
-    require_mfa: false,
-  })
+  const [settings, setSettings] = useState<SecuritySettings>(DEFAULT)
+  const [saved, setSaved] = useState<SecuritySettings>(DEFAULT)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [notice, setNotice] = useState<{ ok: boolean; msg: string } | null>(null)
 
-  const update = (key: string, value: any) => setSettings(s => ({ ...s, [key]: value }))
+  useEffect(() => {
+    api.getSecuritySettings()
+      .then(d => {
+        const s = d as SecuritySettings
+        setSettings(s)
+        setSaved(s)
+      })
+      .catch(() => setNotice({ ok: false, msg: 'FAILED TO LOAD SETTINGS' }))
+      .finally(() => setLoading(false))
+  }, [])
 
-  const Toggle = ({ enabled, onToggle, color = 'var(--cyan)' }: { enabled: boolean; onToggle: () => void; color?: string }) => (
-    <button onClick={onToggle}
-      style={{
-        position: 'relative', width: 44, height: 22,
-        background: enabled ? color : 'var(--bg-elevated)',
-        border: `1px solid ${enabled ? color : 'var(--border-bright)'}`,
-        cursor: 'pointer', transition: 'all 0.2s',
-      }}>
+  const dirty = JSON.stringify(settings) !== JSON.stringify(saved)
+
+  const update = <K extends keyof SecuritySettings>(key: K, value: SecuritySettings[K]) =>
+    setSettings(s => ({ ...s, [key]: value }))
+
+  const save = async () => {
+    setSaving(true)
+    setNotice(null)
+    try {
+      const d = await api.updateSecuritySettings(settings as Record<string, unknown>) as SecuritySettings
+      setSaved(d)
+      setSettings(d)
+      setNotice({ ok: true, msg: 'SETTINGS SAVED' })
+      setTimeout(() => setNotice(null), 3000)
+    } catch (e: any) {
+      setNotice({ ok: false, msg: e?.message || 'SAVE FAILED' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const Toggle = ({ enabled, onToggle, color = 'var(--cyan)' }: {
+    enabled: boolean; onToggle: () => void; color?: string
+  }) => (
+    <button onClick={onToggle} style={{
+      position: 'relative', width: 44, height: 22,
+      background: enabled ? color : 'var(--bg-elevated)',
+      border: `1px solid ${enabled ? color : 'var(--border-bright)'}`,
+      cursor: 'pointer', transition: 'all 0.2s',
+    }}>
       <div style={{
         position: 'absolute', top: 2, left: 2,
         width: 16, height: 16,
@@ -33,12 +79,12 @@ export default function Security() {
   )
 
   const SettingRow = ({ icon, title, desc, enabled, onToggle, color = 'var(--cyan)' }: {
-    icon: React.ReactNode; title: string; desc: string; enabled: boolean; onToggle: () => void; color?: string
+    icon: React.ReactNode; title: string; desc: string
+    enabled: boolean; onToggle: () => void; color?: string
   }) => (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: 20,
-      background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
+      padding: 20, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
       marginBottom: 12,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -54,13 +100,48 @@ export default function Security() {
     </div>
   )
 
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 40, color: 'var(--text-muted)', fontSize: 13 }}>
+        <Loader2 size={16} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent)' }} />
+        LOADING...
+      </div>
+    )
+  }
+
   return (
     <div>
-      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
           <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>ZERO TRUST ARCHITECTURE</div>
           <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>SECURITY CONFIG</h1>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {notice && (
+            <span style={{ fontSize: 12, letterSpacing: '0.1em', color: notice.ok ? 'var(--accent)' : 'var(--red)' }}>
+              {notice.msg}
+            </span>
+          )}
+          <button
+            onClick={save}
+            disabled={!dirty || saving}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '0 16px', height: 34,
+              background: dirty ? 'var(--accent)' : 'var(--bg-elevated)',
+              border: `1px solid ${dirty ? 'var(--accent-border)' : 'var(--border-bright)'}`,
+              color: dirty ? '#000' : 'var(--text-dim)',
+              fontSize: 12, letterSpacing: '0.1em', fontWeight: 700,
+              cursor: dirty ? 'pointer' : 'not-allowed',
+              fontFamily: 'var(--font-mono)',
+              transition: 'all 0.15s',
+            }}
+          >
+            {saving
+              ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} />
+              : <Save size={12} />}
+            SAVE
+          </button>
         </div>
       </div>
 
@@ -73,7 +154,6 @@ export default function Security() {
           onToggle={() => update('encryption_enabled', !settings.encryption_enabled)}
           color="var(--cyan)"
         />
-
         <SettingRow
           icon={<Lock size={15} />}
           title="RBAC ACCESS CONTROL"
@@ -82,7 +162,6 @@ export default function Security() {
           onToggle={() => update('rbac_enabled', !settings.rbac_enabled)}
           color="var(--cyan)"
         />
-
         <SettingRow
           icon={<AlertTriangle size={15} />}
           title="AUDIT LOGGING"
@@ -92,26 +171,27 @@ export default function Security() {
           color="var(--amber)"
         />
 
-        {/* Numeric settings */}
         <div style={{ padding: 20, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
             THRESHOLD CONFIGURATION
           </div>
-          {[
+          {([
             { key: 'max_login_attempts', label: 'MAX LOGIN ATTEMPTS', min: 3, max: 20 },
             { key: 'session_timeout_minutes', label: 'SESSION TIMEOUT (MINUTES)', min: 5, max: 480 },
             { key: 'api_key_rotation_days', label: 'API KEY ROTATION (DAYS)', min: 7, max: 365 },
-          ].map(({ key, label, min, max }) => (
+          ] as const).map(({ key, label, min, max }) => (
             <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <span style={{ fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.08em' }}>{label}</span>
-              <input type="number" min={min} max={max}
-                value={(settings as any)[key]}
-                onChange={e => update(key, parseInt(e.target.value))}
+              <input
+                type="number" min={min} max={max}
+                value={settings[key]}
+                onChange={e => update(key, parseInt(e.target.value) || min)}
                 style={{
                   width: 80, height: 32, padding: '0 10px', textAlign: 'right',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
                   color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-mono)',
-                }} />
+                }}
+              />
             </div>
           ))}
         </div>
