@@ -1,9 +1,9 @@
 """Chat conversation management router."""
 from typing import Optional
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 
@@ -34,8 +34,7 @@ class ConversationResponse(BaseModel):
     temperature_override: Optional[float] = None
     knowledge_base_id: Optional[int] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ConversationCreate(BaseModel):
@@ -170,7 +169,7 @@ async def update_conversation(
     if body.knowledge_base_id is not None:
         conv.knowledge_base_id = body.knowledge_base_id
 
-    conv.updated_at = datetime.utcnow()
+    conv.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(conv)
     return ConversationResponse.model_validate(conv)
@@ -252,11 +251,11 @@ async def append_message(
     messages.append({
         "role": body.role,
         "content": body.content,
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
     })
 
     conv.messages_json = json.dumps(messages, ensure_ascii=False)
-    conv.updated_at = datetime.utcnow()
+    conv.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(conv)
 

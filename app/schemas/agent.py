@@ -1,8 +1,8 @@
 """Pydantic schemas for agent management."""
 import re
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def _validate_endpoint_url(v: Optional[str]) -> Optional[str]:
@@ -154,12 +154,11 @@ class AgentConfigRead(BaseModel):
         inst.openclaw_last_seen = last_seen
         if last_seen:
             from datetime import timezone
-            delta = (datetime.utcnow() - last_seen).total_seconds()
+            delta = (datetime.now(timezone.utc) - last_seen).total_seconds()
             inst.is_online = delta < 300
         return inst
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AgentConfigListResponse(BaseModel):
@@ -191,5 +190,4 @@ class AgentExecutionRead(BaseModel):
     completed_at: Optional[datetime]
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

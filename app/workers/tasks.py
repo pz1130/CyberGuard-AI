@@ -1,7 +1,7 @@
 """Celery tasks for background agent execution."""
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor
 
 from celery import shared_task
@@ -32,7 +32,7 @@ def _evaluate_cron_should_fire(cron_expr: str, last_run_at: datetime | None) -> 
         return False
 
     try:
-        tz = datetime.now().utcnow().tzinfo
+        tz = timezone.utc
         cron = croniter(cron_expr, datetime.now(tz))
         next_run = cron.get_next(datetime)
         prev_run = cron.get_prev(datetime)
@@ -99,7 +99,7 @@ def sync_scheduled_jobs_task(self):
             )
 
             # Update last_run_at and compute next_run_at
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             task.last_run_at = now
             try:
                 cron = croniter(task.cron_expression, now)
@@ -156,7 +156,7 @@ def _update_execution_status_sync(execution_id: str, status: str):
         if execution:
             execution.status = status
             if status == "running":
-                execution.started_at = datetime.utcnow()
+                execution.started_at = datetime.now(timezone.utc)
             session.commit()
 
 
@@ -174,7 +174,7 @@ def _update_execution_with_result_sync(execution_id: str, status: str, result_da
         execution = result.scalar_one_or_none()
         if execution:
             execution.status = status
-            execution.completed_at = datetime.utcnow()
+            execution.completed_at = datetime.now(timezone.utc)
             if result_data is not None:
                 execution.output_data = result_data
             if error_msg is not None:
@@ -220,7 +220,7 @@ def _query_knowledge_base_sync(kb_id: int, query: str, top_k: int = 5) -> str:
 def _save_to_conversation_async(conversation_id: int, user_input: str, result: dict):
     """Save user message and result to conversation (fire-and-forget)."""
     import json
-    from datetime import datetime
+    from datetime import datetime, timezone
     try:
         from app.core.database import get_sync_session
         from app.models.conversation import Conversation
@@ -241,7 +241,7 @@ def _save_to_conversation_async(conversation_id: int, user_input: str, result: d
             messages.append({
                 "role": "user",
                 "content": user_input,
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat(),
             })
 
             # Add assistant response
@@ -251,11 +251,11 @@ def _save_to_conversation_async(conversation_id: int, user_input: str, result: d
             messages.append({
                 "role": "assistant",
                 "content": final_summary or str(result),
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat(),
             })
 
             conv.messages_json = json.dumps(messages, ensure_ascii=False)
-            conv.updated_at = datetime.utcnow()
+            conv.updated_at = datetime.now(timezone.utc)
             session.commit()
     except Exception as e:
         logger.warning(f"Failed to save to conversation {conversation_id}: {e}")
@@ -540,7 +540,7 @@ def cleanup_stale_executions_task(self):
 
     logger.info("[cleanup_stale_executions_task] Running stale execution cleanup")
 
-    stale_threshold = datetime.utcnow() - timedelta(minutes=STALE_TIMEOUT_MINUTES)
+    stale_threshold = datetime.now(timezone.utc) - timedelta(minutes=STALE_TIMEOUT_MINUTES)
 
     SessionLocal = get_sync_session()
     with SessionLocal() as session:
@@ -556,7 +556,7 @@ def cleanup_stale_executions_task(self):
             for exec_record in stale_executions:
                 exec_record.status = "failed"
                 exec_record.error_message = "Execution timed out (stale cleanup)"
-                exec_record.completed_at = datetime.utcnow()
+                exec_record.completed_at = datetime.now(timezone.utc)
                 logger.warning(
                     f"[cleanup_stale_executions_task] Marked stale execution {exec_record.execution_id} as failed"
                 )

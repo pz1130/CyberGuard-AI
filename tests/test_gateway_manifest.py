@@ -196,7 +196,7 @@ async def test_poll_has_manifest_true_when_skills_assigned():
             result = await gw.poll(x_api_key="oc-test")
 
     assert len(result.messages) == 1
-    assert result.messages[0]["has_manifest"] is True
+    assert result.has_manifest is True
 
 
 @pytest.mark.asyncio
@@ -231,6 +231,42 @@ async def test_poll_has_manifest_false_when_no_pools():
             result = await gw.poll(x_api_key="oc-test")
 
     assert result.messages == []
+    assert result.has_manifest is False
+
+
+@pytest.mark.asyncio
+async def test_poll_has_manifest_true_when_idle_but_skills_assigned():
+    """Top-level has_manifest is True even when no pending messages exist."""
+    from app.routers import gateway as gw
+
+    agent_with_skills = SimpleNamespace(
+        id=6, agent_name="IdleBot",
+        associated_skills=[1],
+        associated_tools=None,
+        associated_mcp_tools=None,
+    )
+
+    mock_session = AsyncMock()
+
+    async def fake_execute(_q):
+        r = MagicMock()
+        r.scalars.return_value.all.return_value = []  # no pending messages
+        r.scalar_one_or_none.return_value = agent_with_skills
+        return r
+
+    mock_session.execute = fake_execute
+    mock_session.commit = AsyncMock()
+
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+
+    with patch.object(gw, "_auth_agent", AsyncMock(return_value=agent_with_skills)):
+        with patch("app.routers.gateway.AsyncSessionLocal", return_value=ctx):
+            result = await gw.poll(x_api_key="oc-test")
+
+    assert result.messages == []
+    assert result.has_manifest is True
 
 
 # ---------------------------------------------------------------------------

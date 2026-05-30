@@ -1,7 +1,7 @@
 """Master Agent configuration router."""
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db, require_permission
@@ -19,8 +19,7 @@ class MasterConfigResponse(BaseModel):
     max_rounds: int
     auto_approve_threshold: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MasterConfigUpdate(BaseModel):

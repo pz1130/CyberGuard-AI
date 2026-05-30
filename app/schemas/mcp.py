@@ -1,5 +1,5 @@
 """Pydantic schemas for MCP (Model Context Protocol) tool integration."""
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -59,8 +59,7 @@ class MCPServerResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MCPToolBase(BaseModel):
@@ -115,8 +114,7 @@ class MCPToolResponse(BaseModel):
     use_count: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MCPToolExecuteRequest(BaseModel):

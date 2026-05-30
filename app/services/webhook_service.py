@@ -15,7 +15,7 @@ import hmac
 import json
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
@@ -110,7 +110,7 @@ def deliver_sync(
 
         body_dict = {
             "event": event,
-            "delivered_at": datetime.utcnow().isoformat() + "Z",
+            "delivered_at": datetime.now(timezone.utc).isoformat() + "Z",
             "webhook_id": webhook_id,
             "data": payload,
         }
@@ -126,7 +126,7 @@ def deliver_sync(
             headers["X-CyberGuard-Signature"] = _sign(secret_plain, body_bytes)
 
         wh.trigger_count += 1
-        wh.last_triggered_at = datetime.utcnow()
+        wh.last_triggered_at = datetime.now(timezone.utc)
         session.commit()  # commit the trigger before the HTTP call so reload sees it
 
         t0 = time.monotonic()

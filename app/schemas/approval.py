@@ -1,7 +1,7 @@
 """Pydantic schemas for approval requests."""
 from datetime import datetime
 from typing import Optional, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class ApprovalRequestCreate(BaseModel):
@@ -37,8 +37,7 @@ class ApprovalRequestResponse(BaseModel):
     decided_at: Optional[datetime]
     approver_comment: Optional[str]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ApprovalDecision(BaseModel):

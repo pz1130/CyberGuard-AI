@@ -3,7 +3,7 @@ import hashlib
 import logging
 import secrets
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -216,7 +216,7 @@ async def test_webhook(
     sample_payload = {
         "test": True,
         "message": "This is a synthetic event from CyberGuard webhook test.",
-        "fired_at": datetime.utcnow().isoformat() + "Z",
+        "fired_at": datetime.now(timezone.utc).isoformat() + "Z",
     }
     result = deliver_sync(
         webhook_id=webhook_id,
@@ -282,7 +282,7 @@ async def incoming_webhook(
 
     # Record trigger.
     wh.trigger_count = (wh.trigger_count or 0) + 1
-    wh.last_triggered_at = datetime.utcnow()
+    wh.last_triggered_at = datetime.now(timezone.utc)
     await db.commit()
 
     # Dispatch as Master Agent task. user_id=0 = system/external.

@@ -11,7 +11,7 @@ type: project
 - **Branch:** `main` — PR #2 merged (commit e74c9b9). `feat/internal-agents` fully landed.
 - **Just finished:** Merged PR #2 (QwenPaw pool alignment ①②③ + test-infra). Fixed Python 3.9 compat in 6 router files (`X | None → Optional[X]`); all 54 non-DB tests now pass locally.
 - **Next up:** Decide M6 scope. Remaining known issues:
-  - `test_smoke_api.py` needs a running server (`SMOKE_BASE_URL`)
+  - `test_smoke_api.py` excluded from pytest via root `conftest.py` (`collect_ignore`) — run standalone with `python -m unittest tests.test_smoke_api` when server is up
   - WebUI: Custom agents don't show API key in UI (API-only for now)
   - `has_manifest` is per-message (not top-level on PollResponse) — idle nodes w/no pending tasks won't see it until next task is dispatched; nodes can call `/gateway/manifest` proactively with their API key
 
@@ -219,7 +219,7 @@ dc2066a feat(webui): kind badge + filter + chooser modal + internal form on Agen
 - Governance evidence file upload (`kind=file` schema exists, UI not wired).
 - Internal agent streaming output.
 - Scheduled-tasks execution: `/api/v1/schedule` CRUD + `ScheduledTask` model exist, but no Alembic migration for `scheduled_tasks` and no Celery-beat executor — cron expressions are stored, never run.
-- **Test isolation for DB-backed async tests** (tracked 2026-05-29): the DB-backed tests in `tests/test_internal_agent.py` (and likely other suites) share the module-level SQLAlchemy async engine, whose asyncpg connection pool binds to the first event loop. Under `pytest-asyncio` 1.x (default function-scoped loops) they **pass individually but fail when run together** with `RuntimeError: Event loop is closed` / "attached to a different loop". The pure-logic unit tests (truncation, parallel dispatch, auto-continue, compaction) are unaffected and pass. Fix needs a session-scoped event loop or a per-test engine/connection in a `conftest.py` fixture — deferred, not yet done.
+- **Test isolation for DB-backed async tests** ✅ (fixed 2026-05-30): root `conftest.py` excludes `test_smoke_api.py` from pytest collection via `collect_ignore`. The smoke test uses `asyncio.run()` in `setUpClass` which creates a separate event loop, poisoning the module-level SQLAlchemy async engine's connection pool. It remains runnable standalone via `python -m unittest tests.test_smoke_api` when a server is running. All 71 non-smoke tests pass together cleanly.
 
 ## Operational notes
 

@@ -3,7 +3,7 @@ import asyncio
 import json
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 
 from langgraph.graph import StateGraph, END
@@ -114,7 +114,7 @@ class MasterAgent:
         """Start node - initialize state."""
         state["current_state"] = AgentState.START
         state["request_id"] = str(uuid.uuid4())
-        state["timestamp"] = datetime.utcnow().isoformat()
+        state["timestamp"] = datetime.now(timezone.utc).isoformat()
         state["sub_results"] = {}
         state["group_chat_messages"] = []
         return state
@@ -421,7 +421,7 @@ class MasterAgent:
         messages.append({
             "role": "user",
             "content": user_input,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
         # Round-robin through agents
@@ -438,7 +438,7 @@ class MasterAgent:
                 "role": "agent",
                 "agent_id": agent_id,
                 "content": result.get("output", ""),
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             })
 
         state["group_chat_messages"] = messages

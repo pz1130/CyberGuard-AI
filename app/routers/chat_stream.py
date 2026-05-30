@@ -19,7 +19,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import AsyncGenerator
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -183,11 +183,11 @@ async def _persist_to_conversation(
                 return
 
             messages = _json.loads(conv.messages_json or "[]")
-            now = datetime.utcnow().isoformat()
+            now = datetime.now(timezone.utc).isoformat()
             messages.append({"role": "user", "content": user_message, "created_at": now})
             messages.append({"role": "assistant", "content": assistant_response, "created_at": now})
             conv.messages_json = _json.dumps(messages, ensure_ascii=False)
-            conv.updated_at = datetime.utcnow()
+            conv.updated_at = datetime.now(timezone.utc)
 
             # Auto-title if still default
             if conv.title == "新对话" and user_message:

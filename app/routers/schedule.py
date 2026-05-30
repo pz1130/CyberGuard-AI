@@ -6,7 +6,7 @@ from app.core.rbac import Permission
 from app.schemas.schedule import ScheduleTaskCreate, ScheduleTaskRead, ScheduleTaskListResponse
 from app.models.schedule import ScheduledTask
 from sqlalchemy import select
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 router = APIRouter()
@@ -31,7 +31,7 @@ async def create_scheduled_task(
 ):
     """Create a new scheduled task."""
     task_id = str(uuid.uuid4())
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     task = ScheduledTask(
         task_id=task_id,
         name=body.name,
@@ -78,7 +78,7 @@ async def update_scheduled_task(
     update_data = body.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(task, key, value)
-    task.updated_at = datetime.utcnow()
+    task.updated_at = datetime.now(timezone.utc)
 
     await db.commit()
     await db.refresh(task)

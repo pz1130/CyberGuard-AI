@@ -1,7 +1,7 @@
 """Audit log router."""
 from typing import Optional
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_db, require_permission
@@ -74,11 +74,11 @@ async def export_audit_logs(
         return {
             "format": "csv",
             "content": output.getvalue(),
-            "filename": f"audit_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv",
+            "filename": f"audit_export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv",
         }
 
     return {
         "format": "json",
         "logs": [AuditLogRead.model_validate(l).model_dump() for l in logs],
-        "filename": f"audit_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json",
+        "filename": f"audit_export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json",
     }
