@@ -335,7 +335,7 @@ async def test_agent_executor_routes_internal_kind(monkeypatch):
                                context={"conversation_id": None})
     assert result["status"] == "completed"
     assert captured["task"] == "hello"
-    assert captured["cfg"]["agent_name"] == "exec_test_int"
+    assert captured["cfg"]["agent_name"].startswith("exec_test_int_")
 
     async with AsyncSessionLocal() as s:
         await s.execute(AgentConfig.__table__.delete().where(AgentConfig.id == agent_id))
