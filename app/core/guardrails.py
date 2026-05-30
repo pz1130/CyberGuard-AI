@@ -83,7 +83,7 @@ _INJECTION_PATTERNS: list[tuple[str, re.Pattern, str]] = [
         "direct_instruction_override",
         re.compile(
             r'^(ignore|forget|disregard|discard)\s+(all?\s+)?(previous|prior|above|'
-            r'instructions?|instructions?|rules?|guidelines?|system)\s*[:.\-]',
+            r'instructions?|rules?|guidelines?|system)\b',
             re.IGNORECASE,
         ),
         "Input contains a direct instruction-override attempt",

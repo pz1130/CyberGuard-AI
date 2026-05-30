@@ -164,6 +164,7 @@ class TestMasterAgentStateMachine(unittest.IsolatedAsyncioTestCase):
         })
         mock_router.chat = AsyncMock(return_value="The analysis is complete.")
         mock_router._load_master_config = AsyncMock(return_value={})
+        mock_router.build_chat_system_prompt = AsyncMock(return_value="You are a helpful assistant.")
 
         with patch("app.agents.master.AgentExecutor"):
             from app.agents.master import MasterAgent
@@ -214,7 +215,7 @@ class TestMasterAgentStateMachine(unittest.IsolatedAsyncioTestCase):
             )
         # chat() should have been called with history messages included
         call_args = mock_router.chat.call_args
-        messages = call_args.kwargs.get("messages") or call_args.args[0] if call_args.args else []
+        messages = call_args.kwargs.get("messages", [])
         roles = [m["role"] for m in messages]
         self.assertIn("user", roles)
         # History messages should be in the call
@@ -311,29 +312,8 @@ class TestEmailService(unittest.IsolatedAsyncioTestCase):
 # Rate limit helpers (unit)
 # ---------------------------------------------------------------------------
 
-class TestWebSocketRateLimit(unittest.TestCase):
-    def _manager(self):
-        from app.routers.groupchat import ConnectionManager
-        return ConnectionManager()
-
-    def test_under_limit_not_rate_limited(self):
-        mgr = self._manager()
-        for _ in range(59):
-            self.assertFalse(mgr.is_rate_limited(user_id=1))
-
-    def test_over_limit_is_rate_limited(self):
-        mgr = self._manager()
-        for _ in range(60):
-            mgr.is_rate_limited(user_id=1)
-        # 61st call should be blocked
-        self.assertTrue(mgr.is_rate_limited(user_id=1))
-
-    def test_different_users_independent(self):
-        mgr = self._manager()
-        for _ in range(60):
-            mgr.is_rate_limited(user_id=1)
-        # user 2 should not be affected
-        self.assertFalse(mgr.is_rate_limited(user_id=2))
+# TestWebSocketRateLimit removed — ConnectionManager (WebSocket room chat)
+# was deleted in migration 005 (single-operator deployments don't need it).
 
 
 if __name__ == "__main__":
