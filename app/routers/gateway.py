@@ -11,7 +11,6 @@ OpenClaw 节点用这四个接口与 CyberGuard 通信：
 """
 import hashlib
 import json
-import json as _json
 from datetime import datetime
 from typing import Optional
 
@@ -292,7 +291,7 @@ async def manifest(x_api_key: str = Header(..., alias="X-Api-Key")):
         tools = []
         for t in trows:
             try:
-                schema = _json.loads(t.input_schema_json) if t.input_schema_json else {}
+                schema = json.loads(t.input_schema_json) if t.input_schema_json else {}
             except Exception:
                 schema = {}
             tools.append(ManifestTool(
@@ -309,7 +308,7 @@ async def manifest(x_api_key: str = Header(..., alias="X-Api-Key")):
         mcp_tools = []
         for m in mrows:
             try:
-                schema = _json.loads(m.input_schema_json) if m.input_schema_json else {}
+                schema = json.loads(m.input_schema_json) if m.input_schema_json else {}
             except Exception:
                 schema = {}
             mcp_tools.append(ManifestMCPTool(

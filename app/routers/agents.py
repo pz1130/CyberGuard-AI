@@ -4,6 +4,7 @@ import json
 import os
 import secrets
 from datetime import datetime
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -93,7 +94,7 @@ def _generate_api_key() -> tuple[str, str]:
     return raw, h
 
 
-def _build_metadata(fields: dict, existing: dict | None = None) -> dict:
+def _build_metadata(fields: dict, existing: Optional[dict] = None) -> dict:
     """把 OpenClaw 专属字段合并到 metadata_json。"""
     meta = dict(existing or {})
     # api_key → 加密后存入 metadata_json
