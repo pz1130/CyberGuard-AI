@@ -1,6 +1,6 @@
 ---
 name: project_status
-description: CyberGuard platform implementation status — last updated 2026-05-30 (QwenPaw pool alignment ①②③ shipped as PR #2; test-infra event-loop isolation fixed)
+description: CyberGuard platform implementation status — last updated 2026-05-30 (PR #2 merged; all 54 non-DB tests green on Python 3.9)
 type: project
 ---
 
@@ -8,10 +8,9 @@ type: project
 
 ## ▶ Resume point (next session)
 
-- **Branch:** `feat/internal-agents` — PR #2 open (subproject ③ + test-infra fix). Not yet merged to `main`.
-- **Just finished:** QwenPaw pool alignment **subproject ③ (external agents use pools)** via subagent-driven dev + test-infra event-loop isolation fix (greenlet dep, session-scope loop, conftest engine disposal).
-- **Next up:** Merge PR #2, then decide M6 scope. Remaining known issues (pre-existing, not blocking):
-  - 6 integration test failures in `test_integration.py` — `ConnectionManager` import error (groupchat refactor) and guardrail scoring logic changes; unrelated to our work
+- **Branch:** `main` — PR #2 merged (commit e74c9b9). `feat/internal-agents` fully landed.
+- **Just finished:** Merged PR #2 (QwenPaw pool alignment ①②③ + test-infra). Fixed Python 3.9 compat in 6 router files (`X | None → Optional[X]`); all 54 non-DB tests now pass locally.
+- **Next up:** Decide M6 scope. Remaining known issues:
   - `test_smoke_api.py` needs a running server (`SMOKE_BASE_URL`)
   - WebUI: Custom agents don't show API key in UI (API-only for now)
   - `has_manifest` is per-message (not top-level on PollResponse) — idle nodes w/no pending tasks won't see it until next task is dispatched; nodes can call `/gateway/manifest` proactively with their API key
