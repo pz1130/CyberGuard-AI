@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useContext } from 'react'
 import { api } from '../api/client'
 import { Plus, Search, Trash2, Upload, FileText, Database, X, Loader2 } from 'lucide-react'
+import { SearchContext } from '../context/SearchContext'
 
 interface KB {
   id: number
@@ -59,6 +60,22 @@ export default function Knowledge() {
   const [showTextForm, setShowTextForm] = useState(false)
   const [ingesting, setIngesting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const { searchTarget, setSearchTarget } = useContext(SearchContext)
+
+  useEffect(() => {
+    if (!searchTarget || searchTarget.tab !== 'knowledge') return
+    const el = document.querySelector(`[data-item-id="${searchTarget.id}"]`)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.classList.add('search-highlight')
+    const timer = setTimeout(() => {
+      el.classList.remove('search-highlight')
+      setSearchTarget(null)
+    }, 2000)
+    return () => clearTimeout(timer)
+  }, [searchTarget, setSearchTarget])
+
   const [query, setQuery] = useState('')
   const [topK, setTopK] = useState(5)
   const [results, setResults] = useState<QueryResult[]>([])
@@ -306,6 +323,7 @@ export default function Knowledge() {
               {bases.map(k => (
                 <div
                   key={k.id}
+                  data-item-id={k.id}
                   onClick={() => setSelected(k)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 8,
