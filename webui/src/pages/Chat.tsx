@@ -415,10 +415,17 @@ export default function Chat() {
     }
 
     const modelOverride = getModelOverride()
+    const userText = input.trim()
+    const files = attachments.map(a => a.file)
+    const agentIdParam = selectedAgentId || undefined
+    const modeParam = chatMode !== 'normal' ? chatMode : undefined
+
+    // Simple text-only chat → streaming path (SSE)
+    const isSimpleChat = files.length === 0 && !agentIdParam && !modeParam
 
     const userMsg: Message = {
       role: 'user',
-      content: input.trim() || (attachments.length > 0 ? `[${attachments.length} 个附件]` : ''),
+      content: userText || (files.length > 0 ? `[${files.length} 个附件]` : ''),
       created_at: new Date().toISOString(),
       attachments: attachments.map(att => ({
         type: (ACCEPTED_IMAGE_TYPES.includes(att.file.type) ? 'image' : 'doc') as 'image' | 'doc',
@@ -427,59 +434,111 @@ export default function Chat() {
         size: att.file.size,
       })),
     }
-    setMessages(prev => [...prev, userMsg])
-    setInput('')
-    setLoading(true)
-    setPollingStatus(attachments.length > 0 ? 'UPLOADING ATTACHMENTS...' : 'DISPATCHING TASK...')
 
-    try {
-      const files = attachments.map(a => a.file)
+    if (isSimpleChat) {
+      // ── Streaming path ───────────────────────────────────────────
+      setMessages(prev => [...prev, userMsg, { role: 'assistant', content: '', created_at: new Date().toISOString() }])
+      setInput('')
+      setLoading(true)
+      setPollingStatus('STREAMING...')
 
-      const agentIdParam = selectedAgentId || undefined
-      const modeParam = chatMode !== 'normal' ? chatMode : undefined
-      const chatResp = files.length > 0
-        ? await api.uploadChatAttachments(
-            files,
-            input.trim(),
-            activeConvId,
-            Object.keys(modelOverride).length > 0 ? modelOverride : undefined,
-            agentIdParam,
-            modeParam,
-          ) as { task_id: string; status: string; message: string }
-        : await api.chat({ message: input.trim(), conversation_id: activeConvId, agent_id: agentIdParam, mode: modeParam, ...modelOverride }) as { task_id: string; status: string; message: string }
+      try {
+        const streamBody: any = { message: userText, conversation_id: activeConvId }
+        if (modelOverride.provider_id) streamBody.provider_id = modelOverride.provider_id
+        if (modelOverride.model) streamBody.model = modelOverride.model
 
-      // Clean up object URLs
-      attachments.forEach(att => {
-        if (att.previewUrl) URL.revokeObjectURL(att.previewUrl)
-      })
-      setAttachments([])
-
-      const taskId = chatResp.task_id
-      activeTaskIdRef.current = taskId
-      localStorage.setItem('activeChatTaskId', taskId)
-
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
-      let seconds = 0
-      pollIntervalRef.current = setInterval(async () => {
-        seconds += 2
-        if (!isMountedRef.current) return
-        setPollingStatus(`PROCESSING... (${seconds}s)`)
-        const task = await pollForResult(taskId)
-        if (!isMountedRef.current) return
-        if (task?.status === 'completed' || task?.status === 'failed') {
-          clearInterval(pollIntervalRef.current!)
-          pollIntervalRef.current = null
-          activeTaskIdRef.current = null
-          localStorage.removeItem('activeChatTaskId')
-          handleTaskResult(task)
+        for await (const evt of api.chatStream(streamBody)) {
+          if (!isMountedRef.current) return
+          if (evt.type === 'chunk') {
+            setMessages(prev => {
+              const updated = [...prev]
+              const last = updated[updated.length - 1]
+              if (last?.role === 'assistant') {
+                updated[updated.length - 1] = { ...last, content: last.content + evt.content }
+              }
+              return updated
+            })
+          } else if (evt.type === 'error') {
+            setMessages(prev => {
+              const updated = [...prev]
+              const last = updated[updated.length - 1]
+              if (last?.role === 'assistant') {
+                updated[updated.length - 1] = { ...last, content: `⚠ ${evt.content}` }
+              }
+              return updated
+            })
+          }
+          // 'done' — stream finished, backend persists automatically
+        }
+        // Update conversation title on first message
+        if (activeConvId && messages.filter(m => m.role === 'user').length === 0 && userText) {
+          const shortTitle = userText.slice(0, 30) + (userText.length > 30 ? '...' : '')
+          api.updateConversation(activeConvId, { title: shortTitle }).catch(() => {})
+        }
+      } catch (e: any) {
+        setMessages(prev => {
+          const updated = [...prev]
+          const last = updated[updated.length - 1]
+          if (last?.role === 'assistant' && !last.content) {
+            updated[updated.length - 1] = { ...last, content: `⚠ STREAM ERROR — ${e?.message || 'CONNECTION FAILED'}` }
+          } else {
+            updated.push({ role: 'assistant', content: `⚠ STREAM ERROR — ${e?.message || 'CONNECTION FAILED'}`, created_at: new Date().toISOString() })
+          }
+          return updated
+        })
+      } finally {
+        if (isMountedRef.current) {
           setLoading(false)
           setPollingStatus('')
         }
-      }, 2000)
-    } catch (e: any) {
-      setMessages(prev => [...prev, { role: 'assistant', content: `⚠ SYSTEM ERROR — ${e?.message || 'TRANSMISSION FAILURE'}`, created_at: new Date().toISOString() }])
-      setLoading(false)
-      setPollingStatus('')
+      }
+    } else {
+      // ── Celery path (attachments / agent / expert mode) ──────────
+      setMessages(prev => [...prev, userMsg])
+      setInput('')
+      setLoading(true)
+      setPollingStatus(files.length > 0 ? 'UPLOADING ATTACHMENTS...' : 'DISPATCHING TASK...')
+
+      try {
+        const chatResp = files.length > 0
+          ? await api.uploadChatAttachments(
+              files, userText, activeConvId,
+              Object.keys(modelOverride).length > 0 ? modelOverride : undefined,
+              agentIdParam, modeParam,
+            ) as { task_id: string; status: string; message: string }
+          : await api.chat({ message: userText, conversation_id: activeConvId, agent_id: agentIdParam, mode: modeParam, ...modelOverride }) as { task_id: string; status: string; message: string }
+
+        // Clean up object URLs
+        attachments.forEach(att => { if (att.previewUrl) URL.revokeObjectURL(att.previewUrl) })
+        setAttachments([])
+
+        const taskId = chatResp.task_id
+        activeTaskIdRef.current = taskId
+        localStorage.setItem('activeChatTaskId', taskId)
+
+        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+        let seconds = 0
+        pollIntervalRef.current = setInterval(async () => {
+          seconds += 2
+          if (!isMountedRef.current) return
+          setPollingStatus(`PROCESSING... (${seconds}s)`)
+          const task = await pollForResult(taskId)
+          if (!isMountedRef.current) return
+          if (task?.status === 'completed' || task?.status === 'failed') {
+            clearInterval(pollIntervalRef.current!)
+            pollIntervalRef.current = null
+            activeTaskIdRef.current = null
+            localStorage.removeItem('activeChatTaskId')
+            handleTaskResult(task)
+            setLoading(false)
+            setPollingStatus('')
+          }
+        }, 2000)
+      } catch (e: any) {
+        setMessages(prev => [...prev, { role: 'assistant', content: `⚠ SYSTEM ERROR — ${e?.message || 'TRANSMISSION FAILURE'}`, created_at: new Date().toISOString() }])
+        setLoading(false)
+        setPollingStatus('')
+      }
     }
   }
 
