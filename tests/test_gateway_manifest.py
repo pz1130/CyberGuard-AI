@@ -29,3 +29,127 @@ def test_manifest_schemas_round_trip():
     assert data["skills"][0]["md_content"] == "# MD"
     assert data["tools"][0]["command_template"] == "nmap {target}"
     assert data["mcp_tools"][0]["name"] == "search_cve"
+
+
+# ---------------------------------------------------------------------------
+# Task 2 — GET /gateway/manifest
+# ---------------------------------------------------------------------------
+
+def _fake_agent(skills=None, tools=None, mcp=None):
+    return SimpleNamespace(
+        id=7, agent_name="ScanBot",
+        associated_skills=skills,
+        associated_tools=tools,
+        associated_mcp_tools=mcp,
+    )
+
+
+def _mock_session_ctx(rows=None):
+    """Return a mock async context manager whose session.execute returns rows."""
+    rows = rows or []
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = rows
+    mock_session.execute = AsyncMock(return_value=mock_result)
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+    return ctx
+
+
+@pytest.mark.asyncio
+async def test_manifest_empty_pools():
+    """Agent with no assignments returns three empty arrays."""
+    from app.routers import gateway as gw
+
+    with patch.object(gw, "_auth_agent", AsyncMock(return_value=_fake_agent())):
+        with patch("app.routers.gateway.AsyncSessionLocal", return_value=_mock_session_ctx()):
+            result = await gw.manifest(x_api_key="oc-test")
+
+    assert result.agent_id == 7
+    assert result.agent_name == "ScanBot"
+    assert result.skills == []
+    assert result.tools == []
+    assert result.mcp_tools == []
+
+
+@pytest.mark.asyncio
+async def test_manifest_returns_assigned_skill():
+    """Agent with one skill gets it back in full."""
+    from app.routers import gateway as gw
+
+    fake_skill = SimpleNamespace(
+        id=3, name="port-scan", description="Port scanning runbook",
+        md_content="# Port Scan\nRun nmap...",
+    )
+
+    agent = _fake_agent(skills=[3])
+
+    with patch.object(gw, "_auth_agent", AsyncMock(return_value=agent)):
+        # Session is called three times (skills, tools, mcp_tools).
+        # Only skills query needs a real row; the others return empty.
+        mock_session = AsyncMock()
+        call_count = {"n": 0}
+
+        async def fake_execute(_q):
+            result = MagicMock()
+            # First call is skills query
+            if call_count["n"] == 0:
+                result.scalars.return_value.all.return_value = [fake_skill]
+            else:
+                result.scalars.return_value.all.return_value = []
+            call_count["n"] += 1
+            return result
+
+        mock_session.execute = fake_execute
+        ctx = MagicMock()
+        ctx.__aenter__ = AsyncMock(return_value=mock_session)
+        ctx.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("app.routers.gateway.AsyncSessionLocal", return_value=ctx):
+            result = await gw.manifest(x_api_key="oc-test")
+
+    assert len(result.skills) == 1
+    assert result.skills[0].name == "port-scan"
+    assert result.skills[0].md_content == "# Port Scan\nRun nmap..."
+    assert result.tools == []
+    assert result.mcp_tools == []
+
+
+@pytest.mark.asyncio
+async def test_manifest_parses_tool_input_schema():
+    """Tool.input_schema_json string is parsed to dict in the response."""
+    from app.routers import gateway as gw
+
+    fake_tool = SimpleNamespace(
+        id=1, name="nmap", description="Net mapper",
+        command_template="nmap -sV {target}",
+        input_schema_json='{"type": "object", "properties": {"target": {"type": "string"}}}',
+    )
+    agent = _fake_agent(tools=[1])
+
+    mock_session = AsyncMock()
+    call_count = {"n": 0}
+
+    async def fake_execute(_q):
+        result = MagicMock()
+        # Second call is tools query
+        if call_count["n"] == 1:
+            result.scalars.return_value.all.return_value = [fake_tool]
+        else:
+            result.scalars.return_value.all.return_value = []
+        call_count["n"] += 1
+        return result
+
+    mock_session.execute = fake_execute
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+
+    with patch.object(gw, "_auth_agent", AsyncMock(return_value=agent)):
+        with patch("app.routers.gateway.AsyncSessionLocal", return_value=ctx):
+            result = await gw.manifest(x_api_key="oc-test")
+
+    assert len(result.tools) == 1
+    assert result.tools[0].input_schema == {"type": "object", "properties": {"target": {"type": "string"}}}
+    assert result.tools[0].command_template == "nmap -sV {target}"
