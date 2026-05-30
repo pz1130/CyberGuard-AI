@@ -120,7 +120,8 @@ async def _test_provider_connectivity(
     api_key: str,
     provider_type: str,
     api_version: Optional[str],
-    models: list[str],
+    models: list,
+    test_model: Optional[str] = None,
 ) -> ProviderTestResponse:
     """Ping the provider with a minimal completion call to validate configuration."""
     if not base_url:
@@ -129,7 +130,14 @@ async def _test_provider_connectivity(
             error="base_url is required",
         )
 
-    test_model = models[0] if models else "gpt-4o-mini"
+    # Resolve model name: explicit test_model > first chat model in list > fallback
+    if test_model:
+        model_name = test_model
+    elif models:
+        first = models[0]
+        model_name = first.name if hasattr(first, "name") else str(first)
+    else:
+        model_name = "gpt-4o-mini"
 
     extra_kwargs: dict = {"api_key": api_key or "dummy"}
     if provider_type == "azure":
@@ -141,10 +149,10 @@ async def _test_provider_connectivity(
     try:
         # MiniMax uses OpenAI-compatible API despite anthropic provider_type
         if provider_type == "anthropic" and ("minimaxi" in base_url or ".minimaxi.com" in base_url):
-            test_model = models[0] if models else "MiniMax-Text-01"
+            minimax_model = "MiniMax-Text-01"
             try:
                 await client.chat.completions.create(
-                    model=test_model,
+                    model=minimax_model,
                     messages=[{"role": "user", "content": "hi"}],
                     max_tokens=5,
                 )
@@ -152,7 +160,7 @@ async def _test_provider_connectivity(
                 return ProviderTestResponse(
                     success=True,
                     latency_ms=round(latency_ms, 1),
-                    model=test_model,
+                    model=minimax_model,
                 )
             except APIStatusError as e:
                 latency_ms = (time.monotonic() - start) * 1000
@@ -160,7 +168,7 @@ async def _test_provider_connectivity(
                     return ProviderTestResponse(
                         success=True,
                         latency_ms=round(latency_ms, 1),
-                        model=test_model,
+                        model=minimax_model,
                         error="Connected (401 Unauthorized — check your API key)",
                     )
                 return ProviderTestResponse(
@@ -184,7 +192,7 @@ async def _test_provider_connectivity(
                 "content-type": "application/json",
             }
             payload = {
-                "model": test_model,
+                "model": model_name,
                 "max_tokens": 10,
                 "messages": [{"role": "user", "content": "hi"}],
             }
@@ -203,7 +211,7 @@ async def _test_provider_connectivity(
                     )
         else:
             await client.chat.completions.create(
-                model=test_model,
+                model=model_name,
                 messages=[{"role": "user", "content": "hi"}],
                 max_tokens=5,
             )
@@ -211,7 +219,7 @@ async def _test_provider_connectivity(
         return ProviderTestResponse(
             success=True,
             latency_ms=round(latency_ms, 1),
-            model=test_model,
+            model=model_name,
         )
     except APIStatusError as e:
         latency_ms = (time.monotonic() - start) * 1000
@@ -219,7 +227,7 @@ async def _test_provider_connectivity(
             return ProviderTestResponse(
                 success=True,
                 latency_ms=round(latency_ms, 1),
-                model=test_model,
+                model=model_name,
                 error="Connected (401 Unauthorized — check your API key)",
             )
         return ProviderTestResponse(
@@ -328,6 +336,7 @@ async def test_provider_connection(
         provider_type=provider.provider_type,
         api_version=provider.api_version,
         models=provider.models or [],
+        test_model=body.test_model,
     )
 
 
