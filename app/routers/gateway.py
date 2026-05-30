@@ -130,6 +130,10 @@ async def poll(x_api_key: str = Header(..., alias="X-Api-Key")):
 
         await session.commit()
 
+    has_manifest = bool(
+        agent.associated_skills or agent.associated_tools or agent.associated_mcp_tools
+    )
+
     return PollResponse(
         messages=[
             {
@@ -140,6 +144,7 @@ async def poll(x_api_key: str = Header(..., alias="X-Api-Key")):
                 "sender_user_name": "CyberGuard",
                 "sender_user_id": 0,
                 "created_at": m.created_at.isoformat(),
+                "has_manifest": has_manifest,
             }
             for m in messages
         ]

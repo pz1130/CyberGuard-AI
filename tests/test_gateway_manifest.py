@@ -153,3 +153,81 @@ async def test_manifest_parses_tool_input_schema():
     assert len(result.tools) == 1
     assert result.tools[0].input_schema == {"type": "object", "properties": {"target": {"type": "string"}}}
     assert result.tools[0].command_template == "nmap -sV {target}"
+
+
+# ---------------------------------------------------------------------------
+# Task 3 — Poll has_manifest field
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_poll_has_manifest_true_when_skills_assigned():
+    """Poll response includes has_manifest=True when agent has skills assigned."""
+    from app.routers import gateway as gw
+
+    agent_with_skills = SimpleNamespace(
+        id=5, agent_name="Bot",
+        associated_skills=[1, 2],
+        associated_tools=None,
+        associated_mcp_tools=None,
+    )
+
+    fake_msg = SimpleNamespace(
+        id=10, content="do task", execution_id="uuid-1",
+        created_at=MagicMock(isoformat=lambda: "2026-05-30T00:00:00"),
+    )
+
+    mock_session = AsyncMock()
+
+    async def fake_execute(q):
+        r = MagicMock()
+        r.scalars.return_value.all.return_value = [fake_msg]
+        r.scalar_one_or_none.return_value = agent_with_skills
+        return r
+
+    mock_session.execute = fake_execute
+    mock_session.commit = AsyncMock()
+
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+
+    with patch.object(gw, "_auth_agent", AsyncMock(return_value=agent_with_skills)):
+        with patch("app.routers.gateway.AsyncSessionLocal", return_value=ctx):
+            result = await gw.poll(x_api_key="oc-test")
+
+    assert len(result.messages) == 1
+    assert result.messages[0]["has_manifest"] is True
+
+
+@pytest.mark.asyncio
+async def test_poll_has_manifest_false_when_no_pools():
+    """Poll response has has_manifest=False when agent has no pool assignments."""
+    from app.routers import gateway as gw
+
+    bare_agent = SimpleNamespace(
+        id=5, agent_name="Bot",
+        associated_skills=None,
+        associated_tools=None,
+        associated_mcp_tools=None,
+    )
+
+    mock_session = AsyncMock()
+
+    async def fake_execute(_q):
+        r = MagicMock()
+        r.scalars.return_value.all.return_value = []
+        r.scalar_one_or_none.return_value = bare_agent
+        return r
+
+    mock_session.execute = fake_execute
+    mock_session.commit = AsyncMock()
+
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+
+    with patch.object(gw, "_auth_agent", AsyncMock(return_value=bare_agent)):
+        with patch("app.routers.gateway.AsyncSessionLocal", return_value=ctx):
+            result = await gw.poll(x_api_key="oc-test")
+
+    assert result.messages == []
