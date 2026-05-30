@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useContext } from 'react'
 import { api } from '../api/client'
 import { Plus, Loader2, Cpu, Trash, Pencil, Copy, Wifi, WifiOff, Key } from 'lucide-react'
+import { SearchContext } from '../context/SearchContext'
 
 interface Agent {
   id?: string
@@ -349,6 +350,21 @@ export default function Agents() {
   const [toolsPool, setToolsPool] = useState<any[]>([])
   const [mcpToolsPool, setMcpToolsPool] = useState<any[]>([])
 
+  const { searchTarget, setSearchTarget } = useContext(SearchContext)
+
+  useEffect(() => {
+    if (!searchTarget || searchTarget.tab !== 'agents') return
+    const el = document.querySelector(`[data-item-id="${searchTarget.id}"]`)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.classList.add('search-highlight')
+    const timer = setTimeout(() => {
+      el.classList.remove('search-highlight')
+      setSearchTarget(null)
+    }, 2000)
+    return () => clearTimeout(timer)
+  }, [searchTarget, setSearchTarget])
+
   const load = async () => {
     try {
       const data = await api.getAgents() as any
@@ -552,7 +568,7 @@ export default function Agents() {
             const thisRegenKey = regenKey[a.id!]
 
             return (
-              <div key={a.id} style={{
+              <div key={a.id} data-item-id={a.id} style={{
                 padding: 18, background: 'var(--bg-surface)',
                 border: '1px solid var(--border-bright)',
                 borderLeft: `3px solid ${bc}`,
