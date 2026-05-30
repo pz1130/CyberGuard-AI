@@ -47,7 +47,7 @@ export default function Security() {
     setSaving(true)
     setNotice(null)
     try {
-      const d = await api.updateSecuritySettings(settings as Record<string, unknown>) as SecuritySettings
+      const d = await api.updateSecuritySettings(settings as unknown as Record<string, unknown>) as SecuritySettings
       setSaved(d)
       setSettings(d)
       setNotice({ ok: true, msg: 'SETTINGS SAVED' })

@@ -117,7 +117,7 @@ export default function Governance() {
   useEffect(() => {
     if (!searchTarget || searchTarget.tab !== 'governance') return
     const targetView = searchTarget.subview === 'frameworks' ? 'frameworks' : 'list'
-    setView({ kind: targetView as View['kind'] })
+    setView({ kind: targetView as 'frameworks' | 'list' })
     const timer = setTimeout(() => {
       const el = document.querySelector(`[data-item-id="${searchTarget.id}"]`)
       if (el) {
