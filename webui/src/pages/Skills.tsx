@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useContext } from 'react'
 import { api } from '../api/client'
 import { Trash2, Plus, Edit2, Wrench, X, Loader2, Link, Upload } from 'lucide-react'
+import { SearchContext } from '../context/SearchContext'
 
 interface Skill {
   id?: string
@@ -55,6 +56,21 @@ export default function Skills() {
   const [installLoading, setInstallLoading] = useState(false)
   const [installError, setInstallError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const { searchTarget, setSearchTarget } = useContext(SearchContext)
+
+  useEffect(() => {
+    if (!searchTarget || searchTarget.tab !== 'skills') return
+    const el = document.querySelector(`[data-item-id="${searchTarget.id}"]`)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.classList.add('search-highlight')
+    const timer = setTimeout(() => {
+      el.classList.remove('search-highlight')
+      setSearchTarget(null)
+    }, 2000)
+    return () => clearTimeout(timer)
+  }, [searchTarget, setSearchTarget])
 
   const load = async () => {
     try {
@@ -315,7 +331,7 @@ export default function Skills() {
           {items.map(s => {
             const tc = CATEGORY_COLORS[s.category || ''] || 'var(--text-muted)'
             return (
-              <div key={s.id} style={{ padding: 20, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', borderLeft: `3px solid ${tc}` }}>
+              <div key={s.id} data-item-id={s.id} style={{ padding: 20, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', borderLeft: `3px solid ${tc}` }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{ width: 32, height: 32, border: '1px solid var(--border-bright)', background: 'var(--bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: tc }}>
