@@ -5,9 +5,10 @@ interface Props {
   dark: boolean
   toggleDark: () => void
   toggleLang: () => void
+  onSearchOpen: () => void
 }
 
-export default function Header({ dark, toggleDark, toggleLang }: Props) {
+export default function Header({ dark, toggleDark, toggleLang, onSearchOpen }: Props) {
   const [username, setUsername] = useState('ADMIN')
   const [role, setRole] = useState('OPERATOR')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -77,7 +78,9 @@ export default function Header({ dark, toggleDark, toggleLang }: Props) {
         <input
           type="text"
           id="global-search"
+          readOnly
           placeholder="SEARCH AGENTS / SKILLS / TOOLS / PROVIDERS..."
+          onClick={onSearchOpen}
           style={{
             width: '100%', height: 34,
             background: 'var(--bg-surface)',
@@ -85,6 +88,7 @@ export default function Header({ dark, toggleDark, toggleLang }: Props) {
             paddingLeft: 36, paddingRight: 12,
             fontSize: 14, letterSpacing: '0.05em',
             color: 'var(--text-primary)',
+            cursor: 'pointer',
           }}
         />
         <span style={{
@@ -163,7 +167,9 @@ export default function Header({ dark, toggleDark, toggleLang }: Props) {
             </div>
             <div style={{ textAlign: 'left' }}>
               <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.1em' }}>{username}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>{role}</div>
+              {role !== username && (
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>{role}</div>
+              )}
             </div>
             <div
               className="blink"
