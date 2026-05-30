@@ -100,6 +100,7 @@ async def get_group_chat_session(session_id: str):
             for m in session.messages
         ],
         created_at=session.created_at,
+        running=service.is_running(session_id),
     )
 
 
@@ -167,9 +168,12 @@ async def run_group_chat_round(session_id: str):
 @router.post("/groupchat/sessions/{session_id}/complete", response_model=GroupChatSessionResponse)
 async def run_group_chat_to_completion(session_id: str):
     """
-    Run the group chat to completion (all rounds or until consensus).
+    Start running the group chat to completion (all rounds or until consensus).
 
-    Returns the final session state with all messages.
+    Dispatches the discussion as a background task and returns immediately with
+    ``running=True``; the discussion can take minutes (rounds × agents × LLM
+    latency) and must not block the single-worker event loop. Poll
+    ``GET /groupchat/sessions/{session_id}`` until ``running`` is false.
     """
     from app.services.group_chat import get_group_chat_service
 
@@ -178,7 +182,7 @@ async def run_group_chat_to_completion(session_id: str):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    result = await service.run_to_completion(session_id)
+    result = await service.start_completion(session_id)
     return GroupChatSessionResponse(
         session_id=result["session_id"],
         user_id=result["user_id"],
@@ -188,15 +192,16 @@ async def run_group_chat_to_completion(session_id: str):
         max_rounds=result["max_rounds"],
         messages=[
             GroupChatMessageResponse(
-                role=m.role,
-                content=m.content,
-                agent_id=m.agent_id,
-                agent_name=m.agent_name,
-                timestamp=m.timestamp,
+                role=m["role"],
+                content=m["content"],
+                agent_id=m.get("agent_id"),
+                agent_name=m.get("agent_name"),
+                timestamp=m["timestamp"],
             )
             for m in result["messages"]
         ],
         created_at=result["created_at"],
+        running=service.is_running(session_id),
     )
 
 

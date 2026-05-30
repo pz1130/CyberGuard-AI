@@ -23,6 +23,9 @@ class GroupChatSessionResponse(BaseModel):
     max_rounds: int
     messages: List[GroupChatMessageResponse]
     created_at: str
+    # True while a background completion run is in flight; the frontend polls
+    # the session until this flips to false.
+    running: bool = False
 
 
 class GroupChatCreateRequest(BaseModel):
