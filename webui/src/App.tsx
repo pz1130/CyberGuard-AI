@@ -5,6 +5,7 @@ import Sidebar, { type Tab } from './components/Sidebar'
 import Header from './components/Header'
 import GlobalSearch from './components/GlobalSearch'
 import { SearchProvider } from './context/SearchContext'
+import { api } from './api/client'
 import Chat from './pages/Chat'
 import Providers from './pages/Providers'
 import Agents from './pages/Agents'
@@ -69,8 +70,8 @@ export default function App() {
     }
     const token = localStorage.getItem('token')
     if (!token) { setChecking(false); return }
-    fetch('/api/v1/auth/me', { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => { if (r.ok) setAuthed(true); else localStorage.removeItem('token') })
+    api.getAuthMe()
+      .then(() => setAuthed(true))
       .catch(() => localStorage.removeItem('token'))
       .finally(() => setChecking(false))
   }, [])

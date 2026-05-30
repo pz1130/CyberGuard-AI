@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { LogOut, Search } from 'lucide-react'
+import { api } from '../api/client'
 
 interface Props {
   dark: boolean
@@ -30,9 +31,8 @@ export default function Header({ dark, toggleDark, toggleLang, onSearchOpen }: P
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token) return
-    fetch('/api/v1/auth/me', { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => {
+    api.getAuthMe()
+      .then((d: any) => {
         if (d) {
           setUsername((d.username || 'ADMIN').toUpperCase())
           setRole((d.role || 'OPERATOR').toUpperCase())
@@ -42,16 +42,7 @@ export default function Header({ dark, toggleDark, toggleLang, onSearchOpen }: P
   }, [])
 
   useEffect(() => {
-    const check = () => {
-      const token = localStorage.getItem('token')
-      fetch('/health/ready', token ? { headers: { Authorization: `Bearer ${token}` } } : undefined)
-        .then(r => {
-          if (r.ok) setSysStatus('online')
-          else if (r.status === 503) setSysStatus('degraded')
-          else setSysStatus('offline')
-        })
-        .catch(() => setSysStatus('offline'))
-    }
+    const check = () => { api.healthStatus().then(setSysStatus) }
     check()
     const id = setInterval(check, 30_000)
     return () => clearInterval(id)
