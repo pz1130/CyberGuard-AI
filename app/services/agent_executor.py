@@ -43,41 +43,7 @@ def _resolve_api_key(config: Dict[str, Any]) -> str:
     # 3. metadata_json.api_key (plain)
     return meta.get("api_key", "")
 
-# Blocked hostnames for SSRF protection
-_BLOCKED_HOSTS = frozenset({
-    "169.254.169.254",       # AWS / Azure metadata
-    "metadata.google.internal",  # GCP metadata
-    "metadata.internal",
-    "metadata.azure.com",
-    "localhost",
-    "0.0.0.0",
-    "127.0.0.1",
-})
-
-
-def _validate_endpoint_url(endpoint_url: str) -> str:
-    """
-    Validate endpoint URL to prevent SSRF.
-    Returns the validated URL or raises ValueError.
-    """
-    if not endpoint_url:
-        raise ValueError("Endpoint URL cannot be empty")
-    parsed = urlparse(endpoint_url)
-    scheme = parsed.scheme.lower()
-    if scheme not in ("http", "https"):
-        raise ValueError(f"Disallowed scheme: {scheme}. Only http/https allowed.")
-    hostname = parsed.hostname or ""
-    # Block direct IP access to private ranges
-    if hostname in _BLOCKED_HOSTS:
-        raise ValueError(f"Disallowed host: {hostname}")
-    # Block obvious private/CIDR ranges (basic check)
-    if hostname.startswith(("10.", "172.16.", "172.17.", "172.18.", "172.19.",
-                            "172.20.", "172.21.", "172.22.", "172.23.",
-                            "172.24.", "172.25.", "172.26.", "172.27.",
-                            "172.28.", "172.29.", "172.30.", "172.31.",
-                            "192.168.")):
-        raise ValueError(f"Disallowed private network range: {hostname}")
-    return endpoint_url
+from app.core.ssrf import validate_outbound_url as _validate_endpoint_url
 
 
 class SubAgentWrapper:

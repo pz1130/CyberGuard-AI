@@ -341,10 +341,17 @@ async def test_agent_connection(
     if not endpoint:
         return AgentTestResponse(success=False, error="未配置 endpoint_url")
 
+    # SSRF protection — validate before making outbound request
+    from app.core.ssrf import validate_outbound_url, SSRFError
+    try:
+        validate_outbound_url(endpoint)
+    except SSRFError as e:
+        return AgentTestResponse(success=False, error=f"SSRF blocked: {e}")
+
     import httpx, time
     try:
         t0 = time.monotonic()
-        async with httpx.AsyncClient(timeout=10) as client:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
             resp = await client.get(f"{endpoint.rstrip('/')}/health")
         latency = round((time.monotonic() - t0) * 1000, 1)
         return AgentTestResponse(success=resp.status_code == 200,

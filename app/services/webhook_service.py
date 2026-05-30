@@ -29,30 +29,12 @@ from app.schemas.webhook import SUPPORTED_EVENTS
 
 logger = logging.getLogger(__name__)
 
-# SSRF protection — block private/metadata addresses.
-_BLOCKED_HOSTS = frozenset({
-    "169.254.169.254",
-    "metadata.google.internal",
-    "metadata.azure.com",
-    "localhost",
-    "127.0.0.1",
-    "0.0.0.0",
-})
-_PRIVATE_PREFIXES = (
-    "10.", "192.168.",
-    "172.16.", "172.17.", "172.18.", "172.19.", "172.20.", "172.21.",
-    "172.22.", "172.23.", "172.24.", "172.25.", "172.26.", "172.27.",
-    "172.28.", "172.29.", "172.30.", "172.31.",
-)
-
-
 def _validate_url(url: str) -> None:
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https"):
-        raise ValueError(f"Disallowed scheme '{parsed.scheme}'")
-    host = parsed.hostname or ""
-    if host in _BLOCKED_HOSTS or host.startswith(_PRIVATE_PREFIXES):
-        raise ValueError(f"Disallowed host (private/metadata): {host}")
+    from app.core.ssrf import validate_outbound_url, SSRFError
+    try:
+        validate_outbound_url(url)
+    except SSRFError as e:
+        raise ValueError(str(e))
 
 
 def _sign(secret: str, body: bytes) -> str:

@@ -16,25 +16,13 @@ from urllib.parse import urlparse
 
 from app.config import settings
 
-# SSRF protection — block cloud metadata and loopback IPs
-_BLOCKED_HOSTS = frozenset({
-    "169.254.169.254",          # AWS / Azure metadata
-    "metadata.google.internal",  # GCP metadata
-    "metadata.internal",
-    "localhost",
-    "127.0.0.1",
-    "0.0.0.0",
-})
-
-
 def _validate_url(url: str) -> None:
     """Raise ValueError if the URL is unsafe (SSRF protection)."""
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https"):
-        raise ValueError(f"Disallowed scheme '{parsed.scheme}' — only http/https allowed")
-    host = parsed.hostname or ""
-    if host in _BLOCKED_HOSTS:
-        raise ValueError(f"Disallowed host: {host}")
+    from app.core.ssrf import validate_outbound_url, SSRFError
+    try:
+        validate_outbound_url(url)
+    except SSRFError as e:
+        raise ValueError(str(e))
 
 
 def _extract_text(data: dict) -> str:

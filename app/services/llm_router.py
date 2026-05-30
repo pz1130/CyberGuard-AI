@@ -235,6 +235,7 @@ class LLMRouter:
     async def _get_provider_from_db(self, provider_id: int) -> Optional[Dict[str, Any]]:
         """Fetch provider config from database by ID."""
         from app.core.database import get_db_context
+        from app.core.ssrf import validate_outbound_url, SSRFError
         from sqlalchemy import text
 
         try:
@@ -255,6 +256,13 @@ class LLMRouter:
                     except Exception:
                         api_key = ""
 
+                base_url = row[2] or "https://api.openai.com/v1"
+                try:
+                    validate_outbound_url(base_url)
+                except SSRFError as e:
+                    logger.error(f"[llm_router] Provider {provider_id} base_url SSRF blocked: {e}")
+                    return None
+
                 models = row[3]
                 if isinstance(models, str):
                     models = json.loads(models) if models else []
@@ -264,7 +272,7 @@ class LLMRouter:
                 return {
                     "name": row[0],
                     "api_key": api_key,
-                    "base_url": row[2] or "https://api.openai.com/v1",
+                    "base_url": base_url,
                     "models": models,
                     "metadata_json": row[4] or {},
                 }
@@ -290,6 +298,7 @@ class LLMRouter:
     async def _get_first_active_provider(self) -> Optional[Dict[str, Any]]:
         """Fetch the first active provider from DB (for default routing)."""
         from app.core.database import get_db_context
+        from app.core.ssrf import validate_outbound_url, SSRFError
 
         try:
             async with get_db_context() as session:
@@ -312,6 +321,13 @@ class LLMRouter:
                     except Exception:
                         api_key = ""
 
+                base_url = row[2] or "https://api.openai.com/v1"
+                try:
+                    validate_outbound_url(base_url)
+                except SSRFError as e:
+                    logger.error(f"[llm_router] Default provider base_url SSRF blocked: {e}")
+                    return None
+
                 models = row[3]
                 if isinstance(models, str):
                     models = json.loads(models) if models else []
@@ -321,7 +337,7 @@ class LLMRouter:
                 return {
                     "name": row[0],
                     "api_key": api_key,
-                    "base_url": row[2] or "https://api.openai.com/v1",
+                    "base_url": base_url,
                     "models": models,
                     "metadata_json": row[4] or {},
                 }

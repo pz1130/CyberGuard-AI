@@ -295,6 +295,14 @@ async def create_provider(
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Provider name already exists")
 
+    # SSRF protection — validate base_url before saving
+    if body.base_url:
+        from app.core.ssrf import validate_outbound_url, SSRFError
+        try:
+            validate_outbound_url(body.base_url)
+        except SSRFError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid base_url: {e}")
+
     provider = Provider(
         name=body.name,
         provider_type=body.provider_type,
@@ -368,6 +376,15 @@ async def update_provider(
         raise HTTPException(status_code=404, detail="Provider not found")
 
     update_data = body.model_dump(exclude_unset=True)
+
+    # SSRF protection — validate base_url if being updated
+    if "base_url" in update_data and update_data["base_url"]:
+        from app.core.ssrf import validate_outbound_url, SSRFError
+        try:
+            validate_outbound_url(update_data["base_url"])
+        except SSRFError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid base_url: {e}")
+
     for key, value in update_data.items():
         if key == "api_key":
             # Skip re-encryption if the client sends back the masked placeholder

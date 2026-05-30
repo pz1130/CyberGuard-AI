@@ -10,10 +10,11 @@ def _validate_endpoint_url(v: Optional[str]) -> Optional[str]:
         return v
     if not isinstance(v, str):
         raise ValueError("endpoint_url must be a string")
-    if not v.startswith(("http://", "https://")):
-        raise ValueError("endpoint_url must start with http:// or https://")
-    if re.search(r"[;&|`$<>]", v):
-        raise ValueError("endpoint_url contains disallowed characters")
+    from app.core.ssrf import validate_outbound_url, SSRFError
+    try:
+        validate_outbound_url(v)
+    except SSRFError as e:
+        raise ValueError(str(e))
     return v
 
 
