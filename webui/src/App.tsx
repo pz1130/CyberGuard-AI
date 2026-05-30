@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import Sidebar, { type Tab } from './components/Sidebar'
 import Header from './components/Header'
+import GlobalSearch from './components/GlobalSearch'
+import { SearchProvider } from './context/SearchContext'
 import Chat from './pages/Chat'
 import Providers from './pages/Providers'
 import Agents from './pages/Agents'
@@ -54,6 +56,9 @@ export default function App() {
   const [authed, setAuthed] = useState(false)
   const [checking, setChecking] = useState(true)
   const [dark, setDark] = useState(true)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [recentTabs, setRecentTabs] = useState<Tab[]>([])
+
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme')
     if (savedTheme === 'light') {
@@ -67,6 +72,23 @@ export default function App() {
       .catch(() => localStorage.removeItem('token'))
       .finally(() => setChecking(false))
   }, [])
+
+  // Global CTRL+K listener
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === 'k') {
+        e.preventDefault()
+        setSearchOpen(true)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
+  const handleSetTab = (t: Tab) => {
+    setTab(t)
+    setRecentTabs(prev => [t, ...prev.filter(x => x !== t)].slice(0, 3))
+  }
 
   const toggleLang = () => {
     const next = i18n.language === 'zh' ? 'en' : 'zh'
@@ -122,24 +144,37 @@ export default function App() {
   if (!authed) return <Login />
 
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column',
-      height: '100vh', overflow: 'hidden',
-      fontFamily: 'var(--font-mono)',
-      background: 'var(--bg-base)', color: 'var(--text-primary)',
-    }}>
-      <Header dark={dark} toggleDark={toggleDark} toggleLang={toggleLang} />
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', paddingTop: 'var(--header-height)' }}>
-        <Sidebar tab={tab} setTab={setTab} />
-        <main style={{
-          flex: 1, overflowY: 'auto', overflowX: 'hidden',
-          marginLeft: 'var(--sidebar-width)',
-          padding: '24px 28px',
-          animation: 'fade-in 0.2s ease',
-        }}>
-          {PAGES[tab].component}
-        </main>
+    <SearchProvider>
+      <div style={{
+        display: 'flex', flexDirection: 'column',
+        height: '100vh', overflow: 'hidden',
+        fontFamily: 'var(--font-mono)',
+        background: 'var(--bg-base)', color: 'var(--text-primary)',
+      }}>
+        <Header
+          dark={dark}
+          toggleDark={toggleDark}
+          toggleLang={toggleLang}
+          onSearchOpen={() => setSearchOpen(true)}
+        />
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden', paddingTop: 'var(--header-height)' }}>
+          <Sidebar tab={tab} setTab={handleSetTab} />
+          <main style={{
+            flex: 1, overflowY: 'auto', overflowX: 'hidden',
+            marginLeft: 'var(--sidebar-width)',
+            padding: '24px 28px',
+            animation: 'fade-in 0.2s ease',
+          }}>
+            {PAGES[tab].component}
+          </main>
+        </div>
+        <GlobalSearch
+          open={searchOpen}
+          onClose={() => setSearchOpen(false)}
+          setTab={handleSetTab}
+          recentTabs={recentTabs}
+        />
       </div>
-    </div>
+    </SearchProvider>
   )
 }
