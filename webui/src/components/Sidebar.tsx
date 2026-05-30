@@ -128,28 +128,6 @@ export default function Sidebar({ tab, setTab }: Props) {
         )
       })}
 
-      {/* Bottom status */}
-      <div style={{
-        position: 'sticky', bottom: 0,
-        background: 'var(--bg-surface)',
-        borderTop: '1px solid var(--border)',
-        padding: '12px 16px', marginTop: 16,
-      }}>
-        <div style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.15em', lineHeight: 1.8 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>SYS</span>
-            <span style={{ color: 'var(--accent)' }}>NOMINAL</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>MEM</span>
-            <span>62%</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>UPTIME</span>
-            <span>99.97%</span>
-          </div>
-        </div>
-      </div>
     </aside>
   )
 }

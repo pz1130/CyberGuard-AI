@@ -170,11 +170,11 @@ export default function N8N() {
       {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ fontSize: 12, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
             <Workflow size={11} /> AUTOMATION
           </div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--text-primary)' }}>N8N WORKFLOWS</h1>
-          <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 11, color: 'var(--text-dim)' }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--text-primary)' }}>N8N WORKFLOWS</h1>
+          <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 12, color: 'var(--text-dim)' }}>
             <span>{connections.length} connections · {activeCount} active</span>
             <span>{workflows.length} workflows</span>
           </div>
@@ -182,9 +182,9 @@ export default function N8N() {
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => { setEditingConn(null); setConnForm(emptyConnectionForm); setShowConnForm(true) }}
             style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '0 16px', height: 36,
+              display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', height: 28,
               border: '1px solid var(--border-bright)', background: 'var(--bg-surface)',
-              color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.06em', cursor: 'pointer',
+              color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.08em', cursor: 'pointer',
               fontFamily: 'var(--font-mono)', transition: 'all 0.15s',
             }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)' }}
@@ -194,9 +194,9 @@ export default function N8N() {
           </button>
           <button onClick={() => setShowGenerator(true)}
             style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '0 16px', height: 36,
+              display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', height: 28,
               background: 'var(--accent)', border: '1px solid var(--accent)',
-              color: '#000', fontWeight: 700, fontSize: 12, letterSpacing: '0.06em', cursor: 'pointer',
+              color: '#000', fontWeight: 700, fontSize: 12, letterSpacing: '0.08em', cursor: 'pointer',
               fontFamily: 'var(--font-mono)', transition: 'opacity 0.15s',
             }}
             onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
@@ -208,10 +208,10 @@ export default function N8N() {
       </div>
 
       {/* ── Main Grid ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 20, flex: 1, minHeight: 0 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 20, flex: 1, minHeight: 0, alignItems: 'stretch' }}>
         {/* ── Connections Panel ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflow: 'auto' }}>
-          <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', fontWeight: 600, padding: '0 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflow: 'auto', height: '100%' }}>
+          <div style={{ fontSize: 12, letterSpacing: '0.08em', color: 'var(--text-dim)', fontWeight: 600, padding: '0 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
             <Server size={10} /> CONNECTIONS
           </div>
 
@@ -314,6 +314,7 @@ export default function N8N() {
             <div style={{
               padding: '32px 20px', textAlign: 'center',
               border: '1px dashed var(--border)', background: 'var(--bg-surface)',
+              flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
             }}>
               <Server size={28} style={{ color: 'var(--text-dim)', marginBottom: 12, opacity: 0.4 }} />
               <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 4, letterSpacing: '0.06em' }}>NO CONNECTIONS</div>
@@ -332,9 +333,9 @@ export default function N8N() {
         </div>
 
         {/* ── Workflows Panel ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, overflow: 'auto' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, overflow: 'auto', height: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ fontSize: 12, letterSpacing: '0.08em', color: 'var(--text-dim)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
               <GitBranch size={10} /> WORKFLOWS
               {selectedConn && <span style={{ fontSize: 10, color: 'var(--text-dim)', opacity: 0.5 }}>· {selectedConn.name}</span>}
             </div>
@@ -363,6 +364,7 @@ export default function N8N() {
             <div style={{
               padding: 60, textAlign: 'center',
               border: '1px dashed var(--border)', background: 'var(--bg-surface)',
+              flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
             }}>
               <div style={{
                 width: 48, height: 48, margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'center',
