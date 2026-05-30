@@ -560,7 +560,7 @@ export default function Chat() {
           width: 220, flexShrink: 0, borderRight: '1px solid var(--border)',
           display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)',
         }}>
-          <div style={{ padding: '12px 12px 8px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ padding: '0 12px', height: 42, flexShrink: 0, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)' }}>CONVERSATIONS</span>
             <button onClick={createConversation} style={{ padding: 4, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none' }}>
               <Plus size={13} />
@@ -617,7 +617,7 @@ export default function Chat() {
         {/* Toolbar */}
         <div style={{
           padding: '8px 16px', borderBottom: '1px solid var(--border)',
-          display: 'flex', alignItems: 'center', gap: 12,
+          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
           background: 'var(--bg-surface)',
         }}>
           <button onClick={() => setShowConvPanel(p => !p)} style={{
@@ -692,9 +692,8 @@ export default function Chat() {
               </option>
             ))}
           </select>
-          <div style={{ flex: 1 }} />
           {activeConvId && (
-            <>
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
               <button onClick={() => setShowConvSettings(s => !s)} style={{
                 padding: '4px 10px', fontSize: 12, letterSpacing: '0.1em',
                 border: '1px solid var(--border-bright)', background: showConvSettings ? 'var(--accent-dim)' : 'transparent',
@@ -710,7 +709,7 @@ export default function Chat() {
               }}>
                 CLEAR
               </button>
-            </>
+            </div>
           )}
         </div>
 
