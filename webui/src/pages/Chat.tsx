@@ -617,7 +617,7 @@ export default function Chat() {
         {/* Toolbar */}
         <div style={{
           padding: '8px 16px', borderBottom: '1px solid var(--border)',
-          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+          display: 'flex', alignItems: 'center', gap: 12,
           background: 'var(--bg-surface)',
         }}>
           <button onClick={() => setShowConvPanel(p => !p)} style={{
