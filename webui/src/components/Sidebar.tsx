@@ -1,7 +1,7 @@
-import { MessageSquare, Cpu, Plug, Wrench, BookOpen, Users, Clock, Settings, Shield, Coins, Database, FileText, UserCog, GitBranch, Webhook, ScrollText, ClipboardCheck, Terminal } from 'lucide-react'
+import { MessageSquare, Cpu, Plug, Wrench, BookOpen, Users, Clock, Settings, Shield, Coins, Database, FileText, UserCog, GitBranch, Webhook, ScrollText, ClipboardCheck, Terminal, ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-export type Tab = 'chat' | 'agents' | 'providers' | 'skills' | 'tools' | 'knowledge' | 'groupchat' | 'schedule' | 'mcp' | 'envvars' | 'security' | 'token' | 'backup' | 'audit' | 'users' | 'settings' | 'n8n' | 'webhooks' | 'prompts' | 'governance'
+export type Tab = 'chat' | 'agents' | 'providers' | 'skills' | 'tools' | 'knowledge' | 'groupchat' | 'schedule' | 'mcp' | 'envvars' | 'security' | 'token' | 'backup' | 'audit' | 'approvals' | 'users' | 'settings' | 'n8n' | 'webhooks' | 'prompts' | 'governance'
 
 type NavItem = { key: Tab; labelKey: string; icon: React.ReactNode; group: string }
 const NAV_ITEMS: NavItem[] = [
@@ -23,6 +23,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'token', labelKey: 'nav.token', icon: <Coins size={13} />, group: 'OPS' },
   { key: 'backup', labelKey: 'nav.backup', icon: <Database size={13} />, group: 'OPS' },
   { key: 'audit', labelKey: 'nav.audit', icon: <FileText size={13} />, group: 'OPS' },
+  { key: 'approvals', labelKey: 'nav.approvals', icon: <ShieldCheck size={13} />, group: 'OPS' },
   { key: 'users', labelKey: 'nav.users', icon: <UserCog size={13} />, group: 'OPS' },
   { key: 'settings', labelKey: 'nav.settings', icon: <Settings size={13} />, group: 'OPS' },
 ]

@@ -19,6 +19,7 @@ import Security from './pages/Security'
 import TokenUsage from './pages/TokenUsage'
 import Backup from './pages/Backup'
 import AuditLogs from './pages/AuditLogs'
+import Approvals from './pages/Approvals'
 import Users from './pages/Users'
 import Settings from './pages/Settings'
 import N8N from './pages/N8N'
@@ -42,6 +43,7 @@ const PAGES: Record<Tab, { labelKey: string; component: React.ReactNode }> = {
   token: { labelKey: 'nav.token', component: <TokenUsage /> },
   backup: { labelKey: 'nav.backup', component: <Backup /> },
   audit: { labelKey: 'nav.audit', component: <AuditLogs /> },
+  approvals: { labelKey: 'nav.approvals', component: <Approvals /> },
   users: { labelKey: 'nav.users', component: <Users /> },
   settings: { labelKey: 'nav.settings', component: <Settings /> },
   n8n: { labelKey: 'nav.n8n', component: <N8N /> },

@@ -176,6 +176,15 @@ export const api = {
   updateScheduledTask: (id: string, body: any) => request(`/schedule/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteScheduledTask: (id: string) => request(`/schedule/${id}`, { method: 'DELETE' }),
 
+  // ---- Approvals ----
+  getApprovals: (statusFilter: 'pending' | 'approved' | 'rejected' | 'all' = 'pending') =>
+    request(`/approvals?status_filter=${statusFilter}`),
+  decideApproval: (id: number, decision: 'approved' | 'rejected', comment?: string) =>
+    request(`/approvals/${id}/decide`, {
+      method: 'POST',
+      body: JSON.stringify({ decision, comment }),
+    }),
+
   // Audit
   getAuditLogs: (params?: { user_id?: number; limit?: number; offset?: number }) => {
     const q = new URLSearchParams()

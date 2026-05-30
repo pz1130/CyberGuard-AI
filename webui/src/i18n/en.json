@@ -43,6 +43,7 @@
     "token": "Token Usage",
     "backup": "Backup",
     "audit": "Audit Logs",
+    "approvals": "Approvals",
     "users": "User Management",
     "settings": "Settings",
     "n8n": "N8N Workflows",
