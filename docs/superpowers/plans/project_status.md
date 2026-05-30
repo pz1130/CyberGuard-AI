@@ -1,6 +1,6 @@
 ---
 name: project_status
-description: CyberGuard platform implementation status — last updated 2026-05-30 (WebUI polish sprint complete; 72 tests green; alembic head 013)
+description: CyberGuard platform implementation status — last updated 2026-05-30 (Azure AD SSO complete; 87 tests green; alembic head 015)
 type: project
 ---
 
@@ -8,34 +8,54 @@ type: project
 
 ## ▶ Resume point (next session)
 
-- **Branch:** `main` — all work committed, working tree clean. Latest commit: `c75fb4e`.
-- **Tests:** 72 passed, 1 warning (LangChain deprecation, benign). TypeScript: 0 errors.
-- **Alembic head:** `013_security_settings`
+- **Branch:** `main` — all work committed, working tree clean. Latest commit: `893634d`.
+- **Tests:** 87 passed. TypeScript: 0 errors.
+- **Alembic head:** `015_sso_secret_envvar`
 
 ### Remaining known issues (prioritized)
 
-| 优先级 | 问题 |
-|--------|------|
-| 🟡 中 | `App.tsx` / `Header.tsx` 用 raw `fetch('/api/v1/auth/me')` 绕过 api client（功能正常，一致性问题）|
-| 🟢 低 | LangChain 弃用警告：`JsonPlusSerializer.allowed_objects`，升级依赖时处理 |
-| 🟢 低 | GlobalSearch 未覆盖 Users（`api.getUsers()` 存在，可视需求决定是否加）|
-| 🟢 低 | Security 页面 `require_mfa` 字段缺失（原 UI 有但后端未实现，重写时去掉）|
+| Priority | Issue |
+|----------|-------|
+| 🟢 Low | LangChain deprecation: `JsonPlusSerializer.allowed_objects`, handle on dependency upgrade |
+| 🟢 Low | GlobalSearch not covering Users page (optional, depends on UX needs) |
+| 🟢 Low | Security page `require_mfa` field missing (removed from UI rewrite, backend not implementing) |
 
 ---
 
-## Session 2026-05-30 — WebUI 功能补全与 UI 修复
+## Session 2026-05-30 afternoon — Azure AD SSO Module
 
-### CTRL+K 全局搜索（12 commits，`544401a` → `3c9a6c1`）
+### Full Azure AD (Entra ID) SSO implementation (`bc8c844`, `893634d`)
 
-- `webui/src/context/SearchContext.tsx` — 新建 React context，跨页高亮状态（含 `subview?: string` 字段，支持 Governance 子视图切换）
-- `webui/src/components/GlobalSearch.tsx` — 命令面板式搜索 modal
-  - CTRL+K / Header 点击触发；`App.tsx` 全局 keydown 监听
-  - 覆盖 **12 个数据源**（见下表）
-  - 缓存 TTL 60s（stale-while-revalidate）
-- 全部 12 个页面加了 `data-item-id` + `search-highlight` 闪光动画
+Components added:
+- `app/models/sso.py` — `SsoConfig` (single-row), `SsoRoleMapping` (azure_key unique, priority int)
+- `app/services/sso_service.py` — MSAL lazy import, `resolve_role()`/`decide_provisioning()` pure functions, `provision_or_link_user()`, state/nonce Redis 5m TTL
+- `app/routers/sso.py` — `/auth/sso/status`, `/login`, `/callback` (public) + `/sso/config`, `/sso/role-mappings` (ADMIN)
+- `app/models/user.py` — `auth_provider`/`external_id` columns; `hashed_password` nullable for SSO users
+- `alembic/versions/014_sso.py` + `015_sso_secret_envvar.py` — migrations applied
+- `webui/src/pages/Login.tsx` — Microsoft button, `getSsoStatus()`, error URL param parsing
+- `webui/src/pages/Users.tsx` — USERS/SSO tabs, config card + role-mapping CRUD table
+- `webui/src/api/client.ts` — `getSsoConfig`/`updateSsoConfig`/`getSsoRoleMappings`/`createSsoRoleMapping`/`deleteSsoRoleMapping`/`getSecretEnvVars`
+- `webui/src/App.tsx` — reads `#sso_token=` URL fragment on load
+- `tests/test_sso_service.py` — 10 unit tests
 
-| 数据源 | Tab | 图标 |
-|--------|-----|------|
+**Secret source:** Client secret resolved from `sso_config.secret_env_var_id` FK → `env_vars` table (type=secret). Fallback to `AZURE_CLIENT_SECRET` env var for backward compat. Frontend shows dropdown of available secret EnvVars in SSO tab.
+
+**Flow:** `GET /auth/sso/login` → 302 Microsoft → `/auth/sso/callback` → validates state (Redis), exchanges code (MSAL), provisions/links user, 302 `#sso_token=<jwt>` → localStorage.
+
+**Architecture:** Single-worker (multi-worker blocked by MCP `_live_processes` subprocess handles, stale caches, group-chat in-memory state — see `multi-worker-blockers.md`).
+
+### Session 2026-05-30 morning — WebUI Polish Sprint
+
+#### CTRL+K Global Search (12 commits, `544401a` → `3c9a6c1`)
+
+- `webui/src/context/SearchContext.tsx` — new React context for cross-page highlight state
+- `webui/src/components/GlobalSearch.tsx` — command palette search modal (CTRL+K / Header click)
+  - 12 data sources covered (see table below)
+  - Cache TTL 60s (stale-while-revalidate)
+- All 12 pages got `data-item-id` + `search-highlight` shimmer animation
+
+| Data source | Tab | Icon |
+|------------|-----|------|
 | Agents | agents | ◆ |
 | Providers | providers | ▣ |
 | Skills | skills | ◈ |
@@ -49,38 +69,29 @@ type: project
 | Prompt Templates | prompts | ≡ |
 | N8N Connections | n8n | ⌥ |
 
-### Chat UI 修复（`43b13c8`, `593e295`）
-- CONVERSATIONS 标题高度改为显式 `height:42px`，与右侧 toolbar 对齐
-- SESSION/CLEAR 按钮改用 `marginLeft:auto` 分组，不再溢出或换行
-- toolbar 移除 `flexWrap:wrap`
+#### Chat UI fixes (`43b13c8`, `593e295`)
+- CONVERSATIONS header height → explicit `height: 42px`
+- SESSION/CLEAR buttons grouped with `marginLeft: auto`
+- Toolbar removed `flexWrap: wrap`
 
-### SYS ONLINE → 真实健康检查（`a18aef3`）
-- `Header.tsx` 每 30s 轮询 `GET /api/v1/health/ready`（检查 Postgres + Redis）
-- 三态显示：`SYS ONLINE`（绿）/ `SYS DEGRADED`（琥珀，503）/ `SYS OFFLINE`（红，连接失败）
+#### SYS ONLINE → Real health check (`a18aef3`)
+- `Header.tsx` polls `GET /health/ready` every 30s
+- Three states: `SYS ONLINE` (green) / `SYS DEGRADED` (amber, 503) / `SYS OFFLINE` (red)
 
-### TokenUsage raw fetch 修复（`a18aef3`）
-- `client.ts` 新增 `getTokenUsageSummary()`
-- `TokenUsage.tsx` 不再手写 fetch + token，改用 api client
+#### TokenUsage raw fetch fix (`a18aef3`)
+- `client.ts` added `getTokenUsageSummary()`
+- `TokenUsage.tsx` uses api client instead of raw fetch
 
-### Security 页面完整后端实现（`3912396`）
-- `app/models/security_settings.py` — 单行 DB model（id=1）
-- `alembic/versions/013_security_settings.py` — 建表 + 默认值
-- `app/services/security_settings.py` — get/update，带内存缓存（同 master_config 模式）
-- `app/routers/security.py` — `GET/PUT /api/v1/security-settings`（SETTINGS_READ/WRITE 权限）
-- `Security.tsx` — 加载真实数据；SAVE 按钮仅在有改动时激活
+#### Security page full backend (`3912396`)
+- `app/models/security_settings.py`, `app/services/security_settings.py`
+- `app/routers/security.py` — `GET/PUT /security-settings`
+- `Security.tsx` — real data; SAVE only enabled on changes
 
-### Approvals 审批管理页面（`c75fb4e`）
-- `api.getApprovals(statusFilter)` + `api.decideApproval(id, decision, comment?)`
-- `Sidebar.tsx`：Tab type 新增 `'approvals'`；OPS 组 audit 之后加 ShieldCheck 导航项
-- i18n：en=Approvals, zh=审批管理
-- `Approvals.tsx`：
-  - 过滤 tabs：PENDING / APPROVED / REJECTED / ALL
-  - PENDING 视图 15s 自动刷新
-  - 风险等级左侧彩色边框（low 绿 / medium 青 / high 琥珀 / critical 红）
-  - 每行内联 ✓ / ✗ 快捷按钮（pending 行）
-  - 展开面板：元数据、payload JSON（格式化）、注释输入、完整 APPROVE/REJECT 按钮
-
----
+#### Approvals page (`c75fb4e`)
+- Filter tabs: PENDING / APPROVED / REJECTED / ALL
+- PENDING view auto-refreshes every 15s
+- Risk level colored borders
+- Inline ✓/✗ quick buttons, expandable detail panel
 
 ## Milestones
 
