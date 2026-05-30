@@ -229,7 +229,7 @@ async def startup_probe():
 # Routers (imported here to avoid circular imports)
 # ---------------------------------------------------------------------------
 from app.routers import auth, users, agents, skills, knowledge, chat, tasks, groupchat, schedule, audit, backup, config, providers, mcp, envvars, approval, token_usage, master_config, conversations, n8n, webhooks, prompt_templates, governance, security
-from app.routers import chat_stream, gateway
+from app.routers import chat_stream, gateway, sso
 
 app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
 app.include_router(users.router, prefix="/api/v1", tags=["Users"])
@@ -258,6 +258,7 @@ app.include_router(webhooks.router, prefix="/api/v1", tags=["Webhooks"])
 app.include_router(prompt_templates.router, prefix="/api/v1", tags=["Prompt Templates"])
 app.include_router(governance.router, prefix="/api/v1", tags=["Governance"])
 app.include_router(security.router, prefix="/api/v1", tags=["Security Settings"])
+app.include_router(sso.router, prefix="/api/v1", tags=["SSO"])
 
 
 # ---------------------------------------------------------------------------

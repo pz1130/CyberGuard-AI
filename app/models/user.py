@@ -13,10 +13,15 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(100), unique=True, nullable=False, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
-    hashed_password = Column(String(255), nullable=False)
+    # Nullable: SSO-provisioned users have no local password.
+    hashed_password = Column(String(255), nullable=True)
     role = Column(String(50), nullable=False, default="viewer")
     is_active = Column(Boolean, default=True, nullable=False)
     full_name = Column(String(255), nullable=True)
+    # Identity provider for this account: "local" or "azure_ad".
+    auth_provider = Column(String(50), nullable=False, default="local")
+    # Stable external identity (Azure AD object id / "oid") for SSO accounts.
+    external_id = Column(String(255), nullable=True, index=True)
     last_login = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

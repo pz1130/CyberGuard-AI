@@ -44,6 +44,16 @@ export const api = {
     }
   },
 
+  // SSO (Azure AD)
+  getSsoStatus: () => request('/auth/sso/status'),
+  getSsoConfig: () => request('/sso/config'),
+  updateSsoConfig: (body: Record<string, unknown>) =>
+    request('/sso/config', { method: 'PUT', body: JSON.stringify(body) }),
+  getSsoRoleMappings: () => request('/sso/role-mappings'),
+  createSsoRoleMapping: (body: { azure_key: string; app_role: string; priority?: number }) =>
+    request('/sso/role-mappings', { method: 'POST', body: JSON.stringify(body) }),
+  deleteSsoRoleMapping: (id: number) => request(`/sso/role-mappings/${id}`, { method: 'DELETE' }),
+
   // Users
   getUsers: () => request('/users'),
   getUserMe: () => request('/users/me'),
