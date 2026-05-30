@@ -119,7 +119,7 @@ async def _test_provider_connectivity(
     base_url: str,
     api_key: str,
     provider_type: str,
-    api_version: str | None,
+    api_version: Optional[str],
     models: list[str],
 ) -> ProviderTestResponse:
     """Ping the provider with a minimal completion call to validate configuration."""

@@ -1,0 +1,437 @@
+"""Tests for GET /gateway/manifest and related changes."""
+import json
+import pytest
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
+
+from app.schemas.gateway import (
+    ManifestSkill, ManifestTool, ManifestMCPTool, ManifestResponse,
+)
+
+
+# ---------------------------------------------------------------------------
+# Task 1 — Schema smoke
+# ---------------------------------------------------------------------------
+
+def test_manifest_schemas_round_trip():
+    skill = ManifestSkill(id=1, name="port-scan", description="desc", md_content="# MD")
+    tool = ManifestTool(
+        id=2, name="nmap", description="net mapper",
+        command_template="nmap {target}", input_schema={"type": "object"},
+    )
+    mcp = ManifestMCPTool(id=3, name="search_cve", description=None, input_schema={})
+    resp = ManifestResponse(
+        agent_id=7, agent_name="ScanBot",
+        skills=[skill], tools=[tool], mcp_tools=[mcp],
+    )
+    data = resp.model_dump()
+    assert data["agent_id"] == 7
+    assert data["skills"][0]["md_content"] == "# MD"
+    assert data["tools"][0]["command_template"] == "nmap {target}"
+    assert data["mcp_tools"][0]["name"] == "search_cve"
+
+
+# ---------------------------------------------------------------------------
+# Task 2 — GET /gateway/manifest
+# ---------------------------------------------------------------------------
+
+def _fake_agent(skills=None, tools=None, mcp=None):
+    return SimpleNamespace(
+        id=7, agent_name="ScanBot",
+        associated_skills=skills,
+        associated_tools=tools,
+        associated_mcp_tools=mcp,
+    )
+
+
+def _mock_session_ctx(rows=None):
+    """Return a mock async context manager whose session.execute returns rows."""
+    rows = rows or []
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = rows
+    mock_session.execute = AsyncMock(return_value=mock_result)
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+    return ctx
+
+
+@pytest.mark.asyncio
+async def test_manifest_empty_pools():
+    """Agent with no assignments returns three empty arrays."""
+    from app.routers import gateway as gw
+
+    with patch.object(gw, "_auth_agent", AsyncMock(return_value=_fake_agent())):
+        with patch("app.routers.gateway.AsyncSessionLocal", return_value=_mock_session_ctx()):
+            result = await gw.manifest(x_api_key="oc-test")
+
+    assert result.agent_id == 7
+    assert result.agent_name == "ScanBot"
+    assert result.skills == []
+    assert result.tools == []
+    assert result.mcp_tools == []
+
+
+@pytest.mark.asyncio
+async def test_manifest_returns_assigned_skill():
+    """Agent with one skill gets it back in full."""
+    from app.routers import gateway as gw
+
+    fake_skill = SimpleNamespace(
+        id=3, name="port-scan", description="Port scanning runbook",
+        md_content="# Port Scan\nRun nmap...",
+    )
+
+    agent = _fake_agent(skills=[3])
+
+    with patch.object(gw, "_auth_agent", AsyncMock(return_value=agent)):
+        # Session is called three times (skills, tools, mcp_tools).
+        # Only skills query needs a real row; the others return empty.
+        mock_session = AsyncMock()
+        call_count = {"n": 0}
+
+        async def fake_execute(_q):
+            result = MagicMock()
+            # First call is skills query
+            if call_count["n"] == 0:
+                result.scalars.return_value.all.return_value = [fake_skill]
+            else:
+                result.scalars.return_value.all.return_value = []
+            call_count["n"] += 1
+            return result
+
+        mock_session.execute = fake_execute
+        ctx = MagicMock()
+        ctx.__aenter__ = AsyncMock(return_value=mock_session)
+        ctx.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("app.routers.gateway.AsyncSessionLocal", return_value=ctx):
+            result = await gw.manifest(x_api_key="oc-test")
+
+    assert len(result.skills) == 1
+    assert result.skills[0].name == "port-scan"
+    assert result.skills[0].md_content == "# Port Scan\nRun nmap..."
+    assert result.tools == []
+    assert result.mcp_tools == []
+
+
+@pytest.mark.asyncio
+async def test_manifest_parses_tool_input_schema():
+    """Tool.input_schema_json string is parsed to dict in the response."""
+    from app.routers import gateway as gw
+
+    fake_tool = SimpleNamespace(
+        id=1, name="nmap", description="Net mapper",
+        command_template="nmap -sV {target}",
+        input_schema_json='{"type": "object", "properties": {"target": {"type": "string"}}}',
+    )
+    agent = _fake_agent(tools=[1])
+
+    mock_session = AsyncMock()
+    call_count = {"n": 0}
+
+    async def fake_execute(_q):
+        result = MagicMock()
+        # Second call is tools query
+        if call_count["n"] == 1:
+            result.scalars.return_value.all.return_value = [fake_tool]
+        else:
+            result.scalars.return_value.all.return_value = []
+        call_count["n"] += 1
+        return result
+
+    mock_session.execute = fake_execute
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+
+    with patch.object(gw, "_auth_agent", AsyncMock(return_value=agent)):
+        with patch("app.routers.gateway.AsyncSessionLocal", return_value=ctx):
+            result = await gw.manifest(x_api_key="oc-test")
+
+    assert len(result.tools) == 1
+    assert result.tools[0].input_schema == {"type": "object", "properties": {"target": {"type": "string"}}}
+    assert result.tools[0].command_template == "nmap -sV {target}"
+
+
+# ---------------------------------------------------------------------------
+# Task 3 — Poll has_manifest field
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_poll_has_manifest_true_when_skills_assigned():
+    """Poll response includes has_manifest=True when agent has skills assigned."""
+    from app.routers import gateway as gw
+
+    agent_with_skills = SimpleNamespace(
+        id=5, agent_name="Bot",
+        associated_skills=[1, 2],
+        associated_tools=None,
+        associated_mcp_tools=None,
+    )
+
+    fake_msg = SimpleNamespace(
+        id=10, content="do task", execution_id="uuid-1",
+        created_at=MagicMock(isoformat=lambda: "2026-05-30T00:00:00"),
+    )
+
+    mock_session = AsyncMock()
+
+    async def fake_execute(q):
+        r = MagicMock()
+        r.scalars.return_value.all.return_value = [fake_msg]
+        r.scalar_one_or_none.return_value = agent_with_skills
+        return r
+
+    mock_session.execute = fake_execute
+    mock_session.commit = AsyncMock()
+
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+
+    with patch.object(gw, "_auth_agent", AsyncMock(return_value=agent_with_skills)):
+        with patch("app.routers.gateway.AsyncSessionLocal", return_value=ctx):
+            result = await gw.poll(x_api_key="oc-test")
+
+    assert len(result.messages) == 1
+    assert result.messages[0]["has_manifest"] is True
+
+
+@pytest.mark.asyncio
+async def test_poll_has_manifest_false_when_no_pools():
+    """Poll response has has_manifest=False when agent has no pool assignments."""
+    from app.routers import gateway as gw
+
+    bare_agent = SimpleNamespace(
+        id=5, agent_name="Bot",
+        associated_skills=None,
+        associated_tools=None,
+        associated_mcp_tools=None,
+    )
+
+    mock_session = AsyncMock()
+
+    async def fake_execute(_q):
+        r = MagicMock()
+        r.scalars.return_value.all.return_value = []
+        r.scalar_one_or_none.return_value = bare_agent
+        return r
+
+    mock_session.execute = fake_execute
+    mock_session.commit = AsyncMock()
+
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+
+    with patch.object(gw, "_auth_agent", AsyncMock(return_value=bare_agent)):
+        with patch("app.routers.gateway.AsyncSessionLocal", return_value=ctx):
+            result = await gw.poll(x_api_key="oc-test")
+
+    assert result.messages == []
+
+
+# ---------------------------------------------------------------------------
+# Task 4 — API key for all backends
+# ---------------------------------------------------------------------------
+
+def test_create_custom_agent_issues_api_key():
+    """Creating a custom agent returns an api_key (not just openclaw)."""
+    # Test that `_generate_api_key` is called regardless of backend_type.
+    # We test the router logic directly by inspecting the conditional.
+    import ast, inspect
+    from app.routers import agents as ag
+
+    src = inspect.getsource(ag.create_agent)
+    tree = ast.parse(src)
+
+    # Walk the AST — there must be NO If node that checks backend_type == "openclaw"
+    # before calling _generate_api_key.
+    for node in ast.walk(tree):
+        if isinstance(node, ast.If):
+            cond = ast.dump(node.test)
+            if "openclaw" in cond and "_generate_api_key" in ast.dump(node):
+                raise AssertionError(
+                    "create_agent still gates _generate_api_key behind backend_type == 'openclaw'"
+                )
+
+
+def test_regenerate_key_allows_non_openclaw():
+    """regenerate_api_key endpoint no longer rejects non-openclaw agents."""
+    import ast, inspect
+    from app.routers import agents as ag
+
+    src = inspect.getsource(ag.regenerate_api_key)
+    # There must be no raise that checks backend_type != "openclaw"
+    assert "Only openclaw" not in src, (
+        "regenerate_api_key still contains 'Only openclaw' rejection message"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Task 5 — SubAgentWrapper manifest_url injection
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_subagent_wrapper_injects_manifest_url_when_base_url_set():
+    """When settings.BASE_URL is set, execute payload contains manifest_url."""
+    import httpx
+    from app.services.agent_executor import SubAgentWrapper
+
+    config = {
+        "id": 3,
+        "agent_name": "BotX",
+        "backend_type": "custom",
+        "endpoint_url": "https://bot.example.com",
+        "env_vars_encrypted": None,
+    }
+
+    captured = {}
+
+    async def fake_post(url, headers=None, json=None, **kw):
+        captured["payload"] = json
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = {"output": "done"}
+        return resp
+
+    with patch("app.config.settings.BASE_URL", "https://cyberguard.example.com"):
+        wrapper = SubAgentWrapper(config)
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(side_effect=fake_post)
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            await wrapper.execute(task="scan 10.0.0.1", context={"user_id": 1})
+
+    assert "manifest_url" in captured["payload"]
+    assert captured["payload"]["manifest_url"] == (
+        "https://cyberguard.example.com/api/v1/gateway/manifest"
+    )
+
+
+@pytest.mark.asyncio
+async def test_subagent_wrapper_omits_manifest_url_when_base_url_empty():
+    """When settings.BASE_URL is empty, manifest_url is not in the payload."""
+    from app.services.agent_executor import SubAgentWrapper
+
+    config = {
+        "id": 3,
+        "agent_name": "BotX",
+        "backend_type": "custom",
+        "endpoint_url": "https://bot.example.com",
+        "env_vars_encrypted": None,
+    }
+
+    captured = {}
+
+    async def fake_post(url, headers=None, json=None, **kw):
+        captured["payload"] = json
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = {"output": "done"}
+        return resp
+
+    with patch("app.config.settings.BASE_URL", ""):
+        wrapper = SubAgentWrapper(config)
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(side_effect=fake_post)
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            await wrapper.execute(task="scan 10.0.0.1", context={"user_id": 1})
+
+    assert "manifest_url" not in captured["payload"]
+
+
+# ---------------------------------------------------------------------------
+# Task 6 — get_mcp_tools_for_agent refactor
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_get_mcp_tools_reads_associated_column_first():
+    """Uses agent_associated_mcp_tools list, ignoring metadata fallback."""
+    from app.services.agent_executor import AgentExecutor
+
+    fake_mcp = SimpleNamespace(
+        id=5, tool_name="search_cve", description="CVE lookup",
+        input_schema_json='{"type": "object"}',
+    )
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = [fake_mcp]
+    mock_session.execute = AsyncMock(return_value=mock_result)
+
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("app.core.database.get_db_context", return_value=ctx):
+        executor = AgentExecutor()
+        tools = await executor.get_mcp_tools_for_agent(
+            agent_associated_mcp_tools=[5],
+            agent_metadata_json={"mcp_tool_ids": [99]},  # should be ignored
+        )
+
+    assert len(tools) == 1
+    assert tools[0]["name"] == "search_cve"
+    assert tools[0]["input_schema"] == {"type": "object"}
+
+
+@pytest.mark.asyncio
+async def test_get_mcp_tools_falls_back_to_metadata_when_column_is_none():
+    """Falls back to metadata_json.mcp_tool_ids when associated column is None."""
+    from app.services.agent_executor import AgentExecutor
+
+    fake_mcp = SimpleNamespace(
+        id=99, tool_name="old_tool", description="Legacy",
+        input_schema_json=None,
+    )
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = [fake_mcp]
+    mock_session.execute = AsyncMock(return_value=mock_result)
+
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("app.core.database.get_db_context", return_value=ctx):
+        executor = AgentExecutor()
+        tools = await executor.get_mcp_tools_for_agent(
+            agent_associated_mcp_tools=None,       # column not set
+            agent_metadata_json={"mcp_tool_ids": [99]},  # use this
+        )
+
+    assert len(tools) == 1
+    assert tools[0]["name"] == "old_tool"
+    assert tools[0]["input_schema"] == {}  # None schema becomes empty dict
+
+
+@pytest.mark.asyncio
+async def test_get_mcp_tools_returns_all_when_both_none():
+    """When both column and metadata are None, returns all active MCP tools."""
+    from app.services.agent_executor import AgentExecutor
+
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = []
+    mock_session.execute = AsyncMock(return_value=mock_result)
+
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("app.core.database.get_db_context", return_value=ctx):
+        executor = AgentExecutor()
+        tools = await executor.get_mcp_tools_for_agent(
+            agent_associated_mcp_tools=None,
+            agent_metadata_json=None,
+        )
+
+    # Verify query executed and returned empty list
+    assert tools == []

@@ -1,4 +1,5 @@
 """Audit log router."""
+from typing import Optional
 import json
 from datetime import datetime
 from fastapi import APIRouter, Depends, Query
@@ -16,9 +17,9 @@ router = APIRouter()
 async def list_audit_logs(
     skip: int = 0,
     limit: int = 100,
-    user_id: int | None = Query(None),
-    agent_id: int | None = Query(None),
-    action: str | None = Query(None),
+    user_id: Optional[int] = Query(None),
+    agent_id: Optional[int] = Query(None),
+    action: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     _=Depends(require_permission(Permission.AUDIT_READ)),
 ):

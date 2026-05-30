@@ -137,6 +137,12 @@ from app.schemas.groupchat import (
     GroupChatRoundResponse,
     GroupChatCancelRequest,
 )
+from app.schemas.gateway import (
+    ManifestSkill,
+    ManifestTool,
+    ManifestMCPTool,
+    ManifestResponse,
+)
 
 __all__ = [
     # Auth
@@ -263,4 +269,9 @@ __all__ = [
     "GroupChatRunToCompletionRequest",
     "GroupChatRoundResponse",
     "GroupChatCancelRequest",
+    # Gateway
+    "ManifestSkill",
+    "ManifestTool",
+    "ManifestMCPTool",
+    "ManifestResponse",
 ]

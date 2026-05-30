@@ -1,4 +1,5 @@
 """Chat conversation management router."""
+from typing import Optional
 import json
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,7 +16,7 @@ from app.models.conversation import Conversation
 class MessageModel(BaseModel):
     role: str
     content: str
-    created_at: str | None = None
+    created_at: Optional[str] = None
 
 
 class ConversationResponse(BaseModel):
@@ -26,38 +27,38 @@ class ConversationResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     # Per-conversation config overrides
-    system_prompt_override: str | None = None
-    intent_parser_prompt_override: str | None = None
-    summarizer_prompt_override: str | None = None
-    model_override: str | None = None
-    temperature_override: float | None = None
-    knowledge_base_id: int | None = None
+    system_prompt_override: Optional[str] = None
+    intent_parser_prompt_override: Optional[str] = None
+    summarizer_prompt_override: Optional[str] = None
+    model_override: Optional[str] = None
+    temperature_override: Optional[float] = None
+    knowledge_base_id: Optional[int] = None
 
     class Config:
         from_attributes = True
 
 
 class ConversationCreate(BaseModel):
-    title: str | None = None
+    title: Optional[str] = None
     # Per-conversation config overrides
-    system_prompt_override: str | None = None
-    intent_parser_prompt_override: str | None = None
-    summarizer_prompt_override: str | None = None
-    model_override: str | None = None
-    temperature_override: float | None = None
-    knowledge_base_id: int | None = None
+    system_prompt_override: Optional[str] = None
+    intent_parser_prompt_override: Optional[str] = None
+    summarizer_prompt_override: Optional[str] = None
+    model_override: Optional[str] = None
+    temperature_override: Optional[float] = None
+    knowledge_base_id: Optional[int] = None
 
 
 class ConversationUpdate(BaseModel):
-    title: str | None = None
-    messages_json: str | None = None  # JSON string of messages
+    title: Optional[str] = None
+    messages_json: Optional[str] = None  # JSON string of messages
     # Per-conversation config overrides
-    system_prompt_override: str | None = None
-    intent_parser_prompt_override: str | None = None
-    summarizer_prompt_override: str | None = None
-    model_override: str | None = None
-    temperature_override: float | None = None
-    knowledge_base_id: int | None = None
+    system_prompt_override: Optional[str] = None
+    intent_parser_prompt_override: Optional[str] = None
+    summarizer_prompt_override: Optional[str] = None
+    model_override: Optional[str] = None
+    temperature_override: Optional[float] = None
+    knowledge_base_id: Optional[int] = None
 
 
 class AppendMessageRequest(BaseModel):

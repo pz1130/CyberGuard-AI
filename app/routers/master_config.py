@@ -1,4 +1,5 @@
 """Master Agent configuration router."""
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,13 +24,13 @@ class MasterConfigResponse(BaseModel):
 
 
 class MasterConfigUpdate(BaseModel):
-    model: str | None = None
-    temperature: float | None = None
-    system_prompt: str | None = None
-    intent_parser_prompt: str | None = None
-    summarizer_prompt: str | None = None
-    max_rounds: int | None = None
-    auto_approve_threshold: int | None = None
+    model: Optional[str] = None
+    temperature: Optional[float] = None
+    system_prompt: Optional[str] = None
+    intent_parser_prompt: Optional[str] = None
+    summarizer_prompt: Optional[str] = None
+    max_rounds: Optional[int] = None
+    auto_approve_threshold: Optional[int] = None
 
 
 router = APIRouter()

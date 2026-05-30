@@ -4,6 +4,7 @@ import json
 import os
 import secrets
 from datetime import datetime
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -93,7 +94,7 @@ def _generate_api_key() -> tuple[str, str]:
     return raw, h
 
 
-def _build_metadata(fields: dict, existing: dict | None = None) -> dict:
+def _build_metadata(fields: dict, existing: Optional[dict] = None) -> dict:
     """把 OpenClaw 专属字段合并到 metadata_json。"""
     meta = dict(existing or {})
     # api_key → 加密后存入 metadata_json
@@ -154,10 +155,11 @@ async def create_agent(
 ):
     """创建 Sub-Agent。
 
+    所有 backend 创建时均自动生成 `oc-xxx` Gateway API Key，**只在此响应中返回一次**。
+    外部节点用此 key 调用 /gateway/poll、/gateway/manifest 等接口。
+
     **OpenClaw 模式**（backend_type="openclaw"）：
-    - 系统自动生成 `oc-xxx` API Key，**只在此响应中返回一次**。
-    - 把返回的 `api_key` 配置到 OpenClaw 节点的 X-Api-Key 头。
-    - `endpoint_url` 留空（OpenClaw 主动来轮询，无需 CyberGuard 主动调用）。
+    - `endpoint_url` 留空（OpenClaw 主动来轮询）。
 
     **其他模式**（hermes / custom）：
     - 填写 `endpoint_url`，CyberGuard 会主动 POST 到该地址。
@@ -180,10 +182,8 @@ async def create_agent(
         env_vars_encrypted=encrypt_data(json.dumps(env_vars)) if env_vars else None,
     )
 
-    # OpenClaw 模式：生成 Gateway API Key
-    plaintext_key: str | None = None
-    if body.backend_type == "openclaw":
-        plaintext_key, agent.api_key_hash = _generate_api_key()
+    # 所有 backend 生成 Gateway API Key（外部节点用此 key 调 /gateway/manifest 等接口）
+    plaintext_key, agent.api_key_hash = _generate_api_key()
 
     db.add(agent)
     await db.commit()
@@ -274,21 +274,19 @@ async def regenerate_api_key(
     db: AsyncSession = Depends(get_db),
     _=Depends(require_permission(Permission.AGENT_WRITE)),
 ):
-    """重新生成 OpenClaw Gateway API Key。
+    """重新生成 Gateway API Key。
 
-    旧 Key 立即失效，新 Key 只返回一次，请立即更新 OpenClaw 节点配置。
+    旧 Key 立即失效，新 Key 只返回一次。
     """
     result = await db.execute(select(AgentConfig).where(AgentConfig.id == agent_id))
     agent = result.scalar_one_or_none()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    if agent.backend_type != "openclaw":
-        raise HTTPException(status_code=400, detail="Only openclaw agents have a Gateway API Key")
 
     plaintext, agent.api_key_hash = _generate_api_key()
     await db.commit()
 
-    return {"api_key": plaintext, "note": "此 Key 只显示一次，请立即保存并更新 OpenClaw 节点配置。"}
+    return {"api_key": plaintext, "note": "此 Key 只显示一次，请立即保存并更新节点配置。"}
 
 
 # ---------------------------------------------------------------------------

@@ -1,10 +1,20 @@
 ---
 name: project_status
-description: CyberGuard platform implementation status — last updated 2026-05-29 (scheduled-tasks model export + webui port)
+description: CyberGuard platform implementation status — last updated 2026-05-30 (QwenPaw pool alignment ①②③ shipped as PR #2; test-infra event-loop isolation fixed)
 type: project
 ---
 
-# CyberGuard Project Status — 2026-05-29
+# CyberGuard Project Status — 2026-05-30
+
+## ▶ Resume point (next session)
+
+- **Branch:** `feat/internal-agents` — PR #2 open (subproject ③ + test-infra fix). Not yet merged to `main`.
+- **Just finished:** QwenPaw pool alignment **subproject ③ (external agents use pools)** via subagent-driven dev + test-infra event-loop isolation fix (greenlet dep, session-scope loop, conftest engine disposal).
+- **Next up:** Merge PR #2, then decide M6 scope. Remaining known issues (pre-existing, not blocking):
+  - 6 integration test failures in `test_integration.py` — `ConnectionManager` import error (groupchat refactor) and guardrail scoring logic changes; unrelated to our work
+  - `test_smoke_api.py` needs a running server (`SMOKE_BASE_URL`)
+  - WebUI: Custom agents don't show API key in UI (API-only for now)
+  - `has_manifest` is per-message (not top-level on PollResponse) — idle nodes w/no pending tasks won't see it until next task is dispatched; nodes can call `/gateway/manifest` proactively with their API key
 
 ## Milestones (1-5 complete)
 
@@ -13,12 +23,13 @@ type: project
 - **M3** — Sub-Agent System: external (OpenClaw/Hermes/Custom) + internal (in-app) ✅
 - **M4** — WebUI: React + Vite + TypeScript ✅
 - **M5** — Agent Collaboration: Multi-agent routing + group chat panel ✅
+- **QwenPaw pool alignment** — ① executable Tool pool ✅ · ② unified assignment + tags ✅ · ③ external agents use pools ✅ (PR #2)
 
 ## Alembic head
 
-`010_agent_kind_and_internal` (latest)
+`012_pool_assignment_tags` (latest)
 
-Sequence: `001_initial → 002_openclaw_gateway → 003_pgvector_knowledge → 004_multi_dim_embeddings → 005_drop_room_chat → 006_webhooks → 007_prompt_templates → 008_governance → 009_req_typical_evidence → 010_agent_kind_and_internal`
+Sequence: `… → 010_agent_kind_and_internal → 011_tool_executable → 012_pool_assignment_tags`
 
 ---
 
