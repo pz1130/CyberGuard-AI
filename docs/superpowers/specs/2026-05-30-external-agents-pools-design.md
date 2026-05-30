@@ -116,7 +116,7 @@ Authentication reuses the existing `_auth_agent(x_api_key)` helper.
 - `Tool.input_schema_json` (a JSON string) is parsed to a dict before inclusion.
 - `md_content` is returned in full (not truncated).
 
-**New Pydantic schemas** (add to `app/schemas/` or inline in the router):
+**New Pydantic schemas** — add to new file `app/schemas/gateway.py`, imported by the router:
 
 ```python
 class ManifestSkill(BaseModel):
