@@ -8,10 +8,24 @@ interface Props {
   onSearchOpen: () => void
 }
 
+type SysStatus = 'online' | 'degraded' | 'offline'
+
+const SYS_LABEL: Record<SysStatus, string> = {
+  online: 'SYS ONLINE',
+  degraded: 'SYS DEGRADED',
+  offline: 'SYS OFFLINE',
+}
+const SYS_COLOR: Record<SysStatus, string> = {
+  online: 'var(--accent)',
+  degraded: 'var(--amber, #ffb000)',
+  offline: 'var(--red)',
+}
+
 export default function Header({ dark, toggleDark, toggleLang, onSearchOpen }: Props) {
   const [username, setUsername] = useState('ADMIN')
   const [role, setRole] = useState('OPERATOR')
   const [menuOpen, setMenuOpen] = useState(false)
+  const [sysStatus, setSysStatus] = useState<SysStatus>('online')
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -25,6 +39,22 @@ export default function Header({ dark, toggleDark, toggleLang, onSearchOpen }: P
         }
       })
       .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const check = () => {
+      const token = localStorage.getItem('token')
+      fetch('/api/v1/health/ready', token ? { headers: { Authorization: `Bearer ${token}` } } : undefined)
+        .then(r => {
+          if (r.ok) setSysStatus('online')
+          else if (r.status === 503) setSysStatus('degraded')
+          else setSysStatus('offline')
+        })
+        .catch(() => setSysStatus('offline'))
+    }
+    check()
+    const id = setInterval(check, 30_000)
+    return () => clearInterval(id)
   }, [])
 
   const logout = () => {
@@ -103,9 +133,9 @@ export default function Header({ dark, toggleDark, toggleLang, onSearchOpen }: P
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexShrink: 0 }}>
         {/* Status */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '0 12px', height: 28, border: '1px solid var(--border-bright)' }}>
-          <div className="status-dot online" style={{ color: 'var(--accent)' }} />
-          <span style={{ fontSize: 12, letterSpacing: '0.15em', color: 'var(--accent)', opacity: 0.8 }}>
-            SYS ONLINE
+          <div className={`status-dot ${sysStatus === 'online' ? 'online' : ''}`} style={{ color: SYS_COLOR[sysStatus] }} />
+          <span style={{ fontSize: 12, letterSpacing: '0.15em', color: SYS_COLOR[sysStatus], opacity: 0.8 }}>
+            {SYS_LABEL[sysStatus]}
           </span>
         </div>
 

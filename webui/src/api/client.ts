@@ -362,6 +362,9 @@ export const api = {
   executeTool: (id: number, args: Record<string, any>) =>
     request(`/tools/${id}/execute`, { method: 'POST', body: JSON.stringify({ args }) }),
 
+  // ---- Token Usage ----
+  getTokenUsageSummary: () => request('/token-usage/summary'),
+
   // ---- Webhooks ----
   getWebhooks: () => request('/webhooks'),
   createWebhook: (body: {

@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useContext } from 'react'
 import { Plus, Edit2, Trash2, X, Save, Copy, Check } from 'lucide-react'
 import { api } from '../api/client'
+import { SearchContext } from '../context/SearchContext'
 
 type Category = 'system' | 'intent_parser' | 'summarizer' | 'general'
 
@@ -69,6 +70,18 @@ export default function Prompts() {
   }
 
   useEffect(() => { load() }, [])
+
+  const { searchTarget, setSearchTarget } = useContext(SearchContext)
+  useEffect(() => {
+    if (!searchTarget || searchTarget.tab !== 'prompts') return
+    const el = document.querySelector(`[data-item-id="${searchTarget.id}"]`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el.classList.add('search-highlight')
+    }
+    const t = setTimeout(() => setSearchTarget(null), 2000)
+    return () => clearTimeout(t)
+  }, [searchTarget, setSearchTarget])
 
   const openCreate = () => {
     setEdit(EMPTY_EDIT)
@@ -189,7 +202,7 @@ export default function Prompts() {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 12 }}>
           {filtered.map(item => (
-            <div key={item.id} style={{
+            <div key={item.id} data-item-id={item.id} style={{
               border: '1px solid var(--border)', background: 'var(--bg-surface)',
               padding: 14, display: 'flex', flexDirection: 'column', gap: 8,
               opacity: item.is_active ? 1 : 0.5,

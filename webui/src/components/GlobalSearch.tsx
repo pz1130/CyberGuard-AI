@@ -59,7 +59,9 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
       api.getWebhooks(),
       api.getFrameworks(),
       api.getAssessments(),
-    ]).then(([agents, providers, skills, tools, knowledge, mcp, schedule, webhooks, frameworks, assessments]) => {
+      api.getPromptTemplates(),
+      api.getN8NConnections(),
+    ]).then(([agents, providers, skills, tools, knowledge, mcp, schedule, webhooks, frameworks, assessments, prompts, n8n]) => {
       const items: SearchItem[] = []
 
       if (agents.status === 'fulfilled') {
@@ -161,6 +163,26 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
           subtitle: a.framework_name || 'ASSESSMENT',
           tab: 'governance', category: 'ASSESSMENTS', icon: '▧',
           subview: 'list',
+        }))
+      }
+
+      if (prompts.status === 'fulfilled') {
+        const d = prompts.value as any
+        const list = Array.isArray(d) ? d : []
+        list.forEach((p: any) => items.push({
+          id: p.id, name: p.name,
+          subtitle: (p.category || 'PROMPT').toUpperCase(),
+          tab: 'prompts', category: 'PROMPTS', icon: '≡',
+        }))
+      }
+
+      if (n8n.status === 'fulfilled') {
+        const d = n8n.value as any
+        const list = Array.isArray(d) ? d : (d?.connections || [])
+        list.forEach((c: any) => items.push({
+          id: c.id, name: c.name,
+          subtitle: c.base_url || 'N8N CONNECTION',
+          tab: 'n8n', category: 'N8N', icon: '⌥',
         }))
       }
 
@@ -309,7 +331,7 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
 
           {!loadingData && !q && recentTabs.length === 0 && (
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-dim)', fontSize: 12, letterSpacing: '0.1em' }}>
-              TYPE TO SEARCH ACROSS AGENTS, PROVIDERS, SKILLS, TOOLS, KNOWLEDGE, MCP, SCHEDULE, WEBHOOKS, GOVERNANCE
+              TYPE TO SEARCH ACROSS AGENTS, PROVIDERS, SKILLS, TOOLS, KNOWLEDGE, MCP, SCHEDULE, WEBHOOKS, PROMPTS, N8N, GOVERNANCE
             </div>
           )}
 

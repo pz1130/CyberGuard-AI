@@ -1,5 +1,6 @@
 import { Coins } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { api } from '../api/client'
 
 interface TokenUsageByModel {
   provider_id: string
@@ -40,28 +41,10 @@ export default function TokenUsage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const token = localStorage.getItem('token')
-        const response = await fetch('/api/v1/token-usage/summary', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        })
-        if (response.ok) {
-          const result = await response.json()
-          setData(result)
-        } else {
-          setError(`Failed to load data: ${response.status}`)
-        }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Unknown error')
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchData()
+    api.getTokenUsageSummary()
+      .then(result => setData(result as TokenUsageSummary))
+      .catch(e => setError(e instanceof Error ? e.message : 'Unknown error'))
+      .finally(() => setLoading(false))
   }, [])
 
   if (loading) {

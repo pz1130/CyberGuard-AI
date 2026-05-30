@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useContext } from 'react'
 import { api } from '../api/client'
 import { GitBranch, Plus, Trash2, Edit2, Play, Square, Loader2, Zap, X, Wifi, WifiOff, Search, Workflow, Server, ArrowRight } from 'lucide-react'
+import { SearchContext } from '../context/SearchContext'
 
 interface N8NConnection {
   id?: number
@@ -77,6 +78,18 @@ export default function N8N() {
   }
 
   useEffect(() => { loadConnections() }, [])
+
+  const { searchTarget, setSearchTarget } = useContext(SearchContext)
+  useEffect(() => {
+    if (!searchTarget || searchTarget.tab !== 'n8n') return
+    const el = document.querySelector(`[data-item-id="${searchTarget.id}"]`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el.classList.add('search-highlight')
+    }
+    const t = setTimeout(() => setSearchTarget(null), 2000)
+    return () => clearTimeout(t)
+  }, [searchTarget, setSearchTarget])
 
   const submitConnection = async () => {
     if (!connForm.name || !connForm.base_url) return
@@ -218,7 +231,7 @@ export default function N8N() {
           {connections.map(conn => {
             const isSelected = selectedConn?.id === conn.id
             return (
-              <div key={conn.id}
+              <div key={conn.id} data-item-id={conn.id}
                 onClick={() => { setSelectedConn(conn); loadWorkflows(conn) }}
                 style={{
                   padding: '14px 16px',
