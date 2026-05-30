@@ -44,7 +44,7 @@ const inputStyle: React.CSSProperties = {
 const labelStyle: React.CSSProperties = {
   display: 'block',
   fontSize: 11,
-  letterSpacing: '0.2em',
+  letterSpacing: '0.08em',
   color: 'var(--text-muted)',
   marginBottom: 6,
 }
@@ -152,12 +152,12 @@ export default function Tools() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>AGENT CAPABILITIES</div>
+          <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>AGENT CAPABILITIES</div>
           <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>TOOL POOL</h1>
         </div>
         <button
           onClick={() => { setShowForm(true); setEditing(null); resetForm() }}
-          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 36, background: 'var(--accent)', border: '1px solid var(--accent-border)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer', fontFamily: 'var(--font-mono)', boxShadow: '0 0 16px rgba(0,255,65,0.15)' }}>
+          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 36, background: 'var(--accent)', border: '1px solid var(--accent-border)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer', fontFamily: 'var(--font-mono)', boxShadow: '0 0 16px rgba(0,255,65,0.15)' }}>
           <Plus size={13} /> NEW TOOL
         </button>
       </div>
@@ -256,11 +256,11 @@ export default function Tools() {
           </div>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 20 }}>
             <button onClick={() => { setShowForm(false); setEditing(null) }}
-              style={{ padding: '0 16px', height: 36, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+              style={{ padding: '0 16px', height: 36, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
               CANCEL
             </button>
             <button onClick={submit}
-              style={{ padding: '0 16px', height: 36, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+              style={{ padding: '0 16px', height: 36, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
               {editing != null ? 'SAVE CHANGES' : 'CREATE TOOL'}
             </button>
           </div>
@@ -311,11 +311,11 @@ export default function Tools() {
                     <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>{t.name}</div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                    <div style={{ display: 'inline-block', padding: '2px 6px', border: `1px solid ${tc}`, color: tc, fontSize: 10, letterSpacing: '0.15em', background: 'var(--bg-base)' }}>
+                    <div style={{ display: 'inline-block', padding: '2px 6px', border: `1px solid ${tc}`, color: tc, fontSize: 10, letterSpacing: '0.06em', background: 'var(--bg-base)' }}>
                       {(t.category || 'tool').toUpperCase()}
                     </div>
                     {t.command_template && (
-                      <div style={{ display: 'inline-block', padding: '2px 6px', border: '1px solid var(--cyan)', color: 'var(--cyan)', fontSize: 10, letterSpacing: '0.15em', background: 'var(--bg-base)' }}>
+                      <div style={{ display: 'inline-block', padding: '2px 6px', border: '1px solid var(--cyan)', color: 'var(--cyan)', fontSize: 10, letterSpacing: '0.06em', background: 'var(--bg-base)' }}>
                         EXECUTABLE
                       </div>
                     )}

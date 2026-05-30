@@ -83,7 +83,7 @@ export default function EnvVars() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>SYSTEM CONFIGURATION</div>
+          <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>SYSTEM CONFIGURATION</div>
           <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>ENVIRONMENT VARIABLES</h1>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -102,7 +102,7 @@ export default function EnvVars() {
               display: 'flex', alignItems: 'center', gap: 8,
               padding: '0 16px', height: 36,
               background: 'var(--accent)', border: '1px solid var(--accent-border)',
-              color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer',
+              color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
               fontFamily: 'var(--font-mono)',
             }}>
             <Lock size={11} /> NEW VAR
@@ -128,7 +128,7 @@ export default function EnvVars() {
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 16 }}>NEW ENVIRONMENT VARIABLE</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
             <div>
-              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>KEY</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>KEY</label>
               <input value={newKey} onChange={e => setNewKey(e.target.value.toUpperCase())}
                 placeholder="VARIABLE_NAME"
                 style={{
@@ -139,7 +139,7 @@ export default function EnvVars() {
                 }} />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>VALUE</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>VALUE</label>
               <input value={newVal} onChange={e => setNewVal(e.target.value)}
                 placeholder="VALUE (ENCRYPTED)"
                 style={{
@@ -150,7 +150,7 @@ export default function EnvVars() {
                 }} />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>TYPE</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>TYPE</label>
               <select value={newType} onChange={e => setNewType(e.target.value as 'text' | 'secret')}
                 style={{
                   width: '100%', height: 38, padding: '0 12px',
@@ -162,7 +162,7 @@ export default function EnvVars() {
               </select>
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>DESCRIPTION (OPTIONAL)</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>DESCRIPTION (OPTIONAL)</label>
               <input value={newDesc} onChange={e => setNewDesc(e.target.value)}
                 placeholder="PURPOSE / USAGE..."
                 style={{

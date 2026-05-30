@@ -100,7 +100,7 @@ const inp: React.CSSProperties = {
 }
 const lbl = (text: string, sub?: string) => (
   <div style={{ marginBottom: 6 }}>
-    <label style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)' }}>{text}</label>
+    <label style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)' }}>{text}</label>
     {sub && <span style={{ fontSize: 11, color: 'var(--text-dim)', marginLeft: 8 }}>{sub}</span>}
   </div>
 )
@@ -593,7 +593,7 @@ export default function Providers() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
-          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>AI INFRASTRUCTURE</div>
+          <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>AI INFRASTRUCTURE</div>
           <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>AI PROVIDERS</h1>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
@@ -601,7 +601,7 @@ export default function Providers() {
             <RefreshCw size={13} />
           </button>
           <button onClick={() => setSettingsTarget({})}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 36, background: 'var(--accent)', border: '1px solid var(--accent-border)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer', fontFamily: 'var(--font-mono)', boxShadow: '0 0 16px rgba(0,255,65,0.15)' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 36, background: 'var(--accent)', border: '1px solid var(--accent-border)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer', fontFamily: 'var(--font-mono)', boxShadow: '0 0 16px rgba(0,255,65,0.15)' }}>
             <Plus size={13} /> 自定义 PROVIDER
           </button>
         </div>
@@ -626,7 +626,7 @@ export default function Providers() {
           {/* Configured providers */}
           {sortedProviders.length > 0 && (
             <div style={{ marginBottom: 28 }}>
-              <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 12 }}>已配置 · {sortedProviders.length}</div>
+              <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 12 }}>已配置 · {sortedProviders.length}</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
                 {sortedProviders.map(p => (
                   <ProviderCard
@@ -644,7 +644,7 @@ export default function Providers() {
           {/* Preset (unconfigured) providers */}
           {filteredPresets.length > 0 && (
             <div>
-              <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 12 }}>可添加的 Provider · {filteredPresets.length}</div>
+              <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 12 }}>可添加的 Provider · {filteredPresets.length}</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
                 {filteredPresets.map(preset => (
                   <PresetCard

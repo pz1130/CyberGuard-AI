@@ -116,7 +116,7 @@ function MultiAgentChat() {
         background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
         display: 'flex', flexDirection: 'column', padding: 12,
       }}>
-        <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>SELECT AGENTS</div>
+        <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>SELECT AGENTS</div>
         {agents.length === 0 && (
           <div style={{ fontSize: 12, color: 'var(--text-dim)', padding: '8px 0' }}>No agents configured</div>
         )}
@@ -218,7 +218,7 @@ function MultiAgentChat() {
                     style={{ width: 50, height: 28, padding: '0 8px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-mono)', textAlign: 'center' }} />
                 </div>
                 <button onClick={createAndRun} disabled={running || selectedAgentIds.length === 0 || !initialMessage.trim()}
-                  style={{ height: 34, padding: '0 18px', background: running ? 'var(--bg-elevated)' : 'var(--accent)', border: '1px solid var(--accent-border)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: running ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  style={{ height: 34, padding: '0 18px', background: running ? 'var(--bg-elevated)' : 'var(--accent)', border: '1px solid var(--accent-border)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: running ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: 6 }}>
                   {running ? 'STARTING...' : <><Play size={11} /> START DISCUSSION</>}
                 </button>
               </div>

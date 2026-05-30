@@ -34,7 +34,7 @@ const inputStyle: React.CSSProperties = {
 }
 
 const label = (text: string) => (
-  <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>
+  <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>
     {text}
   </label>
 )
@@ -187,13 +187,13 @@ export default function Webhooks() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>EVENT BUS</div>
+          <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>EVENT BUS</div>
           <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>WEBHOOKS</h1>
         </div>
         <button onClick={openCreate} style={{
           display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 36,
           background: 'var(--accent)', border: '1px solid var(--accent-border)',
-          color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em',
+          color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em',
           cursor: 'pointer', fontFamily: 'var(--font-mono)',
         }}>
           <Plus size={13} /> NEW WEBHOOK
@@ -236,7 +236,7 @@ export default function Webhooks() {
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 4,
                   padding: '2px 7px', border: `1px solid ${dirColor(w.direction)}`,
-                  fontSize: 10, letterSpacing: '0.15em', color: dirColor(w.direction),
+                  fontSize: 10, letterSpacing: '0.06em', color: dirColor(w.direction),
                 }}>
                   {w.direction === 'incoming' ? <ArrowDown size={9} /> : <ArrowUp size={9} />}
                   {w.direction.toUpperCase()}
@@ -320,7 +320,7 @@ export default function Webhooks() {
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: 40, overflowY: 'auto', zIndex: 100 }}>
           <div style={{ width: '100%', maxWidth: 600, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
             <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 4 }}>WEBHOOK CONFIGURATION</div>
+              <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 4 }}>WEBHOOK CONFIGURATION</div>
               <h3 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)', margin: 0 }}>
                 {editing ? 'EDIT WEBHOOK' : 'NEW WEBHOOK'}
               </h3>
@@ -433,17 +433,17 @@ export default function Webhooks() {
             <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', display: 'flex', gap: 12 }}>
               {createdToken ? (
                 <button onClick={() => { setShowForm(false); setCreatedToken(null); setCreatedUrl(null) }}
-                  style={{ flex: 1, height: 40, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+                  style={{ flex: 1, height: 40, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
                   我已保存 TOKEN，关闭
                 </button>
               ) : (
                 <>
                   <button onClick={() => setShowForm(false)}
-                    style={{ flex: 1, height: 40, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+                    style={{ flex: 1, height: 40, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
                     CANCEL
                   </button>
                   <button onClick={submit}
-                    style={{ flex: 1, height: 40, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+                    style={{ flex: 1, height: 40, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
                     {editing ? 'SAVE' : 'CREATE'}
                   </button>
                 </>

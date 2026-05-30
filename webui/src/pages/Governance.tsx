@@ -116,7 +116,7 @@ export default function Governance() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontSize: 20, letterSpacing: '0.15em', color: 'var(--text-primary)' }}>GOVERNANCE</div>
+          <div style={{ fontSize: 20, letterSpacing: '0.06em', color: 'var(--text-primary)' }}>GOVERNANCE</div>
           <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-dim)', marginTop: 4 }}>
             合规框架 · 审计 · 证据 · AI 评估
           </div>
@@ -450,7 +450,7 @@ function AssessmentDetail({ assessmentId, onBack }: { assessmentId: number; onBa
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginRight: 4 }}>FILTER</span>
+        <span style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginRight: 4 }}>FILTER</span>
         {(['all', 'not_assessed', 'compliant', 'partially_compliant', 'non_compliant', 'not_applicable'] as const).map(f => (
           <button key={f} onClick={() => setFilter(f)} style={chipButton(filter === f)}>
             {f === 'all' ? 'ALL' : STATUS_LABELS[f as ReqStatus]}
@@ -480,7 +480,7 @@ function AssessmentDetail({ assessmentId, onBack }: { assessmentId: number; onBa
           {reportLoading ? (
             <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>
               <div style={{ display: 'inline-block', width: 14, height: 14, border: '1px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-              <div style={{ marginTop: 12, fontSize: 13, letterSpacing: '0.15em' }}>GENERATING...</div>
+              <div style={{ marginTop: 12, fontSize: 13, letterSpacing: '0.06em' }}>GENERATING...</div>
             </div>
           ) : (
             <div style={{
@@ -625,7 +625,7 @@ function RequirementRow({
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 marginBottom: 6,
               }}>
-                <span style={{ fontSize: 12, letterSpacing: '0.15em', color: 'var(--text-muted)' }}>
+                <span style={{ fontSize: 12, letterSpacing: '0.06em', color: 'var(--text-muted)' }}>
                   ◆ STANDARD EVIDENCE CHECKLIST
                 </span>
                 <span style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>
@@ -657,7 +657,7 @@ function RequirementRow({
 
           {/* Status / observation editor */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
-            <span style={{ fontSize: 11, letterSpacing: '0.15em', color: 'var(--text-dim)' }}>STATUS</span>
+            <span style={{ fontSize: 11, letterSpacing: '0.06em', color: 'var(--text-dim)' }}>STATUS</span>
             <select value={editing ? draft.status : ra.status}
               disabled={!editing}
               onChange={e => setDraft(d => ({ ...d, status: e.target.value as ReqStatus }))}
@@ -666,7 +666,7 @@ function RequirementRow({
                 <option key={s} value={s}>{STATUS_LABELS[s]}</option>
               )}
             </select>
-            <span style={{ fontSize: 11, letterSpacing: '0.15em', color: 'var(--text-dim)' }}>SCORE</span>
+            <span style={{ fontSize: 11, letterSpacing: '0.06em', color: 'var(--text-dim)' }}>SCORE</span>
             <input type="number" min={0} max={100}
               disabled={!editing}
               value={editing ? (draft.score ?? '') : (ra.score ?? '')}
@@ -735,7 +735,7 @@ function RequirementRow({
           {/* Evidence */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ fontSize: 12, letterSpacing: '0.15em', color: 'var(--text-dim)' }}>EVIDENCE</span>
+              <span style={{ fontSize: 12, letterSpacing: '0.06em', color: 'var(--text-dim)' }}>EVIDENCE</span>
               <button onClick={() => setAddingEv(v => !v)} style={ghostButton()}>
                 {addingEv ? <X size={11} /> : <Plus size={11} />}
                 {addingEv ? ' CLOSE' : ' ADD'}
@@ -838,7 +838,7 @@ function Modal({ title, children, onClose, wide }: { title: string; children: Re
           padding: '12px 16px', borderBottom: '1px solid var(--border)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
-          <span style={{ fontSize: 14, letterSpacing: '0.15em', color: 'var(--accent)' }}>{title}</span>
+          <span style={{ fontSize: 14, letterSpacing: '0.06em', color: 'var(--accent)' }}>{title}</span>
           <button onClick={onClose} style={iconButton('var(--text-dim)')}><X size={14} /></button>
         </div>
         <div style={{ padding: 16, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -859,12 +859,12 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const Loading = () => (
-  <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-dim)', fontSize: 13, letterSpacing: '0.15em' }}>LOADING...</div>
+  <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-dim)', fontSize: 13, letterSpacing: '0.06em' }}>LOADING...</div>
 )
 
 const Empty = ({ hint }: { hint: string }) => (
   <div style={{
-    padding: 40, textAlign: 'center', color: 'var(--text-dim)', fontSize: 13, letterSpacing: '0.15em',
+    padding: 40, textAlign: 'center', color: 'var(--text-dim)', fontSize: 13, letterSpacing: '0.06em',
     border: '1px dashed var(--border-bright)', background: 'var(--bg-surface)',
   }}>{hint}</div>
 )

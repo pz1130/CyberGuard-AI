@@ -160,12 +160,12 @@ export default function Knowledge() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>SEMANTIC SEARCH</div>
+          <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>SEMANTIC SEARCH</div>
           <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>KNOWLEDGE BASE</h1>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 11, letterSpacing: '0.15em', color: 'var(--text-dim)' }}>EMBEDDING</span>
+            <span style={{ fontSize: 11, letterSpacing: '0.06em', color: 'var(--text-dim)' }}>EMBEDDING</span>
             <select
               value={providerId ?? ''}
               onChange={e => setProviderId(Number(e.target.value) || null)}
@@ -184,7 +184,7 @@ export default function Knowledge() {
               display: 'flex', alignItems: 'center', gap: 8,
               padding: '0 16px', height: 36,
               background: 'var(--accent)', border: '1px solid var(--accent-border)',
-              color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em',
+              color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em',
               cursor: 'pointer', fontFamily: 'var(--font-mono)',
               boxShadow: '0 0 16px rgba(0,255,65,0.15)',
             }}>
@@ -207,7 +207,7 @@ export default function Knowledge() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
-              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>NAME *</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>NAME *</label>
               <input value={kbForm.name || ''} onChange={e => setKBForm(f => ({ ...f, name: e.target.value }))}
                 placeholder="e.g. Threat Intel DB"
                 style={{
@@ -218,7 +218,7 @@ export default function Knowledge() {
                 }} />
             </div>
             <div>
-              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>
+              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>
                 <span>EMBEDDING MODEL</span>
                 <span style={{ color: 'var(--accent)' }}>DIM: {kbForm.embedding_dim || 1536}</span>
               </label>
@@ -243,7 +243,7 @@ export default function Knowledge() {
               </div>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>RERANK MODEL</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>RERANK MODEL</label>
               <select value={kbForm.rerank_model || ''} onChange={e => setKBForm(f => ({ ...f, rerank_model: e.target.value }))}
                 style={{
                   width: '100%', height: 38, padding: '0 12px',
@@ -258,7 +258,7 @@ export default function Knowledge() {
               </select>
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>DESCRIPTION</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>DESCRIPTION</label>
               <input value={kbForm.description || ''} onChange={e => setKBForm(f => ({ ...f, description: e.target.value }))}
                 style={{
                   width: '100%', height: 38, padding: '0 12px',
@@ -273,7 +273,7 @@ export default function Knowledge() {
               style={{
                 padding: '0 16px', height: 36,
                 border: '1px solid var(--border-bright)', background: 'transparent',
-                color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer',
+                color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
                 fontFamily: 'var(--font-mono)',
               }}>
               CANCEL
@@ -282,7 +282,7 @@ export default function Knowledge() {
               style={{
                 padding: '0 16px', height: 36,
                 border: '1px solid var(--accent-border)', background: 'var(--accent)',
-                color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer',
+                color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
                 fontFamily: 'var(--font-mono)',
               }}>
               CREATE
@@ -294,7 +294,7 @@ export default function Knowledge() {
       <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 16 }}>
         {/* Sidebar: KB list */}
         <div>
-          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>KNOWLEDGE BASES</div>
+          <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>KNOWLEDGE BASES</div>
           {loadingKB ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '20px 0' }}>
               <Loader2 size={14} style={{ color: 'var(--accent)', animation: 'spin 1s linear infinite' }} />

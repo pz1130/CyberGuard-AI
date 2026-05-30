@@ -91,7 +91,7 @@ export default function Users() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>ACCESS CONTROL</div>
+          <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>ACCESS CONTROL</div>
           <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>USER MANAGEMENT</h1>
         </div>
         <button onClick={() => openForm()}
@@ -99,7 +99,7 @@ export default function Users() {
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '0 16px', height: 36,
             background: 'var(--accent)', border: '1px solid var(--accent-border)',
-            color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer',
+            color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
             fontFamily: 'var(--font-mono)',
             boxShadow: '0 0 16px rgba(0,255,65,0.15)',
           }}>
@@ -115,7 +115,7 @@ export default function Users() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
-              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>USERNAME</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>USERNAME</label>
               <input value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
                 style={{
                   width: '100%', height: 38, padding: '0 12px',
@@ -128,7 +128,7 @@ export default function Users() {
               </div>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>EMAIL</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>EMAIL</label>
               <input type="email" value={form.email || ''} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                 style={{
                   width: '100%', height: 38, padding: '0 12px',
@@ -141,7 +141,7 @@ export default function Users() {
               </div>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>ROLE</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>ROLE</label>
               <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
                 style={{
                   width: '100%', height: 38, padding: '0 12px',
@@ -152,7 +152,7 @@ export default function Users() {
               </select>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>{editing ? 'NEW PASSWORD' : 'PASSWORD'}</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>{editing ? 'NEW PASSWORD' : 'PASSWORD'}</label>
               <input type="password" value={password} onChange={e => setPassword(e.target.value)}
                 placeholder={editing ? 'LEAVE BLANK TO KEEP CURRENT' : ''}
                 style={{
@@ -175,7 +175,7 @@ export default function Users() {
               style={{
                 padding: '0 16px', height: 36,
                 border: '1px solid var(--border-bright)', background: 'transparent',
-                color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer',
+                color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
                 fontFamily: 'var(--font-mono)',
               }}>
               CANCEL
@@ -184,7 +184,7 @@ export default function Users() {
               style={{
                 padding: '0 16px', height: 36,
                 background: 'var(--accent)', border: '1px solid var(--accent-border)',
-                color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em',
+                color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em',
                 cursor: 'pointer', fontFamily: 'var(--font-mono)',
               }}>
               {editing ? 'SAVE CHANGES' : 'CREATE USER'}
@@ -199,7 +199,7 @@ export default function Users() {
           <thead>
             <tr style={{ background: 'var(--bg-base)', borderBottom: '1px solid var(--border-bright)' }}>
               {['USERNAME', 'EMAIL', 'ROLE', 'STATUS', 'ACTIONS'].map((h, i) => (
-                <th key={i} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
+                <th key={i} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -221,7 +221,7 @@ export default function Users() {
                     display: 'inline-block', padding: '2px 8px',
                     border: `1px solid ${ROLE_COLORS[u.role] || 'var(--border)'}`,
                     color: ROLE_COLORS[u.role] || 'var(--text-muted)',
-                    fontSize: 11, letterSpacing: '0.15em', background: 'var(--bg-base)',
+                    fontSize: 11, letterSpacing: '0.06em', background: 'var(--bg-base)',
                   }}>
                     {u.role.toUpperCase()}
                   </span>
@@ -231,7 +231,7 @@ export default function Users() {
                     display: 'inline-block', padding: '2px 8px',
                     border: `1px solid ${u.is_active !== false ? 'var(--green)' : 'var(--border)'}`,
                     color: u.is_active !== false ? 'var(--green)' : 'var(--text-dim)',
-                    fontSize: 11, letterSpacing: '0.15em',
+                    fontSize: 11, letterSpacing: '0.06em',
                     background: u.is_active !== false ? 'rgba(0,255,65,0.05)' : 'transparent',
                   }}>
                     {u.is_active !== false ? 'ACTIVE' : 'INACTIVE'}

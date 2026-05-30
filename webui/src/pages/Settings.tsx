@@ -119,7 +119,7 @@ export default function Settings() {
     const val = config[key] as string | number
     return (
       <div key={key} style={{ marginBottom: 20 }}>
-        <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase' }}>{label}</label>
+        <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase' }}>{label}</label>
         {extra?.type === 'textarea' ? (
           <textarea
             value={val as string}
@@ -180,7 +180,7 @@ export default function Settings() {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>SYSTEM CONFIGURATION</div>
+          <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>SYSTEM CONFIGURATION</div>
           <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>SETTINGS</h1>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -198,7 +198,7 @@ export default function Settings() {
             padding: '0 16px', height: 36,
             background: saved ? 'var(--green)' : 'var(--accent)',
             border: '1px solid var(--accent-border)',
-            color: '#000', fontWeight: 700, fontSize: 12, letterSpacing: '0.15em',
+            color: '#000', fontWeight: 700, fontSize: 12, letterSpacing: '0.06em',
             cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)',
           }}>
             <Save size={11} /> {saving ? 'SAVING...' : saved ? 'SAVED!' : 'SAVE CHANGES'}
@@ -226,7 +226,7 @@ export default function Settings() {
               MODEL CONFIGURATION
             </div>
             <div style={{ marginBottom: 20 }}>
-              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase' }}>MODEL</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase' }}>MODEL</label>
               <select
                 value={config.model}
                 onChange={e => setConfig(c => ({ ...c, model: e.target.value }))}

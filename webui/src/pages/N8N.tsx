@@ -168,7 +168,7 @@ export default function N8N() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>AUTOMATION</div>
+          <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>AUTOMATION</div>
           <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>N8N WORKFLOWS</h1>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -197,7 +197,7 @@ export default function N8N() {
       <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 24 }}>
         {/* Connection Panel */}
         <div>
-          <div style={{ fontSize: 12, letterSpacing: '0.15em', color: 'var(--text-muted)', marginBottom: 12, fontWeight: 600 }}>CONNECTIONS</div>
+          <div style={{ fontSize: 12, letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 12, fontWeight: 600 }}>CONNECTIONS</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {connections.map(conn => (
               <div key={conn.id} onClick={() => { setSelectedConn(conn); loadWorkflows(conn) }}
@@ -248,7 +248,7 @@ export default function N8N() {
         {/* Workflow Panel */}
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <div style={{ fontSize: 12, letterSpacing: '0.15em', color: 'var(--text-muted)', fontWeight: 600 }}>WORKFLOWS</div>
+            <div style={{ fontSize: 12, letterSpacing: '0.06em', color: 'var(--text-muted)', fontWeight: 600 }}>WORKFLOWS</div>
             <input
               type="text" placeholder="Search workflows..." value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
@@ -324,17 +324,17 @@ export default function N8N() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>NAME</label>
+                <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>NAME</label>
                 <input value={connForm.name} onChange={e => setConnForm(f => ({ ...f, name: e.target.value }))}
                   style={{ width: '100%', height: 36, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-mono)' }} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>BASE URL</label>
+                <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>BASE URL</label>
                 <input value={connForm.base_url} onChange={e => setConnForm(f => ({ ...f, base_url: e.target.value }))} placeholder="https://n8n.example.com"
                   style={{ width: '100%', height: 36, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-mono)' }} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>API KEY</label>
+                <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>API KEY</label>
                 <input value={connForm.api_key} onChange={e => setConnForm(f => ({ ...f, api_key: e.target.value }))} type="password" placeholder="Leave empty to keep existing"
                   style={{ width: '100%', height: 36, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-mono)' }} />
               </div>
@@ -389,7 +389,7 @@ export default function N8N() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>DESCRIBE YOUR WORKFLOW</label>
+                  <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>DESCRIBE YOUR WORKFLOW</label>
                   <textarea value={genDescription} onChange={e => setGenDescription(e.target.value)}
                     rows={4} placeholder="e.g., 每小时检查我的邮箱，如果有来自重要客户的邮件就发送 Slack 通知"
                     style={{
@@ -414,7 +414,7 @@ export default function N8N() {
                 {generatedJson && (
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <label style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)' }}>GENERATED WORKFLOW JSON</label>
+                      <label style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)' }}>GENERATED WORKFLOW JSON</label>
                       <span style={{ fontSize: 11, color: 'var(--accent)' }}>{generatedJson.name || 'Untitled'}</span>
                     </div>
                     <pre style={{

@@ -66,7 +66,7 @@ export default function AuditLogs() {
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '0 16px', height: 36,
             background: 'var(--accent)', border: '1px solid var(--accent-border)',
-            color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer',
+            color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
             fontFamily: 'var(--font-mono)',
           }}>
           <Download size={11} /> EXPORT
@@ -114,7 +114,7 @@ export default function AuditLogs() {
           <thead>
             <tr style={{ background: 'var(--bg-base)', borderBottom: '1px solid var(--border-bright)' }}>
               {['TIMESTAMP', 'USER', 'ACTION', 'REQUEST ID'].map((h, i) => (
-                <th key={i} style={{ padding: '12px 16px', textAlign: i === 0 ? 'left' : 'left', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
+                <th key={i} style={{ padding: '12px 16px', textAlign: i === 0 ? 'left' : 'left', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
               ))}
             </tr>
           </thead>

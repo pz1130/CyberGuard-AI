@@ -140,13 +140,13 @@ export default function Prompts() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontSize: 20, letterSpacing: '0.15em', color: 'var(--text-primary)' }}>PROMPT TEMPLATES</div>
+          <div style={{ fontSize: 20, letterSpacing: '0.06em', color: 'var(--text-primary)' }}>PROMPT TEMPLATES</div>
           <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-dim)', marginTop: 4 }}>
             预定义可复用的 system prompt，会话中可一键填入
           </div>
         </div>
         <button onClick={openCreate} style={{
-          padding: '8px 16px', fontSize: 13, letterSpacing: '0.15em',
+          padding: '8px 16px', fontSize: 13, letterSpacing: '0.06em',
           background: 'var(--accent)', border: '1px solid var(--accent-border)',
           color: '#000', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontWeight: 700,
           display: 'flex', alignItems: 'center', gap: 6,
@@ -157,7 +157,7 @@ export default function Prompts() {
 
       {/* Filter */}
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginRight: 4 }}>FILTER</span>
+        <span style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginRight: 4 }}>FILTER</span>
         {(['all', 'system', 'intent_parser', 'summarizer', 'general'] as const).map(f => {
           const active = filter === f
           return (
@@ -176,12 +176,12 @@ export default function Prompts() {
 
       {/* List */}
       {loading ? (
-        <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-dim)', fontSize: 13, letterSpacing: '0.15em' }}>
+        <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-dim)', fontSize: 13, letterSpacing: '0.06em' }}>
           LOADING...
         </div>
       ) : filtered.length === 0 ? (
         <div style={{
-          padding: 40, textAlign: 'center', color: 'var(--text-dim)', fontSize: 13, letterSpacing: '0.15em',
+          padding: 40, textAlign: 'center', color: 'var(--text-dim)', fontSize: 13, letterSpacing: '0.06em',
           border: '1px dashed var(--border-bright)', background: 'var(--bg-surface)',
         }}>
           NO TEMPLATES — CLICK "NEW TEMPLATE" TO CREATE ONE
@@ -258,7 +258,7 @@ export default function Prompts() {
               padding: '14px 18px', borderBottom: '1px solid var(--border)',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
-              <span style={{ fontSize: 14, letterSpacing: '0.15em', color: 'var(--accent)' }}>
+              <span style={{ fontSize: 14, letterSpacing: '0.06em', color: 'var(--accent)' }}>
                 {edit.id == null ? '+ NEW PROMPT TEMPLATE' : '◆ EDIT PROMPT TEMPLATE'}
               </span>
               <button onClick={() => !saving && setEditorOpen(false)} disabled={saving}

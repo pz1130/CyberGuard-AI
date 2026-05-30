@@ -56,7 +56,7 @@ const BACKEND_COLORS: Record<string, string> = {
 }
 
 const label = (text: string) => (
-  <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>
+  <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>
     {text}
   </label>
 )
@@ -306,7 +306,7 @@ function PoolPicker({ label: lbl, options, selected, onToggle }: {
 }) {
   return (
     <div>
-      <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>{lbl}</label>
+      <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>{lbl}</label>
       <div style={{ maxHeight: 140, overflowY: 'auto', border: '1px solid var(--border-bright)', background: 'var(--bg-base)', padding: 8 }}>
         {options.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>— none —</div>}
         {options.map(o => {
@@ -496,13 +496,13 @@ export default function Agents() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>AGENT INFRASTRUCTURE</div>
+          <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>AGENT INFRASTRUCTURE</div>
           <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>SUB-AGENTS</h1>
         </div>
         <button onClick={() => setShowKindPicker(true)} style={{
           display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 36,
           background: 'var(--accent)', border: '1px solid var(--accent-border)',
-          color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em',
+          color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em',
           cursor: 'pointer', fontFamily: 'var(--font-mono)',
           boxShadow: '0 0 16px rgba(0,255,65,0.15)',
         }}>
@@ -565,7 +565,7 @@ export default function Agents() {
                   <div style={{ display: 'flex', gap: 6 }}>
                     <div style={{
                       padding: '2px 7px', border: `1px solid ${isInternal ? '#60a5fa' : bc}`,
-                      fontSize: 10, letterSpacing: '0.15em', color: isInternal ? '#60a5fa' : bc, background: 'var(--bg-base)',
+                      fontSize: 10, letterSpacing: '0.06em', color: isInternal ? '#60a5fa' : bc, background: 'var(--bg-base)',
                     }}>
                       {isInternal ? 'INTERNAL' : (a.backend_type || 'CUSTOM').toUpperCase()}
                     </div>
@@ -688,7 +688,7 @@ export default function Agents() {
             border: '1px solid var(--border-bright)',
           }}>
             <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 4 }}>NEW AGENT</div>
+              <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 4 }}>NEW AGENT</div>
               <h3 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)', margin: 0 }}>
                 CHOOSE AGENT KIND
               </h3>
@@ -745,7 +745,7 @@ export default function Agents() {
           }}>
             {/* Modal header */}
             <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 4 }}>AGENT CONFIGURATION</div>
+              <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 4 }}>AGENT CONFIGURATION</div>
               <h3 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)', margin: 0 }}>
                 {editing ? 'EDIT AGENT' : form.backend_type === '__internal__' ? 'DEPLOY INTERNAL AGENT' : 'DEPLOY EXTERNAL AGENT'}
               </h3>
@@ -984,7 +984,7 @@ export default function Agents() {
                   style={{
                     flex: 1, height: 40, border: '1px solid var(--accent-border)',
                     background: 'var(--accent)', color: '#000',
-                    fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer',
+                    fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
                     fontFamily: 'var(--font-mono)',
                   }}>
                   我已保存 KEY，关闭
@@ -995,7 +995,7 @@ export default function Agents() {
                     style={{
                       flex: 1, height: 40, border: '1px solid var(--border-bright)',
                       background: 'transparent', color: 'var(--text-muted)',
-                      fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer',
+                      fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
                       fontFamily: 'var(--font-mono)',
                     }}>
                     CANCEL
@@ -1004,7 +1004,7 @@ export default function Agents() {
                     style={{
                       flex: 1, height: 40, border: '1px solid var(--accent-border)',
                       background: 'var(--accent)', color: '#000',
-                      fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer',
+                      fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
                       fontFamily: 'var(--font-mono)',
                     }}>
                     {editing ? 'SAVE CHANGES' : 'DEPLOY AGENT'}

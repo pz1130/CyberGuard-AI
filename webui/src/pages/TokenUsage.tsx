@@ -77,7 +77,7 @@ export default function TokenUsage() {
       <div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
           <div>
-            <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>COST ANALYSIS</div>
+            <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>COST ANALYSIS</div>
             <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>TOKEN USAGE</h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -101,7 +101,7 @@ export default function TokenUsage() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>COST ANALYSIS</div>
+          <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>COST ANALYSIS</div>
           <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>TOKEN USAGE</h1>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -118,7 +118,7 @@ export default function TokenUsage() {
         ].map(({ label, value, color }) => (
           <div key={label} style={{ padding: 20, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', textAlign: 'center' }}>
             <div style={{ fontSize: 24, fontWeight: 700, color, letterSpacing: '0.05em', marginBottom: 6 }}>{value}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.15em' }}>{label}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.06em' }}>{label}</div>
           </div>
         ))}
       </div>
@@ -141,7 +141,7 @@ export default function TokenUsage() {
           <thead>
             <tr style={{ background: 'var(--bg-base)', borderBottom: '1px solid var(--border-bright)' }}>
               {['MODEL', 'INPUT', 'OUTPUT', 'COST (USD)'].map((h, i) => (
-                <th key={i} style={{ padding: '12px 16px', textAlign: i === 0 ? 'left' : 'right', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
+                <th key={i} style={{ padding: '12px 16px', textAlign: i === 0 ? 'left' : 'right', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
               ))}
             </tr>
           </thead>

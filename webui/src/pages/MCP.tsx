@@ -137,7 +137,7 @@ export default function MCP() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>MODEL CONTEXT PROTOCOL</div>
+          <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>MODEL CONTEXT PROTOCOL</div>
           <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>MCP SERVERS</h1>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -146,7 +146,7 @@ export default function MCP() {
               display: 'flex', alignItems: 'center', gap: 8,
               padding: '0 16px', height: 36,
               background: 'var(--accent)', border: '1px solid var(--accent-border)',
-              color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer',
+              color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
               fontFamily: 'var(--font-mono)',
             }}>
             <Plus size={13} /> NEW SERVER
@@ -163,7 +163,7 @@ export default function MCP() {
               background: tab === t ? 'var(--accent-dim)' : 'transparent',
               border: 'none', borderRight: '1px solid var(--border-bright)',
               color: tab === t ? 'var(--accent)' : 'var(--text-muted)',
-              fontSize: 12, letterSpacing: '0.15em', cursor: 'pointer',
+              fontSize: 12, letterSpacing: '0.06em', cursor: 'pointer',
               fontFamily: 'var(--font-mono)',
             }}>
             {label} <span style={{ marginLeft: 6, opacity: 0.6 }}>({count})</span>
@@ -177,20 +177,20 @@ export default function MCP() {
           onClick={e => e.target === e.currentTarget && setShowServerForm(false)}>
           <div style={{ width: 560, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', padding: 32 }}>
             <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: 16, marginBottom: 24 }}>
-              <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>SERVER CONFIGURATION</div>
+              <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>SERVER CONFIGURATION</div>
               <h3 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{editingServer ? 'EDIT SERVER' : 'NEW MCP SERVER'}</h3>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>NAME *</label>
+                  <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>NAME *</label>
                   <input value={serverForm.name} disabled={!!editingServer}
                     onChange={e => setServerForm(f => ({ ...f, name: e.target.value }))}
                     placeholder="my-mcp-server"
                     style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-mono)' }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>TRANSPORT</label>
+                  <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>TRANSPORT</label>
                   <select value={serverForm.transport_type} onChange={e => setServerForm(f => ({ ...f, transport_type: e.target.value }))}
                     style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-mono)' }}>
                     <option value="stdio">STDIO</option>
@@ -202,13 +202,13 @@ export default function MCP() {
               {serverForm.transport_type === 'stdio' ? (
                 <>
                   <div>
-                    <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>COMMAND</label>
+                    <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>COMMAND</label>
                     <input value={serverForm.command} onChange={e => setServerForm(f => ({ ...f, command: e.target.value }))}
                       placeholder="npx"
                       style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-mono)' }} />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>ARGS (ONE PER LINE)</label>
+                    <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>ARGS (ONE PER LINE)</label>
                     <textarea value={serverForm.args_text} onChange={e => setServerForm(f => ({ ...f, args_text: e.target.value }))}
                       rows={3}
                       placeholder="@modelcontextprotocol/server-filesystem\n/path/to/dir"
@@ -217,25 +217,25 @@ export default function MCP() {
                 </>
               ) : (
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>HTTP ENDPOINT URL</label>
+                  <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>HTTP ENDPOINT URL</label>
                   <input value={serverForm.url} onChange={e => setServerForm(f => ({ ...f, url: e.target.value }))}
                     placeholder="https://mcp.example.com"
                     style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-mono)' }} />
                 </div>
               )}
               <div>
-                <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 6 }}>DESCRIPTION</label>
+                <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>DESCRIPTION</label>
                 <input value={serverForm.description} onChange={e => setServerForm(f => ({ ...f, description: e.target.value }))}
                   style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-mono)' }} />
               </div>
             </div>
             <div style={{ display: 'flex', gap: 12, marginTop: 28 }}>
               <button onClick={() => { setShowServerForm(false); setEditingServer(null) }}
-                style={{ flex: 1, height: 40, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+                style={{ flex: 1, height: 40, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
                 CANCEL
               </button>
               <button onClick={submitServer}
-                style={{ flex: 1, height: 40, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+                style={{ flex: 1, height: 40, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
                 {editingServer ? 'SAVE CHANGES' : 'CREATE SERVER'}
               </button>
             </div>
@@ -266,8 +266,8 @@ export default function MCP() {
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
                         <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>{s.name}</span>
-                        <span style={{ padding: '2px 6px', border: '1px solid var(--border)', color: 'var(--cyan)', fontSize: 10, letterSpacing: '0.15em', background: 'var(--bg-base)' }}>{s.transport_type.toUpperCase()}</span>
-                        <span style={{ padding: '2px 6px', border: `1px solid ${s.is_active ? 'var(--green)' : 'var(--border)'}`, color: s.is_active ? 'var(--green)' : 'var(--text-dim)', fontSize: 10, letterSpacing: '0.15em', background: s.is_active ? 'rgba(0,255,65,0.05)' : 'transparent' }}>
+                        <span style={{ padding: '2px 6px', border: '1px solid var(--border)', color: 'var(--cyan)', fontSize: 10, letterSpacing: '0.06em', background: 'var(--bg-base)' }}>{s.transport_type.toUpperCase()}</span>
+                        <span style={{ padding: '2px 6px', border: `1px solid ${s.is_active ? 'var(--green)' : 'var(--border)'}`, color: s.is_active ? 'var(--green)' : 'var(--text-dim)', fontSize: 10, letterSpacing: '0.06em', background: s.is_active ? 'rgba(0,255,65,0.05)' : 'transparent' }}>
                           {s.is_active ? 'ACTIVE' : 'INACTIVE'}
                         </span>
                         <span style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>{sTools.length} TOOLS</span>
@@ -292,7 +292,7 @@ export default function MCP() {
                   </div>
                   {expanded && (
                     <div style={{ borderTop: '1px solid var(--border)', padding: '12px 16px', background: 'var(--bg-base)' }}>
-                      <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 10 }}>TOOLS</div>
+                      <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 10 }}>TOOLS</div>
                       {sTools.length === 0 ? (
                         <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>NO TOOLS DISCOVERED</div>
                       ) : (
@@ -338,7 +338,7 @@ export default function MCP() {
                 <div key={t.id} style={{ padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
                     <div style={{ fontSize: 14, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', letterSpacing: '0.05em' }}>{t.tool_name}</div>
-                    <span style={{ padding: '2px 6px', border: `1px solid ${CATEGORY_COLORS[t.category || 'general']}`, color: CATEGORY_COLORS[t.category || 'general'], fontSize: 10, letterSpacing: '0.15em', background: 'var(--bg-base)' }}>
+                    <span style={{ padding: '2px 6px', border: `1px solid ${CATEGORY_COLORS[t.category || 'general']}`, color: CATEGORY_COLORS[t.category || 'general'], fontSize: 10, letterSpacing: '0.06em', background: 'var(--bg-base)' }}>
                       {(t.category || 'general').toUpperCase()}
                     </span>
                   </div>

@@ -68,10 +68,10 @@ export default function Login() {
             <span style={{ color: 'var(--accent)' }}>⬡</span>
           </div>
           <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 20, letterSpacing: '0.15em' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 20, letterSpacing: '0.06em' }}>
               CYBERGUARD
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.2em' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
               AI AGENT PLATFORM · AUTH GATE
             </div>
           </div>
@@ -82,7 +82,7 @@ export default function Login() {
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <div>
             <label style={{
-              display: 'block', fontSize: 12, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 8,
+              display: 'block', fontSize: 12, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 8,
             }}>
               USERNAME
             </label>
@@ -106,7 +106,7 @@ export default function Login() {
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: 12, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 8 }}>
+            <label style={{ display: 'block', fontSize: 12, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 8 }}>
               PASSWORD
             </label>
             <input
@@ -147,7 +147,7 @@ export default function Login() {
               background: loading ? 'var(--bg-elevated)' : 'var(--accent)',
               border: '1px solid var(--accent-border)',
               color: loading ? 'var(--text-muted)' : '#000',
-              fontWeight: 700, fontSize: 14, letterSpacing: '0.2em',
+              fontWeight: 700, fontSize: 14, letterSpacing: '0.08em',
               cursor: loading ? 'not-allowed' : 'pointer',
               transition: 'all 0.15s', fontFamily: 'var(--font-mono)',
               boxShadow: loading ? 'none' : '0 0 20px rgba(0,255,65,0.2)',

@@ -93,7 +93,7 @@ export default function Backup() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)', marginBottom: 6 }}>DATA RESILIENCE</div>
+          <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>DATA RESILIENCE</div>
           <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>BACKUP & RESTORE</h1>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -114,7 +114,7 @@ export default function Backup() {
               background: creating ? 'var(--bg-elevated)' : 'var(--accent)',
               border: '1px solid var(--accent-border)',
               color: creating ? 'var(--text-dim)' : '#000',
-              fontWeight: 700, fontSize: 13, letterSpacing: '0.15em', cursor: creating ? 'not-allowed' : 'pointer',
+              fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: creating ? 'not-allowed' : 'pointer',
               fontFamily: 'var(--font-mono)',
             }}>
             {creating ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Plus size={11} />}
@@ -175,7 +175,7 @@ export default function Backup() {
                     <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>{b.name}</span>
                     <span style={{
                       padding: '2px 6px', border: '1px solid var(--border)',
-                      color: 'var(--cyan)', fontSize: 10, letterSpacing: '0.15em', background: 'var(--bg-base)',
+                      color: 'var(--cyan)', fontSize: 10, letterSpacing: '0.06em', background: 'var(--bg-base)',
                     }}>
                       {(b.type || 'FULL').replace(/\.AES$/i, '').toUpperCase()}
                     </span>

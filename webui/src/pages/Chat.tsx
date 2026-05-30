@@ -561,7 +561,7 @@ export default function Chat() {
           display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)',
         }}>
           <div style={{ padding: '12px 12px 8px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)' }}>CONVERSATIONS</span>
+            <span style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)' }}>CONVERSATIONS</span>
             <button onClick={createConversation} style={{ padding: 4, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none' }}>
               <Plus size={13} />
             </button>
@@ -627,7 +627,7 @@ export default function Chat() {
               <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/>
             </svg>
           </button>
-          <span style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)' }}>MODE</span>
+          <span style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)' }}>MODE</span>
           <div style={{ display: 'flex', border: '1px solid var(--border-bright)' }}>
             {(['normal','fast','expert'] as const).map(m => {
               const active = chatMode === m
@@ -656,7 +656,7 @@ export default function Chat() {
               )
             })}
           </div>
-          <span style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)' }}>MODEL</span>
+          <span style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)' }}>MODEL</span>
           <select value={providerModel} onChange={e => { localStorage.setItem('lastProviderModel', e.target.value); setProviderModel(e.target.value) }}
             style={{
               height: 26, padding: '0 8px',
@@ -667,7 +667,7 @@ export default function Chat() {
             <option value="auto">AUTO</option>
             {availableModels.map(m => <option key={`${m.provider_id}:${m.model}`} value={`${m.provider_id}:${m.model}`}>{m.provider_name} / {m.model}</option>)}
           </select>
-          <span style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-dim)' }}>AGENT</span>
+          <span style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)' }}>AGENT</span>
           <select
             value={selectedAgentId}
             onChange={e => {
@@ -759,7 +759,7 @@ export default function Chat() {
               }}>
                 <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-muted)' }}>CUSTOM SYSTEM PROMPT</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 11, letterSpacing: '0.15em', color: 'var(--text-dim)' }}>TEMPLATE</span>
+                  <span style={{ fontSize: 11, letterSpacing: '0.06em', color: 'var(--text-dim)' }}>TEMPLATE</span>
                   <select
                     value=""
                     onChange={e => {
@@ -870,9 +870,9 @@ export default function Chat() {
           {!activeConvId ? (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, color: 'var(--text-dim)' }}>
               <div style={{ fontSize: 34, color: 'var(--accent)', opacity: 0.5 }}>⬡</div>
-              <div style={{ fontSize: 13, letterSpacing: '0.2em' }}>SELECT OR CREATE A CONVERSATION</div>
+              <div style={{ fontSize: 13, letterSpacing: '0.08em' }}>SELECT OR CREATE A CONVERSATION</div>
               <button onClick={createConversation} style={{
-                padding: '8px 20px', fontSize: 12, letterSpacing: '0.15em',
+                padding: '8px 20px', fontSize: 12, letterSpacing: '0.06em',
                 background: 'var(--accent)', border: 'none', color: '#000',
                 cursor: 'pointer', fontFamily: 'var(--font-mono)', fontWeight: 700,
               }}>+ NEW CONVERSATION</button>
@@ -880,7 +880,7 @@ export default function Chat() {
           ) : messages.length === 0 ? (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: 'var(--text-dim)' }}>
               <div style={{ fontSize: 26, opacity: 0.3 }}>⬡</div>
-              <div style={{ fontSize: 12, letterSpacing: '0.15em' }}>READY — SEND A MESSAGE</div>
+              <div style={{ fontSize: 12, letterSpacing: '0.06em' }}>READY — SEND A MESSAGE</div>
             </div>
           ) : (
             messages.map((msg, i) => (
@@ -888,7 +888,7 @@ export default function Chat() {
                 display: 'flex', flexDirection: 'column',
                 alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
               }}>
-                <div style={{ fontSize: 11, letterSpacing: '0.15em', color: 'var(--text-dim)', marginBottom: 4 }}>
+                <div style={{ fontSize: 11, letterSpacing: '0.06em', color: 'var(--text-dim)', marginBottom: 4 }}>
                   {msg.role === 'user' ? '◆ OPERATOR' : msg.role === 'assistant' ? '◆ CYBERGUARD' : '◆ SYSTEM'}
                 </div>
                 <div style={{
