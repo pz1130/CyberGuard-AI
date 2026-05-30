@@ -4,15 +4,16 @@ import pytest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from app.schemas.gateway import (
+    ManifestSkill, ManifestTool, ManifestMCPTool, ManifestResponse,
+)
+
 
 # ---------------------------------------------------------------------------
 # Task 1 — Schema smoke
 # ---------------------------------------------------------------------------
 
 def test_manifest_schemas_round_trip():
-    from app.schemas.gateway import (
-        ManifestSkill, ManifestTool, ManifestMCPTool, ManifestResponse,
-    )
     skill = ManifestSkill(id=1, name="port-scan", description="desc", md_content="# MD")
     tool = ManifestTool(
         id=2, name="nmap", description="net mapper",

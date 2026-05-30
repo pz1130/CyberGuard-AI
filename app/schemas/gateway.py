@@ -1,5 +1,5 @@
 """Pydantic schemas for the /gateway/manifest endpoint."""
-from typing import Optional
+from typing import Any, Dict, Optional
 from pydantic import BaseModel
 
 
@@ -15,14 +15,14 @@ class ManifestTool(BaseModel):
     name: str
     description: Optional[str] = None
     command_template: Optional[str] = None
-    input_schema: dict
+    input_schema: Dict[str, Any]
 
 
 class ManifestMCPTool(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
-    input_schema: dict
+    input_schema: Dict[str, Any]
 
 
 class ManifestResponse(BaseModel):
