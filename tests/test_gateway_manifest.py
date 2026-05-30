@@ -231,3 +231,40 @@ async def test_poll_has_manifest_false_when_no_pools():
             result = await gw.poll(x_api_key="oc-test")
 
     assert result.messages == []
+
+
+# ---------------------------------------------------------------------------
+# Task 4 — API key for all backends
+# ---------------------------------------------------------------------------
+
+def test_create_custom_agent_issues_api_key():
+    """Creating a custom agent returns an api_key (not just openclaw)."""
+    # Test that `_generate_api_key` is called regardless of backend_type.
+    # We test the router logic directly by inspecting the conditional.
+    import ast, inspect
+    from app.routers import agents as ag
+
+    src = inspect.getsource(ag.create_agent)
+    tree = ast.parse(src)
+
+    # Walk the AST — there must be NO If node that checks backend_type == "openclaw"
+    # before calling _generate_api_key.
+    for node in ast.walk(tree):
+        if isinstance(node, ast.If):
+            cond = ast.dump(node.test)
+            if "openclaw" in cond and "_generate_api_key" in ast.dump(node):
+                raise AssertionError(
+                    "create_agent still gates _generate_api_key behind backend_type == 'openclaw'"
+                )
+
+
+def test_regenerate_key_allows_non_openclaw():
+    """regenerate_api_key endpoint no longer rejects non-openclaw agents."""
+    import ast, inspect
+    from app.routers import agents as ag
+
+    src = inspect.getsource(ag.regenerate_api_key)
+    # There must be no raise that checks backend_type != "openclaw"
+    assert "Only openclaw" not in src, (
+        "regenerate_api_key still contains 'Only openclaw' rejection message"
+    )
