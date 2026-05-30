@@ -1,11 +1,29 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { api } from '../api/client'
+
+const SSO_ERROR_LABELS: Record<string, string> = {
+  sso_unavailable: 'SSO IS NOT CONFIGURED',
+  sso_failed: 'MICROSOFT SIGN-IN FAILED',
+  sso_state: 'SSO SESSION EXPIRED — TRY AGAIN',
+  sso_inactive: 'ACCOUNT DISABLED',
+  sso_no_account: 'NO MATCHING ACCOUNT — CONTACT ADMIN',
+}
 
 export default function Login() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [ssoEnabled, setSsoEnabled] = useState(false)
+
+  useEffect(() => {
+    api.getSsoStatus().then((d: any) => setSsoEnabled(!!d?.enabled)).catch(() => {})
+    const err = new URLSearchParams(window.location.search).get('error')
+    if (err) {
+      setError(SSO_ERROR_LABELS[err] || 'SIGN-IN ERROR')
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+  }, [])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -156,6 +174,34 @@ export default function Login() {
             {loading ? 'AUTHENTICATING...' : 'AUTHENTICATE'}
           </button>
         </form>
+
+        {ssoEnabled && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '20px 0' }}>
+              <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+              <span style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>OR</span>
+              <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+            </div>
+            <a
+              href="/api/v1/auth/sso/login"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                height: 40, width: '100%', textDecoration: 'none',
+                background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
+                color: 'var(--text-primary)', fontWeight: 700, fontSize: 13,
+                letterSpacing: '0.06em', fontFamily: 'var(--font-mono)',
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 23 23" aria-hidden="true">
+                <rect x="1" y="1" width="10" height="10" fill="#f25022" />
+                <rect x="12" y="1" width="10" height="10" fill="#7fba00" />
+                <rect x="1" y="12" width="10" height="10" fill="#00a4ef" />
+                <rect x="12" y="12" width="10" height="10" fill="#ffb900" />
+              </svg>
+              SIGN IN WITH MICROSOFT
+            </a>
+          </>
+        )}
 
         <div style={{ marginTop: 24, fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.1em', textAlign: 'center' }}>
           SECURE · ENCRYPTED · ZERO-TRUST

@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     # Leave empty to disable manifest_url injection (safe default).
     BASE_URL: str = ""
 
+    # Azure AD / Entra ID SSO. The client secret is read from the environment
+    # ONLY (never stored in the DB). Non-secret config (tenant/client id, redirect,
+    # enabled, role mappings) lives in the sso_config / sso_role_mapping tables.
+    AZURE_CLIENT_SECRET: str = ""
+
     # Environment
     ENVIRONMENT: str = "development"
 

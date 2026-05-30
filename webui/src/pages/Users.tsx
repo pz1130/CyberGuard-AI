@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api/client'
-import { Trash2, Plus, Edit2 } from 'lucide-react'
+import { Trash2, Edit2 } from 'lucide-react'
 
 interface User {
   id?: number
@@ -20,6 +20,12 @@ export default function Users() {
   const [editing, setEditing] = useState<number | null>(null)
   const [form, setForm] = useState<User>({ username: '', email: '', role: 'viewer' })
   const [password, setPassword] = useState('')
+  const [activeTab, setActiveTab] = useState<'users' | 'sso'>('users')
+  // SSO state
+  const [ssoCfg, setSsoCfg] = useState<any>(null)
+  const [ssoMappings, setSsoMappings] = useState<any[]>([])
+  const [ssoSaving, setSsoSaving] = useState(false)
+  const [newMapping, setNewMapping] = useState({ azure_key: '', app_role: 'viewer', priority: 10 })
 
   const load = async () => {
     try {
@@ -70,6 +76,40 @@ export default function Users() {
     await api.deleteUser(id); load()
   }
 
+  // SSO data loading & mutation
+  const loadSso = async () => {
+    try {
+      const [cfg, mappings] = await Promise.all([api.getSsoConfig(), api.getSsoRoleMappings()])
+      setSsoCfg(cfg); setSsoMappings(mappings || [])
+    } catch { /* admin-only, let tabs gate access */ }
+  }
+
+  const saveSsoConfig = async (patch: Record<string, unknown>) => {
+    setSsoSaving(true)
+    try {
+      const updated = await api.updateSsoConfig(patch)
+      setSsoCfg(updated)
+    } finally { setSsoSaving(false) }
+  }
+
+  const addMapping = async () => {
+    if (!newMapping.azure_key.trim()) return
+    await api.createSsoRoleMapping(newMapping)
+    setNewMapping({ azure_key: '', app_role: 'viewer', priority: 10 })
+    await loadSso()
+  }
+
+  const removeMapping = async (id: number) => {
+    if (!confirm('REMOVE THIS MAPPING?')) return
+    await api.deleteSsoRoleMapping(id)
+    await loadSso()
+  }
+
+  // Tab switch
+  useEffect(() => {
+    if (activeTab === 'sso') loadSso()
+  }, [activeTab])
+
   const openForm = (u?: User) => {
     if (u) {
       setEditing(u.id!); setForm({ ...u })
@@ -94,25 +134,92 @@ export default function Users() {
           <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>ACCESS CONTROL</div>
           <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>USER MANAGEMENT</h1>
         </div>
-        <button onClick={() => openForm()}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '0 16px', height: 36,
-            background: 'var(--accent)', border: '1px solid var(--accent-border)',
-            color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
-            fontFamily: 'var(--font-mono)',
-            boxShadow: '0 0 16px rgba(0,255,65,0.15)',
-          }}>
-          <Plus size={13} /> NEW USER
-        </button>
+        <div style={{ display: 'flex', border: '1px solid var(--border-bright)' }}>
+          {(['users', 'sso'] as const).map(t => (
+            <button
+              key={t}
+              onClick={() => setActiveTab(t)}
+              style={{
+                padding: '8px 20px', fontFamily: 'var(--font-mono)', fontSize: 12,
+                letterSpacing: '0.08em', fontWeight: 600, cursor: 'pointer',
+                background: activeTab === t ? 'var(--accent)' : 'var(--bg-surface)',
+                color: activeTab === t ? '#000' : 'var(--text-muted)',
+                border: 'none', borderRight: t === 'users' ? '1px solid var(--border-bright)' : 'none',
+              }}
+            >{t === 'users' ? 'USERS' : 'SSO'}</button>
+          ))}
+        </div>
       </div>
 
-      {/* Form */}
-      {showForm && (
-        <div style={{ marginBottom: 24, padding: 24, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border)' }}>
-            {editing ? 'EDIT USER' : 'CREATE NEW USER'}
+      {/* ── SSO tab ── */}
+      {activeTab === 'sso' && (
+        <div style={{ marginBottom: 24, display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <div style={{ padding: 24, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
+            <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: '0.1em', marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border)', color: 'var(--text-primary)' }}>AZURE AD CONFIGURATION</div>
+            {!ssoCfg ? <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>LOADING…</div> : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <SsoField label="ENABLED" checked={!!ssoCfg.enabled} onChange={v => saveSsoConfig({ enabled: v })} saving={ssoSaving} />
+                <SsoField label="CLIENT SECRET (ENV)" value={ssoCfg.secret_configured ? 'CONFIGURED ✓' : 'NOT SET'} saved />
+                <SsoField label="TENANT ID" value={ssoCfg.tenant_id || '—'} saved />
+                <SsoField label="CLIENT ID" value={ssoCfg.client_id || '—'} saved />
+                <div style={{ gridColumn: '1 / -1' }}><SsoField label="REDIRECT URI" value={ssoCfg.redirect_uri || '—'} saved /></div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>DEFAULT ROLE</label>
+                  <select value={ssoCfg.default_role} onChange={e => saveSsoConfig({ default_role: e.target.value })} style={{ width: '100%', height: 36, padding: '0 10px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>
+                    {['admin', 'operator', 'analyst', 'viewer', 'auditor'].map(r => <option key={r} value={r}>{r.toUpperCase()}</option>)}
+                  </select>
+                </div>
+                <SsoField label="JIT PROVISIONING" checked={!!ssoCfg.allow_jit} onChange={v => saveSsoConfig({ allow_jit: v })} saving={ssoSaving} />
+              </div>
+            )}
           </div>
+          <div style={{ padding: 24, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
+            <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: '0.1em', marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border)', color: 'var(--text-primary)' }}>AZURE GROUP → APP ROLE MAPPINGS</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 12, alignItems: 'end', marginBottom: 20 }}>
+              <SsoInput label="AZURE KEY" value={newMapping.azure_key} onChange={v => setNewMapping(p => ({ ...p, azure_key: v }))} placeholder="00000000-0000-0000-0000-000000000000" />
+              <div>
+                <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>APP ROLE</label>
+                <select value={newMapping.app_role} onChange={e => setNewMapping(p => ({ ...p, app_role: e.target.value }))} style={{ height: 36, padding: '0 8px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>
+                  {['admin', 'operator', 'analyst', 'viewer', 'auditor'].map(r => <option key={r} value={r}>{r.toUpperCase()}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>PRIORITY</label>
+                <input type="number" value={newMapping.priority} onChange={e => setNewMapping(p => ({ ...p, priority: parseInt(e.target.value) || 0 }))} style={{ height: 36, width: 80, padding: '0 8px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 13 }} />
+              </div>
+              <button onClick={addMapping} disabled={!newMapping.azure_key.trim()} style={{ height: 36, padding: '0 16px', background: newMapping.azure_key.trim() ? 'var(--accent)' : 'var(--bg-elevated)', border: '1px solid var(--accent-border)', color: newMapping.azure_key.trim() ? '#000' : 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', cursor: 'pointer' }}>+ ADD</button>
+            </div>
+            {ssoMappings.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.06em' }}>NO MAPPINGS — AZURE USERS RECEIVE THE DEFAULT ROLE</div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead><tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  {['AZURE KEY', 'APP ROLE', 'PRIORITY', ''].map(h => <th key={h} style={{ padding: '8px 12px', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', textAlign: 'left', fontWeight: 400 }}>{h}</th>)}
+                </tr></thead>
+                <tbody>{ssoMappings.map(m => (
+                  <tr key={m.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={{ padding: '10px 12px', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-primary)' }}>{m.azure_key}</td>
+                    <td style={{ padding: '10px 12px', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent)' }}>{m.app_role.toUpperCase()}</td>
+                    <td style={{ padding: '10px 12px', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' }}>{m.priority}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                      <button onClick={() => removeMapping(m.id)} style={{ background: 'none', border: '1px solid var(--red)', color: 'var(--red)', padding: '4px 10px', fontSize: 11, fontFamily: 'var(--font-mono)', cursor: 'pointer', letterSpacing: '0.06em' }}>REMOVE</button>
+                    </td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Users tab ── */}
+      {activeTab === 'users' && (
+        <div>
+          {showForm && (
+            <div style={{ marginBottom: 24, padding: 24, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border)' }}>
+                {editing ? 'UPDATE USER' : 'CREATE USER'}
+              </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>USERNAME</label>
@@ -252,6 +359,45 @@ export default function Users() {
           </tbody>
         </table>
       </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── SSO helper components ───────────────────────────────────────────────────
+
+function SsoField({ label, value, checked, saved, onChange, saving }: {
+  label: string; value?: string; checked?: boolean; saved?: boolean;
+  onChange?: (v: boolean) => void; saving?: boolean;
+}) {
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>{label}</label>
+      {checked !== undefined && onChange ? (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+          <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} disabled={saving} />
+          <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', letterSpacing: '0.06em' }}>
+            {checked ? 'ON' : 'OFF'}
+          </span>
+        </label>
+      ) : (
+        <div style={{ padding: '8px 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', fontSize: 12, fontFamily: 'var(--font-mono)', color: saved ? 'var(--green)' : 'var(--text-primary)', letterSpacing: '0.05em' }}>
+          {value || '—'}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SsoInput({ label, value, onChange, placeholder }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string;
+}) {
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>{label}</label>
+      <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+        style={{ width: '100%', height: 36, padding: '0 10px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 13 }} />
     </div>
   )
 }

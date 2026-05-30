@@ -68,6 +68,13 @@ export default function App() {
       setDark(false)
       document.documentElement.setAttribute('data-theme', 'light')
     }
+    // SSO callback delivers the JWT in the URL fragment (#sso_token=...).
+    const ssoMatch = window.location.hash.match(/sso_token=([^&]+)/)
+    if (ssoMatch) {
+      localStorage.setItem('token', decodeURIComponent(ssoMatch[1]))
+      // Strip the token from the URL so it isn't left in history.
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    }
     const token = localStorage.getItem('token')
     if (!token) { setChecking(false); return }
     api.getAuthMe()
