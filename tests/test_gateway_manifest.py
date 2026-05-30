@@ -268,3 +268,79 @@ def test_regenerate_key_allows_non_openclaw():
     assert "Only openclaw" not in src, (
         "regenerate_api_key still contains 'Only openclaw' rejection message"
     )
+
+
+# ---------------------------------------------------------------------------
+# Task 5 — SubAgentWrapper manifest_url injection
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_subagent_wrapper_injects_manifest_url_when_base_url_set():
+    """When settings.BASE_URL is set, execute payload contains manifest_url."""
+    import httpx
+    from app.services.agent_executor import SubAgentWrapper
+
+    config = {
+        "id": 3,
+        "agent_name": "BotX",
+        "backend_type": "custom",
+        "endpoint_url": "https://bot.example.com",
+        "env_vars_encrypted": None,
+    }
+
+    captured = {}
+
+    async def fake_post(url, headers=None, json=None, **kw):
+        captured["payload"] = json
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = {"output": "done"}
+        return resp
+
+    with patch("app.config.settings.BASE_URL", "https://cyberguard.example.com"):
+        wrapper = SubAgentWrapper(config)
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(side_effect=fake_post)
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            await wrapper.execute(task="scan 10.0.0.1", context={"user_id": 1})
+
+    assert "manifest_url" in captured["payload"]
+    assert captured["payload"]["manifest_url"] == (
+        "https://cyberguard.example.com/api/v1/gateway/manifest"
+    )
+
+
+@pytest.mark.asyncio
+async def test_subagent_wrapper_omits_manifest_url_when_base_url_empty():
+    """When settings.BASE_URL is empty, manifest_url is not in the payload."""
+    from app.services.agent_executor import SubAgentWrapper
+
+    config = {
+        "id": 3,
+        "agent_name": "BotX",
+        "backend_type": "custom",
+        "endpoint_url": "https://bot.example.com",
+        "env_vars_encrypted": None,
+    }
+
+    captured = {}
+
+    async def fake_post(url, headers=None, json=None, **kw):
+        captured["payload"] = json
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = {"output": "done"}
+        return resp
+
+    with patch("app.config.settings.BASE_URL", ""):
+        wrapper = SubAgentWrapper(config)
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(side_effect=fake_post)
+            mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+            await wrapper.execute(task="scan 10.0.0.1", context={"user_id": 1})
+
+    assert "manifest_url" not in captured["payload"]

@@ -144,6 +144,10 @@ class SubAgentWrapper:
             "env_vars": self.env_vars,
             "timestamp": datetime.utcnow().isoformat(),
         }
+        if settings.BASE_URL:
+            payload["manifest_url"] = (
+                f"{settings.BASE_URL.rstrip('/')}/api/v1/gateway/manifest"
+            )
 
         for attempt in range(self.max_retries):
             try:
