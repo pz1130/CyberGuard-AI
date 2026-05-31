@@ -1,6 +1,8 @@
 """Knowledge base and document management router."""
+import base64
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
@@ -11,10 +13,51 @@ from app.schemas.knowledge import (
     DocumentRead, DocumentListResponse, DocumentTextIngestRequest, DocumentUploadResponse,
     KnowledgeQueryRequest, KnowledgeQueryResponse,
 )
+from app.schemas.ocr import OcrConfigRead, OcrConfigUpdate
 from app.models.knowledge import KnowledgeBase, Document
 from app.services.knowledge_service import get_knowledge_service, extract_text
+from app.services.ocr_service import ScannedPdfError, load_ocr_config
+
+MAX_OCR_BYTES = 20 * 1024 * 1024  # 20 MB
 
 router = APIRouter()
+
+
+# ---------------------------------------------------------------------------
+# OCR Settings
+# ---------------------------------------------------------------------------
+
+@router.get("/ocr/config", response_model=OcrConfigRead)
+async def get_ocr_config(db: AsyncSession = Depends(get_db),
+                         _=Depends(require_permission(Permission.SETTINGS_READ))):
+    from sqlalchemy import select
+    from app.models.ocr import OcrConfig
+    row = (await db.execute(select(OcrConfig))).scalar_one_or_none()
+    if row is None:
+        return OcrConfigRead(enabled=True, engine="tesseract", vision_provider_id=None,
+                             vision_model=None, languages="chi_sim+eng", max_pages=30)
+    return OcrConfigRead(
+        enabled=row.enabled, engine=row.engine, vision_provider_id=row.vision_provider_id,
+        vision_model=row.vision_model, languages=row.languages, max_pages=row.max_pages)
+
+
+@router.put("/ocr/config", response_model=OcrConfigRead)
+async def update_ocr_config(body: OcrConfigUpdate, db: AsyncSession = Depends(get_db),
+                            _=Depends(require_permission(Permission.SETTINGS_WRITE))):
+    from sqlalchemy import select
+    from app.models.ocr import OcrConfig
+    row = (await db.execute(select(OcrConfig))).scalar_one_or_none()
+    if row is None:
+        row = OcrConfig()
+        db.add(row)
+    for field in ("enabled", "engine", "vision_provider_id", "vision_model", "languages", "max_pages"):
+        val = getattr(body, field)
+        if val is not None:
+            setattr(row, field, val)
+    await db.commit(); await db.refresh(row)
+    return OcrConfigRead(
+        enabled=row.enabled, engine=row.engine, vision_provider_id=row.vision_provider_id,
+        vision_model=row.vision_model, languages=row.languages, max_pages=row.max_pages)
 
 
 # ---------------------------------------------------------------------------
@@ -142,6 +185,22 @@ async def upload_document(
     raw = await file.read()
     try:
         content = extract_text(raw, file.content_type, file.filename or "")
+    except ScannedPdfError:
+        cfg = await load_ocr_config()
+        if not cfg.enabled:
+            raise HTTPException(status_code=400, detail="扫描件 PDF 需启用 OCR（请在 OCR 设置中开启）")
+        if len(raw) > MAX_OCR_BYTES:
+            raise HTTPException(status_code=413, detail="扫描件超出 OCR 大小上限（20MB）")
+        from app.workers.tasks import ocr_ingest_task
+        service = get_knowledge_service()
+        doc = await service.create_pending_document(
+            db=db, kb_id=kb_id, filename=file.filename,
+            mime_type=file.content_type, raw=raw)
+        ocr_ingest_task.delay(
+            doc.id, kb_id, base64.b64encode(raw).decode(),
+            file.filename, file.content_type)
+        return JSONResponse(status_code=202,
+                            content={"document_id": doc.id, "status": "processing"})
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
