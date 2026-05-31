@@ -107,16 +107,16 @@ Components added:
 
 ## Not yet implemented
 
-- S3 / Alibaba OSS backup（API stub 存在，无实现）
-- Email notifications（helpers 存在）
-- Guardrail sanitization（`GuardrailResult.sanitized` 字段预留，未实现）
-- Governance evidence 文件上传（`kind=file` schema 存在，UI 未接）
+- **Guardrail sanitization** — `GuardrailResult.sanitized` 字段预留，永远返回 `None`（`app/core/guardrails.py:423` `# Future: implement sanitization pass`）。
+- **Governance evidence 文件上传（`kind=file`）** — schema/类型声明了 `file`（`EvidenceKind = Literal["file","url","text"]` + `file_path` 字段），但 `POST /governance/req-assessments/{id}/evidence` 只处理 `url`/`text`，**无 multipart `UploadFile`、无文件存储**；前端 `Governance.tsx` 表单 state 仅 `'text'|'url'`，`file` 不可选。两端皆缺。
 
 ## Recently completed
 
 - **流式 sub-agent 输出** ✅ — `POST /agents/{id}/execute/stream`（SSE: start/tool_call_start/tool_call_end/text/done/error）。`InternalAgentRunner` 抽出共享 `_run_loop()`，新增 `execute_stream()`（最终答复经 `router.stream_chat()` 逐字重生成）；`AgentExecutor.execute_stream()` 按 kind 分流（internal 原生流式，其它 kind 单 done 事件）。WebUI Agents 页新增 RUN 面板（`api.executeAgentStream`）。
 - **OCR for scanned-image PDFs** ✅ — merged via PR #4（Tesseract + vision，Celery 异步，`ocr_config`，alembic head `016_ocr`）。
 - **Scheduled-tasks 执行** ✅ — `sync_scheduled_jobs_task` + Celery-beat `beat_schedule`（`app/workers/tasks.py`）已实现；cron 表达式按 beat 周期触发。
+- **S3 / Alibaba OSS 备份** ✅ — `app/routers/backup.py` 有完整 boto3 multipart 实现（`_upload_to_s3_multipart`），已挂载到 `main.py`；运行时需配 `S3_ENDPOINT`/`S3_ACCESS_KEY`/`S3_SECRET_KEY` 环境变量。
+- **Email 通知** ✅ — `app/services/email_service.py` 完整实现（smtplib + STARTTLS），被审批创建/决议（`approval_service.py`、`approval.py`）与定时任务完成（`workers/tasks.py`）三处调用；运行时需配 `SMTP_HOST`/`SMTP_FROM_EMAIL`。
 
 ## Operational notes
 
