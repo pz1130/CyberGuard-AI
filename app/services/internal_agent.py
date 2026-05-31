@@ -551,3 +551,51 @@ class InternalAgentRunner:
             "execution_time": round(time.monotonic() - start, 2),
             "tool_calls": final_event["tool_call_log"],
         }
+
+    async def execute_stream(self, task: str, conversation_id: Optional[int],
+                             user_id: int):
+        """Run the tool-call loop, streaming SSE-shaped event dicts.
+
+        Emits: start / tool_call_start / tool_call_end / text* / done / error.
+        The final answer is re-generated via router.stream_chat() (tools=None) —
+        Approach 1's one extra LLM call, confined to the streaming path.
+        """
+        start = time.monotonic()
+        self._user_id = user_id
+
+        if self.permission_level == "high":
+            yield {"type": "error",
+                   "content": "High permission internal agent requires approval"}
+            return
+
+        async for ev in self._run_loop(task, conversation_id, user_id):
+            t = ev["type"]
+            if t in ("start", "tool_call_start", "tool_call_end"):
+                yield ev
+            elif t == "error":
+                yield {"type": "error", "content": ev["error"]}
+                return
+            elif t == "answer_ready":
+                messages = ev["messages"]
+                new_messages = ev["new_messages"]
+                router = get_llm_router()
+                parts: List[str] = []
+                try:
+                    async for delta in router.stream_chat(
+                        messages=messages,
+                        provider_id=self.llm_provider_id,
+                        model=self.llm_model,
+                    ):
+                        parts.append(delta)
+                        yield {"type": "text", "content": delta}
+                except Exception as e:
+                    yield {"type": "error", "content": f"stream error: {e}"}
+                    return
+
+                final_text = "".join(parts)
+                new_messages.append({"role": "assistant", "content": final_text})
+                await self._append_memory(conversation_id, user_id, new_messages)
+                yield {"type": "done", "output": final_text,
+                       "execution_time": round(time.monotonic() - start, 2),
+                       "tool_calls": ev["tool_call_log"]}
+                return

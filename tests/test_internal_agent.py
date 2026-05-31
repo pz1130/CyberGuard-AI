@@ -396,3 +396,104 @@ def test_runner_falls_back_to_metadata_when_columns_absent():
     r = InternalAgentRunner(cfg)
     assert r.pool_tool_ids == [9]
     assert r.mcp_tool_ids == [8]
+
+
+@pytest.mark.asyncio
+async def test_execute_stream_no_tools_emits_text_then_done(parent_conv_and_internal_agent, monkeypatch):
+    import app.services.internal_agent as ia_mod
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    ids = parent_conv_and_internal_agent
+
+    async def fake_stream(*args, **kwargs):
+        for piece in ["Hel", "lo!"]:
+            yield piece
+
+    # No tools -> first chat returns text-only -> answer_ready -> re-stream.
+    fake_router = SimpleNamespace(
+        chat=AsyncMock(return_value=SimpleNamespace(content="ignored batch text", tool_calls=None)),
+        stream_chat=fake_stream,
+    )
+    monkeypatch.setattr(ia_mod, "get_llm_router", lambda: fake_router)
+
+    runner = ia_mod.InternalAgentRunner({
+        "id": ids["agent_id"], "agent_name": "x", "system_prompt": "y",
+        "permission_level": "medium", "tool_loop_max_steps": 4, "memory_window": 10,
+    })
+    monkeypatch.setattr(runner, "_build_tools", AsyncMock(return_value=[]))
+
+    events = [ev async for ev in runner.execute_stream(
+        task="hi", conversation_id=ids["parent_id"], user_id=ids["user_id"])]
+
+    types = [e["type"] for e in events]
+    assert types[0] == "start"
+    assert "text" in types
+    assert types[-1] == "done"
+    text = "".join(e["content"] for e in events if e["type"] == "text")
+    assert text == "Hello!"
+    assert events[-1]["output"] == "Hello!"
+
+
+@pytest.mark.asyncio
+async def test_execute_stream_tool_then_answer(parent_conv_and_internal_agent, monkeypatch):
+    import app.services.internal_agent as ia_mod
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    ids = parent_conv_and_internal_agent
+
+    def tc(cid, name):
+        return SimpleNamespace(id=cid, function=SimpleNamespace(name=name, arguments="{}"))
+
+    step1 = SimpleNamespace(content="", tool_calls=[tc("c1", "kb_search")])
+    step2 = SimpleNamespace(content="batch final", tool_calls=None)
+
+    async def fake_stream(*args, **kwargs):
+        yield "done answer"
+
+    fake_router = SimpleNamespace(
+        chat=AsyncMock(side_effect=[step1, step2]),
+        stream_chat=fake_stream,
+    )
+    monkeypatch.setattr(ia_mod, "get_llm_router", lambda: fake_router)
+
+    runner = ia_mod.InternalAgentRunner({
+        "id": ids["agent_id"], "agent_name": "x", "system_prompt": "y",
+        "permission_level": "medium", "tool_loop_max_steps": 4, "memory_window": 10,
+    })
+    monkeypatch.setattr(runner, "_build_tools", AsyncMock(return_value=[{"type": "function"}]))
+    monkeypatch.setattr(runner, "_dispatch", AsyncMock(return_value="tool ok"))
+
+    events = [ev async for ev in runner.execute_stream(
+        task="hi", conversation_id=ids["parent_id"], user_id=ids["user_id"])]
+    types = [e["type"] for e in events]
+
+    assert types[0] == "start"
+    assert "tool_call_start" in types
+    assert "tool_call_end" in types
+    assert types[-1] == "done"
+    assert events[-1]["output"] == "done answer"
+    assert len(events[-1]["tool_calls"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_execute_stream_llm_error_emits_error(parent_conv_and_internal_agent, monkeypatch):
+    import app.services.internal_agent as ia_mod
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    ids = parent_conv_and_internal_agent
+    fake_router = SimpleNamespace(chat=AsyncMock(side_effect=RuntimeError("boom")))
+    monkeypatch.setattr(ia_mod, "get_llm_router", lambda: fake_router)
+
+    runner = ia_mod.InternalAgentRunner({
+        "id": ids["agent_id"], "agent_name": "x", "system_prompt": "y",
+        "permission_level": "medium", "tool_loop_max_steps": 4, "memory_window": 10,
+    })
+    monkeypatch.setattr(runner, "_build_tools", AsyncMock(return_value=[]))
+
+    events = [ev async for ev in runner.execute_stream(
+        task="hi", conversation_id=ids["parent_id"], user_id=ids["user_id"])]
+    assert events[-1]["type"] == "error"
+    assert "boom" in events[-1]["content"]
