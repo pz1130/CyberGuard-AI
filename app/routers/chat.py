@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, status, Uploa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db, rate_limit, require_permission
+from app.core.uploads import validate_and_read_upload
 from app.core.rbac import Permission
 from app.core.auth import AuthenticatedUser
 from app.core.guardrails import check_prompt_sync, GuardrailResult
@@ -85,27 +86,6 @@ async def chat(
     )
 
 
-ALLOWED_ATTACHMENT_TYPES = {
-    "image/png",
-    "image/jpeg",
-    "image/gif",
-    "image/webp",
-    "application/pdf",
-    "application/msword",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "text/plain",
-    "text/markdown",
-    "text/csv",
-    "application/json",
-    "application/vnd.ms-excel",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/vnd.ms-powerpoint",
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-}
-
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB per file
-
-
 @router.post("/chat/attachments", response_model=ChatAttachmentsResponse, status_code=status.HTTP_202_ACCEPTED)
 async def chat_attachments(
     message: str = Form(...),
@@ -139,48 +119,9 @@ async def chat_attachments(
         )
 
     # Validate file types and encode as base64
-    # Magic byte signatures for spoofing detection
-    _MAGIC_BYTES = {
-        "image/png": b"\x89PNG\r\n\x1a\n",
-        "image/jpeg": b"\xff\xd8\xff",
-        "image/gif": b"GIF8",
-        "image/webp": b"RIFF",
-        "application/pdf": b"%PDF",
-        "application/msword": b"\xd0\xcf\x11\xe0",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": b"PK",
-        "application/vnd.ms-excel": b"\xd0\xcf\x11\xe0",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": b"PK",
-        "application/vnd.ms-powerpoint": b"\xd0\xcf\x11\xe0",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation": b"PK",
-    }
-
     attachments = []
     for f in files:
-        if f.content_type not in ALLOWED_ATTACHMENT_TYPES:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported file type: {f.content_type}. Allowed: {', '.join(sorted(ALLOWED_ATTACHMENT_TYPES))}",
-            )
-        # Check file size before reading into memory
-        if f.size is not None and f.size > MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File '{f.filename}' exceeds maximum size of {MAX_FILE_SIZE // (1024 * 1024)} MB",
-            )
-        content = await f.read()
-        if len(content) > MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File '{f.filename}' exceeds maximum size of {MAX_FILE_SIZE // (1024 * 1024)} MB",
-            )
-        # Validate magic bytes against claimed content_type (anti-spoofing)
-        if f.content_type in _MAGIC_BYTES and len(content) >= 8:
-            expected = _MAGIC_BYTES[f.content_type]
-            if not content[:len(expected)].startswith(expected):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"File '{f.filename}' content does not match declared type '{f.content_type}'",
-                )
+        content, _mime = await validate_and_read_upload(f)
         attachments.append(
             {
                 "filename": f.filename,
