@@ -264,6 +264,47 @@ class AgentExecutor:
             })
         return openclaw_tools
 
+    async def _load_config_dict(self, agent_id: int) -> Optional[Dict[str, Any]]:
+        """Load an AgentConfig row into the plain config dict used by runners.
+
+        Returns None if the agent does not exist.
+        """
+        from app.core.database import get_db_context
+        from app.models.agent import AgentConfig
+        from sqlalchemy import select
+
+        async with get_db_context() as session:
+            result = await session.execute(
+                select(AgentConfig).where(AgentConfig.id == agent_id)
+            )
+            agent_obj = result.scalar_one_or_none()
+            if not agent_obj:
+                return None
+
+            return {
+                "id": agent_obj.id,
+                "agent_name": agent_obj.agent_name,
+                "kind": agent_obj.kind,
+                "backend_type": agent_obj.backend_type,
+                "provider_id": agent_obj.provider_id,
+                "llm_provider_id": agent_obj.llm_provider_id,
+                "llm_model": agent_obj.llm_model,
+                "endpoint_url": agent_obj.endpoint_url,
+                "env_vars_encrypted": agent_obj.env_vars_encrypted,
+                "system_prompt": agent_obj.system_prompt,
+                "permission_level": getattr(agent_obj, "permission_level", "medium"),
+                "tool_loop_max_steps": agent_obj.tool_loop_max_steps,
+                "memory_window": agent_obj.memory_window,
+                "knowledge_base_id": agent_obj.knowledge_base_id,
+                "associated_skills": agent_obj.associated_skills,
+                "associated_tools": agent_obj.associated_tools,
+                "associated_mcp_tools": agent_obj.associated_mcp_tools,
+                "metadata_json": agent_obj.metadata_json,
+                "api_key": getattr(agent_obj, "api_key", "") or "",
+                "auth_mode": getattr(agent_obj, "auth_mode", "api_key"),
+                "streaming": getattr(agent_obj, "streaming", True),
+            }
+
     async def execute(
         self,
         agent_id: int,
@@ -284,48 +325,12 @@ class AgentExecutor:
         Returns:
             Execution result
         """
-        # Fetch agent config from database
-        from app.core.database import get_db_context
-        from app.models.agent import AgentConfig
-        from sqlalchemy import select
-        import json
-
-        async with get_db_context() as session:
-            result = await session.execute(
-                select(AgentConfig).where(AgentConfig.id == agent_id)
-            )
-            agent_obj = result.scalar_one_or_none()
-
-            if not agent_obj:
-                return {
-                    "status": "error",
-                    "output": None,
-                    "error": f"Agent {agent_id} not found",
-                }
-
-            config_dict = {
-                "id": agent_obj.id,
-                "agent_name": agent_obj.agent_name,
-                "kind": agent_obj.kind,
-                "backend_type": agent_obj.backend_type,
-                "provider_id": agent_obj.provider_id,
-                "llm_provider_id": agent_obj.llm_provider_id,
-                "llm_model": agent_obj.llm_model,
-                "endpoint_url": agent_obj.endpoint_url,
-                "env_vars_encrypted": agent_obj.env_vars_encrypted,
-                "system_prompt": agent_obj.system_prompt,
-                "permission_level": getattr(agent_obj, "permission_level", "medium"),
-                "tool_loop_max_steps": agent_obj.tool_loop_max_steps,
-                "memory_window": agent_obj.memory_window,
-                "knowledge_base_id": agent_obj.knowledge_base_id,
-                "associated_skills": agent_obj.associated_skills,
-                "associated_tools": agent_obj.associated_tools,
-                "associated_mcp_tools": agent_obj.associated_mcp_tools,
-                "metadata_json": agent_obj.metadata_json,
-                # OpenClaw-specific fields (from metadata_json if not set directly)
-                "api_key": getattr(agent_obj, "api_key", "") or "",
-                "auth_mode": getattr(agent_obj, "auth_mode", "api_key"),
-                "streaming": getattr(agent_obj, "streaming", True),
+        config_dict = await self._load_config_dict(agent_id)
+        if config_dict is None:
+            return {
+                "status": "error",
+                "output": None,
+                "error": f"Agent {agent_id} not found",
             }
 
         # Check permission level (external — internal handles it internally)
@@ -354,6 +359,38 @@ class AgentExecutor:
         result["agent_name"] = config_dict.get("agent_name")
         result["timestamp"] = datetime.now(timezone.utc).isoformat()
         return result
+
+    async def execute_stream(self, agent_id: int, task: str, user_id: int,
+                             context: Optional[Dict[str, Any]] = None):
+        """Stream a sub-agent run as SSE-shaped event dicts.
+
+        Internal agents stream natively. Non-internal agents run the batch
+        path and emit a single done/error event so the frontend is uniform.
+        """
+        config_dict = await self._load_config_dict(agent_id)
+        if config_dict is None:
+            yield {"type": "error", "content": f"Agent {agent_id} not found"}
+            return
+
+        kind = config_dict.get("kind") or "external"
+        if kind == "internal":
+            runner = InternalAgentRunner(config_dict)
+            conv_id = (context or {}).get("conversation_id")
+            async for ev in runner.execute_stream(
+                task=task, conversation_id=conv_id, user_id=user_id):
+                yield ev
+            return
+
+        # Non-internal: run batch, surface result as a single event.
+        result = await self.execute(
+            agent_id=agent_id, task=task, user_id=user_id, context=context)
+        if result.get("status") in ("completed", "success"):
+            yield {"type": "done", "output": result.get("output"),
+                   "execution_time": result.get("execution_time"),
+                   "tool_calls": result.get("tool_calls", [])}
+        else:
+            yield {"type": "error",
+                   "content": result.get("error") or "agent execution failed"}
 
     async def _execute_openclaw(self, config: Dict[str, Any], task: str) -> Dict[str, Any]:
         """向 OpenClaw 节点派发任务（Gateway 轮询模式）。

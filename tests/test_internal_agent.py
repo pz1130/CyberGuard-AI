@@ -497,3 +497,21 @@ async def test_execute_stream_llm_error_emits_error(parent_conv_and_internal_age
         task="hi", conversation_id=ids["parent_id"], user_id=ids["user_id"])]
     assert events[-1]["type"] == "error"
     assert "boom" in events[-1]["content"]
+
+
+@pytest.mark.asyncio
+async def test_agent_executor_execute_stream_routes_internal(parent_conv_and_internal_agent, monkeypatch):
+    import app.services.agent_executor as ae_mod
+
+    async def fake_stream(self, task, conversation_id, user_id):
+        yield {"type": "start", "agent_id": 1, "agent_name": "x"}
+        yield {"type": "text", "content": "hi"}
+        yield {"type": "done", "output": "hi", "execution_time": 0.1, "tool_calls": []}
+
+    monkeypatch.setattr(ae_mod.InternalAgentRunner, "execute_stream", fake_stream)
+
+    ids = parent_conv_and_internal_agent
+    events = [ev async for ev in ae_mod.AgentExecutor().execute_stream(
+        agent_id=ids["agent_id"], task="hi", user_id=ids["user_id"])]
+    assert events[0]["type"] == "start"
+    assert events[-1]["type"] == "done"
