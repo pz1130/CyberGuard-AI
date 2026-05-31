@@ -383,24 +383,22 @@ class InternalAgentRunner:
 
     # -------- Public entry point --------
 
-    async def execute(self, task: str, conversation_id: Optional[int],
-                      user_id: int) -> Dict[str, Any]:
-        """Run the tool-call loop. Returns same shape as SubAgentWrapper.execute()."""
-        start = time.monotonic()
-        self._user_id = user_id
+    async def _run_loop(self, task: str, conversation_id: Optional[int],
+                        user_id: int):
+        """Shared tool-call loop. Yields semantic events:
 
-        # 1. Permission gate
-        if self.permission_level == "high":
-            return {
-                "status": "needs_approval",
-                "output": None,
-                "error": "High permission internal agent requires approval",
-                "agent_id": self.agent_id,
-                "agent_name": self.agent_name,
-                "execution_time": 0,
-            }
+          {"type": "start", "agent_id", "agent_name"}
+          {"type": "tool_call_start", "name", "arguments", "call_id"}
+          {"type": "tool_call_end", "name", "call_id", "result_preview", "error"}
+          {"type": "answer_ready", "messages", "new_messages",
+                                   "candidate_text", "tool_call_log"}   # terminal-ish
+          {"type": "error", "status": "failed"|"error", "error", ["tool_call_log"]}
 
-        # 2. Build system prompt + tool catalog + memory
+        On ``answer_ready`` the model is ready to produce the final answer but
+        it has NOT been generated/streamed yet — the consumer finalizes it.
+        Persistence is the consumer's job (batch uses candidate_text; stream
+        re-generates), so this generator never writes memory.
+        """
         system_prompt = await self._build_system_prompt()
         tools = await self._build_tools()
         await self._resolve_mcp_lookup()
@@ -410,17 +408,16 @@ class InternalAgentRunner:
         messages.extend(history)
         messages.append({"role": "user", "content": task})
 
-        # Track new messages added this turn (for persistence)
         new_messages: List[Dict[str, Any]] = [{"role": "user", "content": task}]
         tool_call_log: List[Dict[str, Any]] = []
 
         router = get_llm_router()
-        final_text: Optional[str] = None
         tool_used_ever = False
         auto_continue_used = 0
 
+        yield {"type": "start", "agent_id": self.agent_id, "agent_name": self.agent_name}
+
         for step in range(self.max_steps):
-            # Compact older history if the running buffer grew too large.
             messages = await self._maybe_compact(messages, router)
 
             try:
@@ -431,17 +428,10 @@ class InternalAgentRunner:
                     tools=tools if tools else None,
                 )
             except Exception as e:
-                return {
-                    "status": "failed",
-                    "output": None,
-                    "error": f"LLM error at step {step}: {e}",
-                    "agent_id": self.agent_id,
-                    "agent_name": self.agent_name,
-                    "execution_time": round(time.monotonic() - start, 2),
-                }
+                yield {"type": "error", "status": "failed",
+                       "error": f"LLM error at step {step}: {e}"}
+                return
 
-            # router.chat returns a plain str when tools is None/empty (Task 4
-            # contract); otherwise a message object with optional .tool_calls.
             if isinstance(msg, str):
                 tool_calls = None
                 text_only = True
@@ -452,10 +442,6 @@ class InternalAgentRunner:
                 candidate_text = getattr(msg, "content", None) or ""
 
             if text_only:
-                # Auto-continue: a tool-equipped agent that answered without
-                # ever calling a tool gets a bounded nudge to use tools or
-                # confirm completion (cf. QwenPaw _auto_continue_if_text_only).
-                # The nudge is intentionally NOT persisted to memory.
                 if tools and not tool_used_ever and auto_continue_used < AUTO_CONTINUE_MAX:
                     auto_continue_used += 1
                     messages.append({
@@ -464,12 +450,13 @@ class InternalAgentRunner:
                                    "如果确认已完成，请直接给出最终答复。",
                     })
                     continue
-                final_text = candidate_text
-                new_messages.append({"role": "assistant", "content": final_text})
-                break
+                yield {"type": "answer_ready", "messages": messages,
+                       "new_messages": new_messages,
+                       "candidate_text": candidate_text,
+                       "tool_call_log": tool_call_log}
+                return
 
             tool_used_ever = True
-            # Append assistant message that requested tools
             assistant_msg = {
                 "role": "assistant",
                 "content": getattr(msg, "content", None) or "",
@@ -485,9 +472,10 @@ class InternalAgentRunner:
             messages.append(assistant_msg)
             new_messages.append(assistant_msg)
 
-            # Execute this step's tool calls concurrently (cf. QwenPaw's
-            # asyncio.gather over a reasoning step's tool_calls). _dispatch
-            # catches its own errors and returns an error string.
+            for c in tool_calls:
+                yield {"type": "tool_call_start", "name": c.function.name,
+                       "arguments": c.function.arguments, "call_id": c.id}
+
             results = await asyncio.gather(*[self._dispatch(c) for c in tool_calls])
             for call, result_str in zip(tool_calls, results):
                 result_str = self._truncate_tool_result(result_str)
@@ -498,19 +486,61 @@ class InternalAgentRunner:
                             "content": result_str}
                 messages.append(tool_msg)
                 new_messages.append(tool_msg)
+                yield {"type": "tool_call_end", "name": call.function.name,
+                       "call_id": call.id, "result_preview": result_str[:200],
+                       "error": result_str.startswith("ERROR")}
 
-        if final_text is None:
+        yield {"type": "error", "status": "error",
+               "error": f"exceeded tool_loop_max_steps ({self.max_steps})",
+               "tool_call_log": tool_call_log}
+
+    async def execute(self, task: str, conversation_id: Optional[int],
+                      user_id: int) -> Dict[str, Any]:
+        """Run the tool-call loop (batch). Returns same shape as SubAgentWrapper.execute()."""
+        start = time.monotonic()
+        self._user_id = user_id
+
+        if self.permission_level == "high":
+            return {
+                "status": "needs_approval",
+                "output": None,
+                "error": "High permission internal agent requires approval",
+                "agent_id": self.agent_id,
+                "agent_name": self.agent_name,
+                "execution_time": 0,
+            }
+
+        final_event = None
+        async for ev in self._run_loop(task, conversation_id, user_id):
+            if ev["type"] in ("answer_ready", "error"):
+                final_event = ev
+                break
+            # start / tool_call_* events are not surfaced in batch mode
+
+        if final_event is None or final_event["type"] == "error":
+            if final_event and final_event.get("status") == "failed":
+                return {
+                    "status": "failed",
+                    "output": None,
+                    "error": final_event["error"],
+                    "agent_id": self.agent_id,
+                    "agent_name": self.agent_name,
+                    "execution_time": round(time.monotonic() - start, 2),
+                }
             return {
                 "status": "error",
                 "output": None,
-                "error": f"exceeded tool_loop_max_steps ({self.max_steps})",
+                "error": final_event["error"] if final_event else "no result produced",
                 "agent_id": self.agent_id,
                 "agent_name": self.agent_name,
                 "execution_time": round(time.monotonic() - start, 2),
-                "tool_calls": tool_call_log,
+                "tool_calls": final_event.get("tool_call_log", []) if final_event else [],
             }
 
-        # Persist memory slice
+        # answer_ready: batch mode uses the candidate text directly (no re-stream)
+        final_text = final_event["candidate_text"]
+        new_messages = final_event["new_messages"]
+        new_messages.append({"role": "assistant", "content": final_text})
         await self._append_memory(conversation_id, user_id, new_messages)
 
         return {
@@ -519,5 +549,5 @@ class InternalAgentRunner:
             "agent_id": self.agent_id,
             "agent_name": self.agent_name,
             "execution_time": round(time.monotonic() - start, 2),
-            "tool_calls": tool_call_log,
+            "tool_calls": final_event["tool_call_log"],
         }
