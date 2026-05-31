@@ -411,3 +411,54 @@ async def execute_agent(
     return await AgentExecutor().execute(
         agent_id=agent_id, task=task, user_id=current_user.user_id,
     )
+
+
+@router.post("/agents/{agent_id}/execute/stream")
+async def execute_agent_stream(
+    agent_id: int,
+    body: dict,
+    current_user: AuthenticatedUser = Depends(require_permission(Permission.TASK_EXECUTE)),
+):
+    """流式向指定 Sub-Agent 派发任务（SSE）。
+
+    事件: start / tool_call_start / tool_call_end / text / done / error。
+    internal agent 逐字流式; 其它 kind 以单个 done 事件返回批量结果。
+    """
+    import json as _json
+    from fastapi.responses import StreamingResponse
+    from app.core.guardrails import check_prompt_sync
+    from app.services.agent_executor import AgentExecutor
+
+    task = body.get("task", "")
+    if not task:
+        raise HTTPException(status_code=400, detail="'task' 字段不能为空")
+
+    gr = check_prompt_sync(task)
+    if gr.blocked:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Input blocked: {gr.message} (risk={gr.risk_level})",
+        )
+
+    conversation_id = body.get("conversation_id")
+    context = {"conversation_id": conversation_id} if conversation_id else None
+    user_id = current_user.user_id
+
+    async def event_generator():
+        executor = AgentExecutor()
+        try:
+            async for ev in executor.execute_stream(
+                agent_id=agent_id, task=task, user_id=user_id, context=context):
+                yield f"data: {_json.dumps(ev, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            yield f"data: {_json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
