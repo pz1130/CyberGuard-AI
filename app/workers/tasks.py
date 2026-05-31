@@ -657,18 +657,9 @@ def ocr_ingest_task(self, document_id, kb_id, raw_b64, filename, mime_type):
             # Load OCR config using the private session (avoids the shared
             # module-level engine which may be bound to a different event loop).
             from app.models.ocr import OcrConfig
-            from app.services.ocr_service import OcrSettings
             async with _Session() as _db:
                 row = (await _db.execute(select(OcrConfig))).scalar_one_or_none()
-            if row is None:
-                cfg = OcrSettings(
-                    enabled=True, engine="tesseract", languages="chi_sim+eng",
-                    max_pages=30, vision_provider_id=None, vision_model=None)
-            else:
-                cfg = OcrSettings(
-                    enabled=row.enabled, engine=row.engine, languages=row.languages,
-                    max_pages=row.max_pages, vision_provider_id=row.vision_provider_id,
-                    vision_model=row.vision_model)
+            cfg = ocr_service.settings_from_row(row)
 
             text = await ocr_service.ocr_pdf(raw, cfg)
             if not text.strip():

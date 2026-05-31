@@ -104,13 +104,8 @@ async def _ocr_vision(images: List[bytes], provider_id: int, model: Optional[str
     return "\n\n".join(p for p in pages if p)
 
 
-async def load_ocr_config() -> OcrSettings:
-    """Return the single ocr_config row as OcrSettings, or defaults if none."""
-    from sqlalchemy import select
-    from app.models.ocr import OcrConfig
-
-    async with AsyncSessionLocal() as s:
-        row = (await s.execute(select(OcrConfig))).scalar_one_or_none()
+def settings_from_row(row) -> OcrSettings:
+    """Build OcrSettings from an OcrConfig row, or defaults when row is None."""
     if row is None:
         return OcrSettings(enabled=True, engine="tesseract", languages="chi_sim+eng",
                            max_pages=30, vision_provider_id=None, vision_model=None)
@@ -119,3 +114,13 @@ async def load_ocr_config() -> OcrSettings:
         max_pages=row.max_pages, vision_provider_id=row.vision_provider_id,
         vision_model=row.vision_model,
     )
+
+
+async def load_ocr_config() -> OcrSettings:
+    """Return the single ocr_config row as OcrSettings, or defaults if none."""
+    from sqlalchemy import select
+    from app.models.ocr import OcrConfig
+
+    async with AsyncSessionLocal() as s:
+        row = (await s.execute(select(OcrConfig))).scalar_one_or_none()
+    return settings_from_row(row)
