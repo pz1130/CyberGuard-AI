@@ -168,3 +168,40 @@ async def test_upload_404_when_ra_missing(monkeypatch, tmp_path):
                 current_user=SimpleNamespace(user_id=1),
             )
     assert ei.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_download_returns_stored_bytes(req_assessment, monkeypatch, tmp_path):
+    from app.routers import governance as gov
+    monkeypatch.setattr(gov, "EVIDENCE_DIR", str(tmp_path))
+
+    async with AsyncSessionLocal() as db:
+        ev = await gov.add_evidence_file(
+            ra_id=req_assessment["ra_id"],
+            file=_upload(GOOD_PDF, "proof.pdf", "application/pdf"),
+            name="proof.pdf", description=None, db=db,
+            current_user=SimpleNamespace(user_id=1),
+        )
+        resp = await gov.download_evidence(
+            ev_id=ev.id, db=db, _=SimpleNamespace(user_id=1))
+
+    assert resp.media_type == "application/pdf"
+    assert resp.filename == "proof.pdf"
+    with open(resp.path, "rb") as fh:
+        assert fh.read() == GOOD_PDF
+
+
+@pytest.mark.asyncio
+async def test_download_404_for_non_file_evidence(req_assessment, monkeypatch, tmp_path):
+    from fastapi import HTTPException
+    from app.routers import governance as gov
+    monkeypatch.setattr(gov, "EVIDENCE_DIR", str(tmp_path))
+
+    # Seed a text evidence directly.
+    async with AsyncSessionLocal() as db:
+        ev = Evidence(requirement_assessment_id=req_assessment["ra_id"],
+                      name="note", kind="text", body="hi")
+        db.add(ev); await db.commit(); await db.refresh(ev)
+        with pytest.raises(HTTPException) as ei:
+            await gov.download_evidence(ev_id=ev.id, db=db, _=SimpleNamespace(user_id=1))
+    assert ei.value.status_code == 404

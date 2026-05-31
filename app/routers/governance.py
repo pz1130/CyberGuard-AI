@@ -516,6 +516,29 @@ async def add_evidence_file(
     return EvidenceRead.model_validate(ev)
 
 
+@router.get("/governance/evidence/{ev_id}/download")
+async def download_evidence(
+    ev_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: AuthenticatedUser = Depends(require_permission(Permission.SETTINGS_READ)),
+):
+    """Download a file-kind evidence's stored content (authenticated)."""
+    ev = await db.get(Evidence, ev_id)
+    if not ev or ev.kind != "file" or not ev.file_path:
+        raise HTTPException(404, "File evidence not found")
+
+    base = os.path.abspath(EVIDENCE_DIR)
+    full = os.path.abspath(os.path.join(base, ev.file_path))
+    if not full.startswith(base + os.sep) or not os.path.isfile(full):
+        raise HTTPException(404, "Stored file not found")
+
+    return FileResponse(
+        full,
+        media_type=ev.mime_type or "application/octet-stream",
+        filename=ev.name,
+    )
+
+
 @router.delete("/governance/evidence/{ev_id}", status_code=204)
 async def delete_evidence(
     ev_id: int,
