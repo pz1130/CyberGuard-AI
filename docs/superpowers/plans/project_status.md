@@ -124,3 +124,7 @@ Components added:
 - Migration：`docker compose exec api alembic upgrade head`（开发环境 startup 自动跑）
 - Approvals 只在 `AUTO_APPROVE=false` 时产生待审批请求；docker-compose 默认 `AUTO_APPROVE=true`
 - `test_smoke_api.py` 需要启动服务后单独运行：`python -m unittest tests.test_smoke_api`
+
+## Stale branches (保留，勿合并)
+
+- **`feature/fix-and-enhance`**（仅本地，未推送，10 个独立提交）— provider 层重构：`ProviderManager` 单例 + Anthropic/Gemini/Ollama/LM Studio/OpenRouter 原生 provider + `/discover` `/probe` `/models` 端点。**不要直接合并**：迁移链与 main 冲突，且大部分已被 main 取代；仅 `app/providers/` 是独有内容。将来若需要这些 provider 能力，**重新移植** `app/providers/`，不要 merge 整个分支。保留作参考。
