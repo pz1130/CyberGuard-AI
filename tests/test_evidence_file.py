@@ -7,6 +7,11 @@ import pytest_asyncio
 from types import SimpleNamespace
 from starlette.datastructures import Headers, UploadFile
 
+from app.core.database import AsyncSessionLocal
+from app.models.governance import (
+    Framework, Requirement, ComplianceAssessment, RequirementAssessment, Evidence,
+)
+
 
 def _upload(content: bytes, filename: str, ctype: str) -> UploadFile:
     """Build a Starlette UploadFile for direct endpoint/validator calls."""
@@ -68,12 +73,6 @@ async def test_validate_rejects_short_magic_mismatch():
     with pytest.raises(HTTPException) as ei:
         await validate_and_read_upload(_upload(b"xxxx", "a.pdf", "application/pdf"))
     assert ei.value.status_code == 400
-
-
-from app.core.database import AsyncSessionLocal
-from app.models.governance import (
-    Framework, Requirement, ComplianceAssessment, RequirementAssessment, Evidence,
-)
 
 
 @pytest_asyncio.fixture
