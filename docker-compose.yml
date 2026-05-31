@@ -54,6 +54,7 @@ services:
         condition: service_healthy
     volumes:
       - ./app:/app/app
+      - evidence_data:/data/evidence
 
   tool-runner:
     build:
@@ -135,3 +136,4 @@ volumes:
   postgres_data:
   redis_data:
   celerybeat_data:
+  evidence_data:
