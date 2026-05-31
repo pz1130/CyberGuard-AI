@@ -17,17 +17,21 @@ AI-assisted endpoints (leverage CyberGuard's master LLM):
 """
 import json
 import logging
+import os
 import re
+import uuid as _uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
+from fastapi.responses import FileResponse
 from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
 from app.core.database import get_db_context
 from app.core.dependencies import get_db, require_permission
+from app.core.uploads import validate_and_read_upload
 from app.core.rbac import Permission
 from app.core.auth import AuthenticatedUser
 from app.models.governance import (
@@ -46,6 +50,8 @@ from app.schemas.governance import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+EVIDENCE_DIR = os.environ.get("CYBERGUARD_EVIDENCE_DIR", "/data/evidence")
 
 
 # ---------------------------------------------------------------------------
@@ -462,6 +468,46 @@ async def add_evidence(
         url=body.url,
         body=body.body,
         mime_type=body.mime_type,
+        uploaded_by_user_id=current_user.user_id,
+    )
+    db.add(ev)
+    await db.commit()
+    await db.refresh(ev)
+    return EvidenceRead.model_validate(ev)
+
+
+@router.post(
+    "/governance/req-assessments/{ra_id}/evidence/file",
+    response_model=EvidenceRead, status_code=201,
+)
+async def add_evidence_file(
+    ra_id: int,
+    file: UploadFile = File(...),
+    name: str = Form(...),
+    description: str | None = Form(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_permission(Permission.SETTINGS_WRITE)),
+):
+    """Upload a file as evidence for a requirement assessment (kind='file')."""
+    ra = await db.get(RequirementAssessment, ra_id)
+    if not ra:
+        raise HTTPException(404, "Requirement assessment not found")
+
+    content, mime = await validate_and_read_upload(file)
+
+    os.makedirs(EVIDENCE_DIR, exist_ok=True)
+    fname = _uuid.uuid4().hex
+    with open(os.path.join(EVIDENCE_DIR, fname), "wb") as fh:
+        fh.write(content)
+
+    ev = Evidence(
+        requirement_assessment_id=ra_id,
+        name=name,
+        description=description,
+        kind="file",
+        file_path=fname,
+        mime_type=mime,
+        size_bytes=len(content),
         uploaded_by_user_id=current_user.user_id,
     )
     db.add(ev)
