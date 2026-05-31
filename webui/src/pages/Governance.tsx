@@ -41,6 +41,9 @@ interface Evidence {
   kind: 'file' | 'url' | 'text'
   url: string | null
   body: string | null
+  file_path: string | null
+  mime_type: string | null
+  size_bytes: number | null
   uploaded_at: string
 }
 
@@ -539,7 +542,9 @@ function RequirementRow({
   })
   const [aiLoading, setAiLoading] = useState<'suggest' | 'assess' | null>(null)
   const [suggestions, setSuggestions] = useState<string[]>([])
-  const [newEvidence, setNewEvidence] = useState({ name: '', body: '', kind: 'text' as 'text' | 'url', url: '' })
+  const [newEvidence, setNewEvidence] = useState<{
+    name: string; body: string; kind: 'text' | 'url' | 'file'; url: string; file: File | null
+  }>({ name: '', body: '', kind: 'text', url: '', file: null })
   const [addingEv, setAddingEv] = useState(false)
   const [savingEv, setSavingEv] = useState(false)
 
@@ -579,16 +584,22 @@ function RequirementRow({
     if (!newEvidence.name.trim()) { alert('Name is required'); return }
     if (newEvidence.kind === 'text' && !newEvidence.body.trim()) { alert('Body is required for text evidence'); return }
     if (newEvidence.kind === 'url' && !newEvidence.url.trim()) { alert('URL is required'); return }
+    if (newEvidence.kind === 'file' && !newEvidence.file) { alert('Choose a file'); return }
     setSavingEv(true)
     try {
-      const ev = await api.addEvidence(ra.id, {
-        name: newEvidence.name.trim(),
-        kind: newEvidence.kind,
-        body: newEvidence.kind === 'text' ? newEvidence.body : undefined,
-        url: newEvidence.kind === 'url' ? newEvidence.url : undefined,
-      }) as Evidence
+      let ev: Evidence
+      if (newEvidence.kind === 'file') {
+        ev = await api.uploadEvidenceFile(ra.id, newEvidence.file!, newEvidence.name.trim()) as Evidence
+      } else {
+        ev = await api.addEvidence(ra.id, {
+          name: newEvidence.name.trim(),
+          kind: newEvidence.kind,
+          body: newEvidence.kind === 'text' ? newEvidence.body : undefined,
+          url: newEvidence.kind === 'url' ? newEvidence.url : undefined,
+        }) as Evidence
+      }
       onUpdate({ evidences: [ev, ...ra.evidences] })
-      setNewEvidence({ name: '', body: '', kind: 'text', url: '' })
+      setNewEvidence({ name: '', body: '', kind: 'text', url: '', file: null })
       setAddingEv(false)
     } catch (e: any) { alert(e.message) }
     finally { setSavingEv(false) }
@@ -655,7 +666,7 @@ function RequirementRow({
                     <span style={{ flex: 1 }}>{s}</span>
                     <button
                       onClick={() => {
-                        setNewEvidence({ name: s.slice(0, 80), body: '', kind: 'text', url: '' })
+                        setNewEvidence({ name: s.slice(0, 80), body: '', kind: 'text', url: '', file: null })
                         setAddingEv(true)
                       }}
                       title="Pre-fill 'Add evidence' with this item"
@@ -763,16 +774,23 @@ function RequirementRow({
               <div style={{ padding: 10, border: '1px solid var(--border-bright)', background: 'var(--bg-base)', display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
                 <input value={newEvidence.name} onChange={e => setNewEvidence(s => ({ ...s, name: e.target.value }))}
                   placeholder="Evidence name" style={inputStyle()} />
-                <select value={newEvidence.kind} onChange={e => setNewEvidence(s => ({ ...s, kind: e.target.value as 'text' | 'url' }))} style={inputStyle()}>
+                <select value={newEvidence.kind} onChange={e => setNewEvidence(s => ({ ...s, kind: e.target.value as 'text' | 'url' | 'file' }))} style={inputStyle()}>
                   <option value="text">TEXT</option>
                   <option value="url">URL</option>
+                  <option value="file">FILE</option>
                 </select>
-                {newEvidence.kind === 'text' ? (
+                {newEvidence.kind === 'text' && (
                   <textarea value={newEvidence.body} onChange={e => setNewEvidence(s => ({ ...s, body: e.target.value }))}
                     rows={4} placeholder="Paste log excerpt, policy text, etc." style={textareaStyle()} />
-                ) : (
+                )}
+                {newEvidence.kind === 'url' && (
                   <input value={newEvidence.url} onChange={e => setNewEvidence(s => ({ ...s, url: e.target.value }))}
                     placeholder="https://..." style={inputStyle()} />
+                )}
+                {newEvidence.kind === 'file' && (
+                  <input type="file"
+                    onChange={e => setNewEvidence(s => ({ ...s, file: e.target.files?.[0] ?? null }))}
+                    style={inputStyle()} />
                 )}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
                   <button onClick={addEvidence} disabled={savingEv} style={primaryButton()}>
@@ -800,6 +818,13 @@ function RequirementRow({
                       )}
                       {ev.kind === 'text' && ev.body && (
                         <div style={{ color: 'var(--text-muted)', whiteSpace: 'pre-wrap', maxHeight: 80, overflow: 'hidden' }}>{ev.body.slice(0, 240)}{ev.body.length > 240 ? '…' : ''}</div>
+                      )}
+                      {ev.kind === 'file' && (
+                        <button onClick={() => api.downloadEvidence(ev.id, ev.name)}
+                          style={{ color: 'var(--accent)', background: 'none', border: 'none',
+                            padding: 0, cursor: 'pointer', textAlign: 'left' }}>
+                          ⬇ {ev.name}{ev.size_bytes != null ? ` (${Math.ceil(ev.size_bytes / 1024)} KB)` : ''}
+                        </button>
                       )}
                     </div>
                     <button onClick={() => deleteEv(ev)} style={iconButton('var(--red)')}><Trash2 size={11} /></button>
