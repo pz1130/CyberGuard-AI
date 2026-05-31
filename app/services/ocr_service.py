@@ -11,6 +11,7 @@ from typing import List, Optional
 import fitz  # PyMuPDF
 import pytesseract
 
+from app.core.database import AsyncSessionLocal
 from app.services.llm_router import get_llm_router
 
 logger = logging.getLogger(__name__)
@@ -101,3 +102,20 @@ async def _ocr_vision(images: List[bytes], provider_id: int, model: Optional[str
         text = await router.chat(messages=messages, provider_id=provider_id, model=model)
         pages.append((text if isinstance(text, str) else getattr(text, "content", "") or "").strip())
     return "\n\n".join(p for p in pages if p)
+
+
+async def load_ocr_config() -> OcrSettings:
+    """Return the single ocr_config row as OcrSettings, or defaults if none."""
+    from sqlalchemy import select
+    from app.models.ocr import OcrConfig
+
+    async with AsyncSessionLocal() as s:
+        row = (await s.execute(select(OcrConfig))).scalar_one_or_none()
+    if row is None:
+        return OcrSettings(enabled=True, engine="tesseract", languages="chi_sim+eng",
+                           max_pages=30, vision_provider_id=None, vision_model=None)
+    return OcrSettings(
+        enabled=row.enabled, engine=row.engine, languages=row.languages,
+        max_pages=row.max_pages, vision_provider_id=row.vision_provider_id,
+        vision_model=row.vision_model,
+    )

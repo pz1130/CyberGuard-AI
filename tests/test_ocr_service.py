@@ -70,3 +70,36 @@ async def test_ocr_pdf_vision_calls_router(monkeypatch):
     text = await ocr.ocr_pdf(_one_page_blank_pdf(), cfg)
     assert "VISION TEXT" in text
     assert fake_router.chat.await_count == 1
+
+
+def test_extract_text_raises_scanned_for_blank_pdf():
+    from app.services.knowledge_service import extract_text
+    from app.services.ocr_service import ScannedPdfError
+    with pytest.raises(ScannedPdfError):
+        extract_text(_one_page_blank_pdf(), "application/pdf", "scan.pdf")
+
+
+def test_extract_text_ok_for_text_pdf():
+    from app.services.knowledge_service import extract_text
+    out = extract_text(_one_page_text_pdf(), "application/pdf", "doc.pdf")
+    assert "Hello text layer" in out
+
+
+@pytest.mark.asyncio
+async def test_load_ocr_config_defaults_when_no_row(monkeypatch):
+    import app.services.ocr_service as ocr
+
+    class _NoRowSession:
+        async def execute(self, *a, **k):
+            class _R:
+                def scalar_one_or_none(self_inner): return None
+            return _R()
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+
+    monkeypatch.setattr(ocr, "AsyncSessionLocal", lambda: _NoRowSession())
+    cfg = await ocr.load_ocr_config()
+    assert cfg.enabled is True
+    assert cfg.engine == "tesseract"
+    assert cfg.languages == "chi_sim+eng"
+    assert cfg.max_pages == 30

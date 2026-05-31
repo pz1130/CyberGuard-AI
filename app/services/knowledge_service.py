@@ -21,6 +21,7 @@ _SQL_VECTOR_TYPE_BY_DIM: Dict[int, str] = {
     EMBEDDING_DIM_LARGE: "halfvec",
 }
 from app.services.llm_router import get_llm_router
+from app.services.ocr_service import ScannedPdfError
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ def extract_text(raw: bytes, mime_type: Optional[str], filename: str = "") -> st
                     logger.warning("[extract_text] PDF page %d failed: %s", i, pe)
             text_out = "\n\n".join(p.strip() for p in pages if p and p.strip())
             if not text_out:
-                raise ValueError("PDF contains no extractable text (likely scanned image).")
+                raise ScannedPdfError("PDF contains no extractable text (likely scanned image).")
             return text_out
         except ValueError:
             raise
