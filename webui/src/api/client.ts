@@ -160,6 +160,39 @@ export const api = {
     }
   },
 
+  // Stream a single sub-agent run (SSE): start / tool_call_start / tool_call_end / text / done / error
+  executeAgentStream: async function* (
+    agentId: string | number,
+    task: string,
+    conversationId?: number,
+  ) {
+    const token = localStorage.getItem('token')
+    const res = await fetch(`${BASE}/agents/${agentId}/execute/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ task, conversation_id: conversationId }),
+    })
+    if (!res.ok) throw new Error(await res.text())
+    const reader = res.body!.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop()!
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try { yield JSON.parse(line.slice(6)) } catch { /* skip malformed */ }
+        }
+      }
+    }
+  },
+
   // Chat with attachments (multipart/form-data)
   uploadChatAttachments: (
     files: File[],
