@@ -21,6 +21,7 @@ _SQL_VECTOR_TYPE_BY_DIM: Dict[int, str] = {
     EMBEDDING_DIM_LARGE: "halfvec",
 }
 from app.services.llm_router import get_llm_router
+from app.services.ocr_service import ScannedPdfError
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ def extract_text(raw: bytes, mime_type: Optional[str], filename: str = "") -> st
                     logger.warning("[extract_text] PDF page %d failed: %s", i, pe)
             text_out = "\n\n".join(p.strip() for p in pages if p and p.strip())
             if not text_out:
-                raise ValueError("PDF contains no extractable text (likely scanned image).")
+                raise ScannedPdfError("PDF contains no extractable text (likely scanned image).")
             return text_out
         except ValueError:
             raise
@@ -160,6 +161,25 @@ class KnowledgeService:
             provider_id=provider_id,
         )
 
+    async def create_pending_document(
+        self, db: AsyncSession, kb_id: int, filename: str,
+        mime_type: Optional[str], raw: bytes,
+    ) -> Document:
+        """Insert a Document in 'processing' state (no chunks yet) for async OCR."""
+        doc = Document(
+            kb_id=kb_id,
+            filename=filename,
+            file_hash=hashlib.sha256(raw).hexdigest(),
+            file_size=len(raw),
+            mime_type=mime_type,
+            metadata_json={"filename": filename},
+            status="processing",
+        )
+        db.add(doc)
+        await db.commit()
+        await db.refresh(doc)
+        return doc
+
     async def ingest_document(
         self,
         db: AsyncSession,
@@ -168,6 +188,7 @@ class KnowledgeService:
         content: str,
         mime_type: Optional[str] = None,
         provider_id: Optional[int] = None,
+        document_id: Optional[int] = None,
     ) -> Document:
         """
         Chunk + embed text and persist as Document + DocumentChunk rows.
@@ -213,17 +234,29 @@ class KnowledgeService:
 
         file_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
 
-        doc = Document(
-            kb_id=kb_id,
-            filename=filename,
-            content_chunks_json=None,  # Deprecated column — kept for schema compat; vectors live in document_chunks
-            file_hash=file_hash,
-            file_size=len(content.encode("utf-8")),
-            mime_type=mime_type,
-            metadata_json={"chunk_count": len(chunks), "embedding_dim": kb.embedding_dim},
-        )
-        db.add(doc)
-        await db.flush()  # Get doc.id without committing
+        if document_id is not None:
+            doc = await db.get(Document, document_id)
+            if doc is None:
+                raise ValueError(f"Document {document_id} not found")
+            doc.file_hash = file_hash
+            doc.file_size = len(content.encode("utf-8"))
+            doc.mime_type = mime_type
+            doc.metadata_json = {"chunk_count": len(chunks), "embedding_dim": kb.embedding_dim}
+            doc.status = "ready"
+            doc.status_detail = None
+        else:
+            doc = Document(
+                kb_id=kb_id,
+                filename=filename,
+                content_chunks_json=None,  # Deprecated column — kept for schema compat; vectors live in document_chunks
+                file_hash=file_hash,
+                file_size=len(content.encode("utf-8")),
+                mime_type=mime_type,
+                metadata_json={"chunk_count": len(chunks), "embedding_dim": kb.embedding_dim},
+                status="ready",
+            )
+            db.add(doc)
+        await db.flush()  # ensure doc.id is available
 
         # Write to the dim-appropriate column; leave the other NULL.
         chunk_records: List[DocumentChunk] = []

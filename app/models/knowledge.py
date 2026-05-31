@@ -67,6 +67,8 @@ class Document(Base):
     file_size = Column(Integer, nullable=True)
     mime_type = Column(String(100), nullable=True)
     metadata_json = Column(JSON, nullable=True)
+    status = Column(String(20), nullable=False, default="ready")  # ready | processing | failed
+    status_detail = Column(Text, nullable=True)  # failure reason when status == "failed"
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
