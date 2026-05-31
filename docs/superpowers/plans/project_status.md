@@ -109,11 +109,14 @@ Components added:
 
 - S3 / Alibaba OSS backup（API stub 存在，无实现）
 - Email notifications（helpers 存在）
-- 流式 sub-agent 输出（目前批量）
 - Guardrail sanitization（`GuardrailResult.sanitized` 字段预留，未实现）
-- OCR for scanned-image PDFs
 - Governance evidence 文件上传（`kind=file` schema 存在，UI 未接）
-- Scheduled-tasks **执行**：CRUD + model 存在，但无 Celery-beat executor，cron 表达式只存不跑
+
+## Recently completed
+
+- **流式 sub-agent 输出** ✅ — `POST /agents/{id}/execute/stream`（SSE: start/tool_call_start/tool_call_end/text/done/error）。`InternalAgentRunner` 抽出共享 `_run_loop()`，新增 `execute_stream()`（最终答复经 `router.stream_chat()` 逐字重生成）；`AgentExecutor.execute_stream()` 按 kind 分流（internal 原生流式，其它 kind 单 done 事件）。WebUI Agents 页新增 RUN 面板（`api.executeAgentStream`）。
+- **OCR for scanned-image PDFs** ✅ — merged via PR #4（Tesseract + vision，Celery 异步，`ocr_config`，alembic head `016_ocr`）。
+- **Scheduled-tasks 执行** ✅ — `sync_scheduled_jobs_task` + Celery-beat `beat_schedule`（`app/workers/tasks.py`）已实现；cron 表达式按 beat 周期触发。
 
 ## Operational notes
 
