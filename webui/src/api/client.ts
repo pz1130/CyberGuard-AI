@@ -400,6 +400,38 @@ export const api = {
   deleteEvidence: (id: number) =>
     request(`/governance/evidence/${id}`, { method: 'DELETE' }),
 
+  uploadEvidenceFile: async (raId: number, file: File, name: string, description?: string) => {
+    const token = localStorage.getItem('token')
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('name', name)
+    if (description) fd.append('description', description)
+    const res = await fetch(`${BASE}/governance/req-assessments/${raId}/evidence/file`, {
+      method: 'POST',
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) }, // no Content-Type: browser sets multipart boundary
+      body: fd,
+    })
+    if (!res.ok) throw new Error(await res.text())
+    return res.json()
+  },
+
+  downloadEvidence: async (id: number, filename: string) => {
+    const token = localStorage.getItem('token')
+    const res = await fetch(`${BASE}/governance/evidence/${id}/download`, {
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    })
+    if (!res.ok) throw new Error(await res.text())
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  },
+
   // AI helpers
   aiSuggestEvidence: (raId: number) =>
     request(`/governance/req-assessments/${raId}/ai-suggest-evidence`, { method: 'POST' }),
