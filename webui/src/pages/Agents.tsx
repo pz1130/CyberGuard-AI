@@ -326,6 +326,86 @@ function PoolPicker({ label: lbl, options, selected, onToggle }: {
   )
 }
 
+type RunEvent =
+  | { type: 'start'; agent_name?: string }
+  | { type: 'tool_call_start'; name: string; arguments?: string; call_id: string }
+  | { type: 'tool_call_end'; name: string; call_id: string; result_preview?: string; error?: boolean }
+  | { type: 'text'; content: string }
+  | { type: 'done'; output?: string; execution_time?: number }
+  | { type: 'error'; content: string }
+
+function AgentRunPanel({ agentId, agentName, onClose }: {
+  agentId: string | number; agentName: string; onClose: () => void
+}) {
+  const [task, setTask] = useState('')
+  const [running, setRunning] = useState(false)
+  const [answer, setAnswer] = useState('')
+  const [steps, setSteps] = useState<RunEvent[]>([])
+  const [err, setErr] = useState<string | null>(null)
+
+  const run = async () => {
+    if (!task.trim() || running) return
+    setRunning(true); setAnswer(''); setSteps([]); setErr(null)
+    try {
+      for await (const ev of api.executeAgentStream(agentId, task) as AsyncIterable<RunEvent>) {
+        if (ev.type === 'text') setAnswer(a => a + ev.content)
+        else if (ev.type === 'error') { setErr(ev.content); break }
+        else if (ev.type === 'tool_call_start' || ev.type === 'tool_call_end') {
+          setSteps(s => [...s, ev])
+        }
+      }
+    } catch (e: any) {
+      setErr(String(e?.message || e))
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex',
+      alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 640, maxWidth: '92vw', maxHeight: '86vh',
+        overflow: 'auto', background: 'var(--bg-card, #111)', border: '1px solid var(--border, #333)',
+        borderRadius: 8, padding: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <strong style={{ letterSpacing: '0.08em' }}>运行 · {agentName}</strong>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>✕</button>
+        </div>
+
+        <textarea value={task} onChange={e => setTask(e.target.value)} rows={3}
+          placeholder="输入任务…" disabled={running}
+          style={{ width: '100%', boxSizing: 'border-box', background: 'var(--bg, #0a0a0a)',
+            color: 'var(--text)', border: '1px solid var(--border, #333)', borderRadius: 6, padding: 8 }} />
+
+        <button onClick={run} disabled={running || !task.trim()}
+          style={{ marginTop: 8, padding: '6px 16px', background: 'var(--accent)', color: '#000',
+            border: 'none', borderRadius: 6, cursor: running ? 'default' : 'pointer', opacity: running ? 0.6 : 1 }}>
+          {running ? '运行中…' : '运行'}
+        </button>
+
+        {steps.length > 0 && (
+          <div style={{ marginTop: 14, fontSize: 13 }}>
+            {steps.map((s, i) => s.type === 'tool_call_start' ? (
+              <div key={`s${i}`} style={{ color: 'var(--text-muted)' }}>▸ 调用 {s.name}…</div>
+            ) : s.type === 'tool_call_end' ? (
+              <div key={`e${i}`} style={{ color: s.error ? '#f87171' : '#4ade80' }}>
+                {s.error ? '✗' : '✓'} {s.name} — {s.result_preview}
+              </div>
+            ) : null)}
+          </div>
+        )}
+
+        {answer && (
+          <div style={{ marginTop: 14, whiteSpace: 'pre-wrap', lineHeight: 1.5,
+            borderTop: '1px solid var(--border, #333)', paddingTop: 12 }}>{answer}</div>
+        )}
+
+        {err && <div style={{ marginTop: 12, color: '#f87171' }}>错误: {err}</div>}
+      </div>
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function Agents() {
   const [items, setItems] = useState<Agent[]>([])
@@ -349,6 +429,7 @@ export default function Agents() {
   const [skillsPool, setSkillsPool] = useState<any[]>([])
   const [toolsPool, setToolsPool] = useState<any[]>([])
   const [mcpToolsPool, setMcpToolsPool] = useState<any[]>([])
+  const [runningAgent, setRunningAgent] = useState<{ id: string | number; name: string } | null>(null)
 
   const { searchTarget, setSearchTarget } = useContext(SearchContext)
 
@@ -661,6 +742,16 @@ export default function Agents() {
                       fontFamily: 'var(--font-mono)',
                     }}>
                     {testing === a.id ? '…' : 'TEST'}
+                  </button>
+
+                  <button onClick={() => setRunningAgent({ id: a.id!, name: a.agent_name || a.id! })}
+                    style={{
+                      padding: '0 10px', height: 28, border: '1px solid var(--border-bright)',
+                      background: 'transparent', color: 'var(--accent)',
+                      fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer',
+                      fontFamily: 'var(--font-mono)',
+                    }}>
+                    RUN
                   </button>
 
                   {!isInternal && (
@@ -1030,6 +1121,11 @@ export default function Agents() {
             </div>
           </div>
         </div>
+      )}
+
+      {runningAgent && (
+        <AgentRunPanel agentId={runningAgent.id} agentName={runningAgent.name}
+          onClose={() => setRunningAgent(null)} />
       )}
     </div>
   )
