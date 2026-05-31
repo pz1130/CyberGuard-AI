@@ -108,7 +108,10 @@ Components added:
 ## Not yet implemented
 
 - **Guardrail sanitization** — `GuardrailResult.sanitized` 字段预留，永远返回 `None`（`app/core/guardrails.py:423` `# Future: implement sanitization pass`）。
-- **Governance evidence 文件上传（`kind=file`）** — schema/类型声明了 `file`（`EvidenceKind = Literal["file","url","text"]` + `file_path` 字段），但 `POST /governance/req-assessments/{id}/evidence` 只处理 `url`/`text`，**无 multipart `UploadFile`、无文件存储**；前端 `Governance.tsx` 表单 state 仅 `'text'|'url'`，`file` 不可选。两端皆缺。
+
+## Recently completed
+
+- **Governance evidence 文件上传（`kind=file`）** ✅ — 后端 multipart 端点（`POST /governance/req-assessments/{id}/evidence/file`）+ 鉴权下载（`GET /governance/evidence/{id}/download`）；共享 `app/core/uploads.py::validate_and_read_upload`（magic-byte 校验，chat 已重构复用）；删除时 best-effort 清理磁盘文件；前端 Governance 页 FILE 选项（multipart）+ 下载按钮（显示 KB 大小）；`evidence_data` docker 卷挂载 `/data/evidence`；无需 DB 迁移（列已存在）。11 个新测试全部通过。
 
 ## Recently completed
 
