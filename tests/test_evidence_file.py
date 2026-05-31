@@ -56,3 +56,15 @@ async def test_validate_rejects_oversize(monkeypatch):
     with pytest.raises(HTTPException) as ei:
         await up.validate_and_read_upload(_upload(b"text/plain body well over four", "a.txt", "text/plain"))
     assert ei.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_validate_rejects_short_magic_mismatch():
+    """A file shorter than 8 bytes but >= the signature length must still be
+    magic-checked (regression guard for the len(expected) guard)."""
+    from fastapi import HTTPException
+    from app.core.uploads import validate_and_read_upload
+    # 4 bytes, declared pdf, but not "%PDF".
+    with pytest.raises(HTTPException) as ei:
+        await validate_and_read_upload(_upload(b"xxxx", "a.pdf", "application/pdf"))
+    assert ei.value.status_code == 400
