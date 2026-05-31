@@ -99,6 +99,8 @@ class DocumentResponse(BaseModel):
     metadata_json: Optional[Dict[str, Any]]
     created_at: datetime
     updated_at: datetime
+    status: str = "ready"
+    status_detail: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

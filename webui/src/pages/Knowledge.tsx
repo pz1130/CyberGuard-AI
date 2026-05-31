@@ -53,7 +53,11 @@ interface ProviderOption {
 function OcrSettingsPanel() {
   const [cfg, setCfg] = useState<any>(null)
   const [open, setOpen] = useState(false)
-  useEffect(() => { if (open && !cfg) api.getOcrConfig().then(setCfg) }, [open, cfg])
+  useEffect(() => {
+    if (open && !cfg) {
+      api.getOcrConfig().then(setCfg).catch(() => { setOpen(false) })
+    }
+  }, [open, cfg])
   if (!open) return (
     <button
       onClick={() => setOpen(true)}
@@ -238,8 +242,11 @@ export default function Knowledge() {
     if (!selected) return
     setIngesting(true)
     try {
-      await api.uploadDocument(selected.id, file, providerId ?? undefined)
+      const res = await api.uploadDocument(selected.id, file, providerId ?? undefined) as { status?: string }
       loadDocs(selected.id)
+      if (res?.status === 'processing') {
+        alert('扫描件已上传，正在后台 OCR 识别…')
+      }
     } catch (e: any) { alert(`UPLOAD FAILED: ${e.message}`) } finally {
       setIngesting(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
