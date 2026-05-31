@@ -237,6 +237,13 @@ export const api = {
   getMasterConfig: () => request('/master-config'),
   updateMasterConfig: (body: any) => request('/master-config', { method: 'PUT', body: JSON.stringify(body) }),
 
+  // OCR
+  getOcrConfig: () => request('/ocr/config'),
+  updateOcrConfig: (body: {
+    enabled?: boolean; engine?: string; vision_provider_id?: number | null;
+    vision_model?: string | null; languages?: string; max_pages?: number;
+  }) => request('/ocr/config', { method: 'PUT', body: JSON.stringify(body) }),
+
   // Conversations
   getConversations: () => request('/conversations'),
   createConversation: (body?: {

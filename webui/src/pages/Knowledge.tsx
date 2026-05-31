@@ -27,6 +27,8 @@ interface Doc {
   file_size?: number
   metadata_json?: { chunk_count?: number }
   created_at?: string
+  status?: 'ready' | 'processing' | 'failed'
+  status_detail?: string | null
 }
 
 interface QueryResult {
@@ -46,6 +48,93 @@ interface ProviderOption {
   id: number
   name: string
   models: ModelInfo[]
+}
+
+function OcrSettingsPanel() {
+  const [cfg, setCfg] = useState<any>(null)
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    if (open && !cfg) {
+      api.getOcrConfig().then(setCfg).catch(() => { setOpen(false) })
+    }
+  }, [open, cfg])
+  if (!open) return (
+    <button
+      onClick={() => setOpen(true)}
+      style={{
+        fontSize: 12, color: 'var(--accent)', background: 'none', border: 'none',
+        cursor: 'pointer', letterSpacing: '0.06em', fontFamily: 'var(--font-mono)',
+        padding: '0 4px',
+      }}>
+      OCR 设置 ▾
+    </button>
+  )
+  if (!cfg) return <div style={{ fontSize: 12, color: 'var(--text-dim)', padding: '8px 0', letterSpacing: '0.06em' }}>加载中…</div>
+  const save = async () => { await api.updateOcrConfig(cfg); setOpen(false) }
+  return (
+    <div style={{ border: '1px solid var(--border-bright)', borderRadius: 4, padding: 12, margin: '8px 0', background: 'var(--bg-surface)' }}>
+      <label style={{ display: 'block', marginBottom: 6, fontSize: 12, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
+        <input type="checkbox" checked={cfg.enabled} onChange={e => setCfg({ ...cfg, enabled: e.target.checked })} style={{ marginRight: 6 }} />
+        启用 OCR
+      </label>
+      <label style={{ display: 'block', marginBottom: 6, fontSize: 12, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>引擎:&nbsp;
+        <select
+          value={cfg.engine}
+          onChange={e => setCfg({ ...cfg, engine: e.target.value })}
+          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)' }}>
+          <option value="tesseract">Tesseract（本地）</option>
+          <option value="vision">Vision LLM</option>
+        </select>
+      </label>
+      {cfg.engine === 'vision' && (
+        <>
+          <label style={{ display: 'block', marginBottom: 6, fontSize: 12, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>Vision Provider ID:&nbsp;
+            <input
+              type="number"
+              value={cfg.vision_provider_id ?? ''}
+              onChange={e => setCfg({ ...cfg, vision_provider_id: e.target.value ? Number(e.target.value) : null })}
+              style={{ width: 70, background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)', padding: '2px 6px' }} />
+          </label>
+          <label style={{ display: 'block', marginBottom: 6, fontSize: 12, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>Vision 模型:&nbsp;
+            <input
+              value={cfg.vision_model ?? ''}
+              onChange={e => setCfg({ ...cfg, vision_model: e.target.value })}
+              style={{ width: 180, background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)', padding: '2px 6px' }} />
+          </label>
+        </>
+      )}
+      <label style={{ display: 'block', marginBottom: 6, fontSize: 12, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>语言:&nbsp;
+        <input
+          value={cfg.languages}
+          onChange={e => setCfg({ ...cfg, languages: e.target.value })}
+          style={{ width: 120, background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)', padding: '2px 6px' }} />
+      </label>
+      <label style={{ display: 'block', marginBottom: 10, fontSize: 12, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>最大页数:&nbsp;
+        <input
+          type="number"
+          value={cfg.max_pages}
+          onChange={e => setCfg({ ...cfg, max_pages: Number(e.target.value) })}
+          style={{ width: 70, background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)', padding: '2px 6px' }} />
+      </label>
+      <button
+        onClick={save}
+        style={{
+          padding: '4px 14px', background: 'var(--accent)', color: '#000',
+          border: 'none', borderRadius: 4, cursor: 'pointer',
+          fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', fontFamily: 'var(--font-mono)',
+        }}>
+        保存
+      </button>
+      <button
+        onClick={() => setOpen(false)}
+        style={{
+          marginLeft: 8, background: 'none', border: 'none', color: 'var(--text-muted)',
+          cursor: 'pointer', fontSize: 12, letterSpacing: '0.06em', fontFamily: 'var(--font-mono)',
+        }}>
+        取消
+      </button>
+    </div>
+  )
 }
 
 export default function Knowledge() {
@@ -111,6 +200,14 @@ export default function Knowledge() {
   useEffect(() => { loadKBs(); loadProviders() }, [])
   useEffect(() => { if (selected) { loadDocs(selected.id); setResults([]) } }, [selected?.id])
 
+  // Poll every 5s while any document is still processing
+  useEffect(() => {
+    const hasProcessing = docs.some(d => d.status === 'processing')
+    if (!hasProcessing) return
+    const t = setInterval(() => { if (selected) loadDocs(selected.id) }, 5000)
+    return () => clearInterval(t)
+  }, [docs, selected?.id])
+
   const submitKB = async () => {
     if (!kbForm.name) return alert('NAME REQUIRED')
     try {
@@ -145,8 +242,11 @@ export default function Knowledge() {
     if (!selected) return
     setIngesting(true)
     try {
-      await api.uploadDocument(selected.id, file, providerId ?? undefined)
+      const res = await api.uploadDocument(selected.id, file, providerId ?? undefined) as { status?: string }
       loadDocs(selected.id)
+      if (res?.status === 'processing') {
+        alert('扫描件已上传，正在后台 OCR 识别…')
+      }
     } catch (e: any) { alert(`UPLOAD FAILED: ${e.message}`) } finally {
       setIngesting(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -209,6 +309,9 @@ export default function Knowledge() {
           </button>
         </div>
       </div>
+
+      {/* OCR Settings */}
+      <OcrSettingsPanel />
 
       {/* New KB form */}
       {showKBForm && (
@@ -544,7 +647,15 @@ export default function Knowledge() {
                       }}>
                         <FileText size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, color: 'var(--text-primary)', letterSpacing: '0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.filename}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+                            <span style={{ fontSize: 13, color: 'var(--text-primary)', letterSpacing: '0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.filename}</span>
+                            {d.status === 'processing' && (
+                              <span style={{ fontSize: 11, color: '#f59e0b', letterSpacing: '0.08em', flexShrink: 0 }}>● OCR 识别中…</span>
+                            )}
+                            {d.status === 'failed' && (
+                              <span title={d.status_detail || ''} style={{ fontSize: 11, color: '#f87171', letterSpacing: '0.08em', flexShrink: 0 }}>● 失败</span>
+                            )}
+                          </div>
                           <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
                             {d.metadata_json?.chunk_count ?? 0} CHUNKS
                             {d.file_size != null && ` · ${(d.file_size / 1024).toFixed(1)} KB`}

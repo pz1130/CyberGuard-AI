@@ -19,6 +19,7 @@ from app.models.governance import (
 from app.models.schedule import ScheduledTask
 from app.models.conversation import Conversation
 from app.models.security_settings import SecuritySettings
+from app.models.ocr import OcrConfig
 
 __all__ = [
     "User", "RoleModel",
@@ -39,4 +40,5 @@ __all__ = [
     "ScheduledTask",
     "Conversation",
     "SecuritySettings",
+    "OcrConfig",
 ]

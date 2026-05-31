@@ -612,3 +612,74 @@ def deliver_webhook_task(self, webhook_id: int, event: str, payload: dict):
             webhook_id, event, result.get("error"),
         )
     return result
+
+
+# ---------------------------------------------------------------------------
+# OCR Ingest Task
+# ---------------------------------------------------------------------------
+
+@celery_app.task(bind=True, max_retries=1)
+def ocr_ingest_task(self, document_id, kb_id, raw_b64, filename, mime_type):
+    """OCR a scanned PDF and ingest it into an existing (processing) Document row.
+
+    Uses asyncio.run() with a NullPool engine for all DB access so that every
+    connection is opened and closed within the same event loop — preventing
+    "Future attached to a different loop" errors that arise when a shared
+    connection-pool engine is used from multiple event loops (e.g. in tests).
+    """
+    import base64
+    from sqlalchemy import select, update
+    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+    from sqlalchemy.pool import NullPool
+    from app.models.knowledge import Document
+    from app.services import ocr_service
+    from app.services.knowledge_service import get_knowledge_service
+    from app.config import settings
+
+    raw = base64.b64decode(raw_b64)
+
+    async def _run():
+        # NullPool: each connection is opened and closed within this event loop
+        # only — no pool state leaks to any other loop.
+        _engine = create_async_engine(
+            settings.DATABASE_URL,
+            echo=False,
+            poolclass=NullPool,
+        )
+        _Session = async_sessionmaker(
+            _engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+            autocommit=False,
+            autoflush=False,
+        )
+        try:
+            # Load OCR config using the private session (avoids the shared
+            # module-level engine which may be bound to a different event loop).
+            from app.models.ocr import OcrConfig
+            async with _Session() as _db:
+                row = (await _db.execute(select(OcrConfig))).scalar_one_or_none()
+            cfg = ocr_service.settings_from_row(row)
+
+            text = await ocr_service.ocr_pdf(raw, cfg)
+            if not text.strip():
+                raise ValueError("OCR 未识别出文字")
+            async with _Session() as db:
+                await get_knowledge_service().ingest_document(
+                    db=db, kb_id=kb_id, filename=filename, content=text,
+                    mime_type=mime_type, document_id=document_id)
+            # ingest_document already set status="ready" on the row
+        except Exception as e:
+            async with _Session() as db:
+                await db.execute(
+                    update(Document).where(Document.id == document_id)
+                    .values(status="failed", status_detail=str(e)[:500]))
+                await db.commit()
+        finally:
+            await _engine.dispose()
+
+    loop = asyncio.new_event_loop()
+    try:
+        loop.run_until_complete(_run())
+    finally:
+        loop.close()
