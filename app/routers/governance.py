@@ -7,8 +7,10 @@ Endpoints:
   /governance/assessments/{id}              get with progress stats
   /governance/assessments/{id}/requirements list per-requirement assessments
   /governance/req-assessments/{id}          update status/score/observation
-  /governance/req-assessments/{id}/evidence add evidence
-  /governance/evidence/{id}                 delete evidence
+  /governance/req-assessments/{id}/evidence        add evidence
+  /governance/req-assessments/{id}/evidence/file  upload file evidence
+  /governance/evidence/{id}                        delete evidence
+  /governance/evidence/{id}/download              download file evidence
 
 AI-assisted endpoints (leverage CyberGuard's master LLM):
   /governance/req-assessments/{id}/ai-suggest-evidence
@@ -548,6 +550,14 @@ async def delete_evidence(
     ev = await db.get(Evidence, ev_id)
     if not ev:
         raise HTTPException(404, "Evidence not found")
+    if ev.kind == "file" and ev.file_path:
+        base = os.path.abspath(EVIDENCE_DIR)
+        full = os.path.abspath(os.path.join(base, ev.file_path))
+        if full.startswith(base + os.sep):
+            try:
+                os.remove(full)
+            except FileNotFoundError:
+                pass
     await db.delete(ev)
     await db.commit()
 

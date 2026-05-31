@@ -205,3 +205,25 @@ async def test_download_404_for_non_file_evidence(req_assessment, monkeypatch, t
         with pytest.raises(HTTPException) as ei:
             await gov.download_evidence(ev_id=ev.id, db=db, _=SimpleNamespace(user_id=1))
     assert ei.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_file_evidence_removes_disk_file(req_assessment, monkeypatch, tmp_path):
+    from app.routers import governance as gov
+    monkeypatch.setattr(gov, "EVIDENCE_DIR", str(tmp_path))
+
+    async with AsyncSessionLocal() as db:
+        ev = await gov.add_evidence_file(
+            ra_id=req_assessment["ra_id"],
+            file=_upload(GOOD_PDF, "proof.pdf", "application/pdf"),
+            name="proof.pdf", description=None, db=db,
+            current_user=SimpleNamespace(user_id=1),
+        )
+        disk = os.path.join(str(tmp_path), ev.file_path)
+        assert os.path.isfile(disk)
+        ev_id = ev.id
+
+        await gov.delete_evidence(ev_id=ev_id, db=db, _=SimpleNamespace(user_id=1))
+
+        assert not os.path.exists(disk)            # file gone
+        assert await db.get(Evidence, ev_id) is None  # row gone
