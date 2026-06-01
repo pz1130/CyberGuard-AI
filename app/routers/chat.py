@@ -1,4 +1,5 @@
 """Chat and Master Agent invocation router."""
+import logging
 import uuid
 import base64
 from datetime import datetime
@@ -47,7 +48,6 @@ async def chat(
         )
     # Log medium/high risk (non-blocking) for audit
     if guardrail_result.risk_level in ("high", "critical"):
-        import logging
         logging.getLogger(__name__).warning(
             f"[guardrail] user_id={user_id} risk={guardrail_result.risk_level} "
             f"score={guardrail_result.score} flags={guardrail_result.flags} "
@@ -58,7 +58,6 @@ async def chat(
     # blocked (medium/high). Raw input is preserved in the execution record.
     effective_input = pick_effective_input(body.message, guardrail_result)
     if effective_input != body.message:
-        import logging
         logging.getLogger(__name__).warning(
             "[guardrail] substituted sanitized input user_id=%s risk=%s flags=%s",
             user_id, guardrail_result.risk_level, guardrail_result.flags,
