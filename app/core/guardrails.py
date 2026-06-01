@@ -351,6 +351,24 @@ def sanitize_text(text: str) -> str:
     return out
 
 
+def pick_effective_input(raw: str, result: "GuardrailResult") -> str:
+    """
+    Decide which text to forward to the downstream agent.
+
+    Returns the sanitized version only when it exists, the input was not
+    blocked, and the risk is elevated-but-recoverable (medium/high). For
+    `critical` (or when nothing was sanitized) the raw input is returned —
+    critical inputs route through the existing block / audit path instead.
+    """
+    if (
+        result.sanitized
+        and not result.blocked
+        and result.risk_level in ("medium", "high")
+    ):
+        return result.sanitized
+    return raw
+
+
 # ----------------------------------------------------------------------
 # Strategy 5: LLM-based classification (for ambiguous cases)
 # ----------------------------------------------------------------------

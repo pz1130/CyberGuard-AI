@@ -146,6 +146,36 @@ class TestGuardrails(unittest.TestCase):
         rechecked = check_prompt_sync(r.sanitized)
         self.assertNotEqual(rechecked.risk_level, "critical")
 
+    def test_pick_effective_input_substitutes_on_medium(self):
+        from app.core.guardrails import GuardrailResult, pick_effective_input
+        gr = GuardrailResult(passed=True, blocked=False, risk_level="medium",
+                             score=0.3, flags=["x"], message="", sanitized="cleaned")
+        self.assertEqual(pick_effective_input("raw", gr), "cleaned")
+
+    def test_pick_effective_input_keeps_raw_when_no_sanitized(self):
+        from app.core.guardrails import GuardrailResult, pick_effective_input
+        gr = GuardrailResult(passed=True, blocked=False, risk_level="low",
+                             score=0.0, flags=[], message="", sanitized=None)
+        self.assertEqual(pick_effective_input("hello", gr), "hello")
+
+    def test_pick_effective_input_keeps_raw_when_blocked(self):
+        from app.core.guardrails import GuardrailResult, pick_effective_input
+        gr = GuardrailResult(passed=False, blocked=True, risk_level="high",
+                             score=0.9, flags=["x"], message="", sanitized="cleaned")
+        self.assertEqual(pick_effective_input("raw", gr), "raw")
+
+    def test_pick_effective_input_keeps_raw_on_critical(self):
+        from app.core.guardrails import GuardrailResult, pick_effective_input
+        gr = GuardrailResult(passed=True, blocked=False, risk_level="critical",
+                             score=0.8, flags=["x"], message="", sanitized="cleaned")
+        self.assertEqual(pick_effective_input("raw", gr), "raw")
+
+    def test_pick_effective_input_substitutes_on_high(self):
+        from app.core.guardrails import GuardrailResult, pick_effective_input
+        gr = GuardrailResult(passed=True, blocked=False, risk_level="high",
+                             score=0.5, flags=["x"], message="", sanitized="cleaned")
+        self.assertEqual(pick_effective_input("raw", gr), "cleaned")
+
 
 # ---------------------------------------------------------------------------
 # LLM Router helpers
