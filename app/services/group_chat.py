@@ -5,8 +5,19 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 
-from app.core.redis_client import cache
+from app.core.redis_client import cache, get_redis
 from app.services.agent_executor import AgentExecutor
+
+
+_RUN_LOCK_TTL = 3600  # seconds; a completion run must never exceed this
+
+
+def _lock_key(session_id: str) -> str:
+    return f"groupchat:lock:{session_id}"
+
+
+def _cancel_key(session_id: str) -> str:
+    return f"groupchat:cancel:{session_id}"
 
 
 @dataclass
@@ -43,57 +54,68 @@ class GroupChatService:
     def __init__(self):
         self.executor = AgentExecutor()
         self._active_sessions: Dict[str, GroupChatSession] = {}
-        # Background completion runs, keyed by session_id. A session is
-        # considered "running" iff it has an entry here. Running the whole
-        # discussion inside the HTTP request blocks the single uvicorn worker;
-        # start_completion() dispatches it here instead and returns immediately.
-        self._completion_tasks: Dict[str, asyncio.Task] = {}
 
-    def is_running(self, session_id: str) -> bool:
-        """Whether a background completion run is in flight for this session."""
-        return session_id in self._completion_tasks
+    async def acquire_run_lock(self, session_id: str) -> bool:
+        """Acquire the cross-worker run lock. True if acquired, False if held."""
+        try:
+            r = await get_redis()
+            acquired = await r.set(_lock_key(session_id), "1", nx=True, ex=_RUN_LOCK_TTL)
+            return bool(acquired)
+        except Exception:
+            return False
+
+    async def release_run_lock(self, session_id: str) -> None:
+        try:
+            r = await get_redis()
+            await r.delete(_lock_key(session_id))
+        except Exception:
+            pass
+
+    async def is_running(self, session_id: str) -> bool:
+        """Whether a completion run holds the lock (cross-worker)."""
+        try:
+            r = await get_redis()
+            return bool(await r.exists(_lock_key(session_id)))
+        except Exception:
+            return False
+
+    async def _set_cancel_flag(self, session_id: str) -> None:
+        try:
+            r = await get_redis()
+            await r.set(_cancel_key(session_id), "1", ex=_RUN_LOCK_TTL)
+        except Exception:
+            pass
+
+    async def _clear_cancel_flag(self, session_id: str) -> None:
+        try:
+            r = await get_redis()
+            await r.delete(_cancel_key(session_id))
+        except Exception:
+            pass
+
+    async def _is_cancelled(self, session_id: str) -> bool:
+        try:
+            r = await get_redis()
+            return bool(await r.exists(_cancel_key(session_id)))
+        except Exception:
+            return False
 
     async def start_completion(self, session_id: str) -> Dict[str, Any]:
-        """Dispatch run_to_completion as a background task and return immediately.
+        """Acquire the cross-worker run lock and dispatch the completion to Celery.
 
-        Idempotent: if a run is already in flight for this session, this is a
-        no-op (it also structurally prevents the concurrent double-run that
-        previously desynced run_to_completion's loop and pinned the event loop).
+        Idempotent: if the lock is already held (a run is in flight on any
+        worker), this is a no-op and just returns the current summary.
         """
-        session = self._active_sessions.get(session_id)
+        session = await self.load_session(session_id)
         if not session:
             raise ValueError(f"Session {session_id} not found")
 
-        if session_id not in self._completion_tasks:
-            self._completion_tasks[session_id] = asyncio.create_task(
-                self._run_completion_safe(session_id)
-            )
+        if await self.acquire_run_lock(session_id):
+            await self._clear_cancel_flag(session_id)
+            from app.workers.tasks import run_group_chat_completion_task
+            run_group_chat_completion_task.apply_async(args=[session_id])
 
         return await self.get_session_summary(session_id)
-
-    async def _run_completion_safe(self, session_id: str) -> None:
-        """Run run_to_completion, surfacing failures as a system message.
-
-        CancelledError is intentionally not caught (it is a BaseException, not
-        Exception) so cancel_session() can stop an in-flight run. The finally
-        block always clears the task handle so is_running() flips back to false.
-        """
-        try:
-            await self.run_to_completion(session_id)
-        except Exception as e:  # noqa: BLE001 - log + surface, never crash the loop
-            import logging
-            logging.getLogger(__name__).warning(
-                f"Group chat completion failed for {session_id}: {e}"
-            )
-            session = self._active_sessions.get(session_id)
-            if session is not None:
-                session.messages.append(GroupChatMessage(
-                    role="system",
-                    content=f"⚠️ Group chat run failed: {e}",
-                ))
-                await self._persist_session(session)
-        finally:
-            self._completion_tasks.pop(session_id, None)
 
     async def create_session(
         self,
@@ -264,6 +286,9 @@ class GroupChatService:
         while True:
             session = self._active_sessions.get(session_id)
             if not session or session.status != "active":
+                break
+            if await self._is_cancelled(session_id):
+                session.status = "cancelled"
                 break
             if session.current_round >= session.max_rounds:
                 break
@@ -473,15 +498,10 @@ class GroupChatService:
         Returns:
             GroupChatSession if found, None otherwise
         """
-        # Prefer the live in-memory session — within a single worker it holds the
-        # freshest in-flight state (persist always writes memory -> Redis, never
-        # the reverse during an active run). Rebuilding from Redis here would
-        # reset an actively-running session AND swap the object out from under
-        # run_to_completion, desyncing its loop counter. See group-chat hang.
-        existing = self._active_sessions.get(session_id)
-        if existing is not None:
-            return existing
-
+        # Redis is authoritative. Completion now runs in a Celery worker (a
+        # different process from the API workers serving polls), so the original
+        # in-process object-swap hazard cannot occur here: no run_to_completion
+        # loop shares this process with these polls. Always read fresh state.
         data = await cache.get_json(f"groupchat:session:{session_id}")
 
         if not data:
@@ -512,29 +532,22 @@ class GroupChatService:
         return session
     
     async def cancel_session(self, session_id: str) -> bool:
+        """Cancel an active session (cross-worker).
+
+        Sets status=cancelled in Redis and raises a dedicated cancel flag that
+        the Celery completion loop polls each round. The flag is a separate key
+        the running task never overwrites, so a cancel cannot be clobbered by
+        the task's own end-of-round persist.
+
+        Returns True if cancelled, False if not found.
         """
-        Cancel an active session.
-        
-        Args:
-            session_id: Session to cancel
-            
-        Returns:
-            True if cancelled, False if not found
-        """
-        session = self._active_sessions.get(session_id)
+        session = await self.load_session(session_id)
         if not session:
             return False
 
         session.status = "cancelled"
         await self._persist_session(session)
-
-        # Stop any in-flight background completion run promptly. (run_to_completion
-        # also checks status == "active" each iteration, but cancelling the task
-        # avoids waiting for the current round to finish.)
-        task = self._completion_tasks.get(session_id)
-        if task is not None:
-            task.cancel()
-
+        await self._set_cancel_flag(session_id)
         return True
 
 

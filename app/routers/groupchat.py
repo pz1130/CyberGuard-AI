@@ -100,7 +100,7 @@ async def get_group_chat_session(session_id: str):
             for m in session.messages
         ],
         created_at=session.created_at,
-        running=service.is_running(session_id),
+        running=await service.is_running(session_id),
     )
 
 
@@ -201,7 +201,7 @@ async def run_group_chat_to_completion(session_id: str):
             for m in result["messages"]
         ],
         created_at=result["created_at"],
-        running=service.is_running(session_id),
+        running=await service.is_running(session_id),
     )
 
 

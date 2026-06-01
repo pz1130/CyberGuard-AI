@@ -87,113 +87,103 @@ async def test_run_to_completion_stops_at_max_rounds(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_start_completion_runs_in_background_and_clears_running(monkeypatch):
-    """start_completion returns immediately; the run proceeds in the background
-    and clears the running flag when done."""
+async def test_start_completion_dispatches_under_lock_and_returns(monkeypatch):
+    """start_completion acquires the run lock, dispatches the Celery task, and
+    returns the session summary. The actual completion now runs in a Celery
+    worker, so the in-process task machinery is gone — see
+    test_group_chat_multiworker.py for the dispatch-acquire-release contract."""
     service = GroupChatService()
     sid = "bg"
-    service._active_sessions[sid] = _make_session(sid, current_round=0, max_rounds=1)
+    sess = _make_session(sid, current_round=0, max_rounds=1)
+    service._active_sessions[sid] = sess
 
-    started = asyncio.Event()
-    gate = asyncio.Event()
+    async def fake_load(session_id):
+        return service._active_sessions[session_id]
 
-    async def fake_run_round(session_id):
-        started.set()
-        await gate.wait()
-        sess = service._active_sessions[session_id]
-        sess.current_round = sess.max_rounds
-        return {"session_id": session_id, "round": sess.current_round, "responses": []}
+    async def no_redis():
+        raise ConnectionError("no redis in unit test")
 
-    async def no_consensus(_session):
-        return False
+    dispatched = []
 
-    monkeypatch.setattr(service, "run_round", fake_run_round)
-    monkeypatch.setattr(service, "_check_consensus", no_consensus)
-    monkeypatch.setattr(service, "_generate_summary", lambda *a, **k: _noop())
-    monkeypatch.setattr(service, "_persist_session", lambda *a, **k: _noop())
+    class FakeTask:
+        @staticmethod
+        def apply_async(args=None, **kwargs):
+            dispatched.append(args)
 
-    await service.start_completion(sid)  # must return without awaiting the run
+    import app.workers.tasks as tasks_mod
+    monkeypatch.setattr(service, "load_session", fake_load)
+    monkeypatch.setattr("app.services.group_chat.get_redis", no_redis)
+    monkeypatch.setattr(tasks_mod, "run_group_chat_completion_task", FakeTask, raising=False)
 
-    await asyncio.wait_for(started.wait(), timeout=2)
-    assert service.is_running(sid) is True
-    task = service._completion_tasks[sid]
-
-    gate.set()
-    await asyncio.wait_for(task, timeout=2)
-
-    assert service.is_running(sid) is False
-    assert service._active_sessions[sid].status == "completed"
+    result = await service.start_completion(sid)
+    assert result["session_id"] == sid
+    # No Redis available → lock not acquired → no Celery dispatch. This
+    # confirms the gating: the dispatch only fires when the lock is held.
+    assert dispatched == []
 
 
 @pytest.mark.asyncio
-async def test_start_completion_is_idempotent_while_running(monkeypatch):
-    """A second start_completion while one is in flight must not start a second
-    task — this is the structural guard against the original concurrent-run hang."""
+async def test_run_to_completion_is_idempotent_via_status_check(monkeypatch):
+    """A second start_completion while one is in flight must not re-run the
+    loop. With multi-worker, this is enforced by the Redis lock + Celery
+    dispatch-once. Here we verify the loop's own status guard: if the session
+    is already 'completed' or 'cancelled' when run_to_completion enters, the
+    loop returns without running another round."""
     service = GroupChatService()
     sid = "idem"
-    service._active_sessions[sid] = _make_session(sid, current_round=0, max_rounds=1)
+    sess = _make_session(sid, current_round=0, max_rounds=1)
+    sess.status = "completed"  # already done
+    service._active_sessions[sid] = sess
 
-    started = asyncio.Event()
-    gate = asyncio.Event()
+    rounds_run = {"n": 0}
 
     async def fake_run_round(session_id):
-        started.set()
-        await gate.wait()
-        sess = service._active_sessions[session_id]
-        sess.current_round = sess.max_rounds
-        return {"session_id": session_id, "round": sess.current_round, "responses": []}
+        rounds_run["n"] += 1
+        return {"session_id": session_id, "round": 1, "responses": []}
 
-    async def no_consensus(_session):
-        return False
+    async def _no_redis():
+        raise ConnectionError("no redis in unit test")
 
     monkeypatch.setattr(service, "run_round", fake_run_round)
-    monkeypatch.setattr(service, "_check_consensus", no_consensus)
     monkeypatch.setattr(service, "_generate_summary", lambda *a, **k: _noop())
     monkeypatch.setattr(service, "_persist_session", lambda *a, **k: _noop())
+    monkeypatch.setattr("app.services.group_chat.get_redis", _no_redis)
 
-    await service.start_completion(sid)
-    await asyncio.wait_for(started.wait(), timeout=2)
-    task = service._completion_tasks[sid]
-
-    await service.start_completion(sid)  # second call while running
-    assert service._completion_tasks[sid] is task  # same task, not replaced
-
-    gate.set()
-    await asyncio.wait_for(task, timeout=2)
-    assert service.is_running(sid) is False
+    result = await asyncio.wait_for(service.run_to_completion(sid), timeout=5)
+    assert rounds_run["n"] == 0
+    assert result["session_id"] == sid
 
 
 @pytest.mark.asyncio
-async def test_cancel_session_stops_inflight_run(monkeypatch):
-    """Cancelling a session stops the background run and clears running."""
+async def test_cancel_session_marks_session_cancelled(monkeypatch):
+    """Cancelling a session sets status='cancelled' and persists it.
+
+    Cross-worker cancellation (via the Redis cancel flag) is exercised in
+    test_group_chat_multiworker.py. This test pins the local contract: a
+    non-existent session returns False, and a known session flips to
+    'cancelled'."""
     service = GroupChatService()
     sid = "cancel"
-    service._active_sessions[sid] = _make_session(sid, current_round=0, max_rounds=5)
+    sess = _make_session(sid, current_round=0, max_rounds=5)
+    service._active_sessions[sid] = sess
 
-    started = asyncio.Event()
-    gate = asyncio.Event()  # never released — simulates a long round
+    async def fake_load(session_id):
+        return service._active_sessions.get(session_id)
 
-    async def fake_run_round(session_id):
-        started.set()
-        await gate.wait()
-        return {"session_id": session_id, "round": 1, "responses": []}
+    async def _no_redis():
+        raise ConnectionError("no redis in unit test")
 
-    monkeypatch.setattr(service, "run_round", fake_run_round)
-    monkeypatch.setattr(service, "_generate_summary", lambda *a, **k: _noop())
+    monkeypatch.setattr(service, "load_session", fake_load)
     monkeypatch.setattr(service, "_persist_session", lambda *a, **k: _noop())
+    monkeypatch.setattr("app.services.group_chat.get_redis", _no_redis)
 
-    await service.start_completion(sid)
-    await asyncio.wait_for(started.wait(), timeout=2)
-    task = service._completion_tasks[sid]
-
-    ok = await service.cancel_session(sid)
-    assert ok is True
+    assert await service.cancel_session("missing") is False
+    assert await service.cancel_session(sid) is True
     assert service._active_sessions[sid].status == "cancelled"
 
-    with pytest.raises(asyncio.CancelledError):
-        await task
-    assert service.is_running(sid) is False
 
+async def _noop():
+    return None
 
 async def _noop():
     return None
