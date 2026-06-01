@@ -1,4 +1,5 @@
 """Chat and Master Agent invocation router."""
+import logging
 import uuid
 import base64
 from datetime import datetime
@@ -10,7 +11,7 @@ from app.core.dependencies import get_db, rate_limit, require_permission
 from app.core.uploads import validate_and_read_upload
 from app.core.rbac import Permission
 from app.core.auth import AuthenticatedUser
-from app.core.guardrails import check_prompt_sync, GuardrailResult
+from app.core.guardrails import check_prompt_sync, GuardrailResult, pick_effective_input
 from app.schemas.chat import ChatAttachmentsResponse, ChatRequest, ChatResponse
 from app.schemas.task import TaskRead, TaskStatus
 from app.models.agent import AgentExecution
@@ -47,11 +48,19 @@ async def chat(
         )
     # Log medium/high risk (non-blocking) for audit
     if guardrail_result.risk_level in ("high", "critical"):
-        import logging
         logging.getLogger(__name__).warning(
             f"[guardrail] user_id={user_id} risk={guardrail_result.risk_level} "
             f"score={guardrail_result.score} flags={guardrail_result.flags} "
             f"message={guardrail_result.message}"
+        )
+
+    # Forward the sanitized text downstream when the input was risky but not
+    # blocked (medium/high). Raw input is preserved in the execution record.
+    effective_input = pick_effective_input(body.message, guardrail_result)
+    if effective_input != body.message:
+        logging.getLogger(__name__).warning(
+            "[guardrail] substituted sanitized input user_id=%s risk=%s flags=%s",
+            user_id, guardrail_result.risk_level, guardrail_result.flags,
         )
 
     # Create execution record
@@ -69,7 +78,7 @@ async def chat(
     # Dispatch to Celery worker — returns immediately with 202
     from app.workers.tasks import run_master_agent_task
     run_master_agent_task.apply_async(
-        args=[execution_id, body.message, user_id],
+        args=[execution_id, effective_input, user_id],
         kwargs={
             "mode": body.mode or "normal",
             "provider_id": body.provider_id,
