@@ -275,6 +275,73 @@ def _score_structural_anomaly(text: str) -> dict:
 
 
 # ----------------------------------------------------------------------
+# Sanitization pass — neutralize mechanical-noise injection only
+# ----------------------------------------------------------------------
+
+_MAX_SEGMENT = 20000  # mirrors overlong_padding threshold
+
+# Tag/markup strippers (keep inner visible text)
+_RE_SYSTEM_TAGS = re.compile(
+    r'<\s*/?\s*(system|system_prompt|instruction)\s*>',
+    re.IGNORECASE,
+)
+_RE_BRACKET_SYSTEM = re.compile(r'\[\s*/?\s*SYSTEM\s*\]', re.IGNORECASE)
+_RE_HTML_TAG = re.compile(r'<[a-zA-Z][^>]*>|</[a-zA-Z][^>]*>')
+_RE_IMPERSONATION = re.compile(
+    r'^(system|developer|admin)\s*:\s*',
+    re.IGNORECASE | re.MULTILINE,
+)
+_RE_MD_LINK = re.compile(r'!?\[([^\]]+)\]\([^\)]+\)')
+_RE_EMOJI_FLOOD = re.compile(
+    r'([\U0001F600-\U0001F64F☀-⛿✀-➿])\1{3,}'
+)
+_RE_ESCAPE_FLOOD = re.compile(r'(\\n|\\t|\\r|\\\\)\1{3,}')
+_RE_DELIMITER_INJECTION = re.compile(
+    r'"""\s*[{}]|\'\'\'\s*[{}]|[{}]\s*"""'
+)
+
+
+def sanitize_text(text: str) -> str:
+    """
+    Produce a cleaned version of `text` with mechanical-noise injection
+    neutralized. Idempotent: running it on already-clean text returns the
+    text unchanged. Pure-intent jailbreaks (no mechanical noise) are left
+    unchanged — they are not safely fixable and the caller handles them via
+    risk-level / blocking.
+    """
+    out = text
+
+    # Truncate any overlong segment first (cheapest way to bound the rest)
+    if len(out) > _MAX_SEGMENT:
+        out = out[:_MAX_SEGMENT]
+
+    # Strip system / instruction tags and bracket-system markers (keep inner text)
+    out = _RE_SYSTEM_TAGS.sub("", out)
+    out = _RE_BRACKET_SYSTEM.sub("", out)
+
+    # Strip remaining HTML/XML tags (keep visible text)
+    out = _RE_HTML_TAG.sub("", out)
+
+    # Drop system/developer/admin impersonation prefixes
+    out = _RE_IMPERSONATION.sub("", out)
+
+    # Markdown links -> just the link text
+    out = _RE_MD_LINK.sub(r"\1", out)
+
+    # Collapse unicode / escape floods to a single repeat
+    out = _RE_EMOJI_FLOOD.sub(r"\1", out)
+    out = _RE_ESCAPE_FLOOD.sub(r"\1", out)
+
+    # Remove delimiter-injection substrings
+    out = _RE_DELIMITER_INJECTION.sub("", out)
+
+    # Collapse the whitespace that stripping may have left, but preserve newlines
+    out = re.sub(r"[ \t]{2,}", " ", out).strip()
+
+    return out
+
+
+# ----------------------------------------------------------------------
 # Strategy 5: LLM-based classification (for ambiguous cases)
 # ----------------------------------------------------------------------
 
