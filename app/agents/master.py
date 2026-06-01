@@ -523,6 +523,8 @@ class MasterAgent:
                 )
                 history = state.get("conversation_history") or []
                 history, _compressed, _degraded = await maybe_compress(history, self.llm_router)
+                # Observability hook: set so callers (status surface, audit) can see
+                # whether compression ran / whether the LLM call degraded.
                 state["context_compression"] = {"compressed": _compressed, "degraded": _degraded}
                 messages: List[Dict[str, str]] = [
                     {"role": "system", "content": system_prompt}
