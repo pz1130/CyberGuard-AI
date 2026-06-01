@@ -6,6 +6,8 @@ import time
 
 from fastapi import FastAPI, Header, HTTPException
 
+from tool_runner import mcp_host
+
 app = FastAPI(title="tool-runner")
 
 RUNNER_TOKEN = os.environ.get("RUNNER_TOKEN", "")
@@ -54,3 +56,49 @@ async def run(body: dict, x_runner_token: str = Header(default="")):
         "duration_ms": int((time.monotonic() - t0) * 1000),
         "timed_out": timed_out,
     }
+
+
+def _check_token(token: str) -> None:
+    if token != RUNNER_TOKEN:
+        raise HTTPException(status_code=401, detail="bad runner token")
+
+
+@app.post("/mcp/start")
+async def mcp_start(body: dict, x_runner_token: str = Header(default="")):
+    _check_token(x_runner_token)
+    running = await mcp_host.start_server(
+        body.get("name", ""), body.get("command", ""),
+        body.get("args") or [], body.get("env") or {},
+    )
+    return {"running": running}
+
+
+@app.post("/mcp/stop")
+async def mcp_stop(body: dict, x_runner_token: str = Header(default="")):
+    _check_token(x_runner_token)
+    await mcp_host.stop_server(body.get("name", ""))
+    return {"stopped": True}
+
+
+@app.post("/mcp/status")
+async def mcp_status(body: dict, x_runner_token: str = Header(default="")):
+    _check_token(x_runner_token)
+    return {"running": mcp_host.is_running(body.get("name", ""))}
+
+
+@app.post("/mcp/rpc")
+async def mcp_rpc(body: dict, x_runner_token: str = Header(default="")):
+    _check_token(x_runner_token)
+    try:
+        result = await mcp_host.rpc(
+            name=body.get("name", ""),
+            command=body.get("command", ""),
+            args=body.get("args") or [],
+            env=body.get("env") or {},
+            method=body.get("method", ""),
+            params=body.get("params") or {},
+            timeout=body.get("timeout"),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"result": result}
