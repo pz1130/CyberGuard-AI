@@ -400,7 +400,9 @@ async def execute_mcp_tool(
         # Update usage stats
         tool.use_count += 1
         from datetime import datetime, timezone
-        tool.last_used_at = datetime.now(timezone.utc)
+        # The mcp_tools.last_used_at column is naive DateTime (project
+        # convention). Strip tzinfo so the value fits the column.
+        tool.last_used_at = datetime.now(timezone.utc).replace(tzinfo=None)
         await db.commit()
 
         execution_time_ms = (time.monotonic() - start) * 1000
