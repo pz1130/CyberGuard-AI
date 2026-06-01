@@ -132,3 +132,58 @@ async def test_start_completion_dispatches_celery_once_under_lock(fake_redis, mo
 
     assert dispatched == [["s5"]]
     assert await svc.is_running("s5") is True
+
+
+@pytest.mark.asyncio
+async def test_run_to_completion_honors_cross_worker_cancel_flag(fake_redis, monkeypatch):
+    """A cancel flag set by another worker stops the loop before the next round."""
+    svc = gc.GroupChatService()
+    sess = _make_session("s7", current_round=0, max_rounds=5)
+    svc._active_sessions["s7"] = sess
+
+    rounds_run = {"n": 0}
+
+    async def fake_run_round(session_id):
+        rounds_run["n"] += 1
+        # Honour max_rounds so the loop terminates if cancel isn't checked
+        # (lets the test produce a clean fail/pass signal rather than hang).
+        s = svc._active_sessions[session_id]
+        if s.current_round + 1 >= s.max_rounds:
+            s.current_round = s.max_rounds
+            return {"status": "max_rounds_reached", "session_id": session_id}
+        s.current_round += 1
+        return {"session_id": session_id, "round": s.current_round, "responses": []}
+
+    async def _noop(*a, **k):
+        return None
+
+    monkeypatch.setattr(svc, "run_round", fake_run_round)
+    monkeypatch.setattr(svc, "_check_consensus", _noop)
+    monkeypatch.setattr(svc, "_generate_summary", _noop)
+    monkeypatch.setattr(svc, "_persist_session", _noop)
+
+    # Cancel was requested (by an API worker) before the run started.
+    await svc._set_cancel_flag("s7")
+
+    result = await svc.run_to_completion("s7")
+    assert rounds_run["n"] == 0          # cancelled before any round ran
+    assert result["session_id"] == "s7"
+
+
+@pytest.mark.asyncio
+async def test_cancel_session_sets_flag_and_status(fake_redis, monkeypatch):
+    svc = gc.GroupChatService()
+    sess = _make_session("s8", current_round=0, max_rounds=5)
+
+    async def fake_load(session_id):
+        return sess
+
+    async def _noop(*a, **k):
+        return None
+
+    monkeypatch.setattr(svc, "load_session", fake_load)
+    monkeypatch.setattr(svc, "_persist_session", _noop)
+
+    assert await svc.cancel_session("s8") is True
+    assert sess.status == "cancelled"
+    assert await svc._is_cancelled("s8") is True

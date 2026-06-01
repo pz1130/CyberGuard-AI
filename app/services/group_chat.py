@@ -287,6 +287,9 @@ class GroupChatService:
             session = self._active_sessions.get(session_id)
             if not session or session.status != "active":
                 break
+            if await self._is_cancelled(session_id):
+                session.status = "cancelled"
+                break
             if session.current_round >= session.max_rounds:
                 break
 
@@ -529,29 +532,22 @@ class GroupChatService:
         return session
     
     async def cancel_session(self, session_id: str) -> bool:
+        """Cancel an active session (cross-worker).
+
+        Sets status=cancelled in Redis and raises a dedicated cancel flag that
+        the Celery completion loop polls each round. The flag is a separate key
+        the running task never overwrites, so a cancel cannot be clobbered by
+        the task's own end-of-round persist.
+
+        Returns True if cancelled, False if not found.
         """
-        Cancel an active session.
-        
-        Args:
-            session_id: Session to cancel
-            
-        Returns:
-            True if cancelled, False if not found
-        """
-        session = self._active_sessions.get(session_id)
+        session = await self.load_session(session_id)
         if not session:
             return False
 
         session.status = "cancelled"
         await self._persist_session(session)
-
-        # Stop any in-flight background completion run promptly. (run_to_completion
-        # also checks status == "active" each iteration, but cancelling the task
-        # avoids waiting for the current round to finish.)
-        task = self._completion_tasks.get(session_id)
-        if task is not None:
-            task.cancel()
-
+        await self._set_cancel_flag(session_id)
         return True
 
 
