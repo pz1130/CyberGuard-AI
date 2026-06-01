@@ -1,16 +1,16 @@
 ---
 name: project_status
-description: CyberGuard platform implementation status — last updated 2026-05-30 (Azure AD SSO complete; 87 tests green; alembic head 015)
+description: CyberGuard platform implementation status — last updated 2026-06-01 (governance evidence-file upload + streaming sub-agent + OCR all merged; alembic head 016_ocr)
 type: project
 ---
 
-# CyberGuard Project Status — 2026-05-30 (updated)
+# CyberGuard Project Status — 2026-06-01 (updated)
 
 ## ▶ Resume point (next session)
 
-- **Branch:** `main` — all work committed, working tree clean. Latest commit: `893634d`.
-- **Tests:** 87 passed. TypeScript: 0 errors.
-- **Alembic head:** `015_sso_secret_envvar`
+- **Branch:** `main` — all work committed, working tree clean. Latest commit: `749c911`.
+- **Tests:** 13 test files (`tests/test_*.py`). TypeScript: 0 errors.
+- **Alembic head:** `016_ocr`
 
 ### Remaining known issues (prioritized)
 
