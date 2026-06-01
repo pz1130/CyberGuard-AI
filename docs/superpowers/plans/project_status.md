@@ -107,10 +107,11 @@ Components added:
 
 ## Not yet implemented
 
-- **Guardrail sanitization** — `GuardrailResult.sanitized` 字段预留，永远返回 `None`（`app/core/guardrails.py:423` `# Future: implement sanitization pass`）。
+- _（无明确声明但未实现的功能）_
 
 ## Recently completed
 
+- **Guardrail sanitization** ✅ — `GuardrailResult.sanitized` 不再恒为 `None`。新增纯函数 `sanitize_text()`（幂等，固定点循环整条管线）中和「机械噪声」型注入：剥离 system/instruction 标签、HTML/markdown 标记，折叠 unicode/escape flood，截断 >20KB 段，移除分隔符注入；纯意图型 jailbreak 不可机械清理 → 返回 `None`，交给 block 逻辑。`check_prompt` / `check_prompt_sync` 均按 `cleaned if cleaned != text else None` 填充。新增 `pick_effective_input()`：仅在 medium/high 且未阻塞时替换为清理文本（critical 永不替换）。`POST /chat` 接入——派发给 worker 的是 `effective_input`，审计记录仍存原始 `body.message`。`tests/test_integration.py::TestGuardrails` 30 个测试全绿（含幂等性 fuzz、emoji flood、空输入、纯 jailbreak 等）。
 - **Governance evidence 文件上传（`kind=file`）** ✅ — 后端 multipart 端点（`POST /governance/req-assessments/{id}/evidence/file`）+ 鉴权下载（`GET /governance/evidence/{id}/download`）；共享 `app/core/uploads.py::validate_and_read_upload`（magic-byte 校验，chat 已重构复用）；删除时 best-effort 清理磁盘文件；前端 Governance 页 FILE 选项（multipart）+ 下载按钮（显示 KB 大小）；`evidence_data` docker 卷挂载 `/data/evidence`；无需 DB 迁移（列已存在）。11 个新测试全部通过。
 
 ## Recently completed
