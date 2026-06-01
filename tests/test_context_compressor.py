@@ -212,3 +212,10 @@ async def test_maybe_compress_empty_history():
     assert compressed is False
     assert degraded is False
     router.chat.assert_not_called()
+
+
+def test_settings_have_context_compress_fields():
+    from app.config import settings
+    # Defaults: 8000 / 6
+    assert int(getattr(settings, "CONTEXT_COMPRESS_MAX_TOKENS", 8000)) == 8000
+    assert int(getattr(settings, "CONTEXT_COMPRESS_KEEP_LAST", 6)) == 6

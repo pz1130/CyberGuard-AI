@@ -12,6 +12,7 @@ from langgraph.prebuilt import ToolNode
 from app.agents.states import MasterAgentState, AgentState, SubAgentResult
 from app.services.agent_executor import AgentExecutor
 from app.core.audit import log_audit
+from app.core.context_compressor import maybe_compress
 
 logger = logging.getLogger(__name__)
 
@@ -521,6 +522,8 @@ class MasterAgent:
                     expert_no_agents=bool(state.get("expert_mode_no_agents")),
                 )
                 history = state.get("conversation_history") or []
+                history, _compressed, _degraded = await maybe_compress(history, self.llm_router)
+                state["context_compression"] = {"compressed": _compressed, "degraded": _degraded}
                 messages: List[Dict[str, str]] = [
                     {"role": "system", "content": system_prompt}
                 ]

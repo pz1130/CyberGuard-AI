@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     MASTER_AGENT_MODEL: str = "gpt-4o"
     MASTER_AGENT_TEMPERATURE: float = 0.7
 
+    # Context Compressor (master-agent conversation-history compression)
+    CONTEXT_COMPRESS_MAX_TOKENS: int = 8000
+    CONTEXT_COMPRESS_KEEP_LAST: int = 6
+
     # Sub-Agent Defaults
     SUB_AGENT_TIMEOUT: int = 30
     SUB_AGENT_MAX_RETRIES: int = 2
