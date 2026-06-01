@@ -320,33 +320,31 @@ def sanitize_text(text: str) -> str:
     if len(out) > _MAX_SEGMENT:
         out = out[:_MAX_SEGMENT]
 
-    # Strip system/instruction tags, bracket-system markers, and remaining
-    # HTML/XML tags — replacing each with a space so adjacent words don't fuse.
-    # Looped to a fixed point because removing one tag can expose/splice text
-    # into a new tag (keeps the function idempotent). Each pass only shortens
-    # the string when a match exists, so the loop always terminates.
+    # Apply every neutralizing transform to a fixed point. One pass can expose
+    # input for another (e.g. stripping a tag reveals a `system:` prefix, or an
+    # outer markdown link reveals an inner one), so we loop until the string
+    # stops changing. Tags/markers are replaced with a space so adjacent words
+    # don't fuse; whitespace is then collapsed. Every transform only shortens
+    # (or leaves unchanged) the string, so the loop always terminates, and the
+    # result is idempotent: re-running sanitize_text on its own output is a no-op.
     prev = None
     while prev != out:
         prev = out
+        # Strip system/instruction tags, bracket-system markers, HTML/XML tags
         out = _RE_SYSTEM_TAGS.sub(" ", out)
         out = _RE_BRACKET_SYSTEM.sub(" ", out)
         out = _RE_HTML_TAG.sub(" ", out)
-
-    # Drop system/developer/admin impersonation prefixes
-    out = _RE_IMPERSONATION.sub("", out)
-
-    # Markdown links -> just the link text
-    out = _RE_MD_LINK.sub(r"\1", out)
-
-    # Collapse unicode / escape floods to a single repeat
-    out = _RE_EMOJI_FLOOD.sub(r"\1", out)
-    out = _RE_ESCAPE_FLOOD.sub(r"\1", out)
-
-    # Remove delimiter-injection substrings
-    out = _RE_DELIMITER_INJECTION.sub("", out)
-
-    # Collapse the whitespace that stripping may have left, but preserve newlines
-    out = re.sub(r"[ \t]{2,}", " ", out).strip()
+        # Drop system/developer/admin impersonation prefixes
+        out = _RE_IMPERSONATION.sub("", out)
+        # Markdown links -> just the link text
+        out = _RE_MD_LINK.sub(r"\1", out)
+        # Collapse unicode / escape floods to a single repeat
+        out = _RE_EMOJI_FLOOD.sub(r"\1", out)
+        out = _RE_ESCAPE_FLOOD.sub(r"\1", out)
+        # Remove delimiter-injection substrings
+        out = _RE_DELIMITER_INJECTION.sub("", out)
+        # Collapse the whitespace that stripping may have left; trim the ends
+        out = re.sub(r"[ \t]{2,}", " ", out).strip()
 
     return out
 
