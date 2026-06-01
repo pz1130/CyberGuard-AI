@@ -17,9 +17,10 @@ from app.schemas.mcp import (
     MCPToolExecuteRequest, MCPToolExecuteResponse,
 )
 from app.services.mcp_executor import (
-    _live_processes,
     _start_stdio_server,
     _stop_stdio_server,
+    stdio_status,
+    discover_stdio_tools,
     execute_mcp_tool as _svc_execute_mcp_tool,
 )
 
@@ -209,32 +210,7 @@ async def _discover_tools_via_jsonrpc(server: MCPServer) -> list[dict]:
     payload = {"jsonrpc": "2.0", "id": request_id, "method": "tools/list", "params": {}}
 
     if server.transport_type == "stdio":
-        proc = _live_processes.get(server.name)
-        if not proc or proc.returncode is not None:
-            await _start_stdio_server(server)
-            proc = _live_processes.get(server.name)
-        if not proc or proc.stdin is None or proc.stdout is None:
-            raise RuntimeError("MCP subprocess not running")
-
-        proc.stdin.write((json.dumps(payload) + "\n").encode("utf-8"))
-        await proc.stdin.drain()
-        deadline = asyncio.get_event_loop().time() + (server.timeout_seconds or 30)
-        while True:
-            remaining = deadline - asyncio.get_event_loop().time()
-            if remaining <= 0:
-                raise asyncio.TimeoutError("tools/list timed out")
-            line = await asyncio.wait_for(proc.stdout.readline(), timeout=remaining)
-            if not line:
-                raise RuntimeError("MCP server stdout closed")
-            try:
-                resp = json.loads(line.decode("utf-8").strip())
-            except json.JSONDecodeError:
-                continue
-            if resp.get("id") != request_id:
-                continue
-            if "error" in resp:
-                raise RuntimeError(resp["error"].get("message", "tools/list error"))
-            return resp.get("result", {}).get("tools", [])
+        return await discover_stdio_tools(server)
 
     # HTTP transport
     import httpx
