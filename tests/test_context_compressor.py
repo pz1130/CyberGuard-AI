@@ -1,5 +1,14 @@
 """Unit tests for app.core.context_compressor (pure-function layer)."""
-from app.core.context_compressor import estimate_tokens, select_window
+from unittest.mock import AsyncMock
+
+import pytest
+
+from app.core.context_compressor import (
+    compress_history,
+    estimate_tokens,
+    maybe_compress,
+    select_window,
+)
 
 
 def test_estimate_tokens_empty():

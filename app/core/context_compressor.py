@@ -97,6 +97,8 @@ async def compress_history(
       summary prepended. On any exception, logs and returns the keep_last tail
       with `summary=None` (the caller surfaces this as `degraded=True`).
     - If `llm_router is None` at threshold, degrades the same way.
+    - A whitespace-only or empty LLM response also degrades to the tail only
+      (caller sees `degraded=True`).
     """
     history_list = list(history)
     if estimate_tokens(history_list) < max_tokens:
