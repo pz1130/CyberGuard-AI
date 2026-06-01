@@ -72,3 +72,35 @@ async def test_is_running_false_when_redis_down(monkeypatch):
     monkeypatch.setattr(gc, "get_redis", _broken)
     svc = gc.GroupChatService()
     assert await svc.is_running("s1") is False
+
+
+@pytest.mark.asyncio
+async def test_load_session_reads_fresh_redis_not_stale_memory(monkeypatch):
+    """A poll on any worker must see the latest persisted state, not a stale
+    in-memory copy cached by an earlier load."""
+    svc = gc.GroupChatService()
+
+    # Seed an old object in the in-memory map (simulating an earlier load).
+    stale = _make_session("s9", current_round=0, max_rounds=5)
+    svc._active_sessions["s9"] = stale
+
+    # Redis holds newer state (round advanced by the Celery worker).
+    fresh_data = {
+        "session_id": "s9", "user_id": 1, "agent_ids": [1, 2],
+        "messages": [{"role": "user", "content": "hi", "agent_id": None,
+                      "agent_name": None, "timestamp": "t"}],
+        "max_rounds": 5, "current_round": 3, "status": "active",
+        "created_at": "t",
+    }
+    captured = {}
+
+    async def fake_get_json(key):
+        captured["key"] = key
+        return fresh_data
+
+    monkeypatch.setattr(gc.cache, "get_json", fake_get_json)
+
+    loaded = await svc.load_session("s9")
+    assert loaded is not None
+    assert loaded.current_round == 3  # fresh Redis state, not the stale 0
+    assert captured["key"] == "groupchat:session:s9"

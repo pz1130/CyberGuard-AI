@@ -525,15 +525,10 @@ class GroupChatService:
         Returns:
             GroupChatSession if found, None otherwise
         """
-        # Prefer the live in-memory session — within a single worker it holds the
-        # freshest in-flight state (persist always writes memory -> Redis, never
-        # the reverse during an active run). Rebuilding from Redis here would
-        # reset an actively-running session AND swap the object out from under
-        # run_to_completion, desyncing its loop counter. See group-chat hang.
-        existing = self._active_sessions.get(session_id)
-        if existing is not None:
-            return existing
-
+        # Redis is authoritative. Completion now runs in a Celery worker (a
+        # different process from the API workers serving polls), so the original
+        # in-process object-swap hazard cannot occur here: no run_to_completion
+        # loop shares this process with these polls. Always read fresh state.
         data = await cache.get_json(f"groupchat:session:{session_id}")
 
         if not data:
