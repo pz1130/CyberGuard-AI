@@ -84,3 +84,122 @@ def test_select_window_keep_last_zero_empty_summary():
     history = [{"role": "user", "content": str(i)} for i in range(10)]
     out = select_window(history, "", keep_last=0)
     assert out == []
+
+
+# ---- async orchestrators (Task 2) ----
+
+import pytest
+from unittest.mock import AsyncMock
+
+from app.core.context_compressor import compress_history, maybe_compress
+
+
+# ---- compress_history ----
+
+@pytest.mark.asyncio
+async def test_compress_history_below_threshold_no_llm_call():
+    history = [{"role": "user", "content": "hi"}]
+    router = AsyncMock()
+    new, summary = await compress_history(history, router, max_tokens=100, keep_last=6)
+    assert summary is None
+    assert new == history
+    router.chat.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_compress_history_at_threshold_calls_llm_once():
+    # 4 messages x 1000 chars = 1000 tokens, above max_tokens=100
+    history = [{"role": "user", "content": "x" * 1000} for _ in range(4)]
+    router = AsyncMock()
+    router.chat.return_value = "  summary body  "
+    new, summary = await compress_history(history, router, max_tokens=100, keep_last=3)
+    assert summary == "summary body"  # stripped
+    assert router.chat.await_count == 1
+    assert len(new) == 1 + 3
+    assert new[0] == {"role": "system", "content": "summary body"}
+    assert new[1:] == history[-3:]
+
+
+@pytest.mark.asyncio
+async def test_compress_history_llm_raises_degrades_to_window():
+    history = [{"role": "user", "content": "x" * 4000}]
+    router = AsyncMock()
+    router.chat.side_effect = RuntimeError("rate limit")
+    new, summary = await compress_history(history, router, max_tokens=100, keep_last=2)
+    assert summary is None
+    assert new == history[-2:]
+
+
+@pytest.mark.asyncio
+async def test_compress_history_no_router_at_threshold_degrades():
+    history = [{"role": "user", "content": "x" * 4000}]
+    new, summary = await compress_history(history, None, max_tokens=100, keep_last=2)
+    assert summary is None
+    assert new == history[-2:]
+
+
+# ---- maybe_compress ----
+
+@pytest.mark.asyncio
+async def test_maybe_compress_below_threshold_unchanged():
+    history = [{"role": "user", "content": "x" * 100}]
+    router = AsyncMock()
+    new, compressed, degraded = await maybe_compress(
+        history, router, max_tokens=1000, keep_last=6
+    )
+    assert new == history
+    assert compressed is False
+    assert degraded is False
+    router.chat.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_maybe_compress_at_threshold_returns_compressed():
+    # 5 messages x 1000 chars = 1250 tokens, above max_tokens=100
+    history = [{"role": "user", "content": "x" * 1000} for _ in range(5)]
+    router = AsyncMock()
+    router.chat.return_value = "summary"
+    new, compressed, degraded = await maybe_compress(
+        history, router, max_tokens=100, keep_last=4
+    )
+    assert compressed is True
+    assert degraded is False
+    assert new[0]["content"] == "summary"
+    assert len(new) == 1 + 4
+    assert new[1:] == history[-4:]
+
+
+@pytest.mark.asyncio
+async def test_maybe_compress_llm_raises_degraded_path():
+    history = [{"role": "user", "content": "x" * 4000}]
+    router = AsyncMock()
+    router.chat.side_effect = TimeoutError("upstream slow")
+    new, compressed, degraded = await maybe_compress(
+        history, router, max_tokens=100, keep_last=3
+    )
+    assert compressed is False
+    assert degraded is True
+    assert new == history[-3:]
+
+
+@pytest.mark.asyncio
+async def test_maybe_compress_no_router_at_threshold_degrades():
+    history = [{"role": "user", "content": "x" * 4000}]
+    new, compressed, degraded = await maybe_compress(
+        history, None, max_tokens=100, keep_last=3
+    )
+    assert compressed is False
+    assert degraded is True
+    assert new == history[-3:]
+
+
+@pytest.mark.asyncio
+async def test_maybe_compress_empty_history():
+    router = AsyncMock()
+    new, compressed, degraded = await maybe_compress(
+        [], router, max_tokens=100, keep_last=6
+    )
+    assert new == []
+    assert compressed is False
+    assert degraded is False
+    router.chat.assert_not_called()
