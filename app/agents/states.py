@@ -56,6 +56,9 @@ class MasterAgentState(TypedDict, total=False):
     risk_score: Optional[float]
     action_items: List[str]
 
+    # Context-compression observability (set when maybe_compress runs)
+    context_compression: Dict[str, bool]
+
     # Human approval
     approval_required: bool
     approval_status: Optional[str]  # approved, rejected, pending
