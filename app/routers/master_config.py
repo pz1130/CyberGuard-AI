@@ -55,7 +55,7 @@ async def put_config(
     from app.services.master_config import invalidate_cache
     update_data = body.model_dump(exclude_unset=True)
     config = await update_master_config(db, update_data)
-    invalidate_cache()
+    await invalidate_cache()
     # Also invalidate the llm_router's cached config
     from app.services.llm_router import get_llm_router
     get_llm_router().invalidate_master_config_cache()
