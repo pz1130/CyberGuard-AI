@@ -490,6 +490,7 @@ async def check_prompt(
     else:
         message = f"Detected {len(flags)} signal(s): {', '.join(flags[:5])}"
 
+    cleaned = sanitize_text(text)
     return GuardrailResult(
         passed=passed,
         blocked=blocked,
@@ -497,7 +498,7 @@ async def check_prompt(
         score=round(total_score, 3),
         flags=flags,
         message=message,
-        sanitized=None,  # Future: implement sanitization pass
+        sanitized=cleaned if cleaned != text else None,
     )
 
 
@@ -539,6 +540,7 @@ def check_prompt_sync(text: str, *, block: bool = False) -> GuardrailResult:
 
     message = f"Detected {len(flags)} signal(s): {', '.join(flags[:5])}" if flags else "No injection signals detected"
 
+    cleaned = sanitize_text(text)
     return GuardrailResult(
         passed=passed,
         blocked=blocked,
@@ -546,5 +548,5 @@ def check_prompt_sync(text: str, *, block: bool = False) -> GuardrailResult:
         score=round(total_score, 3),
         flags=flags,
         message=message,
-        sanitized=None,
+        sanitized=cleaned if cleaned != text else None,
     )
