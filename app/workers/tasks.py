@@ -683,3 +683,48 @@ def ocr_ingest_task(self, document_id, kb_id, raw_b64, filename, mime_type):
         loop.run_until_complete(_run())
     finally:
         loop.close()
+
+
+# ---------------------------------------------------------------------------
+# Group Chat Completion (multi-worker safe)
+# ---------------------------------------------------------------------------
+
+async def _run_group_chat_completion_async(session_id: str) -> None:
+    """Load the session from Redis, run it to completion, then release the lock.
+
+    Runs inside the Celery worker (a separate process from the API), so the
+    completion loop never shares an event loop with the request handlers.
+    """
+    from app.services.group_chat import GroupChatService
+    service = GroupChatService()
+    try:
+        session = await service.load_session(session_id)
+        if session is None:
+            logger.warning(f"[group_chat_completion] session {session_id} not found")
+            return
+        await service.run_to_completion(session_id)
+    finally:
+        await service.release_run_lock(session_id)
+        await service._clear_cancel_flag(session_id)
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(ConnectionError, TimeoutError),
+    retry_backoff=True,
+    retry_backoff_max=120,
+    retry_jitter=True,
+    max_retries=3,
+    default_retry_delay=10,
+    ignore_result=True,
+)
+def run_group_chat_completion_task(self, session_id: str):
+    """Run a group-chat discussion to completion in the background."""
+    logger.info(f"[run_group_chat_completion_task] session_id={session_id} started")
+    try:
+        asyncio.run(_run_group_chat_completion_async(session_id))
+        logger.info(f"[run_group_chat_completion_task] session_id={session_id} completed")
+        return {"status": "completed", "session_id": session_id}
+    except Exception as e:
+        logger.error(f"[run_group_chat_completion_task] session_id={session_id} error: {e}")
+        raise

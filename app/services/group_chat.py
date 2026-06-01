@@ -54,11 +54,6 @@ class GroupChatService:
     def __init__(self):
         self.executor = AgentExecutor()
         self._active_sessions: Dict[str, GroupChatSession] = {}
-        # Background completion runs, keyed by session_id. A session is
-        # considered "running" iff it has an entry here. Running the whole
-        # discussion inside the HTTP request blocks the single uvicorn worker;
-        # start_completion() dispatches it here instead and returns immediately.
-        self._completion_tasks: Dict[str, asyncio.Task] = {}
 
     async def acquire_run_lock(self, session_id: str) -> bool:
         """Acquire the cross-worker run lock. True if acquired, False if held."""
@@ -106,46 +101,21 @@ class GroupChatService:
             return False
 
     async def start_completion(self, session_id: str) -> Dict[str, Any]:
-        """Dispatch run_to_completion as a background task and return immediately.
+        """Acquire the cross-worker run lock and dispatch the completion to Celery.
 
-        Idempotent: if a run is already in flight for this session, this is a
-        no-op (it also structurally prevents the concurrent double-run that
-        previously desynced run_to_completion's loop and pinned the event loop).
+        Idempotent: if the lock is already held (a run is in flight on any
+        worker), this is a no-op and just returns the current summary.
         """
-        session = self._active_sessions.get(session_id)
+        session = await self.load_session(session_id)
         if not session:
             raise ValueError(f"Session {session_id} not found")
 
-        if session_id not in self._completion_tasks:
-            self._completion_tasks[session_id] = asyncio.create_task(
-                self._run_completion_safe(session_id)
-            )
+        if await self.acquire_run_lock(session_id):
+            await self._clear_cancel_flag(session_id)
+            from app.workers.tasks import run_group_chat_completion_task
+            run_group_chat_completion_task.apply_async(args=[session_id])
 
         return await self.get_session_summary(session_id)
-
-    async def _run_completion_safe(self, session_id: str) -> None:
-        """Run run_to_completion, surfacing failures as a system message.
-
-        CancelledError is intentionally not caught (it is a BaseException, not
-        Exception) so cancel_session() can stop an in-flight run. The finally
-        block always clears the task handle so is_running() flips back to false.
-        """
-        try:
-            await self.run_to_completion(session_id)
-        except Exception as e:  # noqa: BLE001 - log + surface, never crash the loop
-            import logging
-            logging.getLogger(__name__).warning(
-                f"Group chat completion failed for {session_id}: {e}"
-            )
-            session = self._active_sessions.get(session_id)
-            if session is not None:
-                session.messages.append(GroupChatMessage(
-                    role="system",
-                    content=f"⚠️ Group chat run failed: {e}",
-                ))
-                await self._persist_session(session)
-        finally:
-            self._completion_tasks.pop(session_id, None)
 
     async def create_session(
         self,

@@ -104,3 +104,31 @@ async def test_load_session_reads_fresh_redis_not_stale_memory(monkeypatch):
     assert loaded is not None
     assert loaded.current_round == 3  # fresh Redis state, not the stale 0
     assert captured["key"] == "groupchat:session:s9"
+
+
+@pytest.mark.asyncio
+async def test_start_completion_dispatches_celery_once_under_lock(fake_redis, monkeypatch):
+    svc = gc.GroupChatService()
+    sess = _make_session("s5", current_round=0, max_rounds=3)
+
+    async def fake_load(session_id):
+        svc._active_sessions[session_id] = sess
+        return sess
+
+    monkeypatch.setattr(svc, "load_session", fake_load)
+
+    dispatched = []
+
+    class FakeTask:
+        @staticmethod
+        def apply_async(args=None, **kwargs):
+            dispatched.append(args)
+
+    import app.workers.tasks as tasks_mod
+    monkeypatch.setattr(tasks_mod, "run_group_chat_completion_task", FakeTask, raising=False)
+
+    await svc.start_completion("s5")
+    await svc.start_completion("s5")  # lock already held -> no second dispatch
+
+    assert dispatched == [["s5"]]
+    assert await svc.is_running("s5") is True
