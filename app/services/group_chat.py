@@ -5,8 +5,19 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 
-from app.core.redis_client import cache
+from app.core.redis_client import cache, get_redis
 from app.services.agent_executor import AgentExecutor
+
+
+_RUN_LOCK_TTL = 3600  # seconds; a completion run must never exceed this
+
+
+def _lock_key(session_id: str) -> str:
+    return f"groupchat:lock:{session_id}"
+
+
+def _cancel_key(session_id: str) -> str:
+    return f"groupchat:cancel:{session_id}"
 
 
 @dataclass
@@ -49,9 +60,50 @@ class GroupChatService:
         # start_completion() dispatches it here instead and returns immediately.
         self._completion_tasks: Dict[str, asyncio.Task] = {}
 
-    def is_running(self, session_id: str) -> bool:
-        """Whether a background completion run is in flight for this session."""
-        return session_id in self._completion_tasks
+    async def acquire_run_lock(self, session_id: str) -> bool:
+        """Acquire the cross-worker run lock. True if acquired, False if held."""
+        try:
+            r = await get_redis()
+            acquired = await r.set(_lock_key(session_id), "1", nx=True, ex=_RUN_LOCK_TTL)
+            return bool(acquired)
+        except Exception:
+            return False
+
+    async def release_run_lock(self, session_id: str) -> None:
+        try:
+            r = await get_redis()
+            await r.delete(_lock_key(session_id))
+        except Exception:
+            pass
+
+    async def is_running(self, session_id: str) -> bool:
+        """Whether a completion run holds the lock (cross-worker)."""
+        try:
+            r = await get_redis()
+            return bool(await r.exists(_lock_key(session_id)))
+        except Exception:
+            return False
+
+    async def _set_cancel_flag(self, session_id: str) -> None:
+        try:
+            r = await get_redis()
+            await r.set(_cancel_key(session_id), "1", ex=_RUN_LOCK_TTL)
+        except Exception:
+            pass
+
+    async def _clear_cancel_flag(self, session_id: str) -> None:
+        try:
+            r = await get_redis()
+            await r.delete(_cancel_key(session_id))
+        except Exception:
+            pass
+
+    async def _is_cancelled(self, session_id: str) -> bool:
+        try:
+            r = await get_redis()
+            return bool(await r.exists(_cancel_key(session_id)))
+        except Exception:
+            return False
 
     async def start_completion(self, session_id: str) -> Dict[str, Any]:
         """Dispatch run_to_completion as a background task and return immediately.
