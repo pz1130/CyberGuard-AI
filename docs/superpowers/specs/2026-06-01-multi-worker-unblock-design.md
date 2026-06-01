@@ -48,8 +48,11 @@ flipped only after all three blockers are resolved.
 - **Cache invalidation:** Redis **version-number** (not pub/sub, not TTL).
 - **Group-chat completion:** **Celery task + Redis-authoritative state** (not
   in-process asyncio with sticky routing).
-- **MCP scope:** **all** MCP (STDIO **and** HTTP) routes through tool-runner —
-  uniform "all MCP via tool-runner" model.
+- **MCP scope:** **only STDIO** relocates to tool-runner. (Revised during Phase 3
+  planning: the tool-runner is deliberately minimal — fastapi+uvicorn only, no
+  `httpx`/SSRF/`ENCRYPTION_KEY`/DB — so routing HTTP MCP through it would add deps
+  and move SSRF/egress for zero multi-worker benefit. HTTP MCP is already stateless
+  and worker-safe, so it stays in-process in `mcp_executor`.)
 
 ## Phased design
 
@@ -109,7 +112,10 @@ Multi-worker is flipped only in Phase 4.
   an authenticated HTTP call to `TOOL_RUNNER_URL`. **Call sites in
   `app/routers/mcp.py` and `app/services/internal_agent.py` do not change** — they
   call the same functions, which simply no longer spawn subprocesses.
-- Both STDIO and HTTP MCP route through tool-runner (uniform model).
+- Only STDIO MCP routes through tool-runner; HTTP MCP stays in-process in
+  `mcp_executor` (stateless, already multi-worker safe). Decryption of per-server
+  env happens client-side (tool-runner has no `ENCRYPTION_KEY`); command/arg
+  validation happens in tool-runner (it is the spawning host).
 - tool-runner restart resilience: STDIO servers are (re)started on demand; a call
   hitting a not-running server triggers an auto-start in tool-runner. The
   single-instance assumption is documented.
