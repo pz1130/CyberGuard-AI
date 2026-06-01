@@ -278,7 +278,7 @@ def _score_structural_anomaly(text: str) -> dict:
 # Sanitization pass — neutralize mechanical-noise injection only
 # ----------------------------------------------------------------------
 
-_MAX_SEGMENT = 20000  # mirrors overlong_padding threshold
+_MAX_SEGMENT = 20000  # overlong_padding flags segments >= this; we cap length here
 
 # Tag/markup strippers (keep inner visible text)
 _RE_SYSTEM_TAGS = re.compile(
@@ -292,8 +292,11 @@ _RE_IMPERSONATION = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 _RE_MD_LINK = re.compile(r'!?\[([^\]]+)\]\([^\)]+\)')
+# Flood thresholds here (collapse at 4+) are deliberately lower/more aggressive
+# than the detection rules in _INJECTION_PATTERNS (which only FLAG at 20+/30+):
+# sanitization neutralizes noise the detector may not even flag.
 _RE_EMOJI_FLOOD = re.compile(
-    r'([\U0001F600-\U0001F64F☀-⛿✀-➿])\1{3,}'
+    r'([\U0001F300-\U0001FAFF☀-➿])\1{3,}'
 )
 _RE_ESCAPE_FLOOD = re.compile(r'(\\n|\\t|\\r|\\\\)\1{3,}')
 _RE_DELIMITER_INJECTION = re.compile(
@@ -309,18 +312,25 @@ def sanitize_text(text: str) -> str:
     unchanged — they are not safely fixable and the caller handles them via
     risk-level / blocking.
     """
+    if not text:
+        return text
     out = text
 
     # Truncate any overlong segment first (cheapest way to bound the rest)
     if len(out) > _MAX_SEGMENT:
         out = out[:_MAX_SEGMENT]
 
-    # Strip system / instruction tags and bracket-system markers (keep inner text)
-    out = _RE_SYSTEM_TAGS.sub("", out)
-    out = _RE_BRACKET_SYSTEM.sub("", out)
-
-    # Strip remaining HTML/XML tags (keep visible text)
-    out = _RE_HTML_TAG.sub("", out)
+    # Strip system/instruction tags, bracket-system markers, and remaining
+    # HTML/XML tags — replacing each with a space so adjacent words don't fuse.
+    # Looped to a fixed point because removing one tag can expose/splice text
+    # into a new tag (keeps the function idempotent). Each pass only shortens
+    # the string when a match exists, so the loop always terminates.
+    prev = None
+    while prev != out:
+        prev = out
+        out = _RE_SYSTEM_TAGS.sub(" ", out)
+        out = _RE_BRACKET_SYSTEM.sub(" ", out)
+        out = _RE_HTML_TAG.sub(" ", out)
 
     # Drop system/developer/admin impersonation prefixes
     out = _RE_IMPERSONATION.sub("", out)
