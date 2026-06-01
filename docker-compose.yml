@@ -44,6 +44,7 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       MOCK_MODE: ${MOCK_MODE:-false}
       AUTO_APPROVE: ${AUTO_APPROVE:-false}
+      API_WORKERS: ${API_WORKERS:-4}
       TOOL_RUNNER_URL: http://tool-runner:9000
       RUNNER_TOKEN: ${RUNNER_TOKEN:-changeme-runner-token}
       AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
