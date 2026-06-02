@@ -290,6 +290,61 @@ async def test_loop_detection_recovers_when_model_changes_course(monkeypatch):
     assert res["output"] == "recovered answer"
 
 
+def test_tool_call_budget_derives_from_permission():
+    from app.services.internal_agent import (
+        InternalAgentRunner, TOOL_CALL_BUDGET_DEFAULT, TOOL_CALL_BUDGET_LIMITED,
+    )
+    base = {"id": 1, "agent_name": "x", "metadata_json": {}}
+    low = InternalAgentRunner({**base, "permission_level": "low"})
+    med = InternalAgentRunner({**base, "permission_level": "medium"})
+    override = InternalAgentRunner({**base, "permission_level": "low",
+                                    "tool_call_budget": 5})
+    assert low.tool_call_budget == TOOL_CALL_BUDGET_LIMITED
+    assert med.tool_call_budget == TOOL_CALL_BUDGET_DEFAULT
+    assert override.tool_call_budget == 5            # explicit config wins
+
+
+@pytest.mark.asyncio
+async def test_tool_call_budget_caps_dispatch_and_forces_answer(monkeypatch):
+    """Once the per-run tool-call budget is spent, no more tools are dispatched
+    and the model is forced to answer from what it has — not hard-errored."""
+    from app.services import internal_agent as ia_mod
+    from app.services.internal_agent import InternalAgentRunner
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    n = {"i": 0}
+    # A model that keeps requesting (distinct, so the loop guard never trips)
+    # tools while tools are offered, and only answers once tools are withdrawn.
+    async def fake_chat(*, messages, provider_id, model, tools):
+        if not tools:
+            return SimpleNamespace(content="final after budget", tool_calls=None)
+        n["i"] += 1
+        return SimpleNamespace(content="", tool_calls=[SimpleNamespace(
+            id=f"c{n['i']}",
+            function=SimpleNamespace(name="grep", arguments=f'{{"i": {n["i"]}}}'))])
+    monkeypatch.setattr(ia_mod, "get_llm_router",
+                        lambda: SimpleNamespace(chat=fake_chat))
+
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
+           "llm_model": "m", "tool_loop_max_steps": 50, "memory_window": 0,
+           "associated_skills": [], "metadata_json": {"mcp_tool_ids": []},
+           "permission_level": "medium", "tool_call_budget": 3}
+    runner = InternalAgentRunner(cfg)
+    monkeypatch.setattr(runner, "_build_tools", AsyncMock(return_value=[
+        {"type": "function", "function": {"name": "grep"}}]))
+    dispatched = []
+    async def fake_dispatch(call):
+        dispatched.append(call.function.name)
+        return "ok"
+    monkeypatch.setattr(runner, "_dispatch", fake_dispatch)
+
+    res = await runner.execute(task="go", conversation_id=None, user_id=1)
+    assert res["status"] == "completed"
+    assert res["output"] == "final after budget"
+    assert len(dispatched) == 3                      # exactly the budget, no more
+
+
 @pytest.mark.asyncio
 async def test_llm_error_self_recovers_on_retry(monkeypatch):
     """A transient LLM failure is retried (self-recovery) rather than failing
