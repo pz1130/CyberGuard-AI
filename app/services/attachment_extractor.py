@@ -83,7 +83,7 @@ async def build_attachment_section(
         filename = att.get("filename") or "attachment"
         content_type = att.get("content_type") or ""
         try:
-            raw = base64.b64decode(att.get("data", ""), validate=True)
+            raw = base64.b64decode(att.get("data") or "", validate=True)
             text = await extract_attachment_text(raw, content_type, filename, cfg)
         except Exception as e:  # noqa: BLE001 - bad payload must not crash the run
             logger.warning("attachment decode failed for %r: %s", filename, e)
@@ -91,5 +91,7 @@ async def build_attachment_section(
         capped = cap_text(text, per_cap)
         lines.append(f"[附件: {filename}] (type: {content_type})\n{capped}")
 
+    # total_cap counts chars of the formatted block (incl. per-file headers/markers),
+    # not raw extracted text — close enough for protecting the prompt budget.
     body = cap_text("\n\n".join(lines), total_cap)
     return f"\n\n--- 附件信息 ---\n{body}"

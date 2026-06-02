@@ -1,3 +1,5 @@
+import base64
+
 import pytest
 
 import app.services.attachment_extractor as ax
@@ -95,6 +97,10 @@ def test_cap_text_over_limit_truncates_with_marker():
     assert "...[truncated 6 chars]" in out
 
 
+def test_cap_text_at_exact_limit_unchanged():
+    assert ax.cap_text("abcd", 4) == "abcd"
+
+
 @pytest.mark.asyncio
 async def test_build_section_empty_when_no_attachments():
     out = await ax.build_attachment_section([], _cfg(), per_cap=8000, total_cap=24000)
@@ -105,7 +111,6 @@ async def test_build_section_empty_when_no_attachments():
 async def test_build_section_formats_and_decodes(monkeypatch):
     # Real extraction path for a text/plain file (no mocks): exercises base64
     # decode -> extract -> format end to end (the worker's behavior).
-    import base64
     data = base64.b64encode("file body".encode()).decode()
     atts = [{"filename": "n.txt", "content_type": "text/plain", "data": data}]
     out = await ax.build_attachment_section(atts, _cfg(), per_cap=8000, total_cap=24000)
