@@ -103,3 +103,43 @@ async def test_load_ocr_config_defaults_when_no_row(monkeypatch):
     assert cfg.engine == "tesseract"
     assert cfg.languages == "chi_sim+eng"
     assert cfg.max_pages == 30
+
+
+@pytest.mark.asyncio
+async def test_ocr_image_uses_tesseract(monkeypatch):
+    import app.services.ocr_service as ocr
+    seen = {}
+
+    async def fake_tess(images, languages):
+        seen["images"] = images
+        seen["languages"] = languages
+        return "TESS"
+
+    monkeypatch.setattr(ocr, "_ocr_tesseract", fake_tess)
+    cfg = ocr.OcrSettings(enabled=True, engine="tesseract", languages="eng",
+                          max_pages=5, vision_provider_id=None, vision_model=None)
+    out = await ocr.ocr_image(b"IMGBYTES", cfg)
+    assert out == "TESS"
+    assert seen["images"] == [b"IMGBYTES"]
+    assert seen["languages"] == "eng"
+
+
+@pytest.mark.asyncio
+async def test_ocr_image_uses_vision(monkeypatch):
+    import app.services.ocr_service as ocr
+    seen = {}
+
+    async def fake_vision(images, provider_id, model):
+        seen["images"] = images
+        seen["provider_id"] = provider_id
+        seen["model"] = model
+        return "VIS"
+
+    monkeypatch.setattr(ocr, "_ocr_vision", fake_vision)
+    cfg = ocr.OcrSettings(enabled=True, engine="vision", languages="eng",
+                          max_pages=5, vision_provider_id=7, vision_model="gpt-4o")
+    out = await ocr.ocr_image(b"IMGBYTES", cfg)
+    assert out == "VIS"
+    assert seen["images"] == [b"IMGBYTES"]
+    assert seen["provider_id"] == 7
+    assert seen["model"] == "gpt-4o"

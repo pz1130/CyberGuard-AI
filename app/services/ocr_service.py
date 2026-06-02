@@ -73,6 +73,18 @@ async def ocr_pdf(raw: bytes, cfg: OcrSettings) -> str:
     return await _ocr_tesseract(images, cfg.languages)
 
 
+async def ocr_image(raw: bytes, cfg: OcrSettings) -> str:
+    """OCR a single image (Tesseract or vision, per cfg.engine).
+
+    Unlike ocr_pdf there is no rasterization step — the payload is already an
+    image, so it is passed through as a single-element list. PIL/Tesseract and
+    the vision data-URL both accept png/jpeg/gif/webp.
+    """
+    if cfg.engine == "vision" and cfg.vision_provider_id:
+        return await _ocr_vision([raw], cfg.vision_provider_id, cfg.vision_model)
+    return await _ocr_tesseract([raw], cfg.languages)
+
+
 async def _ocr_tesseract(images: List[bytes], languages: str) -> str:
     from PIL import Image
 
