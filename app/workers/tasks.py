@@ -333,32 +333,24 @@ def _run_async_master_agent(execution_id: str, user_input: str, user_id: int, **
     if rag_context:
         user_input = f"[知识库检索结果]\n{rag_context}\n\n[用户问题]\n{user_input}"
 
-    # Inject attachment content into user_input when attachments are present
-    attachments = kwargs.get("attachments")
-    if attachments:
-        attachment_lines = []
-        for att in attachments:
-            filename = att.get("filename", "attachment")
-            # Router stores base64 content under "data" key
-            b64_content = att.get("data", "")
-            mime_type = att.get("content_type", "")
-            # Decode base64 to get text content
-            try:
-                import base64 as b64_mod
-                content = b64_mod.b64decode(b64_content).decode("utf-8", errors="replace")
-            except Exception:
-                content = ""
-            # Truncate very long content
-            truncated = content[:1000] if content else ""
-            attachment_lines.append(f"[附件: {filename}] (type: {mime_type})\n{truncated}")
-
-        attachment_desc = "\n\n".join(attachment_lines)
-        user_input = f"{user_input}\n\n--- 附件信息 ---\n{attachment_desc}"
-
     async def _run():
+        run_input = user_input
+        attachments = kwargs.get("attachments")
+        if attachments:
+            from app.config import settings
+            from app.services.attachment_extractor import build_attachment_section
+            from app.services.ocr_service import load_ocr_config
+            cfg = await load_ocr_config()
+            section = await build_attachment_section(
+                attachments, cfg,
+                per_cap=settings.ATTACHMENT_MAX_CHARS,
+                total_cap=settings.ATTACHMENT_TOTAL_MAX_CHARS,
+            )
+            run_input = f"{run_input}{section}"
+
         master_agent = get_master_agent()
         return await master_agent.run(
-            user_input=user_input,
+            user_input=run_input,
             user_id=user_id,
             conversation_history=conversation_history,
             **{**kwargs, **conv_overrides},
