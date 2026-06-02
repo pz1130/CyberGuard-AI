@@ -7,6 +7,7 @@ docs/superpowers/specs/2026-06-02-chat-attachment-extraction-design.md
 """
 from __future__ import annotations
 
+import base64
 import logging
 
 from app.services.knowledge_service import extract_text
@@ -51,3 +52,44 @@ async def extract_attachment_text(
         logger.warning("attachment extraction failed for %r (%s): %s",
                        filename, content_type, e)
         return f"(提取失败: {e})"
+
+
+def cap_text(text: str, limit: int) -> str:
+    """Return text unchanged if within limit, else truncate + append a marker."""
+    if len(text) <= limit:
+        return text
+    dropped = len(text) - limit
+    return f"{text[:limit]}\n...[truncated {dropped} chars]"
+
+
+async def build_attachment_section(
+    attachments: list[dict],
+    cfg: OcrSettings,
+    *,
+    per_cap: int,
+    total_cap: int,
+) -> str:
+    """Decode + extract + cap + format a list of attachment dicts.
+
+    Each dict has keys: filename, content_type, data (base64 str). Returns the
+    full block to append to user_input (with the '--- 附件信息 ---' header), or
+    '' when there are no attachments.
+    """
+    if not attachments:
+        return ""
+
+    lines: list[str] = []
+    for att in attachments:
+        filename = att.get("filename") or "attachment"
+        content_type = att.get("content_type") or ""
+        try:
+            raw = base64.b64decode(att.get("data", ""), validate=True)
+            text = await extract_attachment_text(raw, content_type, filename, cfg)
+        except Exception as e:  # noqa: BLE001 - bad payload must not crash the run
+            logger.warning("attachment decode failed for %r: %s", filename, e)
+            text = f"(提取失败: {e})"
+        capped = cap_text(text, per_cap)
+        lines.append(f"[附件: {filename}] (type: {content_type})\n{capped}")
+
+    body = cap_text("\n\n".join(lines), total_cap)
+    return f"\n\n--- 附件信息 ---\n{body}"
