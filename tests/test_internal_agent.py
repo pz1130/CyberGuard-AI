@@ -103,6 +103,92 @@ async def test_build_tools_includes_kb_when_kb_set(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_build_system_prompt_injects_episodes_when_enabled(monkeypatch):
+    from unittest.mock import AsyncMock
+    from app.services.internal_agent import InternalAgentRunner
+
+    class FakeEp:
+        async def recall(self, agent_id, task, top_k=3, provider_id=None):
+            return ([{"task": "scan a host", "approach": "web_search→vuln_search",
+                      "outcome": "found CVE-x"}], [0.0] * 1536)
+        async def record(self, **kw):  # unused here
+            pass
+    monkeypatch.setattr("app.services.internal_agent.episodic_memory", FakeEp())
+
+    cfg = {"id": 7, "agent_name": "x", "system_prompt": "BASE",
+           "associated_skills": [], "metadata_json": {"enable_episodic": True},
+           "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+    monkeypatch.setattr(runner, "_load_skill_bodies", AsyncMock(return_value={}))
+
+    prompt = await runner._build_system_prompt("scan host 1.2.3.4")
+    assert "过往成功经验" in prompt and "web_search→vuln_search" in prompt
+    assert runner._episode_embedding is not None     # stashed for reuse
+
+
+@pytest.mark.asyncio
+async def test_episodic_record_on_completed_run(monkeypatch):
+    from app.services import internal_agent as ia_mod
+    from app.services.internal_agent import InternalAgentRunner
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    def tc(name, cid):
+        return SimpleNamespace(id=cid, function=SimpleNamespace(name=name, arguments="{}"))
+    step1 = SimpleNamespace(content="", tool_calls=[tc("web_search", "1")])
+    fake_router = SimpleNamespace(chat=AsyncMock(side_effect=[step1, "done answer"]))
+    monkeypatch.setattr(ia_mod, "get_llm_router", lambda: fake_router)
+
+    recorded = {}
+    class FakeEp:
+        async def recall(self, agent_id, task, top_k=3, provider_id=None):
+            return ([], None)
+        async def record(self, agent_id, task, approach, outcome, success=True,
+                         tool_count=0, embedding=None, provider_id=None):
+            recorded.update(agent_id=agent_id, task=task, approach=approach,
+                            outcome=outcome, success=success)
+    monkeypatch.setattr(ia_mod, "episodic_memory", FakeEp())
+
+    cfg = {"id": 7, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
+           "llm_model": "m", "tool_loop_max_steps": 4, "memory_window": 0,
+           "associated_skills": [], "metadata_json": {"enable_episodic": True},
+           "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+    monkeypatch.setattr(runner, "_dispatch", AsyncMock(return_value="ok"))
+
+    res = await runner.execute(task="scan host", conversation_id=None, user_id=1)
+    assert res["status"] == "completed"
+    assert recorded["approach"] == "web_search"      # distilled tool sequence
+    assert recorded["agent_id"] == 7 and recorded["success"] is True
+    assert recorded["outcome"] == "done answer"
+
+
+@pytest.mark.asyncio
+async def test_no_episodic_record_when_disabled(monkeypatch):
+    from app.services import internal_agent as ia_mod
+    from app.services.internal_agent import InternalAgentRunner
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    fake_router = SimpleNamespace(chat=AsyncMock(return_value="just answer"))
+    monkeypatch.setattr(ia_mod, "get_llm_router", lambda: fake_router)
+
+    called = {"record": 0}
+    class FakeEp:
+        async def recall(self, *a, **k): return ([], None)
+        async def record(self, *a, **k): called["record"] += 1
+    monkeypatch.setattr(ia_mod, "episodic_memory", FakeEp())
+
+    cfg = {"id": 7, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
+           "llm_model": "m", "tool_loop_max_steps": 4, "memory_window": 0,
+           "associated_skills": [], "metadata_json": {}, "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+    res = await runner.execute(task="hi", conversation_id=None, user_id=1)
+    assert res["status"] == "completed"
+    assert called["record"] == 0                      # disabled -> never records
+
+
+@pytest.mark.asyncio
 async def test_build_tools_includes_search_when_enabled(monkeypatch):
     from app.services.internal_agent import InternalAgentRunner
     cfg = {"id": 1, "agent_name": "x", "system_prompt": "",

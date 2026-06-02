@@ -94,6 +94,34 @@ class _SearchAdapter:
 search_service = _SearchAdapter()
 
 
+# ---------------------------------------------------------------------------
+# EpisodicMemory adapter — recall/record over the agent_episodes store, opening
+# its own DB session. Mockable from tests via:
+#   monkeypatch.setattr("app.services.internal_agent.episodic_memory", Fake())
+# ---------------------------------------------------------------------------
+class _EpisodicAdapter:
+    async def recall(self, agent_id: int, task: str, top_k: int = 3,
+                     provider_id: Optional[int] = None):
+        from app.services.episodic_memory import get_episodic_memory_service
+        svc = get_episodic_memory_service()
+        async with AsyncSessionLocal() as db:
+            return await svc.recall(db, agent_id=agent_id, task=task,
+                                    top_k=top_k, provider_id=provider_id)
+
+    async def record(self, agent_id: int, task: str, approach: str, outcome: str,
+                     success: bool = True, tool_count: int = 0,
+                     embedding=None, provider_id: Optional[int] = None):
+        from app.services.episodic_memory import get_episodic_memory_service
+        svc = get_episodic_memory_service()
+        async with AsyncSessionLocal() as db:
+            await svc.record(db, agent_id=agent_id, task=task, approach=approach,
+                             outcome=outcome, success=success, tool_count=tool_count,
+                             embedding=embedding, provider_id=provider_id)
+
+
+episodic_memory = _EpisodicAdapter()
+
+
 class InternalAgentRunner:
     def __init__(self, config: Dict[str, Any]):
         self.agent_id: int = config["id"]
@@ -112,6 +140,10 @@ class InternalAgentRunner:
         # OSINT search tools (web_search / vuln_search) opt-in per agent.
         self.enable_search: bool = bool(
             config.get("enable_search") or meta.get("enable_search"))
+        # Episodic memory (recall past successes / record this run) opt-in.
+        self.enable_episodic: bool = bool(
+            config.get("enable_episodic") or meta.get("enable_episodic"))
+        self._episode_embedding = None    # reused between recall and record
         # Hard per-run tool-call cap: explicit override, else by permission tier.
         self.tool_call_budget: int = config.get("tool_call_budget") or (
             TOOL_CALL_BUDGET_LIMITED if self.permission_level == "low"
@@ -187,7 +219,7 @@ class InternalAgentRunner:
             rows = result.scalars().all()
         return {r.id: (r.md_content or "") for r in rows}
 
-    async def _build_system_prompt(self) -> str:
+    async def _build_system_prompt(self, task: Optional[str] = None) -> str:
         parts = [self.system_prompt] if self.system_prompt else []
         bodies = await self._load_skill_bodies(self.associated_skills)
         if bodies:
@@ -196,6 +228,22 @@ class InternalAgentRunner:
                 body = bodies.get(sid)
                 if body:
                     parts.append(f"\n### Skill #{sid}\n{body}\n")
+
+        if self.enable_episodic and task:
+            try:
+                episodes, emb = await episodic_memory.recall(
+                    self.agent_id, task, provider_id=self.llm_provider_id)
+                self._episode_embedding = emb
+                if episodes:
+                    parts.append("\n\n## 过往成功经验（参考）\n")
+                    for ep in episodes:
+                        parts.append(
+                            f"- 任务：{ep.get('task','')}\n"
+                            f"  方法：{ep.get('approach','')}\n"
+                            f"  结果：{ep.get('outcome','')}\n")
+            except Exception as e:           # noqa: BLE001 - never break the run
+                logger.debug("episodic recall failed: %s", e)
+
         return "\n".join(parts).strip() or "You are an assistant."
 
     # -------- Tool catalog --------
@@ -505,7 +553,7 @@ class InternalAgentRunner:
         Persistence is the consumer's job (batch uses candidate_text; stream
         re-generates), so this generator never writes memory.
         """
-        system_prompt = await self._build_system_prompt()
+        system_prompt = await self._build_system_prompt(task)
         tools = await self._build_tools()
         await self._resolve_mcp_lookup()
         history = await self._load_memory(conversation_id)
@@ -719,6 +767,7 @@ class InternalAgentRunner:
         new_messages = final_event["new_messages"]
         new_messages.append({"role": "assistant", "content": final_text})
         await self._append_memory(conversation_id, user_id, new_messages)
+        await self._maybe_record_episode(task, final_text, final_event["tool_call_log"])
 
         return {
             "status": "completed",
@@ -728,6 +777,20 @@ class InternalAgentRunner:
             "execution_time": round(time.monotonic() - start, 2),
             "tool_calls": final_event["tool_call_log"],
         }
+
+    async def _maybe_record_episode(self, task: str, output: str,
+                                    tool_call_log: List[Dict[str, Any]]) -> None:
+        """Record a successful run as an episode (best-effort, opt-in)."""
+        if not self.enable_episodic:
+            return
+        try:
+            from app.services.episodic_memory import distill_approach
+            await episodic_memory.record(
+                self.agent_id, task, distill_approach(tool_call_log), output,
+                success=True, tool_count=len(tool_call_log),
+                embedding=self._episode_embedding, provider_id=self.llm_provider_id)
+        except Exception as e:               # noqa: BLE001 - never break the run
+            logger.debug("episodic record failed: %s", e)
 
     async def execute_stream(self, task: str, conversation_id: Optional[int],
                              user_id: int):
@@ -777,6 +840,7 @@ class InternalAgentRunner:
                     final_text = "".join(parts)
                     new_messages.append({"role": "assistant", "content": final_text})
                     await self._append_memory(conversation_id, user_id, new_messages)
+                    await self._maybe_record_episode(task, final_text, ev["tool_call_log"])
                     yield {"type": "done", "output": final_text,
                            "execution_time": round(time.monotonic() - start, 2),
                            "tool_calls": ev["tool_call_log"]}

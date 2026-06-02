@@ -20,6 +20,7 @@ from app.models.schedule import ScheduledTask
 from app.models.conversation import Conversation
 from app.models.security_settings import SecuritySettings
 from app.models.ocr import OcrConfig
+from app.models.episode import AgentEpisode
 
 __all__ = [
     "User", "RoleModel",
@@ -41,4 +42,5 @@ __all__ = [
     "Conversation",
     "SecuritySettings",
     "OcrConfig",
+    "AgentEpisode",
 ]
