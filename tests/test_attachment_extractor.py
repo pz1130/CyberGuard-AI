@@ -149,3 +149,9 @@ async def test_build_section_bad_base64_yields_marker(monkeypatch):
     # Decode failure is caught and surfaced as a per-file marker, not a crash.
     assert "[附件: n.bin]" in out
     assert "提取失败" in out
+
+
+def test_config_has_attachment_caps():
+    from app.config import settings
+    assert settings.ATTACHMENT_MAX_CHARS == 8000
+    assert settings.ATTACHMENT_TOTAL_MAX_CHARS == 24000

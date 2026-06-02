@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     # Mock mode (for demo without real LLM API keys) — defaults False for safety
     MOCK_MODE: bool = False
 
+    # Chat attachment extraction caps (chars)
+    ATTACHMENT_MAX_CHARS: int = 8000          # per attachment
+    ATTACHMENT_TOTAL_MAX_CHARS: int = 24000   # across all attachments in one request
+
     # Auto-approve approval requests without human intervention
     AUTO_APPROVE: bool = True
 
