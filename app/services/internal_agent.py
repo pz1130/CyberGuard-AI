@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import time
+from collections import Counter
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,22 @@ AUTO_CONTINUE_MAX = 2
 # (cf. QwenPaw _compact_context / context_compact_threshold).
 CONTEXT_COMPACT_CHARS = 24000
 CONTEXT_KEEP_RECENT = 6
+
+# --- Reflector / loop guard (cf. PentAGI Reflector + execution monitoring) --
+# Same (tool name + normalized args) seen this many times across steps ==
+# the agent is stuck repeating itself instead of making progress.
+LOOP_DETECT_THRESHOLD = 3
+# How many reflector interventions to allow before aborting a stuck loop.
+REFLECT_MAX = 2
+# Bounded self-recovery on transient LLM failures before failing the turn.
+LLM_RETRY_MAX = 2
+LLM_RETRY_BACKOFF = 0.5  # base seconds between retries (linear backoff)
+
+# Injected as a user nudge when a loop is detected, to break the rut.
+REFLECT_GUIDANCE = (
+    "你似乎在重复同一个操作且没有进展。请停下来反思：要么换一种"
+    "完全不同的方法或参数，要么基于已有信息直接给出最终答复。"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -301,6 +318,26 @@ class InternalAgentRunner:
     # -------- Tool-result pruning + context compaction --------
 
     @staticmethod
+    def _fingerprint(name: str, arguments: str) -> str:
+        """Stable identity for a tool call: name + order-invariant arguments.
+
+        Two calls with the same name and semantically equal arguments (regardless
+        of JSON key order) share a fingerprint, so the loop guard can count
+        genuine repeats. Unparseable arguments fall back to the raw string.
+        """
+        try:
+            norm = json.dumps(json.loads(arguments or "{}"), sort_keys=True,
+                              ensure_ascii=False)
+        except (json.JSONDecodeError, TypeError):
+            norm = arguments or ""
+        return f"{name}::{norm}"
+
+    @staticmethod
+    def _loop_notice(name: str, count: int) -> str:
+        return (f"LOOP_DETECTED: 你已用相同参数调用 {name} {count} 次，结果不会改变。"
+                f"请改用其他工具或参数，或直接给出最终答复。")
+
+    @staticmethod
     def _truncate_tool_result(text: str) -> str:
         """Cap a single tool result so noisy tools can't blow the context."""
         if text is None:
@@ -414,22 +451,37 @@ class InternalAgentRunner:
         router = get_llm_router()
         tool_used_ever = False
         auto_continue_used = 0
+        fingerprints: Counter = Counter()  # tool-call fingerprint -> times seen
+        reflections_used = 0               # reflector interventions so far
 
         yield {"type": "start", "agent_id": self.agent_id, "agent_name": self.agent_name}
 
         for step in range(self.max_steps):
             messages = await self._maybe_compact(messages, router)
 
-            try:
-                msg = await router.chat(
-                    messages=messages,
-                    provider_id=self.llm_provider_id,
-                    model=self.llm_model,
-                    tools=tools if tools else None,
-                )
-            except Exception as e:
+            # Self-recovery: retry transient LLM failures with linear backoff
+            # before failing the turn (cf. PentAGI Reflector recovery).
+            msg = None
+            last_err: Optional[Exception] = None
+            for attempt in range(LLM_RETRY_MAX + 1):
+                try:
+                    msg = await router.chat(
+                        messages=messages,
+                        provider_id=self.llm_provider_id,
+                        model=self.llm_model,
+                        tools=tools if tools else None,
+                    )
+                    break
+                except Exception as e:
+                    last_err = e
+                    if attempt < LLM_RETRY_MAX:
+                        yield {"type": "reflection", "reason": "llm_error",
+                               "attempt": attempt + 1}
+                        await asyncio.sleep(LLM_RETRY_BACKOFF * (attempt + 1))
+            if msg is None:
                 yield {"type": "error", "status": "failed",
-                       "error": f"LLM error at step {step}: {e}"}
+                       "error": f"LLM error at step {step} after "
+                                f"{LLM_RETRY_MAX + 1} attempts: {last_err}"}
                 return
 
             if isinstance(msg, str):
@@ -476,7 +528,23 @@ class InternalAgentRunner:
                 yield {"type": "tool_call_start", "name": c.function.name,
                        "arguments": c.function.arguments, "call_id": c.id}
 
-            results = await asyncio.gather(*[self._dispatch(c) for c in tool_calls])
+            # Loop guard: a call whose fingerprint has already been seen
+            # LOOP_DETECT_THRESHOLD times is short-circuited into a reflector
+            # notice instead of re-executing — its result can't change.
+            loop_hit = False
+
+            async def _dispatch_or_reflect(call):
+                nonlocal loop_hit
+                fp = self._fingerprint(call.function.name, call.function.arguments)
+                fingerprints[fp] += 1
+                if fingerprints[fp] >= LOOP_DETECT_THRESHOLD:
+                    loop_hit = True
+                    logger.warning("internal agent %s: tool-call loop on %r (x%d)",
+                                   self.agent_name, call.function.name, fingerprints[fp])
+                    return self._loop_notice(call.function.name, fingerprints[fp])
+                return await self._dispatch(call)
+
+            results = await asyncio.gather(*[_dispatch_or_reflect(c) for c in tool_calls])
             for call, result_str in zip(tool_calls, results):
                 result_str = self._truncate_tool_result(result_str)
                 tool_call_log.append({"name": call.function.name,
@@ -488,7 +556,21 @@ class InternalAgentRunner:
                 new_messages.append(tool_msg)
                 yield {"type": "tool_call_end", "name": call.function.name,
                        "call_id": call.id, "result_preview": result_str[:200],
-                       "error": result_str.startswith("ERROR")}
+                       "error": result_str.startswith(("ERROR", "LOOP_DETECTED"))}
+
+            if loop_hit:
+                reflections_used += 1
+                yield {"type": "reflection", "reason": "loop",
+                       "count": reflections_used}
+                if reflections_used > REFLECT_MAX:
+                    yield {"type": "error", "status": "error",
+                           "error": (f"aborted: agent stuck in a tool-call loop "
+                                     f"(repeated identical calls); reflector gave up "
+                                     f"after {REFLECT_MAX} nudges"),
+                           "tool_call_log": tool_call_log}
+                    return
+                # One reflector nudge to push the model onto a different path.
+                messages.append({"role": "user", "content": REFLECT_GUIDANCE})
 
         yield {"type": "error", "status": "error",
                "error": f"exceeded tool_loop_max_steps ({self.max_steps})",
@@ -570,7 +652,7 @@ class InternalAgentRunner:
 
         async for ev in self._run_loop(task, conversation_id, user_id):
             t = ev["type"]
-            if t in ("start", "tool_call_start", "tool_call_end"):
+            if t in ("start", "tool_call_start", "tool_call_end", "reflection"):
                 yield ev
             elif t == "error":
                 yield {"type": "error", "content": ev["error"]}

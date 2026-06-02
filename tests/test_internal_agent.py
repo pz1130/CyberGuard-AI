@@ -172,6 +172,16 @@ def test_truncate_tool_result():
     assert "truncated 500 chars" in out
 
 
+def test_fingerprint_is_argument_order_invariant():
+    from app.services.internal_agent import InternalAgentRunner
+    fp = InternalAgentRunner._fingerprint
+    assert fp("t", '{"a": 1, "b": 2}') == fp("t", '{"b": 2, "a": 1}')
+    assert fp("t", '{"a": 1}') != fp("t", '{"a": 2}')
+    assert fp("t", "{}") != fp("other", "{}")
+    # Unparseable arguments fall back to the raw string without crashing.
+    assert fp("t", "not json") == fp("t", "not json")
+
+
 @pytest.mark.asyncio
 async def test_parallel_dispatch_runs_all_tools(monkeypatch):
     """A reasoning step with multiple tool_calls dispatches them all and feeds
@@ -206,6 +216,126 @@ async def test_parallel_dispatch_runs_all_tools(monkeypatch):
     assert res["output"] == "all done"
     assert sorted(dispatched) == ["a", "b"]            # both tools ran
     assert len(res["tool_calls"]) == 2                  # both logged
+
+
+@pytest.mark.asyncio
+async def test_loop_detection_aborts_after_reflector_budget(monkeypatch):
+    """An agent that calls the same tool with identical args every step is
+    nudged by the reflector, then aborted once the reflector budget is spent —
+    instead of spinning until tool_loop_max_steps."""
+    from app.services import internal_agent as ia_mod
+    from app.services.internal_agent import (
+        InternalAgentRunner, LOOP_DETECT_THRESHOLD, REFLECT_MAX,
+    )
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    def tc():
+        return SimpleNamespace(id="c1", function=SimpleNamespace(
+            name="spin", arguments='{"x": 1}'))
+    # The model is stubborn: every reasoning step it re-issues the same call.
+    step = SimpleNamespace(content="", tool_calls=[tc()])
+    fake_router = SimpleNamespace(chat=AsyncMock(return_value=step))
+    monkeypatch.setattr(ia_mod, "get_llm_router", lambda: fake_router)
+
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
+           "llm_model": "m", "tool_loop_max_steps": 20, "memory_window": 0,
+           "associated_skills": [], "metadata_json": {"mcp_tool_ids": []},
+           "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+
+    dispatched = []
+    async def fake_dispatch(call):
+        dispatched.append(call.function.name)
+        return "same result"
+    monkeypatch.setattr(runner, "_dispatch", fake_dispatch)
+
+    res = await runner.execute(task="go", conversation_id=None, user_id=1)
+    assert res["status"] == "error"
+    assert "loop" in res["error"].lower()
+    # Real dispatch only happens below the loop threshold; repeats are
+    # short-circuited into reflector notices.
+    assert len(dispatched) == LOOP_DETECT_THRESHOLD - 1
+    # Aborted well before exhausting the 20-step budget.
+    assert fake_router.chat.await_count <= LOOP_DETECT_THRESHOLD + REFLECT_MAX + 1
+
+
+@pytest.mark.asyncio
+async def test_loop_detection_recovers_when_model_changes_course(monkeypatch):
+    """If the reflector nudge works and the model stops repeating, the turn
+    completes normally rather than aborting."""
+    from app.services import internal_agent as ia_mod
+    from app.services.internal_agent import InternalAgentRunner, LOOP_DETECT_THRESHOLD
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    def tc():
+        return SimpleNamespace(id="c1", function=SimpleNamespace(
+            name="spin", arguments='{"x": 1}'))
+    step = SimpleNamespace(content="", tool_calls=[tc()])
+    # Repeat enough to trip detection once, then answer.
+    seq = [step] * LOOP_DETECT_THRESHOLD + ["recovered answer"]
+    fake_router = SimpleNamespace(chat=AsyncMock(side_effect=seq))
+    monkeypatch.setattr(ia_mod, "get_llm_router", lambda: fake_router)
+
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
+           "llm_model": "m", "tool_loop_max_steps": 20, "memory_window": 0,
+           "associated_skills": [], "metadata_json": {"mcp_tool_ids": []},
+           "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+    monkeypatch.setattr(runner, "_dispatch", AsyncMock(return_value="r"))
+
+    res = await runner.execute(task="go", conversation_id=None, user_id=1)
+    assert res["status"] == "completed"
+    assert res["output"] == "recovered answer"
+
+
+@pytest.mark.asyncio
+async def test_llm_error_self_recovers_on_retry(monkeypatch):
+    """A transient LLM failure is retried (self-recovery) rather than failing
+    the turn immediately."""
+    from app.services import internal_agent as ia_mod
+    from app.services.internal_agent import InternalAgentRunner
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    monkeypatch.setattr(ia_mod.asyncio, "sleep", AsyncMock())  # no real backoff
+    ok = SimpleNamespace(content="recovered", tool_calls=None)
+    chat = AsyncMock(side_effect=[RuntimeError("transient"), ok])
+    monkeypatch.setattr(ia_mod, "get_llm_router", lambda: SimpleNamespace(chat=chat))
+
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
+           "llm_model": "m", "tool_loop_max_steps": 4, "memory_window": 0,
+           "associated_skills": [], "metadata_json": {"mcp_tool_ids": []},
+           "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+    res = await runner.execute(task="hi", conversation_id=None, user_id=1)
+    assert res["status"] == "completed"
+    assert res["output"] == "recovered"
+    assert chat.await_count == 2                         # first failed, retry won
+
+
+@pytest.mark.asyncio
+async def test_llm_error_fails_after_exhausting_retries(monkeypatch):
+    """Persistent LLM failures fail the turn after LLM_RETRY_MAX retries."""
+    from app.services import internal_agent as ia_mod
+    from app.services.internal_agent import InternalAgentRunner, LLM_RETRY_MAX
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    monkeypatch.setattr(ia_mod.asyncio, "sleep", AsyncMock())
+    chat = AsyncMock(side_effect=RuntimeError("boom"))
+    monkeypatch.setattr(ia_mod, "get_llm_router", lambda: SimpleNamespace(chat=chat))
+
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
+           "llm_model": "m", "tool_loop_max_steps": 4, "memory_window": 0,
+           "associated_skills": [], "metadata_json": {"mcp_tool_ids": []},
+           "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+    res = await runner.execute(task="hi", conversation_id=None, user_id=1)
+    assert res["status"] == "failed"
+    assert "boom" in res["error"]
+    assert chat.await_count == LLM_RETRY_MAX + 1         # initial + retries
 
 
 @pytest.mark.asyncio
