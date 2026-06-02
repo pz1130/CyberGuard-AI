@@ -75,7 +75,9 @@ FALLBACK_SYSTEM_PROMPTS: Dict[str, str] = {
 1. WHOIS / DNS 信息
 2. 关联的公开数据泄露
 3. 社交媒体足迹
-4. 网络空间测绘数据""",
+4. 网络空间测绘数据
+提示：当作为「internal」类型 Agent 并启用 enable_search 时，你可调用 web_search
+（公开网络检索）与 vuln_search（Sploitus 漏洞/利用检索）工具获取实时情报。""",
     "n8n_workflow": """你是一个 N8N 工作流生成 Agent。
 当用户请求创建自动化工作流时：
 1. 理解用户的自动化目标
