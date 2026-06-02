@@ -44,6 +44,12 @@ REFLECT_MAX = 2
 LLM_RETRY_MAX = 2
 LLM_RETRY_BACKOFF = 0.5  # base seconds between retries (linear backoff)
 
+# Hard cap on total tool executions per run, preventing runaway operations
+# (cf. PentAGI: 100 for general agents, 20 for limited ones). Once spent, the
+# agent is forced to answer from what it already has rather than erroring out.
+TOOL_CALL_BUDGET_DEFAULT = 100
+TOOL_CALL_BUDGET_LIMITED = 20
+
 # Injected as a user nudge when a loop is detected, to break the rut.
 REFLECT_GUIDANCE = (
     "你似乎在重复同一个操作且没有进展。请停下来反思：要么换一种"
@@ -85,6 +91,11 @@ class InternalAgentRunner:
         self.mcp_tool_ids: List[int] = config.get("associated_mcp_tools") or meta.get("mcp_tool_ids") or []
         self.pool_tool_ids: List[int] = config.get("associated_tools") or meta.get("tool_ids") or []
         self.permission_level: str = config.get("permission_level") or "medium"
+        # Hard per-run tool-call cap: explicit override, else by permission tier.
+        self.tool_call_budget: int = config.get("tool_call_budget") or (
+            TOOL_CALL_BUDGET_LIMITED if self.permission_level == "low"
+            else TOOL_CALL_BUDGET_DEFAULT
+        )
 
     # -------- Memory --------
 
@@ -338,6 +349,11 @@ class InternalAgentRunner:
                 f"请改用其他工具或参数，或直接给出最终答复。")
 
     @staticmethod
+    def _budget_notice(budget: int) -> str:
+        return (f"BUDGET_EXHAUSTED: 已达到工具调用上限（{budget} 次），"
+                f"该调用未执行。请基于已有信息给出最终答复。")
+
+    @staticmethod
     def _truncate_tool_result(text: str) -> str:
         """Cap a single tool result so noisy tools can't blow the context."""
         if text is None:
@@ -453,6 +469,7 @@ class InternalAgentRunner:
         auto_continue_used = 0
         fingerprints: Counter = Counter()  # tool-call fingerprint -> times seen
         reflections_used = 0               # reflector interventions so far
+        tool_calls_made = 0                # total tools dispatched this run
 
         yield {"type": "start", "agent_id": self.agent_id, "agent_name": self.agent_name}
 
@@ -528,13 +545,21 @@ class InternalAgentRunner:
                 yield {"type": "tool_call_start", "name": c.function.name,
                        "arguments": c.function.arguments, "call_id": c.id}
 
-            # Loop guard: a call whose fingerprint has already been seen
-            # LOOP_DETECT_THRESHOLD times is short-circuited into a reflector
-            # notice instead of re-executing — its result can't change.
+            # Per-call guards, evaluated synchronously before any await so the
+            # shared counters can't interleave across the gathered coroutines:
+            #   * budget gate — hard cap on total tool executions per run;
+            #   * loop guard  — short-circuit identical repeats into a notice.
             loop_hit = False
+            budget_hit = False
 
             async def _dispatch_or_reflect(call):
-                nonlocal loop_hit
+                nonlocal loop_hit, budget_hit, tool_calls_made
+                if tool_calls_made >= self.tool_call_budget:
+                    budget_hit = True
+                    logger.warning("internal agent %s: tool-call budget (%d) exhausted",
+                                   self.agent_name, self.tool_call_budget)
+                    return self._budget_notice(self.tool_call_budget)
+                tool_calls_made += 1
                 fp = self._fingerprint(call.function.name, call.function.arguments)
                 fingerprints[fp] += 1
                 if fingerprints[fp] >= LOOP_DETECT_THRESHOLD:
@@ -556,7 +581,19 @@ class InternalAgentRunner:
                 new_messages.append(tool_msg)
                 yield {"type": "tool_call_end", "name": call.function.name,
                        "call_id": call.id, "result_preview": result_str[:200],
-                       "error": result_str.startswith(("ERROR", "LOOP_DETECTED"))}
+                       "error": result_str.startswith(
+                           ("ERROR", "LOOP_DETECTED", "BUDGET_EXHAUSTED"))}
+
+            if budget_hit:
+                # Hard cap reached: withdraw tools so the next turn must answer
+                # from what it already gathered, rather than erroring out.
+                tools = None
+                yield {"type": "reflection", "reason": "budget",
+                       "tool_calls_made": tool_calls_made}
+                messages.append({"role": "user", "content": (
+                    f"已达到本次任务的工具调用上限（{self.tool_call_budget} 次），"
+                    f"不会再执行任何工具。请基于已获取的信息直接给出最终答复。")})
+                continue
 
             if loop_hit:
                 reflections_used += 1
