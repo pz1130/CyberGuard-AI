@@ -1,16 +1,17 @@
 ---
 name: project_status
-description: CyberGuard platform implementation status — last updated 2026-06-01 (governance evidence-file upload + streaming sub-agent + OCR all merged; alembic head 016_ocr)
+description: CyberGuard platform implementation status — last updated 2026-06-02 (PentAGI-inspired features PRs #5–#12 + episodic memory + document_chunks bridge migration all merged; two alembic heads 002b_create_document_chunks + 017_agent_episodes)
 type: project
 ---
 
-# CyberGuard Project Status — 2026-06-01 (updated)
+# CyberGuard Project Status — 2026-06-02 (updated)
 
 ## ▶ Resume point (next session)
 
-- **Branch:** `main` — all work committed, working tree clean. Latest commit: `749c911`.
-- **Tests:** 13 test files (`tests/test_*.py`). TypeScript: 0 errors.
-- **Alembic head:** `016_ocr`
+- **Branch:** `main` — all work committed, working tree clean, in sync with `origin/main`. Latest commit: `db76245`.
+- **Open PRs / issues:** none.
+- **Tests:** 24 test files (`tests/test_*.py`). TypeScript: 0 errors.
+- **Alembic heads (two — intentional):** `002b_create_document_chunks` + `017_agent_episodes`. The split comes from a branch point at `002_openclaw_gateway` (children `002b` and `003`). Dev-startup handles multiple heads (PR #12).
 
 ### Remaining known issues (prioritized)
 
@@ -21,6 +22,18 @@ type: project
 | 🟢 Low | Security page `require_mfa` field missing (removed from UI rewrite, backend not implementing) |
 
 ---
+
+## Session 2026-06-02 — PentAGI-inspired features (PRs #5–#12, all merged)
+
+Six feature PRs + two migration fixes merged into `main` on 2026-06-02:
+
+- **#5 Reflector / loop-guard** — internal-agent self-reflection + loop detection.
+- **#6 Tool-call budget** — per-run cap on internal-agent tool calls.
+- **#7 Pluggable OSINT search providers** — DuckDuckGo + Sploitus behind `enable_search` (opt-in).
+- **#8 Langfuse LLM tracing** — optional per-conversation/agent tracing; env-gated no-op when unconfigured.
+- **#9 Episodic memory** — record/recall successful agent runs. New table `agent_episodes`, alembic `017_agent_episodes`, opt-in `enable_episodic`.
+- **#11 document_chunks bridge migration** — `002b_create_document_chunks` (resolves #10: `001_initial` never created `document_chunks`, breaking `alembic upgrade head` on fresh DBs). Full chain `001→002→002b→003→…→017` verified clean on a fresh `pgvector/pgvector:pg16` container.
+- **#12 multi-head startup fix** — dev-startup now handles the two-head alembic state instead of erroring.
 
 ## Session 2026-05-30 afternoon — Azure AD SSO Module
 
@@ -130,6 +143,7 @@ Components added:
 - Approvals 只在 `AUTO_APPROVE=false` 时产生待审批请求；docker-compose 默认 `AUTO_APPROVE=true`
 - `test_smoke_api.py` 需要启动服务后单独运行：`python -m unittest tests.test_smoke_api`
 
-## Stale branches (保留，勿合并)
+## Branch cleanup (2026-06-02)
 
-- **`feature/fix-and-enhance`**（仅本地，未推送，10 个独立提交）— provider 层重构：`ProviderManager` 单例 + Anthropic/Gemini/Ollama/LM Studio/OpenRouter 原生 provider + `/discover` `/probe` `/models` 端点。**不要直接合并**：迁移链与 main 冲突，且大部分已被 main 取代；仅 `app/providers/` 是独有内容。将来若需要这些 provider 能力，**重新移植** `app/providers/`，不要 merge 整个分支。保留作参考。
+- **删除** `origin/feat/evidence-file-upload` 与 `origin/feat/internal-agents` — 二者 tip 均已是 `origin/main` 的祖先（功能也确认在 main 中），已完全合并，安全删除。
+- **保留** `feature/fix-and-enhance`（仅本地，未推送，**47 个独立提交**，不在 main 中）— provider 层重构：`ProviderManager` 单例 + Anthropic/Gemini/Ollama/LM Studio/OpenRouter 原生 provider + `/discover` `/probe` `/models` 端点。**不要直接合并**：迁移链与 main 冲突，且大部分已被 main 取代；仅 `app/providers/` 是独有内容。将来若需要这些 provider 能力，**重新移植** `app/providers/`，不要 merge 整个分支。保留作参考。
