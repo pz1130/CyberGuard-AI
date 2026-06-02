@@ -170,9 +170,9 @@ async def chat_attachments(
     await db.commit()
 
     # Dispatch to Celery worker
-    # NOTE: run_master_agent_task accepts **kwargs, so attachments can be passed
-    # via kwargs. However, the task does not yet process attachments — it will
-    # need to be updated separately to handle the 'attachments' kwarg.
+    # NOTE: run_master_agent_task consumes the 'attachments' kwarg and injects
+    # decoded attachment content into user_input. Only UTF-8 text is decoded
+    # (truncated); binary/image/PDF attachments are not yet meaningfully handled.
     from app.workers.tasks import run_master_agent_task
     run_master_agent_task.apply_async(
         args=[execution_id, message, user_id],
