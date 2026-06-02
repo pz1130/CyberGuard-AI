@@ -38,35 +38,12 @@ async def lifespan(app: FastAPI):
     # Startup: run Alembic migrations (all environments — not just dev)
     # In dev: also create any tables Alembic doesn't know about (e.g. if migration hasn't run yet)
     if settings.ENVIRONMENT == "development":
-        # Run alembic migrations on every startup in dev (safe — alembic is idempotent)
-        # Outside dev: rely on CI/CD running `alembic upgrade head` before deploy
+        # Run alembic migrations on every startup in dev (safe — alembic is idempotent).
+        # Handles single-head, multiple-head (PR #11 introduced a second head), and
+        # already-applied-schema fallback. Outside dev: rely on CI/CD alembic upgrade.
         try:
-            import subprocess
-            result = subprocess.run(
-                ["alembic", "-c", "/app/alembic.ini", "upgrade", "head"],
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode == 0:
-                logger.info("Alembic migrations applied successfully")
-            else:
-                stderr_text = result.stderr or ""
-                # Existing DB without alembic_version can hit duplicate table errors.
-                # In that case, mark current schema as head to prevent endless boot warnings.
-                if "DuplicateTableError" in stderr_text or "already exists" in stderr_text:
-                    stamp = subprocess.run(
-                        ["alembic", "-c", "/app/alembic.ini", "stamp", "head"],
-                        capture_output=True,
-                        text=True,
-                    )
-                    if stamp.returncode == 0:
-                        logger.warning("Alembic stamp head applied for existing schema")
-                    else:
-                        logger.warning(
-                            f"Alembic stamp failed (stdout={stamp.stdout}, stderr={stamp.stderr})"
-                        )
-                else:
-                    logger.warning(f"Alembic upgrade failed (stdout={result.stdout}, stderr={result.stderr})")
+            from app.core.migrations import run_alembic_upgrade_on_startup
+            run_alembic_upgrade_on_startup()
         except Exception as e:
             logger.warning(f"Alembic upgrade skipped: {e}")
     else:
