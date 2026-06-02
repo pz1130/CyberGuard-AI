@@ -76,6 +76,24 @@ class _KSAdapter:
 knowledge_service = _KSAdapter()
 
 
+# ---------------------------------------------------------------------------
+# SearchService adapter — exposes web_search/vuln_search returning JSON-safe
+# dicts. Mockable from tests via:
+#   monkeypatch.setattr("app.services.internal_agent.search_service", FakeSearch())
+# ---------------------------------------------------------------------------
+class _SearchAdapter:
+    async def web_search(self, query: str, limit: int = 5):
+        from app.services.search_service import get_search_service
+        return [r.to_dict() for r in await get_search_service().web_search(query, limit)]
+
+    async def vuln_search(self, query: str, limit: int = 5):
+        from app.services.search_service import get_search_service
+        return [r.to_dict() for r in await get_search_service().vuln_search(query, limit)]
+
+
+search_service = _SearchAdapter()
+
+
 class InternalAgentRunner:
     def __init__(self, config: Dict[str, Any]):
         self.agent_id: int = config["id"]
@@ -91,6 +109,9 @@ class InternalAgentRunner:
         self.mcp_tool_ids: List[int] = config.get("associated_mcp_tools") or meta.get("mcp_tool_ids") or []
         self.pool_tool_ids: List[int] = config.get("associated_tools") or meta.get("tool_ids") or []
         self.permission_level: str = config.get("permission_level") or "medium"
+        # OSINT search tools (web_search / vuln_search) opt-in per agent.
+        self.enable_search: bool = bool(
+            config.get("enable_search") or meta.get("enable_search"))
         # Hard per-run tool-call cap: explicit override, else by permission tier.
         self.tool_call_budget: int = config.get("tool_call_budget") or (
             TOOL_CALL_BUDGET_LIMITED if self.permission_level == "low"
@@ -264,6 +285,29 @@ class InternalAgentRunner:
                     },
                 },
             })
+
+        if self.enable_search:
+            for tname, desc in (
+                ("web_search", "Search the public web for general OSINT / recon."),
+                ("vuln_search", "Search exploit/vulnerability databases (Sploitus) "
+                                "for a CVE, product, or keyword."),
+            ):
+                tools.append({
+                    "type": "function",
+                    "function": {
+                        "name": tname,
+                        "description": desc,
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "query": {"type": "string", "description": "search query"},
+                                "limit": {"type": "integer", "default": 5,
+                                           "description": "max number of results"},
+                            },
+                            "required": ["query"],
+                        },
+                    },
+                })
         return tools
 
     # -------- Tool dispatch --------
@@ -298,7 +342,16 @@ class InternalAgentRunner:
             except Exception as e:
                 return f"ERROR: kb_search failed: {e}"
 
-        # 3. Executable pool Tool
+        # 3. Search synthetic tools (OSINT web / vuln recon)
+        if name in ("web_search", "vuln_search") and self.enable_search:
+            try:
+                fn = getattr(search_service, name)
+                results = await fn(args.get("query", ""), args.get("limit", 5))
+                return json.dumps(results, ensure_ascii=False, default=str)
+            except Exception as e:
+                return f"ERROR: {name} failed: {e}"
+
+        # 4. Executable pool Tool
         if getattr(self, "_pool_tools_by_name", None) and name in self._pool_tools_by_name:
             tool_row = self._pool_tools_by_name[name]
             res = await execute_tool(tool_row, args, user_id=getattr(self, "_user_id", 0))

@@ -103,6 +103,60 @@ async def test_build_tools_includes_kb_when_kb_set(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_build_tools_includes_search_when_enabled(monkeypatch):
+    from app.services.internal_agent import InternalAgentRunner
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "",
+           "associated_skills": [], "metadata_json": {"enable_search": True},
+           "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+
+    async def fake_mcp(*_a, **_kw): return []
+    monkeypatch.setattr(runner, "_load_mcp_tools", fake_mcp)
+    names = [t["function"]["name"] for t in await runner._build_tools()]
+    assert "web_search" in names and "vuln_search" in names
+
+
+@pytest.mark.asyncio
+async def test_build_tools_excludes_search_when_disabled(monkeypatch):
+    from app.services.internal_agent import InternalAgentRunner
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "",
+           "associated_skills": [], "metadata_json": {}, "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+
+    async def fake_mcp(*_a, **_kw): return []
+    monkeypatch.setattr(runner, "_load_mcp_tools", fake_mcp)
+    names = [t["function"]["name"] for t in await runner._build_tools()]
+    assert "web_search" not in names and "vuln_search" not in names
+
+
+@pytest.mark.asyncio
+async def test_dispatch_vuln_search(monkeypatch):
+    import json
+    from types import SimpleNamespace
+    from app.services.internal_agent import InternalAgentRunner
+
+    captured = {}
+    class FakeSearch:
+        async def web_search(self, query, limit=5):
+            return []
+        async def vuln_search(self, query, limit=5):
+            captured["call"] = (query, limit)
+            return [{"title": "Log4Shell", "url": "http://e", "source": "sploitus"}]
+    monkeypatch.setattr("app.services.internal_agent.search_service", FakeSearch())
+
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "",
+           "associated_skills": [], "metadata_json": {"enable_search": True},
+           "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+    runner._mcp_by_name = {}
+    call = SimpleNamespace(id="c1", function=SimpleNamespace(
+        name="vuln_search", arguments=json.dumps({"query": "log4j", "limit": 3})))
+    out = await runner._dispatch(call)
+    assert captured["call"] == ("log4j", 3)
+    assert "Log4Shell" in out
+
+
+@pytest.mark.asyncio
 async def test_dispatch_kb_search(monkeypatch):
     import json
     from app.services.internal_agent import InternalAgentRunner
