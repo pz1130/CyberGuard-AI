@@ -143,3 +143,26 @@ async def test_ocr_image_uses_vision(monkeypatch):
     assert seen["images"] == [b"IMGBYTES"]
     assert seen["provider_id"] == 7
     assert seen["model"] == "gpt-4o"
+
+
+@pytest.mark.asyncio
+async def test_ocr_image_vision_without_provider_falls_back_to_tesseract(monkeypatch):
+    import app.services.ocr_service as ocr
+    seen = {}
+
+    async def fake_tess(images, languages):
+        seen["images"] = images
+        return "TESS"
+
+    async def fake_vision(images, provider_id, model):
+        seen["vision_called"] = True
+        return "VIS"
+
+    monkeypatch.setattr(ocr, "_ocr_tesseract", fake_tess)
+    monkeypatch.setattr(ocr, "_ocr_vision", fake_vision)
+    cfg = ocr.OcrSettings(enabled=True, engine="vision", languages="eng",
+                          max_pages=5, vision_provider_id=None, vision_model=None)
+    out = await ocr.ocr_image(b"IMGBYTES", cfg)
+    assert out == "TESS"
+    assert seen["images"] == [b"IMGBYTES"]
+    assert "vision_called" not in seen
