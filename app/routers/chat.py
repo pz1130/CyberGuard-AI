@@ -171,8 +171,9 @@ async def chat_attachments(
 
     # Dispatch to Celery worker
     # NOTE: run_master_agent_task consumes the 'attachments' kwarg and injects
-    # decoded attachment content into user_input. Only UTF-8 text is decoded
-    # (truncated); binary/image/PDF attachments are not yet meaningfully handled.
+    # extracted text into user_input — text decoded directly, PDFs via pypdf
+    # (OCR fallback for scanned PDFs), images via OCR — capped per
+    # ATTACHMENT_MAX_CHARS / ATTACHMENT_TOTAL_MAX_CHARS. See app/services/attachment_extractor.py.
     from app.workers.tasks import run_master_agent_task
     run_master_agent_task.apply_async(
         args=[execution_id, message, user_id],
