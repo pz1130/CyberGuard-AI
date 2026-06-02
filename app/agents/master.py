@@ -640,6 +640,8 @@ class MasterAgent:
 
     async def run(self, user_input: str, user_id: int, **kwargs) -> Dict[str, Any]:
         """Run the master agent with user input."""
+        from app.core.langfuse_tracing import trace_run
+
         initial_state = MasterAgentState(
             user_input=user_input,
             user_id=user_id,
@@ -648,7 +650,9 @@ class MasterAgent:
             **kwargs,
         )
 
-        result = await self.graph.ainvoke(initial_state)
+        session_id = str(kwargs.get("conversation_id") or uuid.uuid4())
+        with trace_run(session_id=session_id, agent_name="master", user_id=user_id):
+            result = await self.graph.ainvoke(initial_state)
         return result
 
 

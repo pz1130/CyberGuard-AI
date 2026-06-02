@@ -682,12 +682,17 @@ class InternalAgentRunner:
                 "execution_time": 0,
             }
 
+        from app.core.langfuse_tracing import trace_run
+        session_id = str(conversation_id) if conversation_id else f"agent:{self.agent_id}"
+
         final_event = None
-        async for ev in self._run_loop(task, conversation_id, user_id):
-            if ev["type"] in ("answer_ready", "error"):
-                final_event = ev
-                break
-            # start / tool_call_* events are not surfaced in batch mode
+        with trace_run(session_id=session_id, agent_name=self.agent_name,
+                       user_id=user_id):
+            async for ev in self._run_loop(task, conversation_id, user_id):
+                if ev["type"] in ("answer_ready", "error"):
+                    final_event = ev
+                    break
+                # start / tool_call_* events are not surfaced in batch mode
 
         if final_event is None or final_event["type"] == "error":
             if final_event and final_event.get("status") == "failed":
@@ -740,34 +745,39 @@ class InternalAgentRunner:
                    "content": "High permission internal agent requires approval"}
             return
 
-        async for ev in self._run_loop(task, conversation_id, user_id):
-            t = ev["type"]
-            if t in ("start", "tool_call_start", "tool_call_end", "reflection"):
-                yield ev
-            elif t == "error":
-                yield {"type": "error", "content": ev["error"]}
-                return
-            elif t == "answer_ready":
-                messages = ev["messages"]
-                new_messages = ev["new_messages"]
-                router = get_llm_router()
-                parts: List[str] = []
-                try:
-                    async for delta in router.stream_chat(
-                        messages=messages,
-                        provider_id=self.llm_provider_id,
-                        model=self.llm_model,
-                    ):
-                        parts.append(delta)
-                        yield {"type": "text", "content": delta}
-                except Exception as e:
-                    yield {"type": "error", "content": f"stream error: {e}"}
-                    return
+        from app.core.langfuse_tracing import trace_run
+        session_id = str(conversation_id) if conversation_id else f"agent:{self.agent_id}"
 
-                final_text = "".join(parts)
-                new_messages.append({"role": "assistant", "content": final_text})
-                await self._append_memory(conversation_id, user_id, new_messages)
-                yield {"type": "done", "output": final_text,
-                       "execution_time": round(time.monotonic() - start, 2),
-                       "tool_calls": ev["tool_call_log"]}
-                return
+        with trace_run(session_id=session_id, agent_name=self.agent_name,
+                       user_id=user_id):
+            async for ev in self._run_loop(task, conversation_id, user_id):
+                t = ev["type"]
+                if t in ("start", "tool_call_start", "tool_call_end", "reflection"):
+                    yield ev
+                elif t == "error":
+                    yield {"type": "error", "content": ev["error"]}
+                    return
+                elif t == "answer_ready":
+                    messages = ev["messages"]
+                    new_messages = ev["new_messages"]
+                    router = get_llm_router()
+                    parts: List[str] = []
+                    try:
+                        async for delta in router.stream_chat(
+                            messages=messages,
+                            provider_id=self.llm_provider_id,
+                            model=self.llm_model,
+                        ):
+                            parts.append(delta)
+                            yield {"type": "text", "content": delta}
+                    except Exception as e:
+                        yield {"type": "error", "content": f"stream error: {e}"}
+                        return
+
+                    final_text = "".join(parts)
+                    new_messages.append({"role": "assistant", "content": final_text})
+                    await self._append_memory(conversation_id, user_id, new_messages)
+                    yield {"type": "done", "output": final_text,
+                           "execution_time": round(time.monotonic() - start, 2),
+                           "tool_calls": ev["tool_call_log"]}
+                    return

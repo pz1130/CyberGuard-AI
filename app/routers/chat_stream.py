@@ -95,7 +95,9 @@ async def stream_chat(
 
     async def event_generator() -> AsyncGenerator[str, None]:
         from app.services.llm_router import get_llm_router
+        from app.core.langfuse_tracing import trace_run
         router_llm = get_llm_router()
+        session_id = str(body.conversation_id) if body.conversation_id else f"chat:{user_id}"
 
         # Build messages: system prompt override + history + current message
         messages: list[dict] = []
@@ -112,16 +114,17 @@ async def stream_chat(
         error_occurred = False
 
         try:
-            async for chunk in router_llm.stream_chat(
-                messages=messages,
-                provider_id=body.provider_id,
-                model=body.model,
-                model_override=model_override,
-                temperature_override=temp_override,
-            ):
-                accumulated.append(chunk)
-                payload = json.dumps({"type": "chunk", "content": chunk}, ensure_ascii=False)
-                yield f"data: {payload}\n\n"
+            with trace_run(session_id=session_id, agent_name="chat", user_id=user_id):
+                async for chunk in router_llm.stream_chat(
+                    messages=messages,
+                    provider_id=body.provider_id,
+                    model=body.model,
+                    model_override=model_override,
+                    temperature_override=temp_override,
+                ):
+                    accumulated.append(chunk)
+                    payload = json.dumps({"type": "chunk", "content": chunk}, ensure_ascii=False)
+                    yield f"data: {payload}\n\n"
 
         except Exception as e:
             error_occurred = True

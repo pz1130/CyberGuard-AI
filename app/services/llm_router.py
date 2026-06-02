@@ -12,6 +12,18 @@ logger = logging.getLogger(__name__)
 from app.config import settings
 
 
+def _record_generation(name, model, input_messages, output, response,
+                       provider_id) -> None:
+    """Best-effort Langfuse generation record. No-op unless Langfuse is set up."""
+    try:
+        from app.core.langfuse_tracing import record_generation
+        record_generation(name=name, model=model, input=input_messages,
+                          output=output, usage=getattr(response, "usage", None),
+                          provider=str(provider_id) if provider_id else None)
+    except Exception:  # noqa: BLE001 - tracing must never break an LLM call
+        pass
+
+
 class LLMRouter:
     """
     LLM model router supporting multiple providers.
@@ -557,6 +569,11 @@ Examples:
 
                 # Record token usage
                 await self._record_token_usage(active_model, provider_id, response)
+                _record_generation(
+                    "parse_intent", active_model,
+                    [{"role": "system", "content": system_prompt},
+                     {"role": "user", "content": user_input}],
+                    content, response, provider_id)
 
                 parsed = self._extract_json_object(content)
                 if parsed is not None:
@@ -637,6 +654,11 @@ Examples:
 
             # Record token usage
             await self._record_token_usage(active_model, provider_id, response)
+            _record_generation(
+                "generate_summary", active_model,
+                [{"role": "system", "content": summarizer_prompt},
+                 {"role": "user", "content": f"Results:\n{results_text}"}],
+                content, response, provider_id)
 
             return content
 
@@ -706,6 +728,8 @@ Examples:
             span.set_attribute("llm.response_length", len(content))
             span.set_attribute("llm.finish_reason", response.choices[0].finish_reason)
             await self._record_token_usage(active_model, active_provider_id, response)
+            _record_generation("chat", active_model, messages, content,
+                               response, active_provider_id)
 
             if tools:
                 return SimpleNamespace(content=content, tool_calls=message.tool_calls)
@@ -773,6 +797,8 @@ Examples:
 
         # Strip think tags from final accumulated response (best-effort)
         full = "".join(accumulated)
+        _record_generation("stream_chat", active_model, messages, full,
+                           None, provider_id)
         strip = await self._should_strip_think(provider_id)
         if strip and "<think>" in full.lower():
             # We already streamed the raw content — emit a replacement signal

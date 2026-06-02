@@ -28,6 +28,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Telemetry setup failed: {e}")
 
+    # Langfuse LLM tracing (optional; no-op unless LANGFUSE_* env is set)
+    try:
+        from app.core.langfuse_tracing import setup_langfuse
+        setup_langfuse()
+    except Exception as e:
+        logger.warning(f"Langfuse setup failed: {e}")
+
     # Startup: run Alembic migrations (all environments — not just dev)
     # In dev: also create any tables Alembic doesn't know about (e.g. if migration hasn't run yet)
     if settings.ENVIRONMENT == "development":
@@ -122,6 +129,11 @@ async def lifespan(app: FastAPI):
 
     yield
     # Shutdown
+    try:
+        from app.core.langfuse_tracing import flush_langfuse
+        flush_langfuse()
+    except Exception:
+        pass
     await engine.dispose()
 
 
