@@ -34,8 +34,8 @@ async def extract_attachment_text(
 
         if ct == "application/pdf":
             try:
-                return extract_text(raw, content_type, filename)
-            except ScannedPdfError:
+                return extract_text(raw, ct, filename)
+            except ScannedPdfError:  # raised by extract_text when a PDF has no text layer
                 if not cfg.enabled:
                     return _OCR_DISABLED_MARKER
                 return await ocr_pdf(raw, cfg)
