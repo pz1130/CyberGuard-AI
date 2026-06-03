@@ -50,7 +50,7 @@ class ModelInfo(BaseModel):
 
 `_test_provider_connectivity` 已经被 `POST /providers/test` 和 `POST /providers/{id}/models/probe` 共用。在它返回响应前,**不直接动它**(返回路径保持纯函数),而是在**调用方**写库:
 
-**`POST /providers/{id}/models/probe`**(`probe_single_model`,在文件第 ~580 行附近):已经是 per-model 路径 — 拿到测试结果后:
+**`POST /providers/{id}/models/probe`**(`probe_provider_capabilities`,在 `app/routers/providers.py:486`):已经是 per-model 路径 — 拿到测试结果后:
 
 ```python
 async def _stamp_model_verified(provider: Provider, model_name: str, ok: bool, err: Optional[str]):
@@ -142,7 +142,7 @@ for (const m of (p.models || [])) {
 ## 6. 涉及文件
 
 - `app/schemas/provider.py` — `ModelInfo` 加 3 字段
-- `app/routers/providers.py` — 新增 `_stamp_model_verified`,在 `test_provider_connection` 和 `probe_single_model` 末尾调用
+- `app/routers/providers.py` — 新增 `_stamp_model_verified`,在 `test_provider_connection` 和 `probe_provider_capabilities` 末尾调用
 - `app/main.py` / `app/routers/providers.py` 的 `_seed_presets` — preset model dict 加 `verified: True`
 - `webui/src/pages/Chat.tsx` — 删 `FALLBACK_MODELS`、改 `useState` 初值、改 `loadModels` 过滤、加空状态提示
 - `webui/src/pages/Providers.tsx` — model 行加状态徽章
