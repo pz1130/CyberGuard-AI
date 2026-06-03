@@ -153,12 +153,30 @@ async def _seed_presets(db: AsyncSession):
     Commits per-preset and tolerates the unique-name race that occurs when several
     API workers run the startup seed concurrently: a duplicate-name insert just means
     another worker already seeded that preset, which is benign.
+
+    Built-in presets are stamped `verified=True` on every model: the spec calls
+    them out as "tested by hand" (Gemini/Kimi/MiniMax/DeepSeek/xAI/LM Studio
+    endpoints probed 2026-06-03) so the Chat page dropdown isn't empty on a
+    fresh install. Existing user-saved providers are not retroactively stamped.
     """
+    from datetime import datetime as _dt
     from sqlalchemy.exc import IntegrityError
+    seed_ts = _dt.utcnow().isoformat()
     for preset in _PRESET_PROVIDERS:
         existing = await db.execute(select(Provider).where(Provider.name == preset.name))
         if existing.scalar_one_or_none():
             continue
+        # Build models list with verified=True stamped on every entry.
+        # User-saved providers go through a different path (POST /providers
+        # + /providers/test) which uses _stamp_model_verified; this is
+        # seed-only.
+        preset_models = []
+        for m in preset.models:
+            d = m.model_dump()
+            d["verified"] = True
+            d["last_tested_at"] = seed_ts
+            d["test_error"] = None
+            preset_models.append(d)
         provider = Provider(
             name=preset.name,
             provider_type=preset.provider_type,
@@ -166,7 +184,7 @@ async def _seed_presets(db: AsyncSession):
             base_url=preset.base_url,
             api_version=preset.api_version,
             # Store as JSON-serializable dicts; the column can't hold ModelInfo objects.
-            models=[m.model_dump() for m in preset.models],
+            models=preset_models,
             is_active=preset.is_active,
             metadata_json=preset.metadata_json,
         )
