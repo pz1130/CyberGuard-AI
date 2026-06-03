@@ -50,37 +50,40 @@ async def lifespan(app: FastAPI):
         # Production: verify migrations are up to date via health check
         # The /health endpoint will check alembic version vs DB state
         logger.info("Production mode — relying on CI/CD alembic upgrade")
-        # Seed default admin user
-        from app.core.database import get_db_context
-        from app.models.user import User
-        import bcrypt
-        from sqlalchemy import select
-        try:
-            async with get_db_context() as session:
-                result = await session.execute(select(User).where(User.username == "admin"))
-                if not result.scalar_one_or_none():
-                    # Fixed default password
-                    default_password = "admin123"
-                    admin = User(
-                        username="admin",
-                        email="admin@cyberguard.local",
-                        hashed_password=bcrypt.hashpw(default_password.encode(), bcrypt.gensalt()).decode(),
-                        role="admin",
-                        full_name="Administrator",
-                        is_active=True,
-                    )
-                    session.add(admin)
-                    await session.commit()
-                    logger.warning(f"Default admin user created — username: admin, password: {default_password}")
-        except Exception as e:
-            logger.warning(f"User seed skipped: {e}")
-        # Seed preset providers
-        try:
-            from app.routers.providers import seed_providers_on_startup
-            await seed_providers_on_startup()
-            logger.info("Preset providers seeded")
-        except Exception as e:
-            logger.warning(f"Provider seed skipped: {e}")
+
+    # Seed default admin user (dev and prod — idempotent by username). Runs in
+    # both modes so a fresh DB (e.g. `docker compose down -v`) is always usable.
+    from app.core.database import get_db_context
+    from app.models.user import User
+    import bcrypt
+    from sqlalchemy import select
+    try:
+        async with get_db_context() as session:
+            result = await session.execute(select(User).where(User.username == "admin"))
+            if not result.scalar_one_or_none():
+                # Fixed default password
+                default_password = "admin123"
+                admin = User(
+                    username="admin",
+                    email="admin@cyberguard.local",
+                    hashed_password=bcrypt.hashpw(default_password.encode(), bcrypt.gensalt()).decode(),
+                    role="admin",
+                    full_name="Administrator",
+                    is_active=True,
+                )
+                session.add(admin)
+                await session.commit()
+                logger.warning(f"Default admin user created — username: admin, password: {default_password}")
+    except Exception as e:
+        logger.warning(f"User seed skipped: {e}")
+
+    # Seed preset providers (dev and prod — idempotent by name).
+    try:
+        from app.routers.providers import seed_providers_on_startup
+        await seed_providers_on_startup()
+        logger.info("Preset providers seeded")
+    except Exception as e:
+        logger.warning(f"Provider seed skipped: {e}")
 
     # Seed default prompt templates (dev and prod — idempotent by name).
     # Runs after migrations so the table exists.

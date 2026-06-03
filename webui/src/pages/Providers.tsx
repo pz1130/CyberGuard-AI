@@ -265,15 +265,24 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
     if (!provider.base_url) { setFetchErr('No base URL configured'); return }
     setFetching(true); setFetchErr('')
     try {
-      const base = provider.base_url.replace(/\/$/, '')
-      const resp = await fetch(`${base}/models`, {
-        headers: provider.api_key ? { Authorization: `Bearer ${provider.api_key}` } : {},
-      })
-      if (!resp.ok) { setFetchErr(`HTTP ${resp.status}`); return }
-      const data = await resp.json()
       let ids: string[] = []
-      if (Array.isArray(data.data)) ids = data.data.map((m: any) => m.id).filter(Boolean)
-      else if (Array.isArray(data.models)) ids = data.models.map((m: any) => m.name || m.id).filter(Boolean)
+      if (provider.id) {
+        // Saved provider: discover server-side with the stored (real) key. The key
+        // is masked in the form, so a browser-side fetch would 401; the backend also
+        // sidesteps provider CORS.
+        const data = await api.discoverProviderModels(provider.id) as any
+        ids = (data.models || []).map((m: any) => m.name || m.id).filter(Boolean)
+      } else {
+        // New provider not yet saved: use the key just typed into the form.
+        const base = provider.base_url.replace(/\/$/, '')
+        const resp = await fetch(`${base}/models`, {
+          headers: provider.api_key ? { Authorization: `Bearer ${provider.api_key}` } : {},
+        })
+        if (!resp.ok) { setFetchErr(`HTTP ${resp.status}`); return }
+        const data = await resp.json()
+        if (Array.isArray(data.data)) ids = data.data.map((m: any) => m.id).filter(Boolean)
+        else if (Array.isArray(data.models)) ids = data.models.map((m: any) => m.name || m.id).filter(Boolean)
+      }
       if (!ids.length) { setFetchErr('No models returned by provider'); return }
       const discovered = ids.map(name => ({ name, model_type: 'chat' as const }))
       // Merge: keep existing type tags, add new ones

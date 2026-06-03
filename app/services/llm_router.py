@@ -12,6 +12,21 @@ logger = logging.getLogger(__name__)
 from app.config import settings
 
 
+def _model_name(model) -> Optional[str]:
+    """Normalize a model reference to the bare model-name string the provider expects.
+
+    A provider's ``models`` are stored as ``{"name": ..., "model_type": ...}`` dicts,
+    and the UI may pass a model picked from that list as the whole object. The OpenAI
+    client must receive just the name string, or the provider rejects the request with
+    ``unknown model '{'name': ...}'``. Accepts str, dict, pydantic ModelInfo, or None.
+    """
+    if model is None or isinstance(model, str):
+        return model
+    if isinstance(model, dict):
+        return model.get("name")
+    return getattr(model, "name", None) or str(model)
+
+
 def _record_generation(name, model, input_messages, output, response,
                        provider_id) -> None:
     """Best-effort Langfuse generation record. No-op unless Langfuse is set up."""
@@ -496,7 +511,7 @@ class LLMRouter:
         client = await self.get_client_async(provider_id=provider_id)
 
         master_config = await self._load_master_config()
-        active_model = model_override or model or master_config.get("model") or settings.MASTER_AGENT_MODEL
+        active_model = _model_name(model_override or model or master_config.get("model") or settings.MASTER_AGENT_MODEL)
 
         # Load available sub-agents from DB to include in prompt
         agents_info = await self._get_agents_info()
@@ -618,6 +633,7 @@ Examples:
             provider_config = await self.get_provider_config_async(provider_id)
             if provider_config and provider_config.get("models"):
                 active_model = provider_config["models"][0]
+        active_model = _model_name(active_model)
 
         results_text = "\n".join([
             f"Agent {r.get('agent_name', 'unknown')}: {r.get('output', 'No output')}"
@@ -688,7 +704,7 @@ Examples:
             config = await self.get_provider_config_async(provider_id)
             if config and config.get("models"):
                 active_model = config["models"][0]
-        active_model = active_model or settings.MASTER_AGENT_MODEL
+        active_model = _model_name(active_model or settings.MASTER_AGENT_MODEL)
 
         master_config = await self._load_master_config()
 
@@ -755,7 +771,7 @@ Examples:
             config = await self.get_provider_config_async(provider_id)
             if config and config.get("models"):
                 active_model = config["models"][0]
-        active_model = active_model or settings.MASTER_AGENT_MODEL
+        active_model = _model_name(active_model or settings.MASTER_AGENT_MODEL)
 
         master_config = await self._load_master_config()
 

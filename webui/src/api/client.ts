@@ -71,6 +71,7 @@ export const api = {
     method: 'POST',
     body: JSON.stringify({ provider_id: id }),
   }),
+  discoverProviderModels: (id: number) => request(`/providers/${id}/models/discover`),
 
   // Agents
   getAgents: () => request('/agents'),

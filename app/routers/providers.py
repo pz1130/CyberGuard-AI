@@ -29,6 +29,7 @@ class ProviderType(str, Enum):
     GROQ = "groq"
     OPENROUTER = "openrouter"
     OLLAMA = "ollama"
+    MINIMAX = "minimax"
     CUSTOM = "custom"
 
 
@@ -92,11 +93,30 @@ _PRESET_PROVIDERS: list[ProviderCreate] = [
         api_key="",
         models=["glm-4-flash", "glm-4-plus", "glm-3-turbo"],
     ),
+    # MiniMax — use the OpenAI-compatible endpoint (/v1), NOT the Anthropic
+    # endpoint (/anthropic) the MiniMax quickstart suggests: this platform speaks
+    # the OpenAI wire protocol (AsyncOpenAI -> /chat/completions) for every
+    # provider, so the Anthropic Messages endpoint would 404. International users
+    # can swap the host for https://api.minimax.io/v1. Chat-only: MiniMax's
+    # embedding API (embo-01) is not OpenAI /embeddings compatible.
+    ProviderCreate(
+        name="MiniMax",
+        provider_type="openai",
+        base_url="https://api.minimaxi.com/v1",
+        api_key="",
+        models=["MiniMax-M3", "MiniMax-M2.7", "MiniMax-M2.5", "MiniMax-M2.1", "MiniMax-M2", "MiniMax-Text-01"],
+    ),
 ]
 
 
 async def _seed_presets(db: AsyncSession):
-    """Seed preset providers (idempotent — only seeds if name doesn't exist)."""
+    """Seed preset providers (idempotent — only seeds if name doesn't exist).
+
+    Commits per-preset and tolerates the unique-name race that occurs when several
+    API workers run the startup seed concurrently: a duplicate-name insert just means
+    another worker already seeded that preset, which is benign.
+    """
+    from sqlalchemy.exc import IntegrityError
     for preset in _PRESET_PROVIDERS:
         existing = await db.execute(select(Provider).where(Provider.name == preset.name))
         if existing.scalar_one_or_none():
@@ -107,12 +127,16 @@ async def _seed_presets(db: AsyncSession):
             api_key_encrypted=encrypt_data(preset.api_key) if preset.api_key else None,
             base_url=preset.base_url,
             api_version=preset.api_version,
-            models=preset.models,
+            # Store as JSON-serializable dicts; the column can't hold ModelInfo objects.
+            models=[m.model_dump() for m in preset.models],
             is_active=preset.is_active,
             metadata_json=preset.metadata_json,
         )
         db.add(provider)
-    await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()  # another worker seeded this preset first
 
 
 async def _test_provider_connectivity(
@@ -135,7 +159,12 @@ async def _test_provider_connectivity(
         model_name = test_model
     elif models:
         first = models[0]
-        model_name = first.name if hasattr(first, "name") else str(first)
+        # Stored models are {"name": ..., "model_type": ...} dicts; may also be a
+        # ModelInfo object or a legacy plain string. Extract just the name.
+        if isinstance(first, dict):
+            model_name = first.get("name") or "gpt-4o-mini"
+        else:
+            model_name = getattr(first, "name", None) or str(first)
     else:
         model_name = "gpt-4o-mini"
 
@@ -309,7 +338,8 @@ async def create_provider(
         api_key_encrypted=encrypt_data(body.api_key) if body.api_key else None,
         base_url=body.base_url,
         api_version=body.api_version,
-        models=body.models,
+        # Store as JSON-serializable dicts; the column can't hold ModelInfo objects.
+        models=[m.model_dump() for m in body.models],
         is_active=body.is_active,
         metadata_json=body.metadata_json,
     )
@@ -346,6 +376,73 @@ async def test_provider_connection(
         models=provider.models or [],
         test_model=body.test_model,
     )
+
+
+@router.get("/providers/{provider_id}/models/discover")
+async def discover_provider_models(
+    provider_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_permission(Permission.AGENT_WRITE)),
+):
+    """Discover available models by querying the provider's GET /models endpoint.
+
+    Runs server-side with the stored (decrypted) API key, so it works for saved
+    providers whose key is masked in API responses, and avoids browser CORS to the
+    provider. Returns ``{"models": [{"name": ..., "model_type": "chat"}, ...]}``.
+    """
+    result = await db.execute(select(Provider).where(Provider.id == provider_id))
+    provider = result.scalar_one_or_none()
+    if not provider:
+        raise HTTPException(status_code=404, detail="Provider not found")
+    if not provider.base_url:
+        raise HTTPException(status_code=400, detail="Provider has no base_url configured")
+
+    from app.core.ssrf import validate_outbound_url, SSRFError
+    try:
+        validate_outbound_url(provider.base_url)
+    except SSRFError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid base_url: {e}")
+
+    api_key = None
+    if provider.api_key_encrypted:
+        try:
+            api_key = decrypt_data(provider.api_key_encrypted)
+        except Exception:
+            api_key = None
+
+    url = provider.base_url.rstrip("/") + "/models"
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(url, headers=headers)
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Failed to reach provider: {e}")
+    if resp.status_code >= 400:
+        raise HTTPException(
+            status_code=resp.status_code,
+            detail=f"Provider returned {resp.status_code}: {resp.text[:200]}",
+        )
+
+    try:
+        data = resp.json()
+    except Exception:
+        raise HTTPException(status_code=502, detail="Provider /models did not return JSON")
+
+    # Accept both OpenAI ({data:[{id}]}) and {models:[{name|id}]} shapes.
+    ids: list[str] = []
+    if isinstance(data, dict) and isinstance(data.get("data"), list):
+        ids = [m.get("id") for m in data["data"] if isinstance(m, dict) and m.get("id")]
+    elif isinstance(data, dict) and isinstance(data.get("models"), list):
+        ids = [
+            (m.get("name") or m.get("id")) if isinstance(m, dict) else str(m)
+            for m in data["models"]
+        ]
+        ids = [m for m in ids if m]
+    if not ids:
+        raise HTTPException(status_code=404, detail="Provider returned no models")
+
+    return {"models": [{"name": name, "model_type": "chat"} for name in ids]}
 
 
 @router.get("/providers/{provider_id}", response_model=ProviderRead)
