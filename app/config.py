@@ -63,6 +63,11 @@ class Settings(BaseSettings):
     ATTACHMENT_MAX_CHARS: int = 8000          # per attachment
     ATTACHMENT_TOTAL_MAX_CHARS: int = 24000   # across all attachments in one request
 
+    # Group-chat consensus detection (issue #14)
+    GROUPCHAT_CONSENSUS_HIGH: float = 0.85      # min cosine >= HIGH => consensus
+    GROUPCHAT_CONSENSUS_LOW: float = 0.65       # min cosine < LOW  => no consensus
+    GROUPCHAT_JACCARD_THRESHOLD: float = 0.7    # lexical fallback threshold
+
     # Auto-approve approval requests without human intervention
     AUTO_APPROVE: bool = True
 
