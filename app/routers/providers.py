@@ -106,6 +106,44 @@ _PRESET_PROVIDERS: list[ProviderCreate] = [
         api_key="",
         models=["MiniMax-M3", "MiniMax-M2.7", "MiniMax-M2.5", "MiniMax-M2.1", "MiniMax-M2", "MiniMax-Text-01"],
     ),
+    # All of the below speak the OpenAI wire protocol via their /v1 (or Gemini's
+    # OpenAI-compat) endpoint, so they slot into the unified AsyncOpenAI client.
+    # Endpoints verified reachable 2026-06-03; refine model lists via auto-discover.
+    ProviderCreate(
+        name="Google Gemini",
+        provider_type="openai",
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+        api_key="",
+        models=["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"],
+    ),
+    ProviderCreate(
+        name="DeepSeek",
+        provider_type="openai",
+        base_url="https://api.deepseek.com/v1",
+        api_key="",
+        models=["deepseek-chat", "deepseek-reasoner"],
+    ),
+    ProviderCreate(
+        name="Moonshot (Kimi)",
+        provider_type="openai",
+        base_url="https://api.moonshot.cn/v1",
+        api_key="",
+        models=["kimi-latest", "moonshot-v1-128k", "moonshot-v1-32k", "moonshot-v1-8k"],
+    ),
+    ProviderCreate(
+        name="xAI (Grok)",
+        provider_type="openai",
+        base_url="https://api.x.ai/v1",
+        api_key="",
+        models=["grok-4", "grok-3", "grok-2-vision-latest"],
+    ),
+    ProviderCreate(
+        name="LM Studio (Local)",
+        provider_type="openai",
+        base_url="http://localhost:1234/v1",
+        api_key="lm-studio",
+        models=["local-model"],
+    ),
 ]
 
 
