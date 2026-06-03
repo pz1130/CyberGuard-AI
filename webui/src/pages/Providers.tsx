@@ -539,35 +539,6 @@ function ProviderCard({
   )
 }
 
-// ── Unconfigured preset card ───────────────────────────────────────────────────
-
-function PresetCard({ preset, onAdd }: { preset: Preset; onAdd: () => void }) {
-  return (
-    <div style={{
-      padding: 18, background: 'var(--bg-surface)',
-      border: '1px solid var(--border)',
-      borderLeft: '3px solid var(--border)',
-      display: 'flex', flexDirection: 'column', gap: 12,
-      opacity: 0.7,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Avatar name={preset.name} color={preset.color} />
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>{preset.name}</div>
-          <div style={{ marginTop: 3 }}><StatusDot status="unconfigured" /></div>
-        </div>
-      </div>
-      <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {preset.base_url || 'Custom endpoint'}
-      </div>
-      <button onClick={onAdd}
-        style={{ height: 32, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
-        + 配置
-      </button>
-    </div>
-  )
-}
-
 // ── Modal shell components ────────────────────────────────────────────────────
 
 function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
@@ -645,10 +616,11 @@ export default function Providers() {
 
   // Presets not yet in DB — no longer used (the "可添加的 Provider" card grid
   // was hidden per user request; the backend _seed_presets already creates
-  // the canonical 14 built-in presets on startup). Kept commented for
-  // reference if the quick-add path is ever restored.
-  // const configuredNames = new Set(providers.map(p => p.name.toLowerCase()))
-  // const unconfiguredPresets = PRESETS.filter(p => !configuredNames.has(p.name.toLowerCase()))
+  // the canonical 14 built-in presets on startup). If the quick-add path is
+  // ever restored, recompute:
+  //   const configuredNames = new Set(providers.map(p => p.name.toLowerCase()))
+  //   const unconfiguredPresets = PRESETS.filter(p => !configuredNames.has(p.name.toLowerCase()))
+  //   const filteredPresets = unconfiguredPresets.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()))
 
   // Sort configured: ready > partial > unconfigured, then filter by search
   const sortedProviders = useMemo(() => {
@@ -658,8 +630,6 @@ export default function Providers() {
       .sort((a, b) => order[a._status!] - order[b._status!])
       .filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()))
   }, [providers, search])
-
-  const filteredPresets = unconfiguredPresets.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()))
 
   return (
     <div>
@@ -714,24 +684,12 @@ export default function Providers() {
             </div>
           )}
 
-          {/* Preset (unconfigured) providers — hidden per user request. The
+          {/* "可添加的 Provider" card grid removed per user request. The
               backend _seed_presets already creates the canonical 14 built-in
-              presets on startup; the "可添加的 Provider" cards were a duplicate
-              quick-add path. To re-enable later, restore the block below. */}
-          {false && filteredPresets.length > 0 && (
-            <div>
-              <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 12 }}>可添加的 Provider · {filteredPresets.length}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
-                {filteredPresets.map(preset => (
-                  <PresetCard
-                    key={preset.name}
-                    preset={preset}
-                    onAdd={() => setSettingsTarget({ preset })}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+              presets on startup (visible in the main list above), so the
+              quick-add cards were a duplicate path. To restore: see the
+              PRESETS array at the top of this file and the unconfigured-
+              presets filter recipe in the comment above. */}
 
           {sortedProviders.length === 0 && (
             <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--text-dim)', fontSize: 13 }}>
