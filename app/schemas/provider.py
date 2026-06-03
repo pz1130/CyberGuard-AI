@@ -1,4 +1,5 @@
 """Pydantic schemas for LLM provider management."""
+from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional, List, Dict, Any, Literal
 
