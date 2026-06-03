@@ -313,6 +313,20 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
 
   const remove = (name: string) => setModels(prev => prev.filter(m => m.name !== name))
 
+  // Per-model verification status badge. Reads the verified/test_error fields that
+  // the backend stamps onto ModelInfo (verified=true on successful test/probe or for
+  // built-in presets; verified=false on test failure with error in test_error; missing
+  // for legacy providers → "UNTESTED"). Mirrors the badge added in Chat.tsx (Task 5).
+  const modelStatusBadge = (m: { verified?: boolean | null; test_error?: string | null }) => {
+    if (m.verified === true) {
+      return <span style={{ fontSize: 10, padding: '1px 6px', border: '1px solid var(--accent-border)', color: 'var(--accent)', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em', flexShrink: 0 }}>✓ VERIFIED</span>
+    }
+    if (m.verified === false) {
+      return <span title={m.test_error || 'test failed'} style={{ fontSize: 10, padding: '1px 6px', border: '1px solid rgba(248,113,113,0.4)', color: '#f87171', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em', flexShrink: 0 }}>✗ FAILED</span>
+    }
+    return <span style={{ fontSize: 10, padding: '1px 6px', border: '1px solid var(--border)', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em', flexShrink: 0 }}>· UNTESTED</span>
+  }
+
   const testModel = async (name: string) => {
     setTesting(name)
     const t0 = Date.now()
@@ -378,10 +392,12 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
                     <span style={{ fontSize: 10, padding: '2px 5px', border: `1px solid ${typeColor[m.model_type]}`, color: typeColor[m.model_type], fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', whiteSpace: 'nowrap', flexShrink: 0 }}>
                       {m.model_type.toUpperCase()}
                     </span>
-                    {/* Model name */}
+                    {/* Model name + verification badge */}
                     <span style={{ flex: 1, fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {m.name}
                     </span>
+                    {/* Verification status (✓ VERIFIED / ✗ FAILED / · UNTESTED) */}
+                    {modelStatusBadge(m)}
                     {/* Capability badges (after probe) */}
                     {m.capabilities?.tools && (
                       <span title="支持 function-calling / tools" style={{ fontSize: 10, padding: '2px 5px', border: '1px solid #10b981', color: '#10b981', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em', flexShrink: 0 }}>🔧 TOOLS</span>
