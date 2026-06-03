@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 from app.core.redis_client import cache, get_redis
 from app.services.agent_executor import AgentExecutor
+from app.config import settings
 
 
 _RUN_LOCK_TTL = 3600  # seconds; a completion run must never exceed this
@@ -373,14 +374,24 @@ class GroupChatService:
         """Simple Jaccard similarity for quick comparison."""
         words1 = set(text1.split())
         words2 = set(text2.split())
-        
+
         if not words1 or not words2:
             return 0.0
-        
+
         intersection = words1 & words2
         union = words1 | words2
-        
+
         return len(intersection) / len(union)
+
+    def _jaccard_consensus(self, responses: List[str]) -> bool:
+        """Lexical fallback: anchor-vs-others Jaccard word overlap."""
+        anchor = (responses[0] or "").lower()
+        threshold = settings.GROUPCHAT_JACCARD_THRESHOLD
+        similar_count = sum(
+            1 for r in responses[1:]
+            if self._text_similarity(anchor, (r or "").lower()) > threshold
+        )
+        return similar_count >= len(responses) - 1
 
     async def _first_agent_provider_id(self, session: GroupChatSession) -> Optional[int]:
         """Return the llm_provider_id of the first participating agent, or None."""

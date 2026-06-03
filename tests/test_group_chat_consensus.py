@@ -96,3 +96,13 @@ async def test_generate_summary_uses_first_agent_provider_id(monkeypatch):
 
     await service._generate_summary(session)
     assert fake.chat_calls and fake.chat_calls[0]["provider_id"] == 42
+
+
+def test_jaccard_consensus_identical_true():
+    service = GroupChatService()
+    assert service._jaccard_consensus(["block the ip", "block the ip"]) is True
+
+
+def test_jaccard_consensus_dissimilar_false():
+    service = GroupChatService()
+    assert service._jaccard_consensus(["block the ip now", "let us order pizza"]) is False
