@@ -9,6 +9,11 @@ interface ModelInfo {
   name: string
   model_type: 'chat' | 'embedding' | 'rerank'
   capabilities?: { tools?: boolean | null; vision?: boolean | null; probed_at?: string } | null
+  // Verification status — stamped by the backend (/providers/test,
+  // /providers/{id}/models/probe) and seeded onto built-in presets.
+  verified?: boolean | null
+  last_tested_at?: string | null
+  test_error?: string | null
 }
 
 interface Provider {
@@ -316,8 +321,10 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
   // Per-model verification status badge. Reads the verified/test_error fields that
   // the backend stamps onto ModelInfo (verified=true on successful test/probe or for
   // built-in presets; verified=false on test failure with error in test_error; missing
-  // for legacy providers → "UNTESTED"). Mirrors the badge added in Chat.tsx (Task 5).
-  const modelStatusBadge = (m: { verified?: boolean | null; test_error?: string | null }) => {
+  // for legacy providers → "UNTESTED"). Companion to the verified-only filter in
+  // Chat.tsx (Task 5) — same data, opposite consumer: this page shows *why* a model
+  // is or isn't verified, the chat dropdown only consumes the verified ones.
+  const modelStatusBadge = (m: ModelInfo) => {
     if (m.verified === true) {
       return <span style={{ fontSize: 10, padding: '1px 6px', border: '1px solid var(--accent-border)', color: 'var(--accent)', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em', flexShrink: 0 }}>✓ VERIFIED</span>
     }
