@@ -67,11 +67,12 @@ export const api = {
   createProvider: (body: any) => request('/providers', { method: 'POST', body: JSON.stringify(body) }),
   updateProvider: (id: string, body: any) => request(`/providers/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteProvider: (id: string) => request(`/providers/${id}`, { method: 'DELETE' }),
-  testProvider: (id: number) => request(`/providers/test`, {
+  testProvider: (id: number, model?: string) => request(`/providers/test`, {
     method: 'POST',
-    body: JSON.stringify({ provider_id: id }),
+    body: JSON.stringify({ provider_id: id, ...(model ? { test_model: model } : {}) }),
   }),
   discoverProviderModels: (id: number) => request(`/providers/${id}/models/discover`),
+  probeProviderModels: (id: number) => request(`/providers/${id}/models/probe`, { method: 'POST' }),
 
   // Agents
   getAgents: () => request('/agents'),

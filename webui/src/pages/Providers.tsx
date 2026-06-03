@@ -8,6 +8,7 @@ import { SearchContext } from '../context/SearchContext'
 interface ModelInfo {
   name: string
   model_type: 'chat' | 'embedding' | 'rerank'
+  capabilities?: { tools?: boolean | null; vision?: boolean | null; probed_at?: string } | null
 }
 
 interface Provider {
@@ -260,6 +261,7 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState<string | null>(null)
   const [testRes, setTestRes] = useState<Record<string, { ok: boolean; ms: number }>>({})
+  const [probing, setProbing] = useState(false)
 
   const discover = async () => {
     if (!provider.base_url) { setFetchErr('No base URL configured'); return }
@@ -292,6 +294,17 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
     finally { setFetching(false) }
   }
 
+  const probe = async () => {
+    if (!provider.id) { setFetchErr('保存 Provider 后才能探测能力'); return }
+    setProbing(true); setFetchErr('')
+    try {
+      const data = await api.probeProviderModels(provider.id) as any
+      const caps = Object.fromEntries((data.models || []).map((m: any) => [m.name, m.capabilities]))
+      setModels(prev => prev.map(m => ({ ...m, capabilities: caps[m.name] ?? m.capabilities })))
+    } catch (e: any) { setFetchErr(e.message) }
+    finally { setProbing(false) }
+  }
+
   const add = () => {
     if (!newName.trim() || models.some(m => m.name === newName.trim())) return
     setModels(prev => [...prev, { name: newName.trim(), model_type: newType }])
@@ -302,17 +315,14 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
 
   const testModel = async (name: string) => {
     setTesting(name)
-    const base = (provider.base_url || '').replace(/\/$/, '')
     const t0 = Date.now()
     try {
-      const resp = await fetch(`${base}/chat/completions`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${provider.api_key || ''}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: name, messages: [{ role: 'user', content: 'hi' }], max_tokens: 5 }),
-      })
-      setTestRes(r => ({ ...r, [name]: { ok: resp.ok, ms: Date.now() - t0 } }))
+      // Route through the backend so it uses the stored (real) key — the form only
+      // has the masked '******' key, and a browser-direct call also hits provider CORS.
+      const r = await api.testProvider(provider.id, name) as any
+      setTestRes(res => ({ ...res, [name]: { ok: !!r.success, ms: Date.now() - t0 } }))
     } catch {
-      setTestRes(r => ({ ...r, [name]: { ok: false, ms: Date.now() - t0 } }))
+      setTestRes(res => ({ ...res, [name]: { ok: false, ms: Date.now() - t0 } }))
     } finally { setTesting(null) }
   }
 
@@ -344,7 +354,12 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
               {fetching ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Zap size={11} />}
               {fetching ? 'FETCHING...' : '自动发现模型'}
             </button>
-            <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>从 /v1/models 接口拉取列表</span>
+            <button onClick={probe} disabled={probing || !models.length}
+              title="对每个模型发极小请求，探测是否支持 tools / vision"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', height: 34, border: '1px solid var(--border-bright)', background: 'var(--bg-base)', color: (probing || !models.length) ? 'var(--text-dim)' : 'var(--text-muted)', fontSize: 12, letterSpacing: '0.12em', cursor: (probing || !models.length) ? 'default' : 'pointer', fontFamily: 'var(--font-mono)' }}>
+              {probing ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Settings2 size={11} />}
+              {probing ? 'PROBING...' : '探测能力'}
+            </button>
           </div>
           {fetchErr && <div style={{ fontSize: 11, color: '#f87171' }}>{fetchErr}</div>}
 
@@ -367,6 +382,13 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
                     <span style={{ flex: 1, fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {m.name}
                     </span>
+                    {/* Capability badges (after probe) */}
+                    {m.capabilities?.tools && (
+                      <span title="支持 function-calling / tools" style={{ fontSize: 10, padding: '2px 5px', border: '1px solid #10b981', color: '#10b981', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em', flexShrink: 0 }}>🔧 TOOLS</span>
+                    )}
+                    {m.capabilities?.vision && (
+                      <span title="支持图像输入 / vision" style={{ fontSize: 10, padding: '2px 5px', border: '1px solid #8b5cf6', color: '#8b5cf6', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em', flexShrink: 0 }}>👁 VISION</span>
+                    )}
                     {/* Test result */}
                     {r && (
                       <span style={{ fontSize: 11, color: r.ok ? 'var(--accent)' : '#f87171', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>

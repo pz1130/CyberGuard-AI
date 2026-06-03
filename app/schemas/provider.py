@@ -5,9 +5,14 @@ from datetime import datetime
 
 
 class ModelInfo(BaseModel):
-    """Model info with type classification."""
+    """Model info with type classification and optional probed capabilities.
+
+    `capabilities` is filled by the capability prober, e.g.
+    {"tools": true, "vision": false, "probed_at": "2026-06-03T..."}. None until probed.
+    """
     name: str
     model_type: Literal["chat", "embedding", "rerank"] = "chat"
+    capabilities: Optional[Dict[str, Any]] = None
 
 
 class ProviderBase(BaseModel):

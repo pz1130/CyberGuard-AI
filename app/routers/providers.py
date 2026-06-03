@@ -483,6 +483,48 @@ async def discover_provider_models(
     return {"models": [{"name": name, "model_type": "chat"} for name in ids]}
 
 
+@router.post("/providers/{provider_id}/models/probe")
+async def probe_provider_capabilities(
+    provider_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_permission(Permission.AGENT_WRITE)),
+):
+    """Probe every model on the provider for tools/vision support and cache the
+    result inline on each model (``models[i].capabilities``). On-demand only.
+    """
+    result = await db.execute(select(Provider).where(Provider.id == provider_id))
+    provider = result.scalar_one_or_none()
+    if not provider:
+        raise HTTPException(status_code=404, detail="Provider not found")
+
+    models = provider.models or []
+    if not models:
+        raise HTTPException(status_code=400, detail="Provider has no models to probe")
+
+    from app.services.llm_router import get_llm_router
+    from app.services.capability_prober import probe_model
+
+    client = await get_llm_router().get_client_async(provider_id=provider_id)
+
+    updated = []
+    for m in models:
+        # Models are stored as dicts, but tolerate a stray legacy string.
+        entry = dict(m) if isinstance(m, dict) else {"name": str(m), "model_type": "chat"}
+        name = entry.get("name")
+        if name:
+            try:
+                entry["capabilities"] = await probe_model(client, name)
+            except Exception as e:  # noqa: BLE001 - one bad model shouldn't abort the batch
+                logger.warning(f"[providers] probe failed for {name}: {e}")
+        updated.append(entry)
+
+    # Reassign (not in-place mutate) so SQLAlchemy detects the JSON change.
+    provider.models = updated
+    await db.commit()
+    get_llm_router().invalidate_provider_cache(provider_id)
+    return {"models": updated}
+
+
 @router.get("/providers/{provider_id}", response_model=ProviderRead)
 async def get_provider(
     provider_id: int,
