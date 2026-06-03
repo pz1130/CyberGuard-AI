@@ -334,6 +334,16 @@ def _run_async_master_agent(execution_id: str, user_input: str, user_id: int, **
         user_input = f"[知识库检索结果]\n{rag_context}\n\n[用户问题]\n{user_input}"
 
     async def _run():
+        # This Celery task runs in a fresh event loop (see below). The module-level
+        # async engine pools connections bound to the loop that created them, so a
+        # connection left over from a previous task's (now-closed) loop fails with
+        # "got Future attached to a different loop" — which silently broke expert
+        # mode (the active-agent load in _parse_intent_node was swallowing it and
+        # degrading to a no-fan-out reply). Dispose the pool so connections are
+        # (re)created on THIS loop.
+        from app.core.database import engine
+        await engine.dispose()
+
         run_input = user_input
         attachments = kwargs.get("attachments")
         if attachments:
