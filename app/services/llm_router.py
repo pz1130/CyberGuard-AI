@@ -209,10 +209,26 @@ class LLMRouter:
 
     @staticmethod
     def _strip_think_blocks(text: str) -> str:
-        """Remove provider-specific reasoning tags from visible output."""
+        """Remove provider-specific reasoning tags from visible output.
+
+        <think>...</think> (and variants like <think>0, <think>_1) and
+        <reasoning>...</reasoning> are always stripped — they are internal model
+        chain-of-thought, never meant for the end user. Other markup follows
+        ``_should_strip_think()`` via the caller.
+        """
         if not text:
             return text
-        return re.sub(r"<think>[\s\S]*?</think>\s*", "", text, flags=re.IGNORECASE).strip()
+        # Internal CoT blocks — always stripped regardless of preserve_think.
+        # Multiple tag variants observed across providers (MiniMax M3, Qwen3,
+        # DeepSeek, etc.): <think>, <think>0, <think>_1, <think>abc; and
+        # <reasoning>...</reasoning>.
+        text = re.sub(
+            r"<think[^>]*>[\s\S]*?</think>\s*", "", text, flags=re.IGNORECASE
+        )
+        text = re.sub(
+            r"<reasoning>[\s\S]*?</reasoning>\s*", "", text, flags=re.IGNORECASE
+        )
+        return text.strip()
 
     @staticmethod
     def _extract_json_object(text: str) -> Optional[Dict[str, Any]]:
@@ -676,8 +692,10 @@ Examples:
                 temperature=temperature_override if temperature_override is not None else (master_config.get("temperature") or 0.3),
             ), label="generate_summary")
             raw_content = response.choices[0].message.content or ""
-            strip_think = await self._should_strip_think(provider_id)
-            content = self._strip_think_blocks(raw_content) if strip_think else raw_content
+            # Always strip internal reasoning blocks (<think>/<reasoning>), even if
+            # the provider has preserve_think=true. preserve_think is reserved for
+            # future "keep other markup" cases — internal CoT is never user-facing.
+            content = self._strip_think_blocks(raw_content)
             span.set_attribute("llm.response_length", len(content))
 
             # Record token usage
@@ -753,8 +771,10 @@ Examples:
                 lambda: client.chat.completions.create(**kwargs), label="chat")
             message = response.choices[0].message
             raw_content = message.content or ""
-            strip_think = await self._should_strip_think(provider_id)
-            content = self._strip_think_blocks(raw_content) if strip_think else raw_content
+            # Always strip internal reasoning blocks (<think>/<reasoning>), even if
+            # the provider has preserve_think=true. preserve_think is reserved for
+            # future "keep other markup" cases — internal CoT is never user-facing.
+            content = self._strip_think_blocks(raw_content)
             span.set_attribute("llm.response_length", len(content))
             span.set_attribute("llm.finish_reason", response.choices[0].finish_reason)
             await self._record_token_usage(active_model, active_provider_id, response)
