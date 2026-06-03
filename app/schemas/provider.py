@@ -5,14 +5,23 @@ from datetime import datetime
 
 
 class ModelInfo(BaseModel):
-    """Model info with type classification and optional probed capabilities.
+    """Model info with type classification and optional probed capabilities /
+    verification status.
 
     `capabilities` is filled by the capability prober, e.g.
     {"tools": true, "vision": false, "probed_at": "2026-06-03T..."}. None until probed.
+
+    `verified` is filled by /providers/test and /models/probe:
+      None  — never tested
+      True  — test succeeded
+      False — test failed (see test_error for detail)
     """
     name: str
     model_type: Literal["chat", "embedding", "rerank"] = "chat"
     capabilities: Optional[Dict[str, Any]] = None
+    verified: Optional[bool] = None
+    last_tested_at: Optional[datetime] = None
+    test_error: Optional[str] = None
 
 
 class ProviderBase(BaseModel):
