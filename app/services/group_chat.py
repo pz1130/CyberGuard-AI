@@ -341,34 +341,51 @@ class GroupChatService:
         return await self.get_session_summary(session_id)
     
     async def _check_consensus(self, session: GroupChatSession) -> bool:
-        """
-        Check if agents have reached consensus.
-        
-        For now, simple check - all last responses must be similar.
+        """Check whether agents have reached consensus.
+
+        Hybrid: embedding cosine similarity (weakest anchor-vs-other pair), an
+        LLM judge for the ambiguous band or on embedding failure, and the
+        Jaccard heuristic as a final fallback. Never raises — it runs inside
+        the discussion loop.
         """
         if len(session.messages) < len(session.agent_ids) + 1:
             return False
-        
-        # Get last responses from each agent
+
         agent_responses = [
             m.content for m in session.messages[-len(session.agent_ids):]
             if m.role == "agent"
         ]
-        
         if len(agent_responses) < len(session.agent_ids):
             return False
-        
-        # Simple consensus: responses within 10% similarity (crude heuristic)
-        # In production, use embedding similarity
-        first_response = (agent_responses[0] or "").lower()
-        consensus_threshold = 0.7
+        if len(agent_responses) < 2:
+            return False
 
-        similar_count = sum(
-            1 for r in agent_responses[1:]
-            if self._text_similarity(first_response, (r or "").lower()) > consensus_threshold
-        )
-        
-        return similar_count >= len(agent_responses) - 1
+        provider_id = await self._first_agent_provider_id(session)
+
+        # 1. Embedding cosine path.
+        try:
+            from app.services.llm_router import get_llm_router
+            router = get_llm_router()
+            vectors = await router.embed(agent_responses, provider_id=provider_id)
+            min_cos = min(_cosine(vectors[0], v) for v in vectors[1:])
+            if min_cos >= settings.GROUPCHAT_CONSENSUS_HIGH:
+                return True
+            if min_cos < settings.GROUPCHAT_CONSENSUS_LOW:
+                return False
+            # gray band -> fall through to the LLM judge
+        except Exception as e:  # noqa: BLE001 - degrade to judge/Jaccard, never raise
+            import logging
+            logging.getLogger(__name__).warning(
+                f"[consensus] embedding similarity failed, using LLM judge: {e}"
+            )
+
+        # 2. LLM judge (gray band or embedding failure).
+        verdict = await self._llm_judge_consensus(agent_responses, provider_id)
+        if verdict is not None:
+            return verdict
+
+        # 3. Lexical fallback.
+        return self._jaccard_consensus(agent_responses)
     
     def _text_similarity(self, text1: str, text2: str) -> float:
         """Simple Jaccard similarity for quick comparison."""

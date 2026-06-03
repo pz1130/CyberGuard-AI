@@ -147,3 +147,102 @@ async def test_judge_error_none(monkeypatch):
     fake = FakeRouter(chat_error=RuntimeError("llm down"))
     monkeypatch.setattr("app.services.llm_router.get_llm_router", lambda: fake)
     assert await service._llm_judge_consensus(["a", "b"], None) is None
+
+
+def _patch_no_provider(monkeypatch, service):
+    async def _no_provider(s):
+        return None
+    monkeypatch.setattr(service, "_first_agent_provider_id", _no_provider)
+
+
+@pytest.mark.asyncio
+async def test_consensus_all_high_cosine_true_no_judge(monkeypatch):
+    service = GroupChatService()
+    session = _make_consensus_session(["block the IP", "block the IP now"])
+    fake = FakeRouter(embed_result=[[1.0, 0.0], [1.0, 0.0]])  # cos 1.0
+    monkeypatch.setattr("app.services.llm_router.get_llm_router", lambda: fake)
+    _patch_no_provider(monkeypatch, service)
+    judge_calls = {"n": 0}
+
+    async def _judge(responses, provider_id):
+        judge_calls["n"] += 1
+        return True
+    monkeypatch.setattr(service, "_llm_judge_consensus", _judge)
+
+    assert await service._check_consensus(session) is True
+    assert judge_calls["n"] == 0
+
+
+@pytest.mark.asyncio
+async def test_consensus_below_low_false_no_judge(monkeypatch):
+    service = GroupChatService()
+    session = _make_consensus_session(["block the IP", "open all ports"])
+    fake = FakeRouter(embed_result=[[1.0, 0.0], [0.0, 1.0]])  # cos 0.0
+    monkeypatch.setattr("app.services.llm_router.get_llm_router", lambda: fake)
+    _patch_no_provider(monkeypatch, service)
+    judge_calls = {"n": 0}
+
+    async def _judge(responses, provider_id):
+        judge_calls["n"] += 1
+        return True
+    monkeypatch.setattr(service, "_llm_judge_consensus", _judge)
+
+    assert await service._check_consensus(session) is False
+    assert judge_calls["n"] == 0
+
+
+@pytest.mark.asyncio
+async def test_consensus_gray_band_invokes_judge(monkeypatch):
+    service = GroupChatService()
+    session = _make_consensus_session(["resp a", "resp b"])
+    fake = FakeRouter(embed_result=[[1.0, 0.0], [1.0, 1.0]])  # cos ~0.707 (gray)
+    monkeypatch.setattr("app.services.llm_router.get_llm_router", lambda: fake)
+    _patch_no_provider(monkeypatch, service)
+    judge_calls = {"n": 0}
+
+    async def _judge(responses, provider_id):
+        judge_calls["n"] += 1
+        return True
+    monkeypatch.setattr(service, "_llm_judge_consensus", _judge)
+
+    assert await service._check_consensus(session) is True
+    assert judge_calls["n"] == 1
+
+
+@pytest.mark.asyncio
+async def test_consensus_embed_error_routes_to_judge(monkeypatch):
+    service = GroupChatService()
+    session = _make_consensus_session(["resp a", "resp b"])
+    fake = FakeRouter(embed_error=RuntimeError("no embed provider"))
+    monkeypatch.setattr("app.services.llm_router.get_llm_router", lambda: fake)
+    _patch_no_provider(monkeypatch, service)
+
+    async def _judge(responses, provider_id):
+        return False
+    monkeypatch.setattr(service, "_llm_judge_consensus", _judge)
+
+    assert await service._check_consensus(session) is False
+
+
+@pytest.mark.asyncio
+async def test_consensus_judge_none_falls_back_to_jaccard(monkeypatch):
+    service = GroupChatService()
+    # identical responses -> Jaccard returns True
+    session = _make_consensus_session(["block the ip now", "block the ip now"])
+    fake = FakeRouter(embed_error=RuntimeError("no embed"))
+    monkeypatch.setattr("app.services.llm_router.get_llm_router", lambda: fake)
+    _patch_no_provider(monkeypatch, service)
+
+    async def _judge(responses, provider_id):
+        return None
+    monkeypatch.setattr(service, "_llm_judge_consensus", _judge)
+
+    assert await service._check_consensus(session) is True
+
+
+@pytest.mark.asyncio
+async def test_consensus_too_few_messages_false():
+    service = GroupChatService()
+    session = GroupChatSession(session_id="x", user_id=1, agent_ids=[1, 2])
+    session.messages.append(GroupChatMessage(role="user", content="q"))
+    assert await service._check_consensus(session) is False
