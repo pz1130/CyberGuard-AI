@@ -23,7 +23,7 @@
 - `provider_id: 0` 的硬编码 fallback 必须删掉(它本来就不该出现在下拉里)。
 - 用户在 Providers 页面点过"测试"且返回 `success=true` 的 model → 立刻出现在 Chat 下拉里。
 - 测试失败、或从未测试过的 model → 不出现在 Chat 下拉。
-- 内置 preset(Gemini/Kimi/MiniMax/DeepSeek/xAI/LM Studio 等手测过的 model)→ 冷启动就 mark `verified=true`,下拉不会瞬间空。
+- **内置 preset 一律 `verified=None`(未测)**,冷启动下拉为空 + 灰色提示文字"no verified models — test in Providers",引导用户去 Providers 逐个 TEST。即使 preset 名字看起来"应该 work"(比如 MiniMax 已经有人测过),也必须用户亲手再测一次才算数。**不接受**"preset 名义上 verified"的设计,因为大部分 preset 是没填 key 的占位(OpenAI/Anthropic 缺 sk-、Ollama 本地没跑、Azure 缺 endpoint),声明它们 verified 等于在 Chat 下拉里放死链。
 
 ## 3. 方案
 
