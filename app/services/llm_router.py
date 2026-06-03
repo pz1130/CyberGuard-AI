@@ -10,6 +10,7 @@ from openai import AsyncOpenAI
 logger = logging.getLogger(__name__)
 
 from app.config import settings
+from app.core.llm_resilience import acall_with_retry, rate_limit
 
 
 def _model_name(model) -> Optional[str]:
@@ -325,6 +326,15 @@ class LLMRouter:
 
         return None
 
+    async def _provider_rpm(self, provider_id: Optional[int]):
+        """Per-provider requests-per-minute limit from metadata_json, or None (no limit)."""
+        if not provider_id:
+            return None
+        cfg = await self.get_provider_config_async(provider_id)
+        if not cfg:
+            return None
+        return (cfg.get("metadata_json") or {}).get("rate_limit_rpm")
+
     async def _get_first_active_provider(self) -> Optional[Dict[str, Any]]:
         """Fetch the first active provider from DB (for default routing)."""
         from app.core.database import get_db_context
@@ -569,7 +579,8 @@ Examples:
             "llm.user_input_length": len(user_input),
         }) as span:
             try:
-                response = await client.chat.completions.create(
+                await rate_limit(provider_id, await self._provider_rpm(provider_id))
+                response = await acall_with_retry(lambda: client.chat.completions.create(
                     model=active_model,
                     messages=[
                         {"role": "system", "content": system_prompt},
@@ -577,7 +588,7 @@ Examples:
                     ],
                     temperature=temperature_override if temperature_override is not None else (master_config.get("temperature") or settings.MASTER_AGENT_TEMPERATURE),
                     response_format={"type": "json_object"},
-                )
+                ), label="parse_intent")
                 content = response.choices[0].message.content or ""
                 span.set_attribute("llm.response_length", len(content))
                 span.set_attribute("llm.finish_reason", response.choices[0].finish_reason)
@@ -655,14 +666,15 @@ Examples:
                 or "You are CyberGuard's summarizer. Create a concise summary of agent results."
             )
 
-            response = await client.chat.completions.create(
+            await rate_limit(provider_id, await self._provider_rpm(provider_id))
+            response = await acall_with_retry(lambda: client.chat.completions.create(
                 model=active_model,
                 messages=[
                     {"role": "system", "content": summarizer_prompt},
                     {"role": "user", "content": f"Results:\n{results_text}"},
                 ],
                 temperature=temperature_override if temperature_override is not None else (master_config.get("temperature") or 0.3),
-            )
+            ), label="generate_summary")
             raw_content = response.choices[0].message.content or ""
             strip_think = await self._should_strip_think(provider_id)
             content = self._strip_think_blocks(raw_content) if strip_think else raw_content
@@ -736,7 +748,9 @@ Examples:
                 kwargs["tools"] = tools
                 kwargs["tool_choice"] = "auto"
 
-            response = await client.chat.completions.create(**kwargs)
+            await rate_limit(provider_id, await self._provider_rpm(provider_id))
+            response = await acall_with_retry(
+                lambda: client.chat.completions.create(**kwargs), label="chat")
             message = response.choices[0].message
             raw_content = message.content or ""
             strip_think = await self._should_strip_think(provider_id)
@@ -796,12 +810,14 @@ Examples:
 
         accumulated = []
         try:
-            stream = await client.chat.completions.create(
+            await rate_limit(provider_id, await self._provider_rpm(provider_id))
+            # Retry only the connection/handshake; mid-stream failures are not retried.
+            stream = await acall_with_retry(lambda: client.chat.completions.create(
                 model=active_model,
                 messages=messages,
                 temperature=temperature,
                 stream=True,
-            )
+            ), label="stream_chat")
             async for chunk in stream:
                 delta = chunk.choices[0].delta.content if chunk.choices else None
                 if delta:
