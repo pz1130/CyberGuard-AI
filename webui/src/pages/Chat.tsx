@@ -307,16 +307,18 @@ export default function Chat() {
           for (const m of (p.models || [])) {
             // Only show models that the user has explicitly verified.
             // A model dict's `verified` is set to true by /providers/test and
-            // /providers/{id}/models/probe on a successful call. Built-in presets are
-            // seeded with verified=true (see _seed_presets).
-            const verified = (typeof m === 'object' && m !== null) ? (m as any).verified : undefined
-            if (verified !== true) continue
+            // /providers/{id}/models/probe on a successful call. Built-in presets
+            // are seeded with verified=true (see _seed_presets). Legacy rows may
+            // still hold plain strings instead of dicts — those have no
+            // `verified` field and are filtered out.
+            const entry = (typeof m === 'object' && m !== null) ? m as { name?: string; verified?: boolean | null } : null
+            if (!entry || entry.verified !== true) continue
             models.push({
               provider_id: p.id,
               provider_name: p.name.toUpperCase(),
               provider_type: p.provider_type,
               base_url: (p.base_url || '').replace(/\/$/, ''),
-              model: typeof m === 'string' ? m : (m as any).name || m,
+              model: entry.name || '',
             })
           }
         }
