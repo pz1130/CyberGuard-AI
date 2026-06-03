@@ -341,9 +341,27 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
       // Route through the backend so it uses the stored (real) key — the form only
       // has the masked '******' key, and a browser-direct call also hits provider CORS.
       const r = await api.testProvider(provider.id, name) as any
-      setTestRes(res => ({ ...res, [name]: { ok: !!r.success, ms: Date.now() - t0 } }))
-    } catch {
-      setTestRes(res => ({ ...res, [name]: { ok: false, ms: Date.now() - t0 } }))
+      const ok = !!r.success
+      const err = r.error || null
+      setTestRes(res => ({ ...res, [name]: { ok, ms: Date.now() - t0, err } }))
+      // Mirror the backend stamp locally so the per-model badge updates
+      // without waiting for a full reload (the modal is otherwise a stale
+      // snapshot of provider.models). The next onSaved() will reconcile
+      // any drift with the server's authoritative state.
+      setModels(prev => prev.map(m => m.name === name ? {
+        ...m,
+        verified: ok,
+        last_tested_at: new Date().toISOString(),
+        test_error: ok ? null : (err || 'test failed'),
+      } : m))
+    } catch (e: any) {
+      setTestRes(res => ({ ...res, [name]: { ok: false, ms: Date.now() - t0, err: e?.message || 'request failed' } }))
+      setModels(prev => prev.map(m => m.name === name ? {
+        ...m,
+        verified: false,
+        last_tested_at: new Date().toISOString(),
+        test_error: e?.message || 'request failed',
+      } : m))
     } finally { setTesting(null) }
   }
 
