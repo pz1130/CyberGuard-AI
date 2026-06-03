@@ -643,9 +643,12 @@ export default function Providers() {
     try { await api.deleteProvider(String(p.id)); load() } catch (e: any) { alert(e.message) }
   }
 
-  // Presets not yet in DB
-  const configuredNames = new Set(providers.map(p => p.name.toLowerCase()))
-  const unconfiguredPresets = PRESETS.filter(p => !configuredNames.has(p.name.toLowerCase()))
+  // Presets not yet in DB — no longer used (the "可添加的 Provider" card grid
+  // was hidden per user request; the backend _seed_presets already creates
+  // the canonical 14 built-in presets on startup). Kept commented for
+  // reference if the quick-add path is ever restored.
+  // const configuredNames = new Set(providers.map(p => p.name.toLowerCase()))
+  // const unconfiguredPresets = PRESETS.filter(p => !configuredNames.has(p.name.toLowerCase()))
 
   // Sort configured: ready > partial > unconfigured, then filter by search
   const sortedProviders = useMemo(() => {
@@ -711,8 +714,11 @@ export default function Providers() {
             </div>
           )}
 
-          {/* Preset (unconfigured) providers */}
-          {filteredPresets.length > 0 && (
+          {/* Preset (unconfigured) providers — hidden per user request. The
+              backend _seed_presets already creates the canonical 14 built-in
+              presets on startup; the "可添加的 Provider" cards were a duplicate
+              quick-add path. To re-enable later, restore the block below. */}
+          {false && filteredPresets.length > 0 && (
             <div>
               <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 12 }}>可添加的 Provider · {filteredPresets.length}</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
@@ -727,7 +733,7 @@ export default function Providers() {
             </div>
           )}
 
-          {sortedProviders.length === 0 && filteredPresets.length === 0 && (
+          {sortedProviders.length === 0 && (
             <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--text-dim)', fontSize: 13 }}>
               未找到匹配的 Provider
             </div>
