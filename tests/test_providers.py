@@ -62,9 +62,19 @@ async def test_stamp_tolerates_none_input():
     assert out[0]["model_type"] == "chat"
 
 
-async def test_seed_presets_marks_all_models_verified():
-    """Built-in presets should be seeded with verified=True so the Chat
-    dropdown isn't empty on a fresh install."""
+async def test_seed_presets_leaves_models_unverified():
+    """Built-in presets are NOT pre-verified. The Chat page dropdown only
+    shows models the user has actually tested via /providers/test or
+    /providers/{id}/models/probe. Until then, every preset model's
+    `verified` must stay None (= untested) — the user must click TEST in
+    the Providers page for each one they want to use.
+
+    This is the inverse of the original design (which pre-stamped
+    verified=True on the assumption that presets were 'tested by hand').
+    Most presets are unfilled placeholders (no API key, wrong base_url,
+    local services not running), so claiming they're verified would
+    lie to the user.
+    """
     async with AsyncSessionLocal() as db:
         await _seed_presets(db)
         preset_names = {p.name for p in _PRESET_PROVIDERS}
@@ -75,8 +85,11 @@ async def test_seed_presets_marks_all_models_verified():
             assert p.models, f"{p.name} has no models"
             for m in p.models:
                 assert isinstance(m, dict)
-                assert m.get("verified") is True, f"{p.name}/{m.get('name')}: {m}"
-                assert m.get("last_tested_at"), f"{p.name}/{m.get('name')}: no timestamp"
+                assert m.get("verified") is None, (
+                    f"{p.name}/{m.get('name')}: preset was pre-verified — "
+                    f"this means the Chat dropdown will lie about which models work"
+                )
+                assert m.get("last_tested_at") is None
                 assert m.get("test_error") is None
 
 

@@ -154,37 +154,28 @@ async def _seed_presets(db: AsyncSession):
     API workers run the startup seed concurrently: a duplicate-name insert just means
     another worker already seeded that preset, which is benign.
 
-    Built-in presets are stamped `verified=True` on every model: the spec calls
-    them out as "tested by hand" (Gemini/Kimi/MiniMax/DeepSeek/xAI/LM Studio
-    endpoints probed 2026-06-03) so the Chat page dropdown isn't empty on a
-    fresh install. Existing user-saved providers are not retroactively stamped.
+    **Presets are NOT pre-stamped `verified=True`.** Most built-in presets are
+    placeholders the user hasn't actually configured (no API key, wrong base_url,
+    Ollama not running locally, etc.); declaring them "verified" without a real
+    chat-completions round-trip would lie to the user and show broken models in
+    the Chat page dropdown. The verified flag stays `None` (= untested) until
+    the user explicitly hits TEST or PROBE on the Providers page.
     """
-    from datetime import datetime as _dt
     from sqlalchemy.exc import IntegrityError
-    seed_ts = _dt.utcnow().isoformat()
     for preset in _PRESET_PROVIDERS:
         existing = await db.execute(select(Provider).where(Provider.name == preset.name))
         if existing.scalar_one_or_none():
             continue
-        # Build models list with verified=True stamped on every entry.
-        # User-saved providers go through a different path (POST /providers
-        # + /providers/test) which uses _stamp_model_verified; this is
-        # seed-only.
-        preset_models = []
-        for m in preset.models:
-            d = m.model_dump()
-            d["verified"] = True
-            d["last_tested_at"] = seed_ts
-            d["test_error"] = None
-            preset_models.append(d)
+        # Store as JSON-serializable dicts; the column can't hold ModelInfo objects.
+        # `verified` / `last_tested_at` / `test_error` are left unset — only a real
+        # test/probe call (which routes through `_stamp_model_verified`) can fill them.
         provider = Provider(
             name=preset.name,
             provider_type=preset.provider_type,
             api_key_encrypted=encrypt_data(preset.api_key) if preset.api_key else None,
             base_url=preset.base_url,
             api_version=preset.api_version,
-            # Store as JSON-serializable dicts; the column can't hold ModelInfo objects.
-            models=preset_models,
+            models=[m.model_dump() for m in preset.models],
             is_active=preset.is_active,
             metadata_json=preset.metadata_json,
         )
