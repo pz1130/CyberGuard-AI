@@ -241,6 +241,7 @@ async def _test_provider_connectivity(
                 return ProviderTestResponse(
                     success=False,
                     latency_ms=round(latency_ms, 1),
+                    model=minimax_model,
                     error=f"HTTP {e.status_code}: {e.message[:200]}",
                 )
             except Exception as e:
@@ -248,6 +249,7 @@ async def _test_provider_connectivity(
                 return ProviderTestResponse(
                     success=False,
                     latency_ms=round(latency_ms, 1),
+                    model=minimax_model,
                     error=str(e)[:200],
                 )
 
@@ -274,6 +276,7 @@ async def _test_provider_connectivity(
                     return ProviderTestResponse(
                         success=False,
                         latency_ms=latency_ms,
+                        model=model_name,
                         error=f"HTTP {resp.status_code}: {resp.text[:200]}",
                     )
         else:
@@ -300,6 +303,7 @@ async def _test_provider_connectivity(
         return ProviderTestResponse(
             success=False,
             latency_ms=round(latency_ms, 1),
+            model=model_name,
             error=f"HTTP {e.status_code}: {e.message[:200]}",
         )
     except Exception as e:
@@ -307,6 +311,7 @@ async def _test_provider_connectivity(
         return ProviderTestResponse(
             success=False,
             latency_ms=round(latency_ms, 1),
+            model=model_name,
             error=str(e)[:200],
         )
 
@@ -577,6 +582,8 @@ async def probe_provider_capabilities(
                 # test, so a successful probe means the model is reachable.
                 entry["verified"] = True
                 entry["last_tested_at"] = cap.get("probed_at") or entry.get("last_tested_at")
+                # Clear any stale failure from a prior probe/test on this model
+                entry.pop("test_error", None)
             except Exception as e:  # noqa: BLE001 - one bad model shouldn't abort the batch
                 entry["verified"] = False
                 entry["test_error"] = str(e)[:200]
