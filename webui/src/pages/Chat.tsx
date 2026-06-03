@@ -56,6 +56,10 @@ interface ProviderModel {
   provider_type: string
   base_url: string
   model: string
+  // optional verification status (gates Chat dropdown visibility)
+  verified?: boolean | null
+  last_tested_at?: string | null
+  test_error?: string | null
 }
 
 interface AgentOption {
@@ -64,12 +68,6 @@ interface AgentOption {
   backend_type?: string
   is_active?: boolean
 }
-
-const FALLBACK_MODELS = [
-  { provider_id: 0, provider_name: 'OPENAI', provider_type: 'openai', base_url: 'https://api.openai.com/v1', model: 'gpt-4o' },
-  { provider_id: 0, provider_name: 'ANTHROPIC', provider_type: 'anthropic', base_url: 'https://api.anthropic.com/v1', model: 'claude-sonnet-4-7-2025' },
-  { provider_id: 0, provider_name: 'GROK', provider_type: 'xai', base_url: 'https://api.x.ai/v1', model: 'grok-3' },
-]
 
 const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 const ACCEPTED_DOC_TYPES = [
@@ -107,7 +105,7 @@ export default function Chat() {
   const [pollingStatus, setPollingStatus] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const [availableModels, setAvailableModels] = useState<ProviderModel[]>(FALLBACK_MODELS)
+  const [availableModels, setAvailableModels] = useState<ProviderModel[]>([])
   const isMountedRef = useRef(true)
   const activeTaskIdRef = useRef<string | null>(null)
   const pollIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -307,6 +305,12 @@ export default function Chat() {
         for (const p of data.providers) {
           if (!p.is_active) continue
           for (const m of (p.models || [])) {
+            // Only show models that the user has explicitly verified.
+            // A model dict's `verified` is set to true by /providers/test and
+            // /providers/{id}/models/probe on a successful call. Built-in presets are
+            // seeded with verified=true (see _seed_presets).
+            const verified = (typeof m === 'object' && m !== null) ? (m as any).verified : undefined
+            if (verified !== true) continue
             models.push({
               provider_id: p.id,
               provider_name: p.name.toUpperCase(),
@@ -663,10 +667,15 @@ export default function Chat() {
               background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
               color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
               fontFamily: 'var(--font-mono)',
-            }}>
+            }}
+            title={availableModels.length === 0 ? 'No verified models — go to Providers and click TEST' : undefined}
+          >
             <option value="auto">AUTO</option>
             {availableModels.map(m => <option key={`${m.provider_id}:${m.model}`} value={`${m.provider_id}:${m.model}`}>{m.provider_name} / {m.model}</option>)}
           </select>
+          {availableModels.length === 0 && (
+            <span style={{ fontSize: 10, letterSpacing: '0.06em', color: 'var(--text-dim)' }}>no verified models — test in Providers</span>
+          )}
           <span style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)' }}>AGENT</span>
           <select
             value={selectedAgentId}
