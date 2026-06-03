@@ -27,7 +27,10 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "003_pgvector_knowledge"
-down_revision: Union[str, None] = "002_openclaw_gateway"
+# Chain into 002b_create_document_chunks so this migration's
+# `ALTER TABLE document_chunks ...` statements see a table that exists.
+# (001_initial never created document_chunks; 002b is the bridge that does.)
+down_revision: Union[str, None] = "002b_create_document_chunks"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
