@@ -6,6 +6,7 @@ from app.services.group_chat import (
     GroupChatSession,
     GroupChatMessage,
 )
+from app.services.group_chat import _cosine
 
 
 class FakeRouter:
@@ -51,3 +52,24 @@ def test_groupchat_consensus_settings_defaults():
     assert settings.GROUPCHAT_CONSENSUS_HIGH == 0.85
     assert settings.GROUPCHAT_CONSENSUS_LOW == 0.65
     assert settings.GROUPCHAT_JACCARD_THRESHOLD == 0.7
+
+
+def test_cosine_identical_is_one():
+    assert _cosine([1.0, 2.0, 3.0], [1.0, 2.0, 3.0]) == pytest.approx(1.0)
+
+
+def test_cosine_orthogonal_is_zero():
+    assert _cosine([1.0, 0.0], [0.0, 1.0]) == 0.0
+
+
+def test_cosine_zero_vector_is_zero():
+    assert _cosine([0.0, 0.0], [1.0, 1.0]) == 0.0
+
+
+def test_cosine_length_mismatch_is_zero():
+    assert _cosine([1.0, 2.0], [1.0, 2.0, 3.0]) == 0.0
+
+
+def test_cosine_known_value():
+    # angle between (1,0) and (1,1) is 45deg -> cos = 1/sqrt(2)
+    assert _cosine([1.0, 0.0], [1.0, 1.0]) == pytest.approx(0.7071, abs=1e-4)
