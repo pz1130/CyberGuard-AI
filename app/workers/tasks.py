@@ -220,6 +220,7 @@ def _query_knowledge_base_sync(kb_id: int, query: str, top_k: int = 5) -> str:
 def _save_to_conversation_async(conversation_id: int, user_input: str, result: dict):
     """Save user message and result to conversation (fire-and-forget)."""
     import json
+    import re
     from datetime import datetime, timezone
     try:
         from app.core.database import get_sync_session
@@ -248,6 +249,18 @@ def _save_to_conversation_async(conversation_id: int, user_input: str, result: d
             final_summary = result.get("final_summary", "")
             if isinstance(final_summary, dict):
                 final_summary = json.dumps(final_summary)
+            # Last-mile safety net: strip any internal chain-of-thought blocks
+            # (<think>/<reasoning>) that may have leaked from a sub-agent executor
+            # or any other path that did not run llm_router's strip pass. This
+            # guarantees the user never sees model reasoning, regardless of
+            # provider preserve_think setting or which executor produced the text.
+            if final_summary:
+                final_summary = re.sub(
+                    r"<think[^>]*>[\s\S]*?</think>\s*", "", final_summary, flags=re.IGNORECASE
+                ).strip()
+                final_summary = re.sub(
+                    r"<reasoning>[\s\S]*?</reasoning>\s*", "", final_summary, flags=re.IGNORECASE
+                ).strip()
             messages.append({
                 "role": "assistant",
                 "content": final_summary or str(result),
