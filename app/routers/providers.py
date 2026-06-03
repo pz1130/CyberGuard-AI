@@ -311,6 +311,44 @@ async def _test_provider_connectivity(
         )
 
 
+def _stamp_model_verified(
+    models: Optional[list],
+    model_name: str,
+    ok: bool,
+    err: Optional[str] = None,
+) -> list:
+    """Return a new models list with `model_name`'s verification status updated.
+
+    - If a dict with this name already exists, update its `verified`,
+      `last_tested_at`, and (on failure) `test_error` in place.
+    - If no such dict exists (e.g. a freshly discovered model), append a stub
+      chat-model entry with the verification status.
+
+    The list is replaced (not mutated) so SQLAlchemy detects the JSON change
+    when the caller assigns the result back to `provider.models = ...`.
+    """
+    from datetime import datetime as _dt
+
+    result: list = [dict(m) if isinstance(m, dict) else {"name": str(m), "model_type": "chat"}
+                    for m in (models or [])]
+    now_iso = _dt.utcnow().isoformat()
+    for entry in result:
+        if entry.get("name") == model_name:
+            entry["verified"] = bool(ok)
+            entry["last_tested_at"] = now_iso
+            entry["test_error"] = (err or "")[:200] if not ok else None
+            return result
+    # Not found — append a stub
+    result.append({
+        "name": model_name,
+        "model_type": "chat",
+        "verified": bool(ok),
+        "last_tested_at": now_iso,
+        "test_error": (err or "")[:200] if not ok else None,
+    })
+    return result
+
+
 def _provider_to_read_schema(provider: Provider) -> ProviderRead:
     """Convert Provider model to ProviderRead schema, masking api_key for security."""
     # Never return decrypted api_key in responses; mask it for display purposes
