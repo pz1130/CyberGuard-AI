@@ -431,7 +431,7 @@ async def test_provider_connection(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(require_permission(Permission.AGENT_WRITE)),
 ):
-    """Test connectivity to an AI provider."""
+    """Test connectivity to an AI provider, persisting the per-model verified flag."""
     result = await db.execute(select(Provider).where(Provider.id == body.provider_id))
     provider = result.scalar_one_or_none()
     if not provider:
@@ -444,7 +444,7 @@ async def test_provider_connection(
         except Exception:
             api_key = None
 
-    return await _test_provider_connectivity(
+    test_resp = await _test_provider_connectivity(
         base_url=provider.base_url or "",
         api_key=api_key or "",
         provider_type=provider.provider_type,
@@ -452,6 +452,25 @@ async def test_provider_connection(
         models=provider.models or [],
         test_model=body.test_model,
     )
+
+    # Stamp per-model verified flag using the model that was actually tested.
+    tested_model = test_resp.model
+    if tested_model:
+        provider.models = _stamp_model_verified(
+            provider.models,
+            tested_model,
+            ok=test_resp.success,
+            err=test_resp.error,
+        )
+        try:
+            await db.commit()
+            await db.refresh(provider)
+        except Exception:
+            await db.rollback()
+            # Don't fail the test endpoint — the connectivity result is the
+            # primary response, the stamp is best-effort.
+
+    return test_resp
 
 
 @router.get("/providers/{provider_id}/models/discover")
@@ -527,8 +546,9 @@ async def probe_provider_capabilities(
     db: AsyncSession = Depends(get_db),
     _: None = Depends(require_permission(Permission.AGENT_WRITE)),
 ):
-    """Probe every model on the provider for tools/vision support and cache the
-    result inline on each model (``models[i].capabilities``). On-demand only.
+    """Probe every model on the provider for tools/vision support, cache the
+    result inline on each model (``models[i].capabilities``), and stamp a
+    successful probe as ``verified=True``. On-demand only.
     """
     result = await db.execute(select(Provider).where(Provider.id == provider_id))
     provider = result.scalar_one_or_none()
@@ -551,9 +571,15 @@ async def probe_provider_capabilities(
         name = entry.get("name")
         if name:
             try:
-                entry["capabilities"] = await probe_model(client, name)
+                cap = await probe_model(client, name)
+                entry["capabilities"] = cap
+                # Probe used the same chat-completions call as the connectivity
+                # test, so a successful probe means the model is reachable.
+                entry["verified"] = True
+                entry["last_tested_at"] = cap.get("probed_at") or entry.get("last_tested_at")
             except Exception as e:  # noqa: BLE001 - one bad model shouldn't abort the batch
-                logger.warning(f"[providers] probe failed for {name}: {e}")
+                entry["verified"] = False
+                entry["test_error"] = str(e)[:200]
         updated.append(entry)
 
     # Reassign (not in-place mutate) so SQLAlchemy detects the JSON change.
