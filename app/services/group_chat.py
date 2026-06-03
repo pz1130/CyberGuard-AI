@@ -382,13 +382,24 @@ class GroupChatService:
         
         return len(intersection) / len(union)
 
+    async def _first_agent_provider_id(self, session: GroupChatSession) -> Optional[int]:
+        """Return the llm_provider_id of the first participating agent, or None."""
+        if not session.agent_ids:
+            return None
+        from app.core.database import AsyncSessionLocal
+        from app.models.agent import AgentConfig
+        from sqlalchemy import select
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(AgentConfig).where(AgentConfig.id == session.agent_ids[0])
+            )
+            agent_obj = result.scalar_one_or_none()
+            return agent_obj.llm_provider_id if agent_obj else None
+
     async def _generate_summary(self, session: GroupChatSession) -> None:
         """Use the LLM to generate a master-agent summary of the discussion."""
         try:
             from app.services.llm_router import get_llm_router
-            from app.core.database import AsyncSessionLocal
-            from app.models.agent import AgentConfig
-            from sqlalchemy import select
 
             # Build a transcript of all agent responses
             transcript_lines: List[str] = []
@@ -400,16 +411,7 @@ class GroupChatService:
             if not transcript_lines:
                 return
 
-            # Get provider_id from the first participating agent
-            provider_id = None
-            if session.agent_ids:
-                async with AsyncSessionLocal() as db:
-                    result = await db.execute(
-                        select(AgentConfig).where(AgentConfig.id == session.agent_ids[0])
-                    )
-                    agent_obj = result.scalar_one_or_none()
-                    if agent_obj:
-                        provider_id = agent_obj.llm_provider_id
+            provider_id = await self._first_agent_provider_id(session)
 
             transcript = "\n\n".join(transcript_lines)
             prompt = (

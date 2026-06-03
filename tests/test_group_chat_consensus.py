@@ -73,3 +73,26 @@ def test_cosine_length_mismatch_is_zero():
 def test_cosine_known_value():
     # angle between (1,0) and (1,1) is 45deg -> cos = 1/sqrt(2)
     assert _cosine([1.0, 0.0], [1.0, 1.0]) == pytest.approx(0.7071, abs=1e-4)
+
+
+@pytest.mark.asyncio
+async def test_first_agent_provider_id_none_when_no_agents():
+    service = GroupChatService()
+    session = GroupChatSession(session_id="x", user_id=1, agent_ids=[])
+    assert await service._first_agent_provider_id(session) is None
+
+
+@pytest.mark.asyncio
+async def test_generate_summary_uses_first_agent_provider_id(monkeypatch):
+    service = GroupChatService()
+    session = _make_consensus_session(["agent says hello"])
+
+    async def _pid(s):
+        return 42
+    monkeypatch.setattr(service, "_first_agent_provider_id", _pid)
+
+    fake = FakeRouter(chat_result="summary text")
+    monkeypatch.setattr("app.services.llm_router.get_llm_router", lambda: fake)
+
+    await service._generate_summary(session)
+    assert fake.chat_calls and fake.chat_calls[0]["provider_id"] == 42
