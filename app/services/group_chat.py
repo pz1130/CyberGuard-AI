@@ -393,6 +393,41 @@ class GroupChatService:
         )
         return similar_count >= len(responses) - 1
 
+    async def _llm_judge_consensus(
+        self, responses: List[str], provider_id: Optional[int]
+    ) -> Optional[bool]:
+        """Ask an LLM whether the responses substantively agree.
+
+        Returns True/False, or None when the call fails or the answer is
+        unparseable (so the caller can fall back to the lexical heuristic).
+        """
+        try:
+            from app.services.llm_router import get_llm_router
+            numbered = "\n\n".join(
+                f"[Response {i + 1}]: {r}" for i, r in enumerate(responses)
+            )
+            prompt = (
+                "You are judging whether multiple agents have reached consensus.\n\n"
+                f"{numbered}\n\n"
+                "Do these responses substantively agree on the same conclusion? "
+                "Answer with exactly YES or NO."
+            )
+            router = get_llm_router()
+            answer = await router.chat(
+                messages=[{"role": "user", "content": prompt}],
+                provider_id=provider_id,
+            )
+            text = (answer or "").strip().lower()
+            if text.startswith("yes"):
+                return True
+            if text.startswith("no"):
+                return False
+            return None
+        except Exception as e:  # noqa: BLE001 - consensus check must not raise
+            import logging
+            logging.getLogger(__name__).warning(f"[consensus] LLM judge failed: {e}")
+            return None
+
     async def _first_agent_provider_id(self, session: GroupChatSession) -> Optional[int]:
         """Return the llm_provider_id of the first participating agent, or None."""
         if not session.agent_ids:

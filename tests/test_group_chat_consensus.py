@@ -106,3 +106,44 @@ def test_jaccard_consensus_identical_true():
 def test_jaccard_consensus_dissimilar_false():
     service = GroupChatService()
     assert service._jaccard_consensus(["block the ip now", "let us order pizza"]) is False
+
+
+@pytest.mark.asyncio
+async def test_judge_yes_true(monkeypatch):
+    service = GroupChatService()
+    fake = FakeRouter(chat_result="YES")
+    monkeypatch.setattr("app.services.llm_router.get_llm_router", lambda: fake)
+    assert await service._llm_judge_consensus(["a", "b"], None) is True
+    assert fake.chat_calls and fake.chat_calls[0]["provider_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_judge_no_false(monkeypatch):
+    service = GroupChatService()
+    fake = FakeRouter(chat_result="No, they differ.")
+    monkeypatch.setattr("app.services.llm_router.get_llm_router", lambda: fake)
+    assert await service._llm_judge_consensus(["a", "b"], None) is False
+
+
+@pytest.mark.asyncio
+async def test_judge_unparseable_none(monkeypatch):
+    service = GroupChatService()
+    fake = FakeRouter(chat_result="maybe, unclear")
+    monkeypatch.setattr("app.services.llm_router.get_llm_router", lambda: fake)
+    assert await service._llm_judge_consensus(["a", "b"], None) is None
+
+
+@pytest.mark.asyncio
+async def test_judge_empty_none(monkeypatch):
+    service = GroupChatService()
+    fake = FakeRouter(chat_result="")
+    monkeypatch.setattr("app.services.llm_router.get_llm_router", lambda: fake)
+    assert await service._llm_judge_consensus(["a", "b"], None) is None
+
+
+@pytest.mark.asyncio
+async def test_judge_error_none(monkeypatch):
+    service = GroupChatService()
+    fake = FakeRouter(chat_error=RuntimeError("llm down"))
+    monkeypatch.setattr("app.services.llm_router.get_llm_router", lambda: fake)
+    assert await service._llm_judge_consensus(["a", "b"], None) is None
