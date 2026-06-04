@@ -2,6 +2,7 @@ import { useState, useEffect, useContext } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Trash2, Plus, Edit2, ChevronDown, ChevronRight, Server, Activity, Wrench } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 import { SearchContext } from '../context/SearchContext'
 import Modal from '../components/Modal'
 
@@ -153,24 +154,19 @@ export default function MCP() {
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <div>
-          <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>MODEL CONTEXT PROTOCOL</div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{t('mcp.title').toUpperCase()}</h1>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => { setEditingServer(null); setServerForm(emptyServerForm); setShowServerForm(true) }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '0 16px', height: 36,
-              background: 'var(--accent)', border: '1px solid var(--accent-border)',
-              color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
-                          }}>
+      <PageHeader
+        eyebrow="MODEL CONTEXT PROTOCOL"
+        title={t('mcp.title').toUpperCase()}
+        actions={
+          <button
+            onClick={() => { setEditingServer(null); setServerForm(emptyServerForm); setShowServerForm(true) }}
+            className="btn btn-primary"
+            style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+          >
             <Plus size={13} /> NEW SERVER
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 0, marginBottom: 24, border: '1px solid var(--border-bright)', borderRadius: 'var(--radius-md)', overflow: 'hidden', width: 'fit-content' }}>
@@ -258,25 +254,26 @@ export default function MCP() {
       {/* Servers Tab */}
       {tab === 'servers' && (
         servers.length === 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 0', gap: 12, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 48, gap: 12 }}>
             <Server size={28} style={{ color: 'var(--text-dim)' }} />
             <div style={{ fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>NO MCP SERVERS DEFINED</div>
             <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>CLICK "NEW SERVER" TO REGISTER ONE</div>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {servers.map(s => {
               const sTools = (s.id && serverTools[s.id]) || []
               const expanded = expandedServer === s.id
               return (
-                <div key={s.id} data-item-id={s.id} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+                <div key={s.id} data-item-id={s.id} className="item-card" style={{ padding: 0, overflow: 'hidden' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px' }}>
                     <button onClick={() => s.id && toggleExpand(s.id)} className="item-card-icon-btn">
                       {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                     </button>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                        <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>{s.name}</span>
+                        <span className="item-card-pip" style={{ background: s.is_active ? 'var(--accent)' : 'var(--text-dim)' }} />
+                        <span className="item-card-title">{s.name}</span>
                         <span className="item-card-badge" style={{ color: 'var(--cyan)' }}>{s.transport_type.toUpperCase()}</span>
                         <span className="item-card-badge" style={{ color: s.is_active ? 'var(--green)' : 'var(--text-dim)' }}>
                           {s.is_active ? 'ACTIVE' : 'INACTIVE'}
@@ -305,11 +302,11 @@ export default function MCP() {
                       {sTools.length === 0 ? (
                         <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>NO TOOLS DISCOVERED</div>
                       ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                           {sTools.map(t => (
-                            <div key={t.id} style={{ padding: '10px 12px', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
                               <Wrench size={11} style={{ color: CATEGORY_COLORS[t.category || 'general'], flexShrink: 0 }} />
-                              <div>
+                              <div style={{ flex: 1 }}>
                                 <div style={{ fontSize: 13, color: 'var(--text-primary)', letterSpacing: '0.05em' }}>{t.tool_name}</div>
                                 {t.description && <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>{t.description}</div>}
                               </div>
@@ -336,33 +333,33 @@ export default function MCP() {
               className="form-input" />
           </div>
           {tools.length === 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 0', gap: 12, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 48, gap: 12 }}>
               <Wrench size={28} style={{ color: 'var(--text-dim)' }} />
               <div style={{ fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>NO MCP TOOLS FOUND</div>
               <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>REGISTER AND START A SERVER FIRST</div>
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {tools.map(t => {
                 const tc = CATEGORY_COLORS[t.category || 'general']
                 return (
-                <div key={t.id} className="item-card">
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                <div key={t.id} className="item-card" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', padding: '10px 14px', gap: 12 }}>
+                  <span className="item-card-pip" style={{ background: tc }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span className="item-card-pip" style={{ background: tc }} />
-                      <span className="item-card-title">{t.tool_name}</span>
+                      <span className="item-card-title" style={{ fontSize: 14 }}>{t.tool_name}</span>
+                      <span className="item-card-badge" style={{ color: tc }}>
+                        {(t.category || 'general').toUpperCase()}
+                      </span>
                     </div>
-                    <span className="item-card-badge" style={{ color: tc }}>
-                      {(t.category || 'general').toUpperCase()}
-                    </span>
+                    {t.description && <div className="item-card-desc" style={{ fontSize: 12, marginTop: 2 }}>{t.description}</div>}
+                    {t.tags && t.tags.length > 0 && (
+                      <span style={{ fontSize: 11, color: 'var(--cyan)', marginTop: 2, display: 'block' }}>{t.tags.join(', ')}</span>
+                    )}
                   </div>
-                  {t.description && <p className="item-card-desc">{t.description}</p>}
-                  {t.tags && t.tags.length > 0 && (
-                    <span style={{ fontSize: 11, color: 'var(--cyan)' }}>{t.tags.join(', ')}</span>
-                  )}
-                  <div className="item-card-actions">
-                    <Activity size={11} style={{ color: 'var(--text-dim)' }} />
-                    <span style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>{t.use_count ?? 0} CALLS</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-dim)', flexShrink: 0 }}>
+                    <Activity size={11} />
+                    <span>{t.use_count ?? 0} CALLS</span>
                   </div>
                 </div>
                 )

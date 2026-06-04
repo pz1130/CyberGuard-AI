@@ -49,6 +49,35 @@ export default function Login() {
         pointerEvents: 'none',
       }} />
 
+      {/* Green wave dots flowing left-to-right randomly along the horizontal grid lines */}
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+        {Array.from({ length: 18 }).map((_, i) => {
+          // Much denser distribution across full height (step ~5.3% for many more grid lines)
+          // Small per-dot jitter to feel organic and aligned with the 44px grid rhythm
+          const topPercent = ((i * 5.3) + (i % 5) * 1.1) % 97;
+          const duration = 6.2 + (i % 8) * 0.9; // faster overall: 6.2s ~ 12.5s for quicker, lively flow
+          const delay = - (i * 0.95 + (i % 4) * 0.55) % duration;
+          return (
+            <div
+              key={i}
+              style={{
+                position: 'absolute',
+                top: `${topPercent}%`,
+                left: -8,
+                width: 3.5,
+                height: 3.5,
+                background: 'var(--accent)',
+                borderRadius: '50%',
+                boxShadow: '0 0 5px var(--accent), 0 0 10px rgba(74,222,128,0.55)',
+                animation: `flow-dot ${duration}s linear infinite`,
+                animationDelay: `${delay}s`,
+                opacity: 0.9,
+              }}
+            />
+          );
+        })}
+      </div>
+
       {/* Glow orb */}
       <div style={{
         position: 'absolute', top: '50%', left: '50%',

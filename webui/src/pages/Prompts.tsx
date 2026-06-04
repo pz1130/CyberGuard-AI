@@ -1,6 +1,7 @@
 import { useEffect, useState, useContext } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, Edit2, Trash2, Save, Copy, Check } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 import { api } from '../api/client'
 import { SearchContext } from '../context/SearchContext'
 import Modal from '../components/Modal'
@@ -153,23 +154,16 @@ export default function Prompts() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ fontSize: 20, letterSpacing: '0.06em', color: 'var(--text-primary)' }}>{t('prompts.title').toUpperCase()}</div>
-          <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-dim)', marginTop: 4 }}>
-            预定义可复用的 system prompt，会话中可一键填入
-          </div>
-        </div>
-        <button onClick={openCreate} style={{
-          padding: '8px 16px', fontSize: 13, letterSpacing: '0.06em',
-          background: 'var(--accent)', border: '1px solid var(--accent-border)',
-          color: '#000', cursor: 'pointer', fontWeight: 700,
-          display: 'flex', alignItems: 'center', gap: 6,
-        }}>
-          <Plus size={12} /> NEW TEMPLATE
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="PROMPT LIBRARY"
+        title={t('prompts.title').toUpperCase()}
+        description="预定义可复用的 system prompt，会话中可一键填入"
+        actions={
+          <button onClick={openCreate} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Plus size={12} /> NEW TEMPLATE
+          </button>
+        }
+      />
 
       {/* Filter */}
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -177,12 +171,17 @@ export default function Prompts() {
         {(['all', 'system', 'intent_parser', 'summarizer', 'general'] as const).map(f => {
           const active = filter === f
           return (
-            <button key={f} onClick={() => setFilter(f)} style={{
-              padding: '4px 10px', fontSize: 12, letterSpacing: '0.1em',
-              background: active ? 'var(--accent-dim)' : 'transparent',
-              border: `1px solid ${active ? 'var(--accent-border)' : 'var(--border-bright)'}`,
-              color: active ? 'var(--accent)' : 'var(--text-muted)',
-              cursor: 'pointer',             }}>
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className="btn btn-sm"
+              style={{
+                background: active ? 'var(--accent-dim)' : 'transparent',
+                borderColor: active ? 'var(--accent-border)' : 'var(--border-bright)',
+                color: active ? 'var(--accent)' : 'var(--text-muted)',
+                height: 28,
+              }}
+            >
               {f === 'all' ? 'ALL' : CATEGORY_LABELS[f as Category]}
             </button>
           )
@@ -202,54 +201,55 @@ export default function Prompts() {
           NO TEMPLATES — CLICK "NEW TEMPLATE" TO CREATE ONE
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 12 }}>
           {filtered.map(item => (
-            <div key={item.id} data-item-id={item.id} style={{
-              border: '1px solid var(--border)', background: 'var(--bg-surface)',
-              padding: 14, display: 'flex', flexDirection: 'column', gap: 8,
-              opacity: item.is_active ? 1 : 0.5,
-            }}>
+            <div
+              key={item.id}
+              data-item-id={item.id}
+              className="item-card"
+              style={{ opacity: item.is_active ? 1 : 0.55, padding: '14px 16px', gap: 10 }}
+            >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                  <span style={{
-                    fontSize: 11, letterSpacing: '0.12em', padding: '2px 6px',
-                    border: `1px solid ${CATEGORY_COLORS[item.category]}`,
-                    color: CATEGORY_COLORS[item.category],
-                  }}>
+                  <span
+                    className="item-card-badge"
+                    style={{ borderColor: CATEGORY_COLORS[item.category], color: CATEGORY_COLORS[item.category] }}
+                  >
                     {CATEGORY_LABELS[item.category]}
                   </span>
-                  <span style={{
-                    fontSize: 15, color: 'var(--text-primary)', fontWeight: 600,
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                  }}>{item.name}</span>
+                  <span className="item-card-title" style={{ fontSize: 14 }}>{item.name}</span>
                 </div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  <button onClick={() => copyContent(item)} title="Copy content"
-                    style={{ padding: 4, background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}>
+                <div style={{ display: 'flex', gap: 2 }}>
+                  <button onClick={() => copyContent(item)} title="Copy content" className="item-card-icon-btn">
                     {copiedId === item.id ? <Check size={12} style={{ color: 'var(--accent)' }} /> : <Copy size={12} />}
                   </button>
-                  <button onClick={() => openEdit(item)} title="Edit"
-                    style={{ padding: 4, background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}>
+                  <button onClick={() => openEdit(item)} title="Edit" className="item-card-icon-btn">
                     <Edit2 size={12} />
                   </button>
-                  <button onClick={() => remove(item)} title="Delete"
-                    style={{ padding: 4, background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer' }}>
+                  <button onClick={() => remove(item)} title="Delete" className="item-card-icon-btn danger">
                     <Trash2 size={12} />
                   </button>
                 </div>
               </div>
+
               {item.description && (
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>{item.description}</div>
+                <div className="item-card-desc">{item.description}</div>
               )}
+
               <div style={{
-                fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5,
+                fontSize: 12,
+                color: 'var(--text-dim)',
+                lineHeight: 1.45,
                 background: 'var(--bg-base)',
-                border: '1px solid var(--border)', padding: '8px 10px',
-                maxHeight: 96, overflow: 'hidden',
-                whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                position: 'relative',
+                border: '1px solid var(--border)',
+                padding: '8px 10px',
+                maxHeight: 88,
+                overflow: 'hidden',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                borderRadius: 'var(--radius-sm)',
               }}>
-                {item.content.length > 280 ? item.content.slice(0, 280) + '\n…' : item.content}
+                {item.content.length > 260 ? item.content.slice(0, 260) + ' …' : item.content}
               </div>
             </div>
           ))}

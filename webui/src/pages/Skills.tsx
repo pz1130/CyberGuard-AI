@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useContext } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Trash2, Plus, Edit2, Wrench, X, Loader2, Link, Upload } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 import { SearchContext } from '../context/SearchContext'
 import Modal from '../components/Modal'
 
@@ -127,38 +128,41 @@ export default function Skills() {
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <div>
-          <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>AGENT CAPABILITIES</div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{t('skills.title').toUpperCase()}</h1>
-        </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={() => setShowInstallUrl(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', height: 36, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.1em', cursor: 'pointer' }}>
-            <Link size={12} /> FROM URL
-          </button>
-          <button onClick={() => setShowImport(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', height: 36, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.1em', cursor: 'pointer' }}>
-            <Upload size={12} /> IMPORT
-          </button>
-          <button onClick={() => { setShowForm(true); setEditing(null); setForm({ name: '', category: 'tool', description: '', version: '1.0.0', permission_level: 'medium', tagsText: '' }); setMdContent('') }}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 36, background: 'var(--accent)', border: '1px solid var(--accent-border)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer', boxShadow: '0 0 16px rgba(0,255,65,0.15)' }}>
-            <Plus size={13} /> NEW SKILL
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="AGENT CAPABILITIES"
+        title={t('skills.title').toUpperCase()}
+        actions={
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={() => setShowInstallUrl(true)} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Link size={12} /> FROM URL
+            </button>
+            <button onClick={() => setShowImport(true)} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Upload size={12} /> IMPORT
+            </button>
+            <button
+              onClick={() => { setShowForm(true); setEditing(null); setForm({ name: '', category: 'tool', description: '', version: '1.0.0', permission_level: 'medium', tagsText: '' }); setMdContent('') }}
+              className="btn btn-primary"
+              style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+            >
+              <Plus size={13} /> NEW SKILL
+            </button>
+          </div>
+        }
+      />
 
       {/* Install from URL Modal */}
       {showInstallUrl && (
         <Modal width={500} title="INSTALL FROM URL" onClose={() => { setShowInstallUrl(false); setInstallError('') }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div>
-              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>SKILL FILE URL</label>
-              <input value={installUrl} onChange={e => setInstallUrl(e.target.value)}
+              <label className="form-label">SKILL FILE URL</label>
+              <input
+                className="form-input"
+                value={installUrl}
+                onChange={e => setInstallUrl(e.target.value)}
                 placeholder="https://raw.githubusercontent.com/.../skill.md"
                 onKeyDown={e => e.key === 'Enter' && handleInstallUrl()}
-                style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em' }} />
+              />
             </div>
             {installError && (
               <div style={{ padding: '8px 10px', background: 'rgba(255,0,0,0.1)', border: '1px solid var(--red)', fontSize: 13, color: 'var(--red)' }}>
@@ -219,12 +223,12 @@ export default function Skills() {
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>NAME</label>
               <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                 placeholder="e.g. cve-lookup"
-                style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em' }} />
+                className="form-input" />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>CATEGORY</label>
               <select value={form.category || 'tool'} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14 }}>
+                className="form-input">
                 <option value="tool">TOOL</option>
                 <option value="skill">SKILL</option>
                 <option value="workflow">WORKFLOW</option>
@@ -237,12 +241,12 @@ export default function Skills() {
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>VERSION</label>
               <input value={form.version || '1.0.0'} onChange={e => setForm(f => ({ ...f, version: e.target.value }))}
                 placeholder="1.0.0"
-                style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em' }} />
+                className="form-input" />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>PERMISSION</label>
               <select value={form.permission_level || 'medium'} onChange={e => setForm(f => ({ ...f, permission_level: e.target.value }))}
-                style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14 }}>
+                className="form-input">
                 <option value="low">LOW</option>
                 <option value="medium">MEDIUM</option>
                 <option value="high">HIGH</option>
@@ -252,21 +256,21 @@ export default function Skills() {
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>DESCRIPTION</label>
               <input value={form.description || ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                 placeholder="Skill capability description..."
-                style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em' }} />
+                className="form-input" />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>MARKDOWN CONTENT</label>
               <textarea value={mdContent} onChange={e => setMdContent(e.target.value)}
                 rows={10}
                 placeholder={"# Skill Name\n\nDescribe what this skill does..."}
-                style={{ width: '100%', padding: '8px 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 13, letterSpacing: '0.05em', resize: 'vertical' }} />
+                className="form-textarea" style={{ minHeight: 120 }} />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>TAGS (comma-separated)</label>
               <input value={form.tagsText || ''}
                 onChange={e => setForm(f => ({ ...f, tagsText: e.target.value }))}
                 placeholder="recon, threat-intel"
-                style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em' }} />
+                className="form-input" />
             </div>
           </div>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 20 }}>
@@ -287,7 +291,7 @@ export default function Skills() {
         <input value={tagFilter} onChange={e => setTagFilter(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') load() }}
           placeholder="filter by tag…"
-          style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em' }} />
+          className="form-input" />
       </div>
 
       {/* Loading */}
@@ -313,36 +317,43 @@ export default function Skills() {
 
       {/* Grid */}
       {!loading && items.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
           {items.map(s => {
             const tc = CATEGORY_COLORS[s.category || ''] || 'var(--text-muted)'
             return (
-              <div key={s.id} data-item-id={s.id} style={{ padding: 20, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', borderLeft: `3px solid ${tc}` }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 32, height: 32, border: '1px solid var(--border-bright)', background: 'var(--bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: tc }}>
-                      <Wrench size={13} />
-                    </div>
-                    <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>{s.name}</div>
+              <div
+                key={s.id}
+                data-item-id={s.id}
+                className="item-card"
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                    <span className="item-card-pip" style={{ background: tc }} />
+                    <div className="item-card-title" style={{ fontSize: 14 }}>{s.name}</div>
                   </div>
-                  <div style={{ display: 'inline-block', padding: '2px 6px', border: `1px solid ${tc}`, color: tc, fontSize: 10, letterSpacing: '0.06em', background: 'var(--bg-base)' }}>
+                  <div className="item-card-badge" style={{ borderColor: tc, color: tc, background: 'var(--bg-base)' }}>
                     {(s.category || 'tool').toUpperCase()}
                   </div>
                 </div>
-                <p style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6, marginBottom: 8 }}>{s.description || '—'}</p>
-                {s.tags && s.tags.length > 0 && (
-                  <span style={{ fontSize: 11, color: '#60a5fa' }}>{s.tags.join(', ')}</span>
-                )}
-                {s.version && (
-                  <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 4 }}>v{s.version}</div>
-                )}
-                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+
+                <div className="item-card-desc" style={{ marginBottom: 2 }}>{s.description || '—'}</div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {s.tags && s.tags.length > 0 && (
+                    <span style={{ fontSize: 11, color: '#60a5fa' }}>{s.tags.join(', ')}</span>
+                  )}
+                  {s.version && (
+                    <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>v{s.version}</span>
+                  )}
+                </div>
+
+                <div className="item-card-actions" style={{ paddingTop: 10, marginTop: 4 }}>
                   <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>ID: {String(s.id || '').slice(0, 8) || '—'}</span>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => openEdit(s)} style={{ padding: 4, color: 'var(--text-muted)', cursor: 'pointer', background: 'none', border: 'none' }}>
+                  <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+                    <button onClick={() => openEdit(s)} className="item-card-icon-btn" title="Edit">
                       <Edit2 size={12} />
                     </button>
-                    <button onClick={() => del(String(s.id))} style={{ padding: 4, color: 'var(--red)', cursor: 'pointer', background: 'none', border: 'none' }}>
+                    <button onClick={() => del(String(s.id))} className="item-card-icon-btn danger" title="Delete">
                       <Trash2 size={12} />
                     </button>
                   </div>

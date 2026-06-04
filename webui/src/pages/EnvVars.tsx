@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Trash2, Eye, EyeOff, RefreshCw, Lock } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 
 interface EnvVar {
   id?: number
@@ -82,33 +83,20 @@ export default function EnvVars() {
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <div>
-          <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>SYSTEM CONFIGURATION</div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{t('envvars.title').toUpperCase()}</h1>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={load}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '0 12px', height: 36,
-              border: '1px solid var(--border-bright)', background: 'transparent',
-              color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer',
-                          }}>
-            <RefreshCw size={11} /> REFRESH
-          </button>
-          <button onClick={() => setShowNew(!showNew)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '0 16px', height: 36,
-              background: 'var(--accent)', border: '1px solid var(--accent-border)',
-              color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
-                          }}>
-            <Lock size={11} /> NEW VAR
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="SYSTEM CONFIGURATION"
+        title={t('envvars.title').toUpperCase()}
+        actions={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={load} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6, height: 36 }}>
+              <RefreshCw size={11} /> REFRESH
+            </button>
+            <button onClick={() => setShowNew(!showNew)} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36 }}>
+              <Lock size={11} /> NEW VAR
+            </button>
+          </div>
+        }
+      />
 
       {/* Security notice */}
       <div style={{
@@ -124,7 +112,7 @@ export default function EnvVars() {
 
       {/* Add New Form */}
       {showNew && (
-        <div style={{ marginBottom: 20, padding: 20, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
+        <div className="item-card" style={{ marginBottom: 20, padding: 20, display: 'block', background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 16 }}>NEW ENVIRONMENT VARIABLE</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
             <div>
@@ -200,8 +188,8 @@ export default function EnvVars() {
             <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>CLICK "NEW VAR" TO CREATE ONE</div>
           </div>
         ) : vars.map(v => (
-          <div key={v.id} style={{
-            display: 'flex', alignItems: 'center', gap: 12,
+          <div key={v.id} className="item-card" style={{
+            display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 12,
             padding: '12px 16px',
             background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
           }}>

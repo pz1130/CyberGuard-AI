@@ -1,4 +1,5 @@
 import { Coins } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
@@ -60,16 +61,16 @@ export default function TokenUsage() {
   if (error || !data) {
     return (
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-          <div>
-            <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>COST ANALYSIS</div>
-            <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{t('token.title').toUpperCase()}</h1>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Coins size={16} style={{ color: 'var(--accent)' }} />
-          </div>
-        </div>
-        <div style={{ padding: 20, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', color: 'var(--text-muted)' }}>
+        <PageHeader
+          eyebrow="COST ANALYSIS"
+          title={t('token.title').toUpperCase()}
+          actions={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Coins size={16} style={{ color: 'var(--accent)' }} />
+            </div>
+          }
+        />
+        <div className="item-card" style={{ padding: 20, color: 'var(--text-muted)' }}>
           No token usage data available. Make LLM API calls to see usage here.
         </div>
       </div>
@@ -84,15 +85,15 @@ export default function TokenUsage() {
   return (
     <div>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <div>
-          <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>COST ANALYSIS</div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{t('token.title').toUpperCase()}</h1>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Coins size={16} style={{ color: 'var(--accent)' }} />
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="COST ANALYSIS"
+        title={t('token.title').toUpperCase()}
+        actions={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Coins size={16} style={{ color: 'var(--accent)' }} />
+          </div>
+        }
+      />
 
       {/* Summary */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
@@ -101,7 +102,7 @@ export default function TokenUsage() {
           { label: 'TOTAL OUTPUT TOKENS', value: (totalOutput / 1000000).toFixed(2) + 'M', color: 'var(--purple)' },
           { label: 'TOTAL COST (USD)', value: '$' + totalCost.toFixed(2), color: 'var(--amber)' },
         ].map(({ label, value, color }) => (
-          <div key={label} style={{ padding: 20, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', textAlign: 'center' }}>
+          <div key={label} className="item-card" style={{ padding: 20, textAlign: 'center' }}>
             <div style={{ fontSize: 24, fontWeight: 700, color, letterSpacing: '0.05em', marginBottom: 6 }}>{value}</div>
             <div style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.06em' }}>{label}</div>
           </div>
@@ -109,7 +110,7 @@ export default function TokenUsage() {
       </div>
 
       {/* Bar chart */}
-      <div style={{ padding: 20, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', marginBottom: 24 }}>
+      <div className="item-card" style={{ padding: 20, marginBottom: 24 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 16 }}>INPUT TOKENS BY MODEL</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {data.by_model.length > 0 ? data.by_model.map(d => (
@@ -121,7 +122,7 @@ export default function TokenUsage() {
       </div>
 
       {/* Table */}
-      <div style={{ border: '1px solid var(--border-bright)', overflow: 'hidden', borderRadius: 'var(--radius-lg)' }}>
+      <div className="item-card" style={{ padding: 0, overflow: 'hidden' }}>
         <table className="data-table">
           <thead>
             <tr>

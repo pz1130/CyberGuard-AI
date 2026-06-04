@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Plus, Loader2, Search, X, RefreshCw, Zap, Settings2, Database } from 'lucide-react'
 import { SearchContext } from '../context/SearchContext'
+import Modal from '../components/Modal'
+import PageHeader from '../components/PageHeader'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -99,19 +101,6 @@ function StatusDot({ status }: { status: 'ready' | 'partial' | 'unconfigured' })
   )
 }
 
-const inp: React.CSSProperties = {
-  width: '100%', height: 38, padding: '0 12px',
-  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-  color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.04em',
-  boxSizing: 'border-box',
-}
-const lbl = (text: string, sub?: string) => (
-  <div style={{ marginBottom: 6 }}>
-    <label style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)' }}>{text}</label>
-    {sub && <span style={{ fontSize: 11, color: 'var(--text-dim)', marginLeft: 8 }}>{sub}</span>}
-  </div>
-)
-
 // ── Settings Modal — API Key + Base URL ───────────────────────────────────────
 
 function SettingsModal({
@@ -178,76 +167,109 @@ function SettingsModal({
   }
 
   return (
-    <Overlay onClose={onClose}>
-      <div style={{ width: 460 }}>
-        <ModalHeader
-          icon={<Settings2 size={14} />}
-          title={isNew ? (preset ? `ADD ${preset.name.toUpperCase()}` : 'NEW PROVIDER') : `SETTINGS · ${provider!.name.toUpperCase()}`}
-          sub={isNew ? 'Configure API credentials' : 'Update provider credentials'}
-          onClose={onClose}
-        />
-        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {isNew && !preset && (
-            <>
-              {lbl('PROVIDER NAME')}
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="My Provider" style={inp} />
-              {lbl('PROTOCOL TYPE')}
-              <select value={type} onChange={e => setType(e.target.value)} style={{ ...inp, height: 38 }}>
+    <Modal
+      title={isNew ? (preset ? `ADD ${preset.name.toUpperCase()}` : 'NEW PROVIDER') : `SETTINGS · ${provider!.name.toUpperCase()}`}
+      eyebrow={isNew ? 'Configure API credentials' : 'Update provider credentials'}
+      onClose={onClose}
+      width={460}
+      footer={
+        <>
+          <button
+            onClick={testConn}
+            disabled={testing || (!baseUrl && !provider)}
+            className="btn btn-secondary"
+            style={{ height: 36, fontSize: 12, letterSpacing: '0.12em' }}
+          >
+            {testing ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : 'TEST'}
+          </button>
+          <div style={{ flex: 1 }} />
+          <button
+            onClick={onClose}
+            className="btn btn-secondary"
+            style={{ height: 36, fontSize: 12, letterSpacing: '0.12em' }}
+          >
+            CANCEL
+          </button>
+          <button
+            onClick={save}
+            disabled={saving || !name}
+            className="btn btn-primary"
+            style={{ height: 36, fontSize: 12, letterSpacing: '0.12em', paddingLeft: 20, paddingRight: 20 }}
+          >
+            {saving ? '...' : 'SAVE'}
+          </button>
+        </>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {isNew && !preset && (
+          <>
+            <div>
+              <label className="form-label">PROVIDER NAME</label>
+              <input className="form-input" value={name} onChange={e => setName(e.target.value)} placeholder="My Provider" />
+            </div>
+            <div>
+              <label className="form-label">PROTOCOL TYPE</label>
+              <select className="form-input" value={type} onChange={e => setType(e.target.value)} style={{ height: 38 }}>
                 <option value="openai">OpenAI-Compatible</option>
                 <option value="anthropic">Anthropic</option>
                 <option value="azure">Azure OpenAI</option>
                 <option value="openrouter">OpenRouter</option>
                 <option value="custom">Custom</option>
               </select>
-            </>
-          )}
-          {lbl('BASE URL', type === 'ollama' ? '本地 Ollama 服务地址' : '')}
-          <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)}
-            placeholder={preset?.base_url || 'https://api.example.com/v1'} style={inp} />
+            </div>
+          </>
+        )}
 
-          {lbl('API KEY', provider?.api_key ? '已配置（输入新值以更新）' : '')}
+        <div>
+          <label className="form-label">
+            BASE URL
+            {type === 'ollama' && <span style={{ marginLeft: 8, color: 'var(--text-dim)' }}>本地 Ollama 服务地址</span>}
+          </label>
           <input
+            className="form-input"
+            value={baseUrl}
+            onChange={e => setBaseUrl(e.target.value)}
+            placeholder={preset?.base_url || 'https://api.example.com/v1'}
+          />
+        </div>
+
+        <div>
+          <label className="form-label">
+            API KEY
+            {provider?.api_key && <span style={{ marginLeft: 8, color: 'var(--text-dim)' }}>已配置（输入新值以更新）</span>}
+          </label>
+          <input
+            className="form-input"
             type="password"
             value={apiKey}
             onChange={e => setApiKey(e.target.value)}
             placeholder={provider?.api_key ? '留空保持不变' : keyPlaceholder}
-            style={inp}
           />
-
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: '1px solid var(--border-bright)', background: 'var(--bg-base)' }}>
-            <div>
-              <div style={{ fontSize: 12, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>保留 &lt;think&gt; 标签</div>
-              <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>适用于 DeepSeek-R1 / QwQ 等思维链模型</div>
-            </div>
-            <input type="checkbox" checked={preserveThink} onChange={e => setPreserveThink(e.target.checked)}
-              style={{ width: 16, height: 16, accentColor: 'var(--accent)' }} />
-          </div>
-
-          {testMsg && (
-            <div style={{
-              padding: '8px 12px', border: `1px solid ${testMsg.ok ? 'var(--accent-border)' : 'rgba(248,113,113,0.3)'}`,
-              background: 'var(--bg-base)', fontSize: 12,
-              color: testMsg.ok ? 'var(--accent)' : '#f87171',             }}>
-              {testMsg.ok ? '✓ ' : '✗ '}{testMsg.msg}
-            </div>
-          )}
         </div>
-        <ModalFooter>
-          <button onClick={testConn} disabled={testing || (!baseUrl && !provider)}
-            style={{ padding: '0 14px', height: 38, border: '1px solid var(--border-bright)', background: 'transparent', color: testing ? 'var(--text-dim)' : 'var(--text-muted)', fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer' }}>
-            {testing ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : 'TEST'}
-          </button>
-          <Spacer />
-          <button onClick={onClose} style={{ padding: '0 14px', height: 38, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer' }}>
-            CANCEL
-          </button>
-          <button onClick={save} disabled={saving || !name}
-            style={{ padding: '0 20px', height: 38, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer' }}>
-            {saving ? '...' : 'SAVE'}
-          </button>
-        </ModalFooter>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: '1px solid var(--border-bright)', background: 'var(--bg-base)', borderRadius: 'var(--radius-md)' }}>
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>保留 &lt;think&gt; 标签</div>
+            <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>适用于 DeepSeek-R1 / QwQ 等思维链模型</div>
+          </div>
+          <input type="checkbox" checked={preserveThink} onChange={e => setPreserveThink(e.target.checked)} style={{ width: 16, height: 16, accentColor: 'var(--accent)' }} />
+        </div>
+
+        {testMsg && (
+          <div style={{
+            padding: '8px 12px',
+            border: `1px solid ${testMsg.ok ? 'var(--accent-border)' : 'rgba(248,113,113,0.3)'}`,
+            background: 'var(--bg-base)',
+            borderRadius: 'var(--radius-sm)',
+            fontSize: 12,
+            color: testMsg.ok ? 'var(--accent)' : '#f87171',
+          }}>
+            {testMsg.ok ? '✓ ' : '✗ '}{testMsg.msg}
+          </div>
+        )}
       </div>
-    </Overlay>
+    </Modal>
   )
 }
 
@@ -376,117 +398,152 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
   const typeColor = { chat: 'var(--accent)', embedding: '#06b6d4', rerank: '#f59e0b' }
 
   return (
-    <Overlay onClose={onClose}>
-      <div style={{ width: 520 }}>
-        <ModalHeader
-          icon={<Database size={14} />}
-          title={`MODELS · ${provider.name.toUpperCase()}`}
-          sub={`${models.length} model${models.length !== 1 ? 's' : ''} configured`}
-          onClose={onClose}
-        />
-        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* Discover button */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <button onClick={discover} disabled={fetching}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', height: 34, border: '1px solid var(--accent-border)', background: 'var(--accent-dim)', color: fetching ? 'var(--text-dim)' : 'var(--accent)', fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer' }}>
-              {fetching ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Zap size={11} />}
-              {fetching ? 'FETCHING...' : '自动发现模型'}
-            </button>
-            <button onClick={probe} disabled={probing || !models.length}
-              title="对每个模型发极小请求，探测是否支持 tools / vision"
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', height: 34, border: '1px solid var(--border-bright)', background: 'var(--bg-base)', color: (probing || !models.length) ? 'var(--text-dim)' : 'var(--text-muted)', fontSize: 12, letterSpacing: '0.12em', cursor: (probing || !models.length) ? 'default' : 'pointer' }}>
-              {probing ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Settings2 size={11} />}
-              {probing ? 'PROBING...' : '探测能力'}
-            </button>
-          </div>
-          {fetchErr && <div style={{ fontSize: 11, color: '#f87171' }}>{fetchErr}</div>}
-
-          {/* Model list */}
-          <div style={{ border: '1px solid var(--border-bright)', overflow: 'hidden' }}>
-            {models.length === 0 ? (
-              <div style={{ padding: '24px 0', textAlign: 'center', fontSize: 12, color: 'var(--text-dim)' }}>
-                暂无模型 — 点击"自动发现"或手动添加
-              </div>
-            ) : (
-              models.map(m => {
-                const r = testRes[m.name]
-                return (
-                  <div key={m.name} style={{ display: 'flex', alignItems: 'center', padding: '9px 14px', borderBottom: '1px solid var(--border)', gap: 10 }}>
-                    {/* Type badge */}
-                    <span style={{ fontSize: 10, padding: '2px 5px', border: `1px solid ${typeColor[m.model_type]}`, color: typeColor[m.model_type], letterSpacing: '0.1em', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                      {m.model_type.toUpperCase()}
-                    </span>
-                    {/* Model name + verification badge */}
-                    <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {m.name}
-                    </span>
-                    {/* Verification status (✓ VERIFIED / ✗ FAILED / · UNTESTED) */}
-                    {modelStatusBadge(m)}
-                    {/* Capability badges (after probe) */}
-                    {m.capabilities?.tools && (
-                      <span title="支持 function-calling / tools" style={{ fontSize: 10, padding: '2px 5px', border: '1px solid #10b981', color: '#10b981', letterSpacing: '0.05em', flexShrink: 0 }}>🔧 TOOLS</span>
-                    )}
-                    {m.capabilities?.vision && (
-                      <span title="支持图像输入 / vision" style={{ fontSize: 10, padding: '2px 5px', border: '1px solid #8b5cf6', color: '#8b5cf6', letterSpacing: '0.05em', flexShrink: 0 }}>👁 VISION</span>
-                    )}
-                    {/* Test result */}
-                    {r && (
-                      <span style={{ fontSize: 11, color: r.ok ? 'var(--accent)' : '#f87171', flexShrink: 0 }}>
-                        {r.ok ? `✓ ${r.ms}ms` : '✗ FAILED'}
-                      </span>
-                    )}
-                    {/* Type selector */}
-                    <select
-                      value={m.model_type}
-                      onChange={e => setModels(prev => prev.map(x => x.name === m.name ? { ...x, model_type: e.target.value as any } : x))}
-                      style={{ height: 24, padding: '0 4px', background: 'var(--bg-base)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>
-                      <option value="chat">chat</option>
-                      <option value="embedding">embed</option>
-                      <option value="rerank">rerank</option>
-                    </select>
-                    {/* Test button */}
-                    <button onClick={() => testModel(m.name)} disabled={testing === m.name}
-                      style={{ fontSize: 11, letterSpacing: '0.1em', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px', flexShrink: 0 }}>
-                      {testing === m.name ? '…' : 'TEST'}
-                    </button>
-                    {/* Remove */}
-                    <button onClick={() => remove(m.name)} style={{ color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', flexShrink: 0 }}>
-                      <X size={11} />
-                    </button>
-                  </div>
-                )
-              })
-            )}
-          </div>
-
-          {/* Add model row */}
-          <div style={{ display: 'flex', gap: 6 }}>
-            <input
-              value={newName} onChange={e => setNewName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && add()}
-              placeholder="模型名称，如 gpt-4o"
-              style={{ flex: 1, height: 34, padding: '0 10px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 13 }}
-            />
-            <select value={newType} onChange={e => setNewType(e.target.value as any)}
-              style={{ width: 90, height: 34, padding: '0 6px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 12 }}>
-              <option value="chat">chat</option>
-              <option value="embedding">embed</option>
-              <option value="rerank">rerank</option>
-            </select>
-            <button onClick={add} style={{ padding: '0 14px', height: 34, border: '1px solid var(--accent-border)', background: 'var(--accent-dim)', color: 'var(--accent)', fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer' }}>
-              + 添加
-            </button>
-          </div>
-        </div>
-        <ModalFooter>
-          <button onClick={onClose} style={{ padding: '0 14px', height: 38, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer' }}>CANCEL</button>
-          <button onClick={save} disabled={saving}
-            style={{ padding: '0 20px', height: 38, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer' }}>
+    <Modal
+      title={`MODELS · ${provider.name.toUpperCase()}`}
+      eyebrow={`${models.length} model${models.length !== 1 ? 's' : ''} configured`}
+      onClose={onClose}
+      width={520}
+      footer={
+        <>
+          <button
+            onClick={onClose}
+            className="btn btn-secondary"
+            style={{ height: 36, fontSize: 12, letterSpacing: '0.12em' }}
+          >
+            CANCEL
+          </button>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="btn btn-primary"
+            style={{ height: 36, fontSize: 12, letterSpacing: '0.12em', paddingLeft: 20, paddingRight: 20 }}
+          >
             {saving ? '...' : 'SAVE MODELS'}
           </button>
-        </ModalFooter>
+        </>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* Discover / Probe toolbar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button
+            onClick={discover}
+            disabled={fetching}
+            className="btn"
+            style={{
+              height: 34,
+              border: '1px solid var(--accent-border)',
+              background: 'var(--accent-dim)',
+              color: fetching ? 'var(--text-dim)' : 'var(--accent)',
+              fontSize: 12,
+              letterSpacing: '0.12em',
+            }}
+          >
+            {fetching ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Zap size={11} />}
+            {fetching ? 'FETCHING...' : '自动发现模型'}
+          </button>
+          <button
+            onClick={probe}
+            disabled={probing || !models.length}
+            title="对每个模型发极小请求，探测是否支持 tools / vision"
+            className="btn btn-secondary"
+            style={{ height: 34, fontSize: 12, letterSpacing: '0.12em' }}
+          >
+            {probing ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Settings2 size={11} />}
+            {probing ? 'PROBING...' : '探测能力'}
+          </button>
+        </div>
+        {fetchErr && <div style={{ fontSize: 11, color: '#f87171' }}>{fetchErr}</div>}
+
+        {/* Model list */}
+        <div style={{ border: '1px solid var(--border-bright)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+          {models.length === 0 ? (
+            <div style={{ padding: '24px 0', textAlign: 'center', fontSize: 12, color: 'var(--text-dim)' }}>
+              暂无模型 — 点击"自动发现"或手动添加
+            </div>
+          ) : (
+            models.map(m => {
+              const r = testRes[m.name]
+              return (
+                <div key={m.name} style={{ display: 'flex', alignItems: 'center', padding: '9px 14px', borderBottom: '1px solid var(--border)', gap: 10 }}>
+                  {/* Type badge */}
+                  <span style={{ fontSize: 10, padding: '2px 5px', border: `1px solid ${typeColor[m.model_type]}`, color: typeColor[m.model_type], letterSpacing: '0.1em', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    {m.model_type.toUpperCase()}
+                  </span>
+                  {/* Model name + verification badge */}
+                  <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {m.name}
+                  </span>
+                  {/* Verification status (✓ VERIFIED / ✗ FAILED / · UNTESTED) */}
+                  {modelStatusBadge(m)}
+                  {/* Capability badges (after probe) */}
+                  {m.capabilities?.tools && (
+                    <span title="支持 function-calling / tools" style={{ fontSize: 10, padding: '2px 5px', border: '1px solid #10b981', color: '#10b981', letterSpacing: '0.05em', flexShrink: 0 }}>🔧 TOOLS</span>
+                  )}
+                  {m.capabilities?.vision && (
+                    <span title="支持图像输入 / vision" style={{ fontSize: 10, padding: '2px 5px', border: '1px solid #8b5cf6', color: '#8b5cf6', letterSpacing: '0.05em', flexShrink: 0 }}>👁 VISION</span>
+                  )}
+                  {/* Test result */}
+                  {r && (
+                    <span style={{ fontSize: 11, color: r.ok ? 'var(--accent)' : '#f87171', flexShrink: 0 }}>
+                      {r.ok ? `✓ ${r.ms}ms` : '✗ FAILED'}
+                    </span>
+                  )}
+                  {/* Type selector */}
+                  <select
+                    value={m.model_type}
+                    onChange={e => setModels(prev => prev.map(x => x.name === m.name ? { ...x, model_type: e.target.value as any } : x))}
+                    style={{ height: 24, padding: '0 4px', background: 'var(--bg-base)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}
+                  >
+                    <option value="chat">chat</option>
+                    <option value="embedding">embed</option>
+                    <option value="rerank">rerank</option>
+                  </select>
+                  {/* Test button */}
+                  <button onClick={() => testModel(m.name)} disabled={testing === m.name}
+                    style={{ fontSize: 11, letterSpacing: '0.1em', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px', flexShrink: 0 }}>
+                    {testing === m.name ? '…' : 'TEST'}
+                  </button>
+                  {/* Remove */}
+                  <button onClick={() => remove(m.name)} style={{ color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', flexShrink: 0 }}>
+                    <X size={11} />
+                  </button>
+                </div>
+              )
+            })
+          )}
+        </div>
+
+        {/* Add model row */}
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input
+            className="form-input"
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && add()}
+            placeholder="模型名称，如 gpt-4o"
+            style={{ flex: 1, height: 34, fontSize: 13 }}
+          />
+          <select
+            className="form-input"
+            value={newType}
+            onChange={e => setNewType(e.target.value as any)}
+            style={{ width: 90, height: 34, fontSize: 12 }}
+          >
+            <option value="chat">chat</option>
+            <option value="embedding">embed</option>
+            <option value="rerank">rerank</option>
+          </select>
+          <button
+            onClick={add}
+            className="btn"
+            style={{ height: 34, border: '1px solid var(--accent-border)', background: 'var(--accent-dim)', color: 'var(--accent)', fontSize: 12, letterSpacing: '0.1em' }}
+          >
+            + 添加
+          </button>
+        </div>
       </div>
-    </Overlay>
+    </Modal>
   )
 }
 
@@ -551,41 +608,6 @@ function ProviderCard({
   )
 }
 
-// ── Modal shell components ────────────────────────────────────────────────────
-
-function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal-container" style={{ width: '100%', maxWidth: 540, overflowY: 'auto' }}>
-        {children}
-      </div>
-    </div>
-  )
-}
-
-function ModalHeader({ icon, title, sub, onClose }: { icon: React.ReactNode; title: string; sub: string; onClose: () => void }) {
-  return (
-    <div className="modal-header">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-        <span style={{ color: 'var(--accent)', display: 'flex' }}>{icon}</span>
-        <div style={{ minWidth: 0 }}>
-          <div className="modal-header-title">{title}</div>
-          {sub && <div className="modal-eyebrow" style={{ margin: '2px 0 0' }}>{sub}</div>}
-        </div>
-      </div>
-      <button onClick={onClose} className="modal-close">
-        <X size={15} />
-      </button>
-    </div>
-  )
-}
-
-function ModalFooter({ children }: { children: React.ReactNode }) {
-  return <div className="modal-footer" style={{ justifyContent: 'flex-start' }}>{children}</div>
-}
-
-function Spacer() { return <div style={{ flex: 1 }} /> }
-
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function Providers() {
@@ -648,30 +670,39 @@ export default function Providers() {
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div>
-          <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>AI INFRASTRUCTURE</div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{t('providers.title').toUpperCase()}</h1>
-        </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={load} title="刷新" style={{ width: 36, height: 36, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <RefreshCw size={13} />
-          </button>
-          <button onClick={() => setSettingsTarget({})}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 36, background: 'var(--accent)', border: '1px solid var(--accent-border)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer', boxShadow: '0 0 16px rgba(0,255,65,0.15)' }}>
-            <Plus size={13} /> 自定义 PROVIDER
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="AI INFRASTRUCTURE"
+        title={t('providers.title').toUpperCase()}
+        actions={
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              onClick={load}
+              title="刷新"
+              className="btn btn-secondary"
+              style={{ width: 36, height: 36, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <RefreshCw size={13} />
+            </button>
+            <button
+              onClick={() => setSettingsTarget({})}
+              className="btn btn-primary"
+              style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+            >
+              <Plus size={13} /> 自定义 PROVIDER
+            </button>
+          </div>
+        }
+      />
 
       {/* Search */}
       <div style={{ position: 'relative', marginBottom: 20 }}>
-        <Search size={13} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
+        <Search size={13} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', pointerEvents: 'none' }} />
         <input
-          value={search} onChange={e => setSearch(e.target.value)}
+          className="form-input"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
           placeholder="搜索 Provider…"
-          style={{ width: '100%', height: 38, paddingLeft: 36, paddingRight: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, boxSizing: 'border-box' }}
+          style={{ paddingLeft: 36 }}
         />
       </div>
 

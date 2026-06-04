@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ShieldCheck, Check, X, RefreshCw, Loader2, ChevronDown, ChevronRight } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 import { api } from '../api/client'
 
 type StatusFilter = 'pending' | 'approved' | 'rejected' | 'all'
@@ -98,39 +99,20 @@ export default function Approvals() {
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{
-            width: 36, height: 36, border: '1px solid var(--border-bright)',
-            background: 'var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--amber, #ffb000)',
-          }}>
-            <ShieldCheck size={15} />
-          </div>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>
-              {t('approvals.title').toUpperCase()}
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.08em', marginTop: 2 }}>
-              {t('approvals.subtitle')}
-            </div>
-          </div>
-        </div>
-        <button
-          onClick={load}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '0 12px', height: 30,
-            background: 'transparent', border: '1px solid var(--border-bright)',
-            color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.1em',
-            cursor: 'pointer',           }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent-border)'; e.currentTarget.style.color = 'var(--accent)' }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-bright)'; e.currentTarget.style.color = 'var(--text-muted)' }}
-        >
-          <RefreshCw size={11} /> REFRESH
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="HUMAN-IN-THE-LOOP"
+        title={t('approvals.title').toUpperCase()}
+        description={t('approvals.subtitle')}
+        actions={
+          <button
+            onClick={load}
+            className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, height: 30 }}
+          >
+            <RefreshCw size={11} /> REFRESH
+          </button>
+        }
+      />
 
       {/* Filter tabs */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
@@ -158,11 +140,11 @@ export default function Approvals() {
           LOADING...
         </div>
       ) : items.length === 0 ? (
-        <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-dim)', fontSize: 13, letterSpacing: '0.1em' }}>
+        <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-dim)', fontSize: 13, letterSpacing: '0.1em' }}>
           {filter === 'pending' ? 'NO PENDING APPROVALS' : 'NO RECORDS'}
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
           {items.map(item => {
             const risk = item.risk_level as RiskLevel
             const isExpanded = expanded === item.id
@@ -171,11 +153,7 @@ export default function Approvals() {
             const itemNotice = notice?.id === item.id ? notice : null
 
             return (
-              <div key={item.id} style={{
-                background: 'var(--bg-surface)',
-                border: `1px solid ${isPending ? 'var(--border-bright)' : 'var(--border)'}`,
-                borderLeft: `3px solid ${RISK_COLOR[risk] || 'var(--border)'}`,
-              }}>
+              <div key={item.id} className="item-card" style={{ border: `1px solid ${isPending ? 'var(--border-bright)' : 'var(--border)'}` }}>
                 {/* Main row */}
                 <div
                   onClick={() => setExpanded(isExpanded ? null : item.id)}
@@ -187,6 +165,7 @@ export default function Approvals() {
                   <span style={{ color: 'var(--text-dim)', flexShrink: 0 }}>
                     {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                   </span>
+                  <span className="item-card-pip" style={{ background: RISK_COLOR[risk] || 'var(--border)' }} />
 
                   {/* Risk badge */}
                   <span style={{

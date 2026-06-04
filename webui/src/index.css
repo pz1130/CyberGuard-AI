@@ -755,7 +755,7 @@ button {
   display: flex;
   align-items: center;
   gap: 16px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   background: var(--bg-surface);
   min-width: 0;
 }
@@ -776,34 +776,6 @@ button {
   height: 20px;
   background: var(--border-bright);
   flex-shrink: 0;
-}
-
-/* Chat mode pill switch */
-.chat-mode-pill {
-  display: flex;
-  border: 1px solid var(--border-bright);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  flex-shrink: 0;
-}
-.chat-mode-pill button {
-  height: 30px;
-  padding: 0 14px;
-  background: var(--bg-base);
-  color: var(--text-muted);
-  border: none;
-  border-right: 1px solid var(--border-bright);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  font-weight: 400;
-  cursor: pointer;
-  transition: all 0.12s ease;
-}
-.chat-mode-pill button:last-child { border-right: none; }
-.chat-mode-pill button.active {
-  background: var(--accent);
-  color: #0b1018;
-  font-weight: 600;
 }
 
 /* Chat input row */
@@ -1049,6 +1021,31 @@ button {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Green wave dots flowing horizontally on the login grid background */
+@keyframes flow-dot {
+  0% {
+    left: -6px;
+    opacity: 0.35;
+    transform: scale(0.7);
+  }
+  5% {
+    opacity: 0.95;
+    transform: scale(1.15);
+  }
+  50% {
+    transform: scale(1);
+  }
+  92% {
+    opacity: 0.95;
+    transform: scale(1.1);
+  }
+  100% {
+    left: 100%;
+    opacity: 0.25;
+    transform: scale(0.6);
+  }
+}
+
 /* Toolbar action buttons */
 .chat-action-btn {
   padding: 5px 12px;
@@ -1261,4 +1258,11 @@ button {
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.08em;
+}
+
+/* Global search result highlight (added to .item-card after Ctrl+K navigation) */
+.search-highlight {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 1px var(--accent-border), 0 0 0 5px var(--accent-dim);
+  transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
 }

@@ -84,10 +84,11 @@ export default function Security() {
     icon: React.ReactNode; title: string; desc: string
     enabled: boolean; onToggle: () => void; color?: string
   }) => (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: 20, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
+    <div className="item-card" style={{
+      display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      padding: 20,
       marginBottom: 12,
+      background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
         <div style={{ width: 38, height: 38, border: '1px solid var(--border-bright)', background: 'var(--bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center', color }}>
@@ -172,7 +173,7 @@ export default function Security() {
           color="var(--amber)"
         />
 
-        <div style={{ padding: 20, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', marginBottom: 12 }}>
+        <div className="item-card" style={{ padding: 20, marginBottom: 12, display: 'block', background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
             THRESHOLD CONFIGURATION
           </div>

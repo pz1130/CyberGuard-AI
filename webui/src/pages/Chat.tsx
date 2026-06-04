@@ -598,14 +598,14 @@ export default function Chat() {
                   background: activeConvId === conv.id ? 'var(--accent-dim)' : 'transparent',
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4,
                   borderRadius: 'var(--radius-md)',
-                  borderLeft: activeConvId === conv.id ? '2px solid var(--accent)' : '2px solid transparent',
                   transition: 'background 0.1s ease',
                 }}
                 onMouseEnter={e => { if (activeConvId !== conv.id) e.currentTarget.style.background = 'var(--bg-hover)' }}
                 onMouseLeave={e => { if (activeConvId !== conv.id) e.currentTarget.style.background = 'transparent' }}
               >
                 {editingConvId === conv.id ? (
-                  <div style={{ flex: 1, display: 'flex', gap: 4 }}>
+                  <div style={{ flex: 1, display: 'flex', gap: 4, alignItems: 'center' }}>
+                    <span className="nav-pulse-dot" />
                     <input
                       value={editingTitle}
                       onChange={e => setEditingTitle(e.target.value)}
@@ -624,8 +624,11 @@ export default function Chat() {
                 ) : (
                   <>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, color: activeConvId === conv.id ? 'var(--accent)' : 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: 'var(--font-sans)', fontWeight: activeConvId === conv.id ? 500 : 400 }}>{conv.title}</div>
-                      {conv.updated_at && <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3, fontFamily: 'var(--font-sans)' }}>{formatTime(conv.updated_at)}</div>}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {activeConvId === conv.id && <span className="nav-pulse-dot" />}
+                        <div style={{ fontSize: 13, color: activeConvId === conv.id ? 'var(--accent)' : 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: 'var(--font-sans)', fontWeight: activeConvId === conv.id ? 500 : 400, flex: 1, minWidth: 0 }}>{conv.title}</div>
+                      </div>
+                      {conv.updated_at && <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3, fontFamily: 'var(--font-sans)', paddingLeft: activeConvId === conv.id ? 14 : 0 }}>{formatTime(conv.updated_at)}</div>}
                     </div>
                     <div style={{ display: 'flex', gap: 2, opacity: 0.5, transition: 'opacity 0.1s ease' }}
                       onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
@@ -667,25 +670,21 @@ export default function Chat() {
           {/* MODE group */}
           <div className="chat-toolbar-group">
             <span className="chat-toolbar-label">MODE</span>
-            <div className="chat-mode-pill">
-              {(['normal','fast','expert'] as const).map(m => {
-                const active = chatMode === m
-                const labels: Record<string, string> = { normal: 'NORMAL', fast: 'FAST', expert: 'EXPERT' }
-                const titles: Record<string, string> = {
-                  normal: '默认：LLM 解析意图决定是否调用子 agent',
-                  fast: '快速：跳过意图解析，只用 Master Agent',
-                  expert: '专家：并行派发给所有 active sub-agent，再汇总',
-                }
-                return (
-                  <button key={m}
-                    onClick={() => { setChatMode(m); localStorage.setItem('lastChatMode', m) }}
-                    title={titles[m]}
-                    className={active ? 'active' : undefined}>
-                    {labels[m]}
-                  </button>
-                )
-              })}
-            </div>
+            <select
+              value={chatMode}
+              onChange={e => {
+                const m = e.target.value as 'normal' | 'fast' | 'expert'
+                setChatMode(m)
+                localStorage.setItem('lastChatMode', m)
+              }}
+              className="chat-settings-select"
+              style={{ width: 'auto', minWidth: 80, height: 30, fontSize: 12 }}
+              title="NORMAL: 默认 LLM 解析意图决定是否调用子 agent | FAST: 跳过意图解析，只用 Master Agent | EXPERT: 并行派发给所有 active sub-agent"
+            >
+              <option value="normal">NORMAL</option>
+              <option value="fast">FAST</option>
+              <option value="expert">EXPERT</option>
+            </select>
           </div>
 
           <div className="chat-toolbar-separator" />

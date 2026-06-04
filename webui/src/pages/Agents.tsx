@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import { Plus, Loader2, Cpu, Trash, Pencil, Copy, Wifi, WifiOff, Key } from 'lucide-react'
 import { SearchContext } from '../context/SearchContext'
 import Modal from '../components/Modal'
+import PageHeader from '../components/PageHeader'
 
 interface Agent {
   id?: string
@@ -573,21 +574,15 @@ export default function Agents() {
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <div>
-          <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>AGENT INFRASTRUCTURE</div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{t('agents.title').toUpperCase()}</h1>
-        </div>
-        <button onClick={() => setShowKindPicker(true)} style={{
-          display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 36,
-          background: 'var(--accent)', border: '1px solid var(--accent-border)',
-          color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em',
-          cursor: 'pointer',           boxShadow: '0 0 16px rgba(0,255,65,0.15)',
-        }}>
-          <Plus size={13} /> NEW AGENT
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="AGENT INFRASTRUCTURE"
+        title={t('agents.title').toUpperCase()}
+        actions={
+          <button onClick={() => setShowKindPicker(true)} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Plus size={13} /> NEW AGENT
+          </button>
+        }
+      />
 
       {/* Kind filter */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
