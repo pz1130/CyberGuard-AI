@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useContext } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Plus, Trash2, Sparkles, FileText, X, Save, Check,
   ChevronRight, ChevronDown, ArrowLeft, Wand2, BookOpen, ClipboardList,
@@ -6,6 +7,7 @@ import {
 import ReactMarkdown from 'react-markdown'
 import { api } from '../api/client'
 import { SearchContext } from '../context/SearchContext'
+import BaseModal from '../components/Modal'
 
 type ReqStatus = 'not_assessed' | 'compliant' | 'partially_compliant' | 'non_compliant' | 'not_applicable'
 type AsmtStatus = 'planning' | 'in_progress' | 'completed' | 'archived'
@@ -114,6 +116,7 @@ type View =
   | { kind: 'frameworks' }
 
 export default function Governance() {
+  const { t } = useTranslation()
   const [view, setView] = useState<View>({ kind: 'list' })
 
   const { searchTarget, setSearchTarget } = useContext(SearchContext)
@@ -136,7 +139,7 @@ export default function Governance() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontSize: 20, letterSpacing: '0.06em', color: 'var(--text-primary)' }}>GOVERNANCE</div>
+          <div style={{ fontSize: 20, letterSpacing: '0.06em', color: 'var(--text-primary)' }}>{t('governance.title').toUpperCase()}</div>
           <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-dim)', marginTop: 4 }}>
             合规框架 · 审计 · 证据 · AI 评估
           </div>
@@ -224,7 +227,7 @@ function FrameworksList() {
               {f.version && <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>VERSION {f.version}</div>}
               <div style={{ fontSize: 12, color: 'var(--accent)', letterSpacing: '0.1em' }}>{f.requirement_count} REQUIREMENTS</div>
               {f.description && <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>{f.description}</div>}
-              <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>{f.urn}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>{f.urn}</div>
             </div>
           ))}
         </div>
@@ -507,8 +510,11 @@ function AssessmentDetail({ assessmentId, onBack }: { assessmentId: number; onBa
               maxHeight: '60vh', overflowY: 'auto',
               background: 'var(--bg-base)', border: '1px solid var(--border)',
               padding: 16, fontSize: 14, lineHeight: 1.7,
+              borderRadius: 'var(--radius-md)',
             }}>
-              <ReactMarkdown>{reportMd}</ReactMarkdown>
+              <div className="chat-markdown">
+                <ReactMarkdown>{reportMd}</ReactMarkdown>
+              </div>
             </div>
           )}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
@@ -629,7 +635,7 @@ function RequirementRow({
           style={iconButton('var(--text-muted)')}>
           {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         </button>
-        <span style={{ fontSize: 12, color: 'var(--accent)', fontFamily: 'var(--font-mono)', minWidth: 70 }}>{req.ref_id}</span>
+        <span style={{ fontSize: 12, color: 'var(--accent)', minWidth: 70 }}>{req.ref_id}</span>
         <span style={{ flex: 1, fontSize: 14, color: 'var(--text-primary)' }}>{req.name}</span>
         {ra.evidences.length > 0 && (
           <span style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>{ra.evidences.length} EVIDENCE</span>
@@ -673,8 +679,7 @@ function RequirementRow({
                       style={{
                         padding: '0 6px', fontSize: 11, letterSpacing: '0.1em',
                         background: 'transparent', border: '1px solid var(--border-bright)',
-                        color: 'var(--text-dim)', cursor: 'pointer', fontFamily: 'var(--font-mono)',
-                        height: 18, flexShrink: 0,
+                        color: 'var(--text-dim)', cursor: 'pointer',                         height: 18, flexShrink: 0,
                       }}
                     >USE</button>
                   </li>
@@ -867,27 +872,9 @@ function ProgressBar({ progress }: { progress: AssessmentSummary['progress'] }) 
 
 function Modal({ title, children, onClose, wide }: { title: string; children: React.ReactNode; onClose: () => void; wide?: boolean }) {
   return (
-    <div onClick={onClose} style={{
-      position: 'fixed', inset: 0, zIndex: 9999, padding: 20,
-      background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }}>
-      <div onClick={e => e.stopPropagation()} style={{
-        width: '100%', maxWidth: wide ? 900 : 640, maxHeight: '90vh',
-        background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
-        display: 'flex', flexDirection: 'column',
-      }}>
-        <div style={{
-          padding: '12px 16px', borderBottom: '1px solid var(--border)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        }}>
-          <span style={{ fontSize: 14, letterSpacing: '0.06em', color: 'var(--accent)' }}>{title}</span>
-          <button onClick={onClose} style={iconButton('var(--text-dim)')}><X size={14} /></button>
-        </div>
-        <div style={{ padding: 16, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {children}
-        </div>
-      </div>
-    </div>
+    <BaseModal title={title} onClose={onClose} width={wide ? 900 : 640}>
+      {children}
+    </BaseModal>
   )
 }
 
@@ -915,7 +902,7 @@ const Empty = ({ hint }: { hint: string }) => (
 const inputStyle = (): React.CSSProperties => ({
   width: '100%', height: 32, padding: '0 10px',
   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-  color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-mono)', outline: 'none',
+  color: 'var(--text-primary)', fontSize: 14, outline: 'none',
 })
 const textareaStyle = (): React.CSSProperties => ({
   ...inputStyle(), height: 'auto', padding: '8px 10px', lineHeight: 1.5, resize: 'vertical',
@@ -927,30 +914,27 @@ const card = (): React.CSSProperties => ({
 const primaryButton = (): React.CSSProperties => ({
   padding: '6px 12px', fontSize: 12, letterSpacing: '0.1em',
   background: 'var(--accent)', border: '1px solid var(--accent-border)',
-  color: '#000', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontWeight: 700,
+  color: '#000', cursor: 'pointer', fontWeight: 700,
   display: 'inline-flex', alignItems: 'center', gap: 4,
 })
 const ghostButton = (): React.CSSProperties => ({
   padding: '6px 12px', fontSize: 12, letterSpacing: '0.1em',
   background: 'transparent', border: '1px solid var(--border-bright)',
-  color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'var(--font-mono)',
-  display: 'inline-flex', alignItems: 'center', gap: 4,
+  color: 'var(--text-muted)', cursor: 'pointer',   display: 'inline-flex', alignItems: 'center', gap: 4,
 })
 const tabButton = (active: boolean): React.CSSProperties => ({
   padding: '6px 14px', fontSize: 12, letterSpacing: '0.1em',
   background: active ? 'var(--accent-dim)' : 'transparent',
   border: `1px solid ${active ? 'var(--accent-border)' : 'var(--border-bright)'}`,
   color: active ? 'var(--accent)' : 'var(--text-muted)',
-  cursor: 'pointer', fontFamily: 'var(--font-mono)',
-  display: 'inline-flex', alignItems: 'center', gap: 4,
+  cursor: 'pointer',   display: 'inline-flex', alignItems: 'center', gap: 4,
 })
 const chipButton = (active: boolean): React.CSSProperties => ({
   padding: '4px 10px', fontSize: 12, letterSpacing: '0.1em',
   background: active ? 'var(--accent-dim)' : 'transparent',
   border: `1px solid ${active ? 'var(--accent-border)' : 'var(--border-bright)'}`,
   color: active ? 'var(--accent)' : 'var(--text-muted)',
-  cursor: 'pointer', fontFamily: 'var(--font-mono)',
-})
+  cursor: 'pointer', })
 const iconButton = (color: string): React.CSSProperties => ({
   padding: 4, background: 'none', border: 'none', color, cursor: 'pointer',
 })
@@ -967,6 +951,5 @@ const statusBadge = (status: string, outlined?: boolean): React.CSSProperties =>
     border: `1px solid ${c}`,
     color: outlined ? c : c,
     background: outlined ? 'transparent' : 'transparent',
-    fontFamily: 'var(--font-mono)',
-  }
+      }
 }

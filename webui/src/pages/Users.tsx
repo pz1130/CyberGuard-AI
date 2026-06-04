@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Trash2, Edit2 } from 'lucide-react'
 
@@ -14,6 +15,7 @@ interface User {
 const ROLES = ['admin', 'operator', 'viewer']
 
 export default function Users() {
+  const { t } = useTranslation()
   const [items, setItems] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -139,7 +141,7 @@ export default function Users() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
           <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>ACCESS CONTROL</div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>USER MANAGEMENT</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{t('users.title').toUpperCase()}</h1>
         </div>
         <div style={{ display: 'flex', border: '1px solid var(--border-bright)' }}>
           {(['users', 'sso'] as const).map(t => (
@@ -147,7 +149,7 @@ export default function Users() {
               key={t}
               onClick={() => setActiveTab(t)}
               style={{
-                padding: '8px 20px', fontFamily: 'var(--font-mono)', fontSize: 12,
+                padding: '8px 20px', fontSize: 12,
                 letterSpacing: '0.08em', fontWeight: 600, cursor: 'pointer',
                 background: activeTab === t ? 'var(--accent)' : 'var(--bg-surface)',
                 color: activeTab === t ? '#000' : 'var(--text-muted)',
@@ -171,7 +173,7 @@ export default function Users() {
                   <select
                     value={ssoCfg.secret_env_var_id ?? ''}
                     onChange={e => saveSsoConfig({ secret_env_var_id: e.target.value ? parseInt(e.target.value) : null })}
-                    style={{ width: '100%', height: 36, padding: '0 10px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 13 }}
+                    style={{ width: '100%', height: 36, padding: '0 10px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 13 }}
                   >
                     <option value="">— NOT SET —</option>
                     {secretEnvVars.map(v => <option key={v.id} value={v.id}>{v.key}</option>)}
@@ -189,7 +191,7 @@ export default function Users() {
               </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>DEFAULT ROLE</label>
-                  <select value={ssoCfg.default_role} onChange={e => saveSsoConfig({ default_role: e.target.value })} style={{ width: '100%', height: 36, padding: '0 10px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>
+                  <select value={ssoCfg.default_role} onChange={e => saveSsoConfig({ default_role: e.target.value })} style={{ width: '100%', height: 36, padding: '0 10px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 13 }}>
                     {['admin', 'operator', 'analyst', 'viewer', 'auditor'].map(r => <option key={r} value={r}>{r.toUpperCase()}</option>)}
                   </select>
                 </div>
@@ -203,30 +205,30 @@ export default function Users() {
               <SsoInput label="AZURE KEY" value={newMapping.azure_key} onChange={v => setNewMapping(p => ({ ...p, azure_key: v }))} placeholder="00000000-0000-0000-0000-000000000000" />
               <div>
                 <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>APP ROLE</label>
-                <select value={newMapping.app_role} onChange={e => setNewMapping(p => ({ ...p, app_role: e.target.value }))} style={{ height: 36, padding: '0 8px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>
+                <select value={newMapping.app_role} onChange={e => setNewMapping(p => ({ ...p, app_role: e.target.value }))} style={{ height: 36, padding: '0 8px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 13 }}>
                   {['admin', 'operator', 'analyst', 'viewer', 'auditor'].map(r => <option key={r} value={r}>{r.toUpperCase()}</option>)}
                 </select>
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>PRIORITY</label>
-                <input type="number" value={newMapping.priority} onChange={e => setNewMapping(p => ({ ...p, priority: parseInt(e.target.value) || 0 }))} style={{ height: 36, width: 80, padding: '0 8px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 13 }} />
+                <input type="number" value={newMapping.priority} onChange={e => setNewMapping(p => ({ ...p, priority: parseInt(e.target.value) || 0 }))} style={{ height: 36, width: 80, padding: '0 8px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 13 }} />
               </div>
-              <button onClick={addMapping} disabled={!newMapping.azure_key.trim()} style={{ height: 36, padding: '0 16px', background: newMapping.azure_key.trim() ? 'var(--accent)' : 'var(--bg-elevated)', border: '1px solid var(--accent-border)', color: newMapping.azure_key.trim() ? '#000' : 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', cursor: 'pointer' }}>+ ADD</button>
+              <button onClick={addMapping} disabled={!newMapping.azure_key.trim()} style={{ height: 36, padding: '0 16px', background: newMapping.azure_key.trim() ? 'var(--accent)' : 'var(--bg-elevated)', border: '1px solid var(--accent-border)', color: newMapping.azure_key.trim() ? '#000' : 'var(--text-muted)', fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', cursor: 'pointer' }}>+ ADD</button>
             </div>
             {ssoMappings.length === 0 ? (
               <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.06em' }}>NO MAPPINGS — AZURE USERS RECEIVE THE DEFAULT ROLE</div>
             ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead><tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  {['AZURE KEY', 'APP ROLE', 'PRIORITY', ''].map(h => <th key={h} style={{ padding: '8px 12px', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', textAlign: 'left', fontWeight: 400 }}>{h}</th>)}
+              <table className="data-table">
+                <thead><tr>
+                  {['AZURE KEY', 'APP ROLE', 'PRIORITY', ''].map(h => <th key={h}>{h}</th>)}
                 </tr></thead>
                 <tbody>{ssoMappings.map(m => (
-                  <tr key={m.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td style={{ padding: '10px 12px', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-primary)' }}>{m.azure_key}</td>
-                    <td style={{ padding: '10px 12px', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent)' }}>{m.app_role.toUpperCase()}</td>
-                    <td style={{ padding: '10px 12px', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' }}>{m.priority}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                      <button onClick={() => removeMapping(m.id)} style={{ background: 'none', border: '1px solid var(--red)', color: 'var(--red)', padding: '4px 10px', fontSize: 11, fontFamily: 'var(--font-mono)', cursor: 'pointer', letterSpacing: '0.06em' }}>REMOVE</button>
+                  <tr key={m.id}>
+                    <td style={{ fontSize: 12 }}>{m.azure_key}</td>
+                    <td style={{ fontSize: 12, color: 'var(--accent)' }}>{m.app_role.toUpperCase()}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{m.priority}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button onClick={() => removeMapping(m.id)} style={{ background: 'none', border: '1px solid var(--red)', color: 'var(--red)', padding: '4px 10px', fontSize: 11, cursor: 'pointer', letterSpacing: '0.06em', borderRadius: 'var(--radius-sm)' }}>REMOVE</button>
                     </td>
                   </tr>
                 ))}</tbody>
@@ -248,12 +250,7 @@ export default function Users() {
             <div>
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>USERNAME</label>
               <input value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
-                style={{
-                  width: '100%', height: 38, padding: '0 12px',
-                  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
-                  fontFamily: 'var(--font-mono)',
-                }} />
+                className="form-input" />
               <div style={{ fontSize: 11, color: form.username && form.username.trim().length >= 3 ? 'var(--green)' : 'var(--text-dim)', marginTop: 4, letterSpacing: '0.05em' }}>
                 {form.username ? (form.username.trim().length >= 3 ? '✓ At least 3 characters' : `✗ ${form.username.trim().length}/3 characters`) : 'Min 3 characters'}
               </div>
@@ -261,12 +258,7 @@ export default function Users() {
             <div>
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>EMAIL</label>
               <input type="email" value={form.email || ''} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                style={{
-                  width: '100%', height: 38, padding: '0 12px',
-                  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
-                  fontFamily: 'var(--font-mono)',
-                }} />
+                className="form-input" />
               <div style={{ fontSize: 11, color: form.email && form.email.includes('@') ? 'var(--green)' : 'var(--text-dim)', marginTop: 4, letterSpacing: '0.05em' }}>
                 {form.email ? (form.email.includes('@') ? '✓ Valid email' : '✗ Must contain @') : 'Must be a valid email'}
               </div>
@@ -274,11 +266,7 @@ export default function Users() {
             <div>
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>ROLE</label>
               <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
-                style={{
-                  width: '100%', height: 38, padding: '0 12px',
-                  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-mono)',
-                }}>
+                className="form-input">
                 {ROLES.map(r => <option key={r} value={r}>{r.toUpperCase()}</option>)}
               </select>
             </div>
@@ -286,12 +274,7 @@ export default function Users() {
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>{editing ? 'NEW PASSWORD' : 'PASSWORD'}</label>
               <input type="password" value={password} onChange={e => setPassword(e.target.value)}
                 placeholder={editing ? 'LEAVE BLANK TO KEEP CURRENT' : ''}
-                style={{
-                  width: '100%', height: 38, padding: '0 12px',
-                  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
-                  fontFamily: 'var(--font-mono)',
-                }} />
+                className="form-input" />
               {editing ? (
                 <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 4, letterSpacing: '0.05em' }}>Leave blank to keep current password</div>
               ) : (
@@ -307,8 +290,7 @@ export default function Users() {
                 padding: '0 16px', height: 36,
                 border: '1px solid var(--border-bright)', background: 'transparent',
                 color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
-                fontFamily: 'var(--font-mono)',
-              }}>
+                              }}>
               CANCEL
             </button>
             <button onClick={submit}
@@ -316,8 +298,7 @@ export default function Users() {
                 padding: '0 16px', height: 36,
                 background: 'var(--accent)', border: '1px solid var(--accent-border)',
                 color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em',
-                cursor: 'pointer', fontFamily: 'var(--font-mono)',
-              }}>
+                cursor: 'pointer',               }}>
               {editing ? 'SAVE CHANGES' : 'CREATE USER'}
             </button>
           </div>
@@ -325,12 +306,12 @@ export default function Users() {
       )}
 
       {/* Table */}
-      <div style={{ border: '1px solid var(--border-bright)', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <div style={{ border: '1px solid var(--border-bright)', overflow: 'hidden', borderRadius: 'var(--radius-lg)' }}>
+        <table className="data-table">
           <thead>
-            <tr style={{ background: 'var(--bg-base)', borderBottom: '1px solid var(--border-bright)' }}>
+            <tr>
               {['USERNAME', 'EMAIL', 'ROLE', 'STATUS', 'ACTIONS'].map((h, i) => (
-                <th key={i} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
+                <th key={i}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -344,9 +325,9 @@ export default function Users() {
                 <td colSpan={5} style={{ textAlign: 'center', padding: 40, fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>NO USERS FOUND</td>
               </tr>
             ) : items.map(u => (
-              <tr key={u.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                <td style={{ padding: '14px 16px', fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.05em' }}>{u.username}</td>
-                <td style={{ padding: '14px 16px', fontSize: 13, color: 'var(--text-muted)' }}>{u.email || '—'}</td>
+              <tr key={u.id}>
+                <td style={{ fontWeight: 600 }}>{u.username}</td>
+                <td style={{ color: 'var(--text-muted)' }}>{u.email || '—'}</td>
                 <td style={{ padding: '14px 16px' }}>
                   <span style={{
                     display: 'inline-block', padding: '2px 8px',
@@ -401,12 +382,12 @@ function SsoField({ label, value, checked, saved, onChange, saving }: {
       {checked !== undefined && onChange ? (
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
           <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} disabled={saving} />
-          <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', letterSpacing: '0.06em' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-primary)', letterSpacing: '0.06em' }}>
             {checked ? 'ON' : 'OFF'}
           </span>
         </label>
       ) : (
-        <div style={{ padding: '8px 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', fontSize: 12, fontFamily: 'var(--font-mono)', color: saved ? 'var(--green)' : 'var(--text-primary)', letterSpacing: '0.05em' }}>
+        <div style={{ padding: '8px 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', fontSize: 12, color: saved ? 'var(--green)' : 'var(--text-primary)', letterSpacing: '0.05em' }}>
           {value || '—'}
         </div>
       )}
@@ -419,9 +400,9 @@ function SsoInput({ label, value, onChange, placeholder }: {
 }) {
   return (
     <div>
-      <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>{label}</label>
+      <label className="form-label">{label}</label>
       <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        style={{ width: '100%', height: 36, padding: '0 10px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 13 }} />
+        className="form-input" />
     </div>
   )
 }

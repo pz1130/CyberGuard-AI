@@ -1,7 +1,9 @@
 import { useEffect, useState, useContext } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Plus, Webhook as WebhookIcon, Loader2, Trash, Pencil, Copy, Key, ArrowDown, ArrowUp } from 'lucide-react'
 import { SearchContext } from '../context/SearchContext'
+import Modal from '../components/Modal'
 
 interface Webhook {
   id: number
@@ -31,7 +33,7 @@ const inputStyle: React.CSSProperties = {
   width: '100%', height: 36, padding: '0 12px',
   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
   color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
-  fontFamily: 'var(--font-mono)', boxSizing: 'border-box',
+  boxSizing: 'border-box',
 }
 
 const label = (text: string) => (
@@ -41,6 +43,7 @@ const label = (text: string) => (
 )
 
 export default function Webhooks() {
+  const { t } = useTranslation()
   const [items, setItems] = useState<Webhook[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -201,14 +204,13 @@ export default function Webhooks() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
           <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>EVENT BUS</div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>WEBHOOKS</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{t('webhooks.title').toUpperCase()}</h1>
         </div>
         <button onClick={openCreate} style={{
           display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 36,
           background: 'var(--accent)', border: '1px solid var(--accent-border)',
           color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em',
-          cursor: 'pointer', fontFamily: 'var(--font-mono)',
-        }}>
+          cursor: 'pointer',         }}>
           <Plus size={13} /> NEW WEBHOOK
         </button>
       </div>
@@ -258,12 +260,12 @@ export default function Webhooks() {
 
               {/* URL display */}
               {w.direction === 'outgoing' && (
-                <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', marginBottom: 6, wordBreak: 'break-all' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, wordBreak: 'break-all' }}>
                   → {w.outgoing_url}
                 </div>
               )}
               {w.direction === 'incoming' && (
-                <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: w.has_token ? 'var(--text-muted)' : '#f59e0b', marginBottom: 6 }}>
+                <div style={{ fontSize: 12, color: w.has_token ? 'var(--text-muted)' : '#f59e0b', marginBottom: 6 }}>
                   {w.has_token ? `← ${w.incoming_url}` : '⚠ no token (regenerate)'}
                 </div>
               )}
@@ -278,7 +280,7 @@ export default function Webhooks() {
               </div>
 
               {/* Stats */}
-              <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', marginBottom: 8 }}>
+              <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--text-dim)', marginBottom: 8 }}>
                 <span>fired {w.trigger_count}</span>
                 <span style={{ color: 'var(--accent)' }}>ok {w.success_count}</span>
                 <span style={{ color: w.failure_count ? '#f87171' : 'var(--text-dim)' }}>fail {w.failure_count}</span>
@@ -286,14 +288,14 @@ export default function Webhooks() {
               </div>
 
               {w.last_error && (
-                <div style={{ fontSize: 11, color: '#f87171', fontFamily: 'var(--font-mono)', marginBottom: 8, padding: '4px 8px', background: 'rgba(248,113,113,0.08)' }}>
+                <div style={{ fontSize: 11, color: '#f87171', marginBottom: 8, padding: '4px 8px', background: 'rgba(248,113,113,0.08)' }}>
                   {w.last_error.slice(0, 200)}
                 </div>
               )}
 
               {testResult[w.id] && (
                 <div style={{
-                  fontSize: 11, fontFamily: 'var(--font-mono)', marginBottom: 8, padding: '4px 8px',
+                  fontSize: 11, marginBottom: 8, padding: '4px 8px',
                   background: testResult[w.id].startsWith('✓') ? 'var(--accent-dim)' : 'rgba(248,113,113,0.08)',
                   color: testResult[w.id].startsWith('✓') ? 'var(--accent)' : '#f87171',
                 }}>{testResult[w.id]}</div>
@@ -303,13 +305,13 @@ export default function Webhooks() {
               <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {w.direction === 'outgoing' && (
                   <button onClick={() => test(w.id)} disabled={testing === w.id}
-                    style={{ padding: '0 10px', height: 26, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--accent)', fontSize: 11, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+                    style={{ padding: '0 10px', height: 26, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--accent)', fontSize: 11, letterSpacing: '0.1em', cursor: 'pointer' }}>
                     {testing === w.id ? '...' : 'TEST'}
                   </button>
                 )}
                 {w.direction === 'incoming' && (
                   <button onClick={() => regen(w.id)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 10px', height: 26, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 11, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+                    style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 10px', height: 26, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 11, letterSpacing: '0.1em', cursor: 'pointer' }}>
                     <Key size={10} /> REGEN
                   </button>
                 )}
@@ -329,27 +331,38 @@ export default function Webhooks() {
 
       {/* Form modal */}
       {showForm && (
-        <div onClick={e => e.target === e.currentTarget && !createdToken && setShowForm(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: 40, overflowY: 'auto', zIndex: 100 }}>
-          <div style={{ width: '100%', maxWidth: 600, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
-            <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 4 }}>WEBHOOK CONFIGURATION</div>
-              <h3 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)', margin: 0 }}>
-                {editing ? 'EDIT WEBHOOK' : 'NEW WEBHOOK'}
-              </h3>
-            </div>
-
-            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {/* Created token banner — only after a successful create */}
+        <Modal
+          width={600}
+          eyebrow="WEBHOOK CONFIGURATION"
+          title={editing ? 'EDIT WEBHOOK' : 'NEW WEBHOOK'}
+          closeOnOverlay={!createdToken}
+          onClose={() => { if (!createdToken) setShowForm(false) }}
+          footer={createdToken ? (
+            <button onClick={() => { setShowForm(false); setCreatedToken(null); setCreatedUrl(null) }}
+              className="btn btn-primary" style={{ flex: 1 }}>
+              我已保存 TOKEN，关闭
+            </button>
+          ) : (
+            <>
+              <button onClick={() => setShowForm(false)} className="btn btn-secondary">
+                CANCEL
+              </button>
+              <button onClick={submit} className="btn btn-primary">
+                {editing ? 'SAVE' : 'CREATE'}
+              </button>
+            </>
+          )}
+        >
+          {/* Created token banner — only after a successful create */}
               {createdToken && createdUrl && (
                 <div style={{ padding: '12px', background: 'rgba(0,255,65,0.06)', border: '1px solid var(--accent-border)', borderLeft: '3px solid var(--accent)' }}>
                   <div style={{ fontSize: 12, color: 'var(--accent)', letterSpacing: '0.1em', marginBottom: 8 }}>⚠ TOKEN SHOWN ONLY ONCE — COPY NOW</div>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
-                    <div style={{ flex: 1, padding: '6px 10px', background: 'var(--bg-base)', fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--accent)', wordBreak: 'break-all', border: '1px solid var(--accent-border)' }}>
+                    <div style={{ flex: 1, padding: '6px 10px', background: 'var(--bg-base)', fontSize: 12, color: 'var(--accent)', wordBreak: 'break-all', border: '1px solid var(--accent-border)' }}>
                       {createdUrl.replace('<TOKEN>', createdToken)}
                     </div>
                     <button onClick={() => cp(createdUrl.replace('<TOKEN>', createdToken), 'url')}
-                      style={{ padding: '6px 10px', border: '1px solid var(--accent-border)', background: copied === 'url' ? 'var(--accent)' : 'transparent', color: copied === 'url' ? '#000' : 'var(--accent)', fontSize: 11, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      style={{ padding: '6px 10px', border: '1px solid var(--accent-border)', background: copied === 'url' ? 'var(--accent)' : 'transparent', color: copied === 'url' ? '#000' : 'var(--accent)', fontSize: 11, letterSpacing: '0.1em', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
                       <Copy size={10} /> {copied === 'url' ? 'COPIED' : 'COPY URL'}
                     </button>
                   </div>
@@ -407,7 +420,7 @@ export default function Webhooks() {
                                     : f.outgoing_events.filter(x => x !== ev),
                                 }))}
                                 style={{ accentColor: 'var(--accent)' }} />
-                              <span style={{ fontSize: 13, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{ev}</span>
+                              <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{ev}</span>
                               <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>— Human-in-the-Loop 审批请求创建时</span>
                             </label>
                           ))}
@@ -437,33 +450,11 @@ export default function Webhooks() {
                     <input type="checkbox" id="wh_active" checked={form.is_active}
                       onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))}
                       style={{ accentColor: 'var(--accent)' }} />
-                    <label htmlFor="wh_active" style={{ fontSize: 13, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', cursor: 'pointer' }}>ACTIVE</label>
+                    <label htmlFor="wh_active" style={{ fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>ACTIVE</label>
                   </div>
                 </>
               )}
-            </div>
-
-            <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', display: 'flex', gap: 12 }}>
-              {createdToken ? (
-                <button onClick={() => { setShowForm(false); setCreatedToken(null); setCreatedUrl(null) }}
-                  style={{ flex: 1, height: 40, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
-                  我已保存 TOKEN，关闭
-                </button>
-              ) : (
-                <>
-                  <button onClick={() => setShowForm(false)}
-                    style={{ flex: 1, height: 40, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
-                    CANCEL
-                  </button>
-                  <button onClick={submit}
-                    style={{ flex: 1, height: 40, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
-                    {editing ? 'SAVE' : 'CREATE'}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

@@ -1,7 +1,9 @@
 import { useEffect, useState, useContext } from 'react'
-import { Plus, Edit2, Trash2, X, Save, Copy, Check } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { Plus, Edit2, Trash2, Save, Copy, Check } from 'lucide-react'
 import { api } from '../api/client'
 import { SearchContext } from '../context/SearchContext'
+import Modal from '../components/Modal'
 
 type Category = 'system' | 'intent_parser' | 'summarizer' | 'general'
 
@@ -49,6 +51,7 @@ const EMPTY_EDIT: EditState = {
 }
 
 export default function Prompts() {
+  const { t } = useTranslation()
   const [items, setItems] = useState<PromptTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | Category>('all')
@@ -153,7 +156,7 @@ export default function Prompts() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontSize: 20, letterSpacing: '0.06em', color: 'var(--text-primary)' }}>PROMPT TEMPLATES</div>
+          <div style={{ fontSize: 20, letterSpacing: '0.06em', color: 'var(--text-primary)' }}>{t('prompts.title').toUpperCase()}</div>
           <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-dim)', marginTop: 4 }}>
             预定义可复用的 system prompt，会话中可一键填入
           </div>
@@ -161,7 +164,7 @@ export default function Prompts() {
         <button onClick={openCreate} style={{
           padding: '8px 16px', fontSize: 13, letterSpacing: '0.06em',
           background: 'var(--accent)', border: '1px solid var(--accent-border)',
-          color: '#000', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontWeight: 700,
+          color: '#000', cursor: 'pointer', fontWeight: 700,
           display: 'flex', alignItems: 'center', gap: 6,
         }}>
           <Plus size={12} /> NEW TEMPLATE
@@ -179,8 +182,7 @@ export default function Prompts() {
               background: active ? 'var(--accent-dim)' : 'transparent',
               border: `1px solid ${active ? 'var(--accent-border)' : 'var(--border-bright)'}`,
               color: active ? 'var(--accent)' : 'var(--text-muted)',
-              cursor: 'pointer', fontFamily: 'var(--font-mono)',
-            }}>
+              cursor: 'pointer',             }}>
               {f === 'all' ? 'ALL' : CATEGORY_LABELS[f as Category]}
             </button>
           )
@@ -241,7 +243,7 @@ export default function Prompts() {
               )}
               <div style={{
                 fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5,
-                fontFamily: 'var(--font-mono)', background: 'var(--bg-base)',
+                background: 'var(--bg-base)',
                 border: '1px solid var(--border)', padding: '8px 10px',
                 maxHeight: 96, overflow: 'hidden',
                 whiteSpace: 'pre-wrap', wordBreak: 'break-word',
@@ -256,103 +258,61 @@ export default function Prompts() {
 
       {/* Editor modal */}
       {editorOpen && (
-        <div onClick={() => !saving && setEditorOpen(false)} style={{
-          position: 'fixed', inset: 0, zIndex: 9999,
-          background: 'rgba(0,0,0,0.75)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: 20,
-        }}>
-          <div onClick={e => e.stopPropagation()} style={{
-            width: '100%', maxWidth: 720, maxHeight: '90vh',
-            background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
-            display: 'flex', flexDirection: 'column',
-          }}>
-            <div style={{
-              padding: '14px 18px', borderBottom: '1px solid var(--border)',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            }}>
-              <span style={{ fontSize: 14, letterSpacing: '0.06em', color: 'var(--accent)' }}>
-                {edit.id == null ? '+ NEW PROMPT TEMPLATE' : '◆ EDIT PROMPT TEMPLATE'}
-              </span>
-              <button onClick={() => !saving && setEditorOpen(false)} disabled={saving}
-                style={{ padding: 4, background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}>
-                <X size={14} />
-              </button>
-            </div>
-            <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
-                <div>
-                  <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 6 }}>NAME</div>
-                  <input value={edit.name} onChange={e => setEdit(s => ({ ...s, name: e.target.value }))}
-                    placeholder="e.g. Security Auditor"
-                    style={inputStyle}
-                  />
-                </div>
-                <div>
-                  <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 6 }}>CATEGORY</div>
-                  <select value={edit.category} onChange={e => setEdit(s => ({ ...s, category: e.target.value as Category }))} style={inputStyle}>
-                    <option value="system">System Prompt</option>
-                    <option value="intent_parser">Intent Parser</option>
-                    <option value="summarizer">Summarizer</option>
-                    <option value="general">General</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 6 }}>DESCRIPTION (OPTIONAL)</div>
-                <input value={edit.description} onChange={e => setEdit(s => ({ ...s, description: e.target.value }))}
-                  placeholder="Short note shown next to the name"
-                  style={inputStyle}
-                />
-              </div>
-              <div>
-                <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 6 }}>CONTENT</div>
-                <textarea value={edit.content} onChange={e => setEdit(s => ({ ...s, content: e.target.value }))}
-                  rows={14}
-                  placeholder="The full prompt text. Will be applied verbatim."
-                  style={{ ...inputStyle, height: 'auto', minHeight: 280, resize: 'vertical', lineHeight: 1.6 }}
-                />
-              </div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-muted)', cursor: 'pointer' }}>
-                <input type="checkbox" checked={edit.is_active} onChange={e => setEdit(s => ({ ...s, is_active: e.target.checked }))} />
-                <span style={{ letterSpacing: '0.1em' }}>ACTIVE (shown in Chat picker)</span>
-              </label>
-            </div>
-            <div style={{
-              padding: '12px 18px', borderTop: '1px solid var(--border)',
-              display: 'flex', justifyContent: 'flex-end', gap: 8,
-            }}>
-              <button onClick={() => setEditorOpen(false)} disabled={saving}
-                style={{
-                  padding: '8px 16px', fontSize: 13, letterSpacing: '0.1em',
-                  border: '1px solid var(--border-bright)', background: 'transparent',
-                  color: 'var(--text-muted)', cursor: saving ? 'not-allowed' : 'pointer',
-                  fontFamily: 'var(--font-mono)',
-                }}>
+        <Modal
+          width={720}
+          title={edit.id == null ? 'NEW PROMPT TEMPLATE' : 'EDIT PROMPT TEMPLATE'}
+          onClose={() => { if (!saving) setEditorOpen(false) }}
+          footer={(
+            <>
+              <button onClick={() => setEditorOpen(false)} disabled={saving} className="btn btn-secondary">
                 CANCEL
               </button>
-              <button onClick={save} disabled={saving}
-                style={{
-                  padding: '8px 16px', fontSize: 13, letterSpacing: '0.1em',
-                  background: 'var(--accent)', border: '1px solid var(--accent-border)',
-                  color: '#000', cursor: saving ? 'not-allowed' : 'pointer',
-                  fontFamily: 'var(--font-mono)', fontWeight: 700,
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  opacity: saving ? 0.6 : 1,
-                }}>
+              <button onClick={save} disabled={saving} className="btn btn-primary" style={{ opacity: saving ? 0.6 : 1 }}>
                 <Save size={12} /> {saving ? 'SAVING...' : 'SAVE'}
               </button>
+            </>
+          )}
+        >
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
+            <div>
+              <label className="form-label">NAME</label>
+              <input value={edit.name} onChange={e => setEdit(s => ({ ...s, name: e.target.value }))}
+                placeholder="e.g. Security Auditor"
+                className="form-input"
+              />
+            </div>
+            <div>
+              <label className="form-label">CATEGORY</label>
+              <select value={edit.category} onChange={e => setEdit(s => ({ ...s, category: e.target.value as Category }))} className="form-input">
+                <option value="system">System Prompt</option>
+                <option value="intent_parser">Intent Parser</option>
+                <option value="summarizer">Summarizer</option>
+                <option value="general">General</option>
+              </select>
             </div>
           </div>
-        </div>
+          <div>
+            <label className="form-label">DESCRIPTION (OPTIONAL)</label>
+            <input value={edit.description} onChange={e => setEdit(s => ({ ...s, description: e.target.value }))}
+              placeholder="Short note shown next to the name"
+              className="form-input"
+            />
+          </div>
+          <div>
+            <label className="form-label">CONTENT</label>
+            <textarea value={edit.content} onChange={e => setEdit(s => ({ ...s, content: e.target.value }))}
+              rows={14}
+              placeholder="The full prompt text. Will be applied verbatim."
+              className="form-textarea"
+              style={{ minHeight: 280, lineHeight: 1.6 }}
+            />
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-muted)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={edit.is_active} onChange={e => setEdit(s => ({ ...s, is_active: e.target.checked }))} />
+            <span style={{ letterSpacing: '0.1em' }}>ACTIVE (shown in Chat picker)</span>
+          </label>
+        </Modal>
       )}
     </div>
   )
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%', height: 32, padding: '0 10px',
-  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-  color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-mono)',
-  outline: 'none',
 }

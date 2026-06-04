@@ -1,7 +1,9 @@
 import { useState, useEffect, useContext } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
-import { GitBranch, Plus, Trash2, Edit2, Play, Square, Loader2, Zap, X, Wifi, WifiOff, Search, Workflow, Server, ArrowRight } from 'lucide-react'
+import { GitBranch, Plus, Trash2, Edit2, Play, Square, Loader2, Zap, Wifi, WifiOff, Search, Workflow, Server, ArrowRight } from 'lucide-react'
 import { SearchContext } from '../context/SearchContext'
+import Modal from '../components/Modal'
 
 interface N8NConnection {
   id?: number
@@ -37,6 +39,7 @@ const emptyConnectionForm: ConnectionForm = {
 }
 
 export default function N8N() {
+  const { t } = useTranslation()
   const [connections, setConnections] = useState<N8NConnection[]>([])
   const [workflows, setWorkflows] = useState<N8NWorkflow[]>([])
   const [selectedConn, setSelectedConn] = useState<N8NConnection | null>(null)
@@ -186,7 +189,7 @@ export default function N8N() {
           <div style={{ fontSize: 12, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
             <Workflow size={11} /> AUTOMATION
           </div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--text-primary)' }}>N8N WORKFLOWS</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--text-primary)' }}>{t('n8n.title').toUpperCase()}</h1>
           <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 12, color: 'var(--text-dim)' }}>
             <span>{connections.length} connections · {activeCount} active</span>
             <span>{workflows.length} workflows</span>
@@ -198,7 +201,7 @@ export default function N8N() {
               display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', height: 28,
               border: '1px solid var(--border-bright)', background: 'var(--bg-surface)',
               color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.08em', cursor: 'pointer',
-              fontFamily: 'var(--font-mono)', transition: 'all 0.15s',
+              transition: 'all 0.15s',
             }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)' }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-bright)'; e.currentTarget.style.color = 'var(--text-muted)' }}
@@ -210,7 +213,7 @@ export default function N8N() {
               display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', height: 28,
               background: 'var(--accent)', border: '1px solid var(--accent)',
               color: '#000', fontWeight: 700, fontSize: 12, letterSpacing: '0.08em', cursor: 'pointer',
-              fontFamily: 'var(--font-mono)', transition: 'opacity 0.15s',
+              transition: 'opacity 0.15s',
             }}
             onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
             onMouseLeave={e => e.currentTarget.style.opacity = '1'}
@@ -300,7 +303,7 @@ export default function N8N() {
                       padding: '3px 10px', fontSize: 10, letterSpacing: '0.06em',
                       background: 'transparent', border: '1px solid var(--border)',
                       color: 'var(--text-dim)', cursor: testing ? 'not-allowed' : 'pointer',
-                      fontFamily: 'var(--font-mono)', transition: 'all 0.15s',
+                      transition: 'all 0.15s',
                     }}
                     onMouseEnter={e => { if (!testing) { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)' }}}
                     onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-dim)'}}
@@ -336,8 +339,7 @@ export default function N8N() {
                 style={{
                   marginTop: 16, padding: '6px 16px', fontSize: 11, letterSpacing: '0.06em',
                   background: 'transparent', border: '1px solid var(--accent)',
-                  color: 'var(--accent)', cursor: 'pointer', fontFamily: 'var(--font-mono)',
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  color: 'var(--accent)', cursor: 'pointer',                   display: 'inline-flex', alignItems: 'center', gap: 6,
                 }}>
                 <Plus size={10} /> ADD CONNECTION
               </button>
@@ -361,8 +363,7 @@ export default function N8N() {
                   style={{
                     width: 180, height: 28, padding: '0 10px 0 28px', fontSize: 11,
                     background: 'var(--bg-surface)', border: '1px solid var(--border)',
-                    color: 'var(--text-primary)', fontFamily: 'var(--font-mono)',
-                  }}
+                    color: 'var(--text-primary)',                   }}
                 />
               </div>
             )}
@@ -456,94 +457,56 @@ export default function N8N() {
 
       {/* ── Connection Form Modal ── */}
       {showConnForm && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
-        }} onClick={e => e.target === e.currentTarget && setShowConnForm(false)}>
-          <div style={{
-            background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
-            padding: 0, width: 480, maxHeight: '85vh', overflowY: 'auto',
-          }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '16px 20px', borderBottom: '1px solid var(--border)',
-            }}>
-              <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.06em', color: 'var(--text-primary)' }}>
-                {editingConn ? 'EDIT CONNECTION' : 'NEW CONNECTION'}
-              </div>
-              <button onClick={() => setShowConnForm(false)}
-                style={{ padding: 4, color: 'var(--text-dim)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                <X size={14} />
-              </button>
-            </div>
-            <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 10, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>NAME</label>
-                <input value={connForm.name} onChange={e => setConnForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="My N8N Instance"
-                  style={{ width: '100%', height: 36, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-mono)' }} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 10, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>BASE URL</label>
-                <input value={connForm.base_url} onChange={e => setConnForm(f => ({ ...f, base_url: e.target.value }))} placeholder="https://n8n.example.com"
-                  style={{ width: '100%', height: 36, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-mono)' }} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 10, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>API KEY</label>
-                <input value={connForm.api_key} onChange={e => setConnForm(f => ({ ...f, api_key: e.target.value }))} type="password" placeholder="Leave empty to keep existing"
-                  style={{ width: '100%', height: 36, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-mono)' }} />
-              </div>
-              <div style={{ display: 'flex', gap: 20 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={connForm.is_active} onChange={e => setConnForm(f => ({ ...f, is_active: e.target.checked }))}
-                    style={{ width: 14, height: 14, accentColor: 'var(--accent)' }} />
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>ACTIVE</span>
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={connForm.is_default} onChange={e => setConnForm(f => ({ ...f, is_default: e.target.checked }))}
-                    style={{ width: 14, height: 14, accentColor: 'var(--accent)' }} />
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>DEFAULT</span>
-                </label>
-              </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                <button onClick={() => setShowConnForm(false)} style={{
-                  flex: 1, height: 36, border: '1px solid var(--border)', background: 'transparent',
-                  color: 'var(--text-muted)', fontSize: 11, letterSpacing: '0.06em', cursor: 'pointer', fontFamily: 'var(--font-mono)',
-                }}>CANCEL</button>
-                <button onClick={submitConnection} style={{
-                  flex: 1, height: 36, background: 'var(--accent)', border: '1px solid var(--accent)',
-                  color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', cursor: 'pointer', fontFamily: 'var(--font-mono)',
-                }}>{editingConn ? 'UPDATE' : 'CREATE'}</button>
-              </div>
-            </div>
+        <Modal
+          width={480}
+          title={editingConn ? 'EDIT CONNECTION' : 'NEW CONNECTION'}
+          onClose={() => setShowConnForm(false)}
+          footer={(
+            <>
+              <button onClick={() => setShowConnForm(false)} className="btn btn-secondary">CANCEL</button>
+              <button onClick={submitConnection} className="btn btn-primary">{editingConn ? 'UPDATE' : 'CREATE'}</button>
+            </>
+          )}
+        >
+          <div>
+            <label className="form-label">NAME</label>
+            <input value={connForm.name} onChange={e => setConnForm(f => ({ ...f, name: e.target.value }))}
+              placeholder="My N8N Instance" className="form-input" />
           </div>
-        </div>
+          <div>
+            <label className="form-label">BASE URL</label>
+            <input value={connForm.base_url} onChange={e => setConnForm(f => ({ ...f, base_url: e.target.value }))} placeholder="https://n8n.example.com"
+              className="form-input" />
+          </div>
+          <div>
+            <label className="form-label">API KEY</label>
+            <input value={connForm.api_key} onChange={e => setConnForm(f => ({ ...f, api_key: e.target.value }))} type="password" placeholder="Leave empty to keep existing"
+              className="form-input" />
+          </div>
+          <div style={{ display: 'flex', gap: 20 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input type="checkbox" checked={connForm.is_active} onChange={e => setConnForm(f => ({ ...f, is_active: e.target.checked }))}
+                style={{ width: 14, height: 14, accentColor: 'var(--accent)' }} />
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>ACTIVE</span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input type="checkbox" checked={connForm.is_default} onChange={e => setConnForm(f => ({ ...f, is_default: e.target.checked }))}
+                style={{ width: 14, height: 14, accentColor: 'var(--accent)' }} />
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>DEFAULT</span>
+            </label>
+          </div>
+        </Modal>
       )}
 
       {/* ── AI Generator Modal ── */}
       {showGenerator && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
-        }} onClick={e => e.target === e.currentTarget && setShowGenerator(false)}>
-          <div style={{
-            background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
-            padding: 0, width: 600, maxHeight: '85vh', overflowY: 'auto',
-          }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '16px 20px', borderBottom: '1px solid var(--border)',
-            }}>
-              <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.06em', color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Zap size={14} /> AI WORKFLOW GENERATOR
-              </div>
-              <button onClick={() => setShowGenerator(false)}
-                style={{ padding: 4, color: 'var(--text-dim)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                <X size={14} />
-              </button>
-            </div>
-            <div style={{ padding: 20 }}>
-              {!selectedConn ? (
+        <Modal
+          width={600}
+          title="AI WORKFLOW GENERATOR"
+          onClose={() => setShowGenerator(false)}
+        >
+          <div>
+            {!selectedConn ? (
                 <div style={{ padding: 30, textAlign: 'center', color: 'var(--amber)', fontSize: 12, letterSpacing: '0.06em' }}>
                   SELECT A CONNECTION FIRST
                 </div>
@@ -555,7 +518,7 @@ export default function N8N() {
                       rows={4} placeholder="e.g., 每小时检查邮箱，重要客户邮件发送 Slack 通知"
                       style={{
                         width: '100%', padding: '10px 12px', background: 'var(--bg-base)', border: '1px solid var(--border)',
-                        color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-mono)', resize: 'vertical',
+                        color: 'var(--text-primary)', fontSize: 13, resize: 'vertical',
                       }} />
                   </div>
                   <button onClick={generateWorkflow} disabled={generating || !genDescription.trim()}
@@ -565,7 +528,7 @@ export default function N8N() {
                       color: generating ? 'var(--text-muted)' : '#000',
                       fontWeight: 700, fontSize: 11, letterSpacing: '0.06em',
                       cursor: generating ? 'not-allowed' : 'pointer',
-                      fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                     }}>
                     {generating ? <><Loader2 size={11} className="spin" /> GENERATING...</> : <><Zap size={11} /> GENERATE WORKFLOW JSON</>}
                   </button>
@@ -583,7 +546,7 @@ export default function N8N() {
                       <pre style={{
                         padding: 12, background: 'var(--bg-base)', border: '1px solid var(--border)',
                         fontSize: 11, color: 'var(--text-primary)', maxHeight: 260, overflow: 'auto',
-                        fontFamily: 'var(--font-mono)', whiteSpace: 'pre-wrap', wordBreak: 'break-all', lineHeight: 1.5,
+                        whiteSpace: 'pre-wrap', wordBreak: 'break-all', lineHeight: 1.5,
                       }}>
                         {JSON.stringify(generatedJson, null, 2)}
                       </pre>
@@ -593,7 +556,7 @@ export default function N8N() {
                           background: 'var(--green)', border: '1px solid var(--green)',
                           color: '#000', fontWeight: 700, fontSize: 11, letterSpacing: '0.06em',
                           cursor: creatingWorkflow ? 'not-allowed' : 'pointer',
-                          fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                         }}>
                         {creatingWorkflow ? <><Loader2 size={11} className="spin" /> CREATING...</> : <><GitBranch size={11} /> CREATE IN N8N</>}
                       </button>
@@ -601,9 +564,8 @@ export default function N8N() {
                   )}
                 </div>
               )}
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

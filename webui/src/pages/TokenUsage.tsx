@@ -1,4 +1,5 @@
 import { Coins } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 
@@ -26,16 +27,17 @@ function Bar({ label, value, max }: { label: string; value: number; max: number 
   const pct = Math.min((value / max) * 100, 100)
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      <span style={{ fontSize: 12, color: 'var(--text-muted)', width: 160, flexShrink: 0, letterSpacing: '0.05em', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+      <span style={{ fontSize: 12, color: 'var(--text-muted)', width: 160, flexShrink: 0, letterSpacing: '0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
       <div style={{ flex: 1, height: 14, background: 'var(--bg-base)', border: '1px solid var(--border-bright)', overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${pct}%`, background: 'var(--accent)', transition: 'all 0.3s' }} />
       </div>
-      <span style={{ fontSize: 12, color: 'var(--text-muted)', width: 48, textAlign: 'right', letterSpacing: '0.05em', fontFamily: 'var(--font-mono)' }}>{(value / 1000).toFixed(0)}K</span>
+      <span style={{ fontSize: 12, color: 'var(--text-muted)', width: 48, textAlign: 'right', letterSpacing: '0.05em' }}>{(value / 1000).toFixed(0)}K</span>
     </div>
   )
 }
 
 export default function TokenUsage() {
+  const { t } = useTranslation()
   const [data, setData] = useState<TokenUsageSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -61,7 +63,7 @@ export default function TokenUsage() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
           <div>
             <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>COST ANALYSIS</div>
-            <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>TOKEN USAGE</h1>
+            <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{t('token.title').toUpperCase()}</h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Coins size={16} style={{ color: 'var(--accent)' }} />
@@ -85,7 +87,7 @@ export default function TokenUsage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
           <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>COST ANALYSIS</div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>TOKEN USAGE</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{t('token.title').toUpperCase()}</h1>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Coins size={16} style={{ color: 'var(--accent)' }} />
@@ -119,22 +121,22 @@ export default function TokenUsage() {
       </div>
 
       {/* Table */}
-      <div style={{ border: '1px solid var(--border-bright)', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <div style={{ border: '1px solid var(--border-bright)', overflow: 'hidden', borderRadius: 'var(--radius-lg)' }}>
+        <table className="data-table">
           <thead>
-            <tr style={{ background: 'var(--bg-base)', borderBottom: '1px solid var(--border-bright)' }}>
+            <tr>
               {['MODEL', 'INPUT', 'OUTPUT', 'COST (USD)'].map((h, i) => (
-                <th key={i} style={{ padding: '12px 16px', textAlign: i === 0 ? 'left' : 'right', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
+                <th key={i} style={i > 0 ? { textAlign: 'right' } : undefined}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {data.by_model.length > 0 ? data.by_model.map(d => (
-              <tr key={`${d.provider_id}:${d.model_name}`} style={{ borderBottom: '1px solid var(--border)' }}>
-                <td style={{ padding: '14px 16px', fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', letterSpacing: '0.05em' }}>{d.model_name}</td>
-                <td style={{ padding: '14px 16px', fontSize: 13, color: 'var(--text-muted)', textAlign: 'right', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em' }}>{(d.prompt_tokens / 1000).toFixed(1)}K</td>
-                <td style={{ padding: '14px 16px', fontSize: 13, color: 'var(--text-muted)', textAlign: 'right', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em' }}>{(d.completion_tokens / 1000).toFixed(1)}K</td>
-                <td style={{ padding: '14px 16px', fontSize: 13, color: 'var(--purple)', textAlign: 'right', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em' }}>${(d.prompt_tokens * 0.000001 * 2 + d.completion_tokens * 0.000006).toFixed(2)}</td>
+              <tr key={`${d.provider_id}:${d.model_name}`}>
+                <td style={{ color: 'var(--text-primary)', letterSpacing: '0.05em' }}>{d.model_name}</td>
+                <td style={{ color: 'var(--text-muted)', textAlign: 'right', letterSpacing: '0.05em' }}>{(d.prompt_tokens / 1000).toFixed(1)}K</td>
+                <td style={{ color: 'var(--text-muted)', textAlign: 'right', letterSpacing: '0.05em' }}>{(d.completion_tokens / 1000).toFixed(1)}K</td>
+                <td style={{ color: 'var(--purple)', textAlign: 'right', letterSpacing: '0.05em' }}>${(d.prompt_tokens * 0.000001 * 2 + d.completion_tokens * 0.000006).toFixed(2)}</td>
               </tr>
             )) : (
               <tr>

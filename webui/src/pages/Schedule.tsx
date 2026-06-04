@@ -1,4 +1,5 @@
 import { useState, useEffect, useContext } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Trash2, Plus, Edit2, Clock, X, Loader2 } from 'lucide-react'
 import { SearchContext } from '../context/SearchContext'
@@ -17,6 +18,7 @@ interface Task {
 }
 
 export default function Schedule() {
+  const { t } = useTranslation()
   const [items, setItems] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -83,7 +85,7 @@ export default function Schedule() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
           <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>AUTOMATION</div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>SCHEDULED TASKS</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{t('schedule.title').toUpperCase()}</h1>
         </div>
         <button
           onClick={() => { setShowForm(true); setEditing(null); setForm({ name: '', task_type: 'agent_execution', cron_expression: '', is_active: true, task_config: {} }) }}
@@ -92,8 +94,7 @@ export default function Schedule() {
             padding: '0 16px', height: 36,
             background: 'var(--accent)', border: '1px solid var(--accent-border)',
             color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em',
-            cursor: 'pointer', fontFamily: 'var(--font-mono)',
-            boxShadow: '0 0 16px rgba(0,255,65,0.15)',
+            cursor: 'pointer',             boxShadow: '0 0 16px rgba(0,255,65,0.15)',
           }}>
           <Plus size={13} /> NEW TASK
         </button>
@@ -121,8 +122,7 @@ export default function Schedule() {
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
                   color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
-                  fontFamily: 'var(--font-mono)',
-                }} />
+                                  }} />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>TYPE</label>
@@ -130,8 +130,7 @@ export default function Schedule() {
                 style={{
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-mono)',
-                }}>
+                  color: 'var(--text-primary)', fontSize: 14,                 }}>
                 <option value="agent_execution">AGENT EXECUTION</option>
                 <option value="backup">BACKUP</option>
                 <option value="report_generation">REPORT GENERATION</option>
@@ -145,8 +144,7 @@ export default function Schedule() {
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
                   color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
-                  fontFamily: 'var(--font-mono)',
-                }} />
+                                  }} />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>AGENT ID</label>
@@ -156,8 +154,7 @@ export default function Schedule() {
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
                   color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
-                  fontFamily: 'var(--font-mono)',
-                }} />
+                                  }} />
             </div>
           </div>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 20 }}>
@@ -166,8 +163,7 @@ export default function Schedule() {
                 padding: '0 16px', height: 36,
                 border: '1px solid var(--border-bright)', background: 'transparent',
                 color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
-                fontFamily: 'var(--font-mono)',
-              }}>
+                              }}>
               CANCEL
             </button>
             <button onClick={submit}
@@ -175,8 +171,7 @@ export default function Schedule() {
                 padding: '0 16px', height: 36,
                 border: '1px solid var(--accent-border)', background: 'var(--accent)',
                 color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
-                fontFamily: 'var(--font-mono)',
-              }}>
+                              }}>
               {editing ? 'SAVE CHANGES' : 'CREATE TASK'}
             </button>
           </div>
@@ -221,7 +216,7 @@ export default function Schedule() {
                     )}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    {t.cron_expression && <span style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em' }}>{t.cron_expression}</span>}
+                    {t.cron_expression && <span style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>{t.cron_expression}</span>}
                     {t.next_run_at && <span style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>NEXT: {t.next_run_at}</span>}
                   </div>
                 </div>

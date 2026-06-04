@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Key, Lock, AlertTriangle, Save, Loader2 } from 'lucide-react'
 import { api } from '../api/client'
 
@@ -21,6 +22,7 @@ const DEFAULT: SecuritySettings = {
 }
 
 export default function Security() {
+  const { t } = useTranslation()
   const [settings, setSettings] = useState<SecuritySettings>(DEFAULT)
   const [saved, setSaved] = useState<SecuritySettings>(DEFAULT)
   const [loading, setLoading] = useState(true)
@@ -114,7 +116,7 @@ export default function Security() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
           <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>ZERO TRUST ARCHITECTURE</div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>SECURITY CONFIG</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{t('security.title').toUpperCase()}</h1>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {notice && (
@@ -133,8 +135,7 @@ export default function Security() {
               color: dirty ? '#000' : 'var(--text-dim)',
               fontSize: 12, letterSpacing: '0.1em', fontWeight: 700,
               cursor: dirty ? 'pointer' : 'not-allowed',
-              fontFamily: 'var(--font-mono)',
-              transition: 'all 0.15s',
+                            transition: 'all 0.15s',
             }}
           >
             {saving
@@ -189,8 +190,7 @@ export default function Security() {
                 style={{
                   width: 80, height: 32, padding: '0 10px', textAlign: 'right',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-mono)',
-                }}
+                  color: 'var(--text-primary)', fontSize: 13,                 }}
               />
             </div>
           ))}

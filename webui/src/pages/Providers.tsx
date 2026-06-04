@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useContext } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Plus, Loader2, Search, X, RefreshCw, Zap, Settings2, Database } from 'lucide-react'
 import { SearchContext } from '../context/SearchContext'
@@ -76,8 +77,7 @@ function Avatar({ name, color }: { name: string; color?: string }) {
       border: `1.5px solid ${bg}66`,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontSize: 18, fontWeight: 800, color: bg,
-      fontFamily: 'var(--font-mono)',
-    }}>
+          }}>
       {letter}
     </div>
   )
@@ -103,7 +103,7 @@ const inp: React.CSSProperties = {
   width: '100%', height: 38, padding: '0 12px',
   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
   color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.04em',
-  fontFamily: 'var(--font-mono)', boxSizing: 'border-box',
+  boxSizing: 'border-box',
 }
 const lbl = (text: string, sub?: string) => (
   <div style={{ marginBottom: 6 }}>
@@ -227,23 +227,22 @@ function SettingsModal({
             <div style={{
               padding: '8px 12px', border: `1px solid ${testMsg.ok ? 'var(--accent-border)' : 'rgba(248,113,113,0.3)'}`,
               background: 'var(--bg-base)', fontSize: 12,
-              color: testMsg.ok ? 'var(--accent)' : '#f87171', fontFamily: 'var(--font-mono)',
-            }}>
+              color: testMsg.ok ? 'var(--accent)' : '#f87171',             }}>
               {testMsg.ok ? '✓ ' : '✗ '}{testMsg.msg}
             </div>
           )}
         </div>
         <ModalFooter>
           <button onClick={testConn} disabled={testing || (!baseUrl && !provider)}
-            style={{ padding: '0 14px', height: 38, border: '1px solid var(--border-bright)', background: 'transparent', color: testing ? 'var(--text-dim)' : 'var(--text-muted)', fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+            style={{ padding: '0 14px', height: 38, border: '1px solid var(--border-bright)', background: 'transparent', color: testing ? 'var(--text-dim)' : 'var(--text-muted)', fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer' }}>
             {testing ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : 'TEST'}
           </button>
           <Spacer />
-          <button onClick={onClose} style={{ padding: '0 14px', height: 38, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+          <button onClick={onClose} style={{ padding: '0 14px', height: 38, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer' }}>
             CANCEL
           </button>
           <button onClick={save} disabled={saving || !name}
-            style={{ padding: '0 20px', height: 38, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+            style={{ padding: '0 20px', height: 38, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer' }}>
             {saving ? '...' : 'SAVE'}
           </button>
         </ModalFooter>
@@ -326,12 +325,12 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
   // is or isn't verified, the chat dropdown only consumes the verified ones.
   const modelStatusBadge = (m: ModelInfo) => {
     if (m.verified === true) {
-      return <span style={{ fontSize: 10, padding: '1px 6px', border: '1px solid var(--accent-border)', color: 'var(--accent)', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em', flexShrink: 0 }}>✓ VERIFIED</span>
+      return <span style={{ fontSize: 10, padding: '1px 6px', border: '1px solid var(--accent-border)', color: 'var(--accent)', letterSpacing: '0.05em', flexShrink: 0 }}>✓ VERIFIED</span>
     }
     if (m.verified === false) {
-      return <span title={m.test_error || 'test failed'} style={{ fontSize: 10, padding: '1px 6px', border: '1px solid rgba(248,113,113,0.4)', color: '#f87171', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em', flexShrink: 0 }}>✗ FAILED</span>
+      return <span title={m.test_error || 'test failed'} style={{ fontSize: 10, padding: '1px 6px', border: '1px solid rgba(248,113,113,0.4)', color: '#f87171', letterSpacing: '0.05em', flexShrink: 0 }}>✗ FAILED</span>
     }
-    return <span style={{ fontSize: 10, padding: '1px 6px', border: '1px solid var(--border)', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em', flexShrink: 0 }}>· UNTESTED</span>
+    return <span style={{ fontSize: 10, padding: '1px 6px', border: '1px solid var(--border)', color: 'var(--text-dim)', letterSpacing: '0.05em', flexShrink: 0 }}>· UNTESTED</span>
   }
 
   const testModel = async (name: string) => {
@@ -389,13 +388,13 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
           {/* Discover button */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <button onClick={discover} disabled={fetching}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', height: 34, border: '1px solid var(--accent-border)', background: 'var(--accent-dim)', color: fetching ? 'var(--text-dim)' : 'var(--accent)', fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', height: 34, border: '1px solid var(--accent-border)', background: 'var(--accent-dim)', color: fetching ? 'var(--text-dim)' : 'var(--accent)', fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer' }}>
               {fetching ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Zap size={11} />}
               {fetching ? 'FETCHING...' : '自动发现模型'}
             </button>
             <button onClick={probe} disabled={probing || !models.length}
               title="对每个模型发极小请求，探测是否支持 tools / vision"
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', height: 34, border: '1px solid var(--border-bright)', background: 'var(--bg-base)', color: (probing || !models.length) ? 'var(--text-dim)' : 'var(--text-muted)', fontSize: 12, letterSpacing: '0.12em', cursor: (probing || !models.length) ? 'default' : 'pointer', fontFamily: 'var(--font-mono)' }}>
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', height: 34, border: '1px solid var(--border-bright)', background: 'var(--bg-base)', color: (probing || !models.length) ? 'var(--text-dim)' : 'var(--text-muted)', fontSize: 12, letterSpacing: '0.12em', cursor: (probing || !models.length) ? 'default' : 'pointer' }}>
               {probing ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Settings2 size={11} />}
               {probing ? 'PROBING...' : '探测能力'}
             </button>
@@ -414,25 +413,25 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
                 return (
                   <div key={m.name} style={{ display: 'flex', alignItems: 'center', padding: '9px 14px', borderBottom: '1px solid var(--border)', gap: 10 }}>
                     {/* Type badge */}
-                    <span style={{ fontSize: 10, padding: '2px 5px', border: `1px solid ${typeColor[m.model_type]}`, color: typeColor[m.model_type], fontFamily: 'var(--font-mono)', letterSpacing: '0.1em', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    <span style={{ fontSize: 10, padding: '2px 5px', border: `1px solid ${typeColor[m.model_type]}`, color: typeColor[m.model_type], letterSpacing: '0.1em', whiteSpace: 'nowrap', flexShrink: 0 }}>
                       {m.model_type.toUpperCase()}
                     </span>
                     {/* Model name + verification badge */}
-                    <span style={{ flex: 1, fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {m.name}
                     </span>
                     {/* Verification status (✓ VERIFIED / ✗ FAILED / · UNTESTED) */}
                     {modelStatusBadge(m)}
                     {/* Capability badges (after probe) */}
                     {m.capabilities?.tools && (
-                      <span title="支持 function-calling / tools" style={{ fontSize: 10, padding: '2px 5px', border: '1px solid #10b981', color: '#10b981', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em', flexShrink: 0 }}>🔧 TOOLS</span>
+                      <span title="支持 function-calling / tools" style={{ fontSize: 10, padding: '2px 5px', border: '1px solid #10b981', color: '#10b981', letterSpacing: '0.05em', flexShrink: 0 }}>🔧 TOOLS</span>
                     )}
                     {m.capabilities?.vision && (
-                      <span title="支持图像输入 / vision" style={{ fontSize: 10, padding: '2px 5px', border: '1px solid #8b5cf6', color: '#8b5cf6', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em', flexShrink: 0 }}>👁 VISION</span>
+                      <span title="支持图像输入 / vision" style={{ fontSize: 10, padding: '2px 5px', border: '1px solid #8b5cf6', color: '#8b5cf6', letterSpacing: '0.05em', flexShrink: 0 }}>👁 VISION</span>
                     )}
                     {/* Test result */}
                     {r && (
-                      <span style={{ fontSize: 11, color: r.ok ? 'var(--accent)' : '#f87171', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
+                      <span style={{ fontSize: 11, color: r.ok ? 'var(--accent)' : '#f87171', flexShrink: 0 }}>
                         {r.ok ? `✓ ${r.ms}ms` : '✗ FAILED'}
                       </span>
                     )}
@@ -440,14 +439,14 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
                     <select
                       value={m.model_type}
                       onChange={e => setModels(prev => prev.map(x => x.name === m.name ? { ...x, model_type: e.target.value as any } : x))}
-                      style={{ height: 24, padding: '0 4px', background: 'var(--bg-base)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 11, fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
+                      style={{ height: 24, padding: '0 4px', background: 'var(--bg-base)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>
                       <option value="chat">chat</option>
                       <option value="embedding">embed</option>
                       <option value="rerank">rerank</option>
                     </select>
                     {/* Test button */}
                     <button onClick={() => testModel(m.name)} disabled={testing === m.name}
-                      style={{ fontSize: 11, letterSpacing: '0.1em', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-mono)', padding: '0 4px', flexShrink: 0 }}>
+                      style={{ fontSize: 11, letterSpacing: '0.1em', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px', flexShrink: 0 }}>
                       {testing === m.name ? '…' : 'TEST'}
                     </button>
                     {/* Remove */}
@@ -466,23 +465,23 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
               value={newName} onChange={e => setNewName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && add()}
               placeholder="模型名称，如 gpt-4o"
-              style={{ flex: 1, height: 34, padding: '0 10px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-mono)' }}
+              style={{ flex: 1, height: 34, padding: '0 10px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 13 }}
             />
             <select value={newType} onChange={e => setNewType(e.target.value as any)}
-              style={{ width: 90, height: 34, padding: '0 6px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)' }}>
+              style={{ width: 90, height: 34, padding: '0 6px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 12 }}>
               <option value="chat">chat</option>
               <option value="embedding">embed</option>
               <option value="rerank">rerank</option>
             </select>
-            <button onClick={add} style={{ padding: '0 14px', height: 34, border: '1px solid var(--accent-border)', background: 'var(--accent-dim)', color: 'var(--accent)', fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+            <button onClick={add} style={{ padding: '0 14px', height: 34, border: '1px solid var(--accent-border)', background: 'var(--accent-dim)', color: 'var(--accent)', fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer' }}>
               + 添加
             </button>
           </div>
         </div>
         <ModalFooter>
-          <button onClick={onClose} style={{ padding: '0 14px', height: 38, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>CANCEL</button>
+          <button onClick={onClose} style={{ padding: '0 14px', height: 38, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer' }}>CANCEL</button>
           <button onClick={save} disabled={saving}
-            style={{ padding: '0 20px', height: 38, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+            style={{ padding: '0 20px', height: 38, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 12, letterSpacing: '0.12em', cursor: 'pointer' }}>
             {saving ? '...' : 'SAVE MODELS'}
           </button>
         </ModalFooter>
@@ -511,46 +510,41 @@ function ProviderCard({
   const modelCount = provider.models?.length || 0
 
   return (
-    <div data-item-id={provider.id} style={{
-      padding: 18, background: 'var(--bg-surface)',
-      border: '1px solid var(--border-bright)',
-      borderLeft: `3px solid ${sc}`,
-      display: 'flex', flexDirection: 'column', gap: 12,
-    }}>
+    <div data-item-id={provider.id} className="item-card">
       {/* Top row: avatar + name + status */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <Avatar name={provider.name} color={color} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.06em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {provider.name}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span className="item-card-pip" style={{ background: sc }} />
+            <span className="item-card-title">{provider.name}</span>
           </div>
-          <div style={{ marginTop: 3 }}>
+          <div style={{ marginTop: 4 }}>
             <StatusDot status={status} />
           </div>
         </div>
       </div>
 
       {/* Meta row */}
-      <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
-        <span style={{ color: sc }}>{modelCount} MODEL{modelCount !== 1 ? 'S' : ''}</span>
+      <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--text-dim)', alignItems: 'center' }}>
+        <span style={{ color: sc, fontWeight: 500, letterSpacing: '0.06em' }}>{modelCount} MODEL{modelCount !== 1 ? 'S' : ''}</span>
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {provider.base_url || '(default endpoint)'}
         </span>
       </div>
 
       {/* Action buttons */}
-      <div style={{ display: 'flex', gap: 8, marginTop: 'auto' }}>
-        <button onClick={onSettings}
-          style={{ flex: 1, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
-          <Settings2 size={11} /> SETTINGS
+      <div className="item-card-actions">
+        <button onClick={onSettings} className="item-card-btn">
+          <Settings2 size={12} /> SETTINGS
         </button>
         <button onClick={onModels}
-          style={{ flex: 1, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, border: `1px solid ${status === 'unconfigured' ? 'var(--border)' : 'var(--accent-border)'}`, background: status === 'unconfigured' ? 'transparent' : 'var(--accent-dim)', color: status === 'unconfigured' ? 'var(--text-dim)' : 'var(--accent)', fontSize: 12, letterSpacing: '0.1em', cursor: status === 'unconfigured' ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)' }}
+          className={`item-card-btn ${status !== 'unconfigured' ? 'accent' : ''}`}
           disabled={status === 'unconfigured'} title={status === 'unconfigured' ? '请先配置 API Key' : ''}>
-          <Database size={11} /> MODELS
+          <Database size={12} /> MODELS
         </button>
-        <button onClick={onDelete} style={{ width: 32, height: 32, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-dim)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <X size={11} />
+        <button onClick={onDelete} className="item-card-icon-btn danger" style={{ marginLeft: 'auto' }}>
+          <X size={13} />
         </button>
       </div>
     </div>
@@ -561,8 +555,8 @@ function ProviderCard({
 
 function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
-    <div onClick={e => e.target === e.currentTarget && onClose()} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20 }}>
-      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', width: '100%', maxWidth: 540, maxHeight: '90vh', overflow: 'auto' }}>
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal-container" style={{ width: '100%', maxWidth: 540, overflowY: 'auto' }}>
         {children}
       </div>
     </div>
@@ -571,21 +565,23 @@ function Overlay({ children, onClose }: { children: React.ReactNode; onClose: ()
 
 function ModalHeader({ icon, title, sub, onClose }: { icon: React.ReactNode; title: string; sub: string; onClose: () => void }) {
   return (
-    <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
-      <span style={{ color: 'var(--accent)' }}>{icon}</span>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{title}</div>
-        <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>{sub}</div>
+    <div className="modal-header">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+        <span style={{ color: 'var(--accent)', display: 'flex' }}>{icon}</span>
+        <div style={{ minWidth: 0 }}>
+          <div className="modal-header-title">{title}</div>
+          {sub && <div className="modal-eyebrow" style={{ margin: '2px 0 0' }}>{sub}</div>}
+        </div>
       </div>
-      <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-dim)', padding: 4 }}>
-        <X size={14} />
+      <button onClick={onClose} className="modal-close">
+        <X size={15} />
       </button>
     </div>
   )
 }
 
 function ModalFooter({ children }: { children: React.ReactNode }) {
-  return <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center' }}>{children}</div>
+  return <div className="modal-footer" style={{ justifyContent: 'flex-start' }}>{children}</div>
 }
 
 function Spacer() { return <div style={{ flex: 1 }} /> }
@@ -593,6 +589,7 @@ function Spacer() { return <div style={{ flex: 1 }} /> }
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function Providers() {
+  const { t } = useTranslation()
   const [providers, setProviders] = useState<Provider[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -655,14 +652,14 @@ export default function Providers() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
           <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>AI INFRASTRUCTURE</div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>AI PROVIDERS</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{t('providers.title').toUpperCase()}</h1>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={load} title="刷新" style={{ width: 36, height: 36, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <RefreshCw size={13} />
           </button>
           <button onClick={() => setSettingsTarget({})}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 36, background: 'var(--accent)', border: '1px solid var(--accent-border)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer', fontFamily: 'var(--font-mono)', boxShadow: '0 0 16px rgba(0,255,65,0.15)' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 36, background: 'var(--accent)', border: '1px solid var(--accent-border)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer', boxShadow: '0 0 16px rgba(0,255,65,0.15)' }}>
             <Plus size={13} /> 自定义 PROVIDER
           </button>
         </div>
@@ -674,7 +671,7 @@ export default function Providers() {
         <input
           value={search} onChange={e => setSearch(e.target.value)}
           placeholder="搜索 Provider…"
-          style={{ width: '100%', height: 38, paddingLeft: 36, paddingRight: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-mono)', boxSizing: 'border-box' }}
+          style={{ width: '100%', height: 38, paddingLeft: 36, paddingRight: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, boxSizing: 'border-box' }}
         />
       </div>
 

@@ -266,6 +266,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ backup_id: id, confirm: true }),
     }),
+  deleteBackup: (id: string) => request(`/backup/${id}`, { method: 'DELETE' }),
 
   // Config
   exportConfig: () => request('/config/export', { method: 'POST' }),

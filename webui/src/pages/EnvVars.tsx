@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Trash2, Eye, EyeOff, RefreshCw, Lock } from 'lucide-react'
 
@@ -11,6 +12,7 @@ interface EnvVar {
 }
 
 export default function EnvVars() {
+  const { t } = useTranslation()
   const [vars, setVars] = useState<EnvVar[]>([])
   const [loading, setLoading] = useState(true)
   const [newKey, setNewKey] = useState('')
@@ -84,7 +86,7 @@ export default function EnvVars() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
           <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>SYSTEM CONFIGURATION</div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>ENVIRONMENT VARIABLES</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{t('envvars.title').toUpperCase()}</h1>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={load}
@@ -93,8 +95,7 @@ export default function EnvVars() {
               padding: '0 12px', height: 36,
               border: '1px solid var(--border-bright)', background: 'transparent',
               color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer',
-              fontFamily: 'var(--font-mono)',
-            }}>
+                          }}>
             <RefreshCw size={11} /> REFRESH
           </button>
           <button onClick={() => setShowNew(!showNew)}
@@ -103,8 +104,7 @@ export default function EnvVars() {
               padding: '0 16px', height: 36,
               background: 'var(--accent)', border: '1px solid var(--accent-border)',
               color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
-              fontFamily: 'var(--font-mono)',
-            }}>
+                          }}>
             <Lock size={11} /> NEW VAR
           </button>
         </div>
@@ -135,8 +135,7 @@ export default function EnvVars() {
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
                   color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
-                  fontFamily: 'var(--font-mono)',
-                }} />
+                                  }} />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>VALUE</label>
@@ -146,8 +145,7 @@ export default function EnvVars() {
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
                   color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
-                  fontFamily: 'var(--font-mono)',
-                }} />
+                                  }} />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>TYPE</label>
@@ -155,8 +153,7 @@ export default function EnvVars() {
                 style={{
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-mono)',
-                }}>
+                  color: 'var(--text-primary)', fontSize: 14,                 }}>
                 <option value="text">TEXT</option>
                 <option value="secret">SECRET</option>
               </select>
@@ -169,8 +166,7 @@ export default function EnvVars() {
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
                   color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
-                  fontFamily: 'var(--font-mono)',
-                }} />
+                                  }} />
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -179,8 +175,7 @@ export default function EnvVars() {
                 padding: '0 14px', height: 34,
                 border: '1px solid var(--border-bright)', background: 'transparent',
                 color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer',
-                fontFamily: 'var(--font-mono)',
-              }}>
+                              }}>
               CANCEL
             </button>
             <button onClick={add}
@@ -188,8 +183,7 @@ export default function EnvVars() {
                 padding: '0 14px', height: 34,
                 background: 'var(--accent)', border: '1px solid var(--accent-border)',
                 color: '#000', fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', cursor: 'pointer',
-                fontFamily: 'var(--font-mono)',
-              }}>
+                              }}>
               ADD
             </button>
           </div>
@@ -213,7 +207,7 @@ export default function EnvVars() {
           }}>
             {/* Key */}
             <div style={{ width: 200, flexShrink: 0 }}>
-              <span style={{ fontSize: 14, fontFamily: 'var(--font-mono)', color: 'var(--accent)', letterSpacing: '0.05em' }}>{v.key}</span>
+              <span style={{ fontSize: 14, color: 'var(--accent)', letterSpacing: '0.05em' }}>{v.key}</span>
               <span style={{
                 marginLeft: 8, padding: '1px 5px',
                 border: `1px solid ${v.value_type === 'secret' ? 'var(--amber)' : 'var(--border)'}`,
@@ -229,7 +223,7 @@ export default function EnvVars() {
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
               {v.value_type === 'secret' ? (
                 <>
-                  <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
                     {displayValue(v)}
                   </span>
                   {v.is_active && (
@@ -266,8 +260,7 @@ export default function EnvVars() {
                 background: v.is_active ? 'rgba(0,255,65,0.05)' : 'transparent',
                 color: v.is_active ? 'var(--green)' : 'var(--text-dim)',
                 fontSize: 11, letterSpacing: '0.1em', cursor: 'pointer',
-                fontFamily: 'var(--font-mono)',
-              }}>
+                              }}>
               {v.is_active ? 'ACTIVE' : 'INACTIVE'}
             </button>
 

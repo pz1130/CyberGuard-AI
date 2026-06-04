@@ -1,5 +1,5 @@
 import { createContext, useContext, useState } from 'react'
-import type { Tab } from '../components/Sidebar'
+import type { Tab } from '../components/SidebarNew'
 
 export interface SearchTarget {
   tab: Tab

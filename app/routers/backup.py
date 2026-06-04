@@ -609,3 +609,60 @@ async def restore_backup(
             completed_at=datetime.now(timezone.utc),
             error=str(e),
         )
+
+
+@router.delete("/backup/{backup_id}")
+async def delete_backup(
+    backup_id: str,
+    _=Depends(require_role(Role.ADMIN)),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """
+    Delete a backup: removes the local encrypted dump, the remote S3/OSS
+    object (best-effort), and the DB record.
+    """
+    result = await session.execute(
+        select(BackupRecordModel).where(BackupRecordModel.id == backup_id)
+    )
+    manifest = result.scalar_one_or_none()
+
+    if not manifest:
+        raise HTTPException(status_code=404, detail="Backup not found")
+
+    local_deleted = False
+    remote_deleted = False
+    warnings: list[str] = []
+
+    # 1. Delete local encrypted dump if present
+    if manifest.local_path:
+        try:
+            if os.path.exists(manifest.local_path):
+                os.unlink(manifest.local_path)
+                local_deleted = True
+        except OSError as e:
+            logger.warning(f"Failed to delete local backup file {manifest.local_path}: {e}")
+            warnings.append(f"local file: {e}")
+
+    # 2. Delete remote object (best-effort — never block record removal on it)
+    if manifest.remote_url:
+        try:
+            remote_deleted = await _delete_from_s3(manifest.remote_url)
+            if not remote_deleted:
+                warnings.append("remote object could not be deleted (check S3 config)")
+        except Exception as e:
+            logger.warning(f"Failed to delete remote backup {manifest.remote_url}: {e}")
+            warnings.append(f"remote object: {e}")
+
+    # 3. Drop the DB record
+    await session.delete(manifest)
+    await session.commit()
+
+    logger.info(f"Deleted backup {backup_id} (local={local_deleted}, remote={remote_deleted})")
+
+    return {
+        "id": backup_id,
+        "status": "deleted",
+        "local_deleted": local_deleted,
+        "remote_deleted": remote_deleted,
+        "warnings": warnings,
+    }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ShieldCheck, Check, X, RefreshCw, Loader2, ChevronDown, ChevronRight } from 'lucide-react'
 import { api } from '../api/client'
 
@@ -26,13 +27,13 @@ interface ApprovalRequest {
 
 const RISK_COLOR: Record<RiskLevel, string> = {
   low: 'var(--accent)',
-  medium: 'var(--cyan)',
+  medium: 'var(--green)',
   high: 'var(--amber, #ffb000)',
   critical: 'var(--red)',
 }
 const RISK_BG: Record<RiskLevel, string> = {
   low: 'rgba(0,255,65,0.08)',
-  medium: 'rgba(0,200,255,0.08)',
+  medium: 'var(--green-dim)',
   high: 'rgba(255,176,0,0.08)',
   critical: 'rgba(255,60,60,0.08)',
 }
@@ -51,6 +52,7 @@ function fmt(iso: string) {
 }
 
 export default function Approvals() {
+  const { t } = useTranslation()
   const [items, setItems] = useState<ApprovalRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<StatusFilter>('pending')
@@ -108,10 +110,10 @@ export default function Approvals() {
           </div>
           <div>
             <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>
-              APPROVALS
+              {t('approvals.title').toUpperCase()}
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.08em', marginTop: 2 }}>
-              人工审批队列 · ADMIN ONLY
+              {t('approvals.subtitle')}
             </div>
           </div>
         </div>
@@ -122,8 +124,7 @@ export default function Approvals() {
             padding: '0 12px', height: 30,
             background: 'transparent', border: '1px solid var(--border-bright)',
             color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.1em',
-            cursor: 'pointer', fontFamily: 'var(--font-mono)',
-          }}
+            cursor: 'pointer',           }}
           onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent-border)'; e.currentTarget.style.color = 'var(--accent)' }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-bright)'; e.currentTarget.style.color = 'var(--text-muted)' }}
         >
@@ -139,8 +140,7 @@ export default function Approvals() {
             border: `1px solid ${filter === f ? 'var(--accent-border)' : 'var(--border-bright)'}`,
             background: filter === f ? 'var(--accent-dim)' : 'transparent',
             color: filter === f ? 'var(--accent)' : 'var(--text-muted)',
-            cursor: 'pointer', fontFamily: 'var(--font-mono)',
-          }}>
+            cursor: 'pointer',           }}>
             {f.toUpperCase()}
           </button>
         ))}
@@ -290,7 +290,7 @@ export default function Approvals() {
                       ].map(([label, value]) => (
                         <div key={label}>
                           <div style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.12em', marginBottom: 2 }}>{label}</div>
-                          <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>{value}</div>
+                          <div style={{ fontSize: 12, color: 'var(--text-muted)', wordBreak: 'break-all' }}>{value}</div>
                         </div>
                       ))}
                     </div>
@@ -308,8 +308,7 @@ export default function Approvals() {
                         <pre style={{
                           fontSize: 11, color: 'var(--text-muted)', background: 'var(--bg-elevated)',
                           border: '1px solid var(--border)', padding: '8px 12px',
-                          overflowX: 'auto', maxHeight: 200, margin: 0, fontFamily: 'var(--font-mono)',
-                        }}>
+                          overflowX: 'auto', maxHeight: 200, margin: 0,                         }}>
                           {JSON.stringify(item.payload, null, 2)}
                         </pre>
                       </div>
@@ -327,7 +326,7 @@ export default function Approvals() {
                             flex: 1, resize: 'none', padding: '6px 10px',
                             background: 'var(--bg-elevated)', border: '1px solid var(--border-bright)',
                             color: 'var(--text-primary)', fontSize: 12,
-                            fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
+                            letterSpacing: '0.04em',
                           }}
                         />
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -339,8 +338,7 @@ export default function Approvals() {
                               padding: '0 14px', height: 32,
                               background: 'rgba(0,255,65,0.1)', border: '1px solid var(--accent)',
                               color: 'var(--accent)', fontSize: 12, letterSpacing: '0.1em',
-                              cursor: isDeciding ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)',
-                            }}
+                              cursor: isDeciding ? 'not-allowed' : 'pointer',                             }}
                           >
                             {isDeciding ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Check size={11} />}
                             APPROVE
@@ -353,8 +351,7 @@ export default function Approvals() {
                               padding: '0 14px', height: 32,
                               background: 'rgba(255,60,60,0.1)', border: '1px solid var(--red)',
                               color: 'var(--red)', fontSize: 12, letterSpacing: '0.1em',
-                              cursor: isDeciding ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)',
-                            }}
+                              cursor: isDeciding ? 'not-allowed' : 'pointer',                             }}
                           >
                             <X size={11} /> REJECT
                           </button>

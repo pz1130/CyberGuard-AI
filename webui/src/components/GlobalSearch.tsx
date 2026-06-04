@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../api/client'
 import { useSearch } from '../context/SearchContext'
-import type { Tab } from './Sidebar'
+import type { Tab } from './SidebarNew'
 
 interface SearchItem {
   id: number | string
@@ -13,6 +13,8 @@ interface SearchItem {
   category: string
   icon: string
   subview?: string
+  /** Preview snippet (for conversation search results) */
+  preview?: string
 }
 
 interface Props {
@@ -61,7 +63,8 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
       api.getAssessments(),
       api.getPromptTemplates(),
       api.getN8NConnections(),
-    ]).then(([agents, providers, skills, tools, knowledge, mcp, schedule, webhooks, frameworks, assessments, prompts, n8n]) => {
+      api.getConversations(),
+    ]).then(([agents, providers, skills, tools, knowledge, mcp, schedule, webhooks, frameworks, assessments, prompts, n8n, convos]) => {
       const items: SearchItem[] = []
 
       if (agents.status === 'fulfilled') {
@@ -186,6 +189,30 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
         }))
       }
 
+      if (convos.status === 'fulfilled') {
+        const d = convos.value as any
+        const list = Array.isArray(d) ? d : (d?.conversations || [])
+        list.forEach((c: any) => {
+          // Parse messages for search
+          let msgs: Array<{ role: string; content: string }> = []
+          try {
+            msgs = typeof c.messages_json === 'string' ? JSON.parse(c.messages_json || '[]') : []
+          } catch { msgs = [] }
+          // Build a searchable text from the last few messages
+          const lastMsgs = msgs.slice(-6)
+          const previewText = lastMsgs.map(m => m.content || '').join(' ').slice(0, 200)
+          items.push({
+            id: c.id,
+            name: c.title || `Conversation #${c.id}`,
+            subtitle: msgs.length > 0 ? `${msgs.length} messages` : 'EMPTY',
+            tab: 'chat',
+            category: 'CONVERSATIONS',
+            icon: '◉',
+            preview: previewText,
+          })
+        })
+      }
+
       setAllItems(items)
       setLoadingData(false)
       loadedAtRef.current = Date.now()
@@ -204,10 +231,14 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
   // Filter and group by category
   const q = query.toLowerCase().trim()
   const filtered = q
-    ? allItems.filter(item =>
-        item.name.toLowerCase().includes(q) ||
-        item.subtitle.toLowerCase().includes(q)
-      )
+    ? allItems.filter(item => {
+        if (item.name.toLowerCase().includes(q) || item.subtitle.toLowerCase().includes(q)) return true
+        // Also search inside conversation preview text
+        if (item.category === 'CONVERSATIONS' && item.preview) {
+          return item.preview.toLowerCase().includes(q)
+        }
+        return false
+      })
     : []
 
   const grouped: Record<string, SearchItem[]> = {}
@@ -269,8 +300,7 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
         border: '1px solid var(--accent-border)',
         maxHeight: '70vh',
         display: 'flex', flexDirection: 'column',
-        fontFamily: 'var(--font-mono)',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
       }}>
         {/* Input row */}
         <div style={{
@@ -288,8 +318,7 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
             style={{
               flex: 1, background: 'none', border: 'none', outline: 'none',
               color: 'var(--text-primary)', fontSize: 14,
-              letterSpacing: '0.05em', fontFamily: 'var(--font-mono)',
-            }}
+              letterSpacing: '0.05em',             }}
           />
           <span style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.1em', flexShrink: 0 }}>ESC</span>
         </div>
@@ -317,7 +346,7 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
                     width: '100%', padding: '0 16px', height: 40,
                     background: 'none', border: 'none', cursor: 'pointer',
                     color: 'var(--text-muted)', textAlign: 'left',
-                    fontFamily: 'var(--font-mono)', fontSize: 13, letterSpacing: '0.08em',
+                    fontSize: 13, letterSpacing: '0.08em',
                   }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'none')}
@@ -361,31 +390,71 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
                   </>
                 ) : item.name
 
+                // Build a highlighted preview snippet for conversation results
+                let previewDisplay: ReactNode = null
+                if (item.category === 'CONVERSATIONS' && item.preview && q) {
+                  const pLow = item.preview.toLowerCase()
+                  const pIdx = pLow.indexOf(q)
+                  if (pIdx >= 0) {
+                    const start = Math.max(0, pIdx - 30)
+                    const end = Math.min(item.preview.length, pIdx + q.length + 50)
+                    const before = (start > 0 ? '…' : '') + item.preview.slice(start, pIdx)
+                    const match = item.preview.slice(pIdx, pIdx + q.length)
+                    const after = item.preview.slice(pIdx + q.length, end) + (end < item.preview.length ? '…' : '')
+                    previewDisplay = (
+                      <div style={{
+                        fontSize: 12, color: 'var(--text-dim)', marginTop: 3,
+                        lineHeight: 1.5, fontFamily: 'var(--font-sans)',
+                        overflow: 'hidden', textOverflow: 'ellipsis',
+                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                      }}>
+                        {before}<span style={{ color: 'var(--accent)', fontWeight: 600 }}>{match}</span>{after}
+                      </div>
+                    )
+                  } else {
+                    previewDisplay = (
+                      <div style={{
+                        fontSize: 12, color: 'var(--text-dim)', marginTop: 3,
+                        lineHeight: 1.5, fontFamily: 'var(--font-sans)',
+                        overflow: 'hidden', textOverflow: 'ellipsis',
+                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                      }}>
+                        {item.preview.slice(0, 100)}{item.preview.length > 100 ? '…' : ''}
+                      </div>
+                    )
+                  }
+                }
+
                 return (
                   <div
                     key={`${cat}-${item.id}`}
                     onClick={() => select(item)}
                     onMouseEnter={() => setSelectedIndex(currentIdx)}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 12,
-                      padding: '0 16px', height: 40, cursor: 'pointer',
+                      padding: previewDisplay ? '8px 16px' : '0 16px',
+                      minHeight: 40,
+                      cursor: 'pointer',
                       background: isSelected ? 'var(--accent-dim)' : 'transparent',
                       borderLeft: isSelected ? '2px solid var(--accent)' : '2px solid transparent',
+                      transition: 'background 0.1s ease',
                     }}
                   >
-                    <span style={{ color: 'var(--accent)', fontSize: 11, flexShrink: 0 }}>{item.icon}</span>
-                    <span style={{
-                      fontSize: 13, color: 'var(--text-primary)', flex: 1,
-                      minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                      {nameDisplay}
-                    </span>
-                    <span style={{
-                      fontSize: 11, color: 'var(--text-dim)', flexShrink: 0,
-                      maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                      {item.subtitle}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <span style={{ color: 'var(--accent)', fontSize: 11, flexShrink: 0 }}>{item.icon}</span>
+                      <span style={{
+                        fontSize: 13, color: 'var(--text-primary)', flex: 1,
+                        minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {nameDisplay}
+                      </span>
+                      <span style={{
+                        fontSize: 11, color: 'var(--text-dim)', flexShrink: 0,
+                        maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {item.subtitle}
+                      </span>
+                    </div>
+                    {previewDisplay}
                   </div>
                 )
               })}

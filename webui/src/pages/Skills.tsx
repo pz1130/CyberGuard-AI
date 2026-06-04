@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useContext } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Trash2, Plus, Edit2, Wrench, X, Loader2, Link, Upload } from 'lucide-react'
 import { SearchContext } from '../context/SearchContext'
+import Modal from '../components/Modal'
 
 interface Skill {
   id?: string
@@ -21,28 +23,12 @@ const CATEGORY_COLORS: Record<string, string> = {
   skill: 'var(--amber)',
   workflow: 'var(--purple)',
   threat_intel: 'var(--red)',
-  log_analysis: 'var(--blue)',
+  log_analysis: 'var(--accent)',
   vuln: 'var(--orange)',
 }
 
-function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px 0' }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ width: 500, maxHeight: 'calc(100vh - 80px)', background: 'var(--bg-surface)', border: '1px solid var(--border-bright)', padding: 24, overflowY: 'auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>{title}</h3>
-          <button onClick={onClose} style={{ color: 'var(--text-muted)', cursor: 'pointer', background: 'none', border: 'none', padding: 4 }}>
-            <X size={14} />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
-  )
-}
-
 export default function Skills() {
+  const { t } = useTranslation()
   const [items, setItems] = useState<Skill[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -145,19 +131,19 @@ export default function Skills() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
           <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>AGENT CAPABILITIES</div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>SKILL POOL</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{t('skills.title').toUpperCase()}</h1>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={() => setShowInstallUrl(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', height: 36, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', height: 36, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.1em', cursor: 'pointer' }}>
             <Link size={12} /> FROM URL
           </button>
           <button onClick={() => setShowImport(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', height: 36, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px', height: 36, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.1em', cursor: 'pointer' }}>
             <Upload size={12} /> IMPORT
           </button>
           <button onClick={() => { setShowForm(true); setEditing(null); setForm({ name: '', category: 'tool', description: '', version: '1.0.0', permission_level: 'medium', tagsText: '' }); setMdContent('') }}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 36, background: 'var(--accent)', border: '1px solid var(--accent-border)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer', fontFamily: 'var(--font-mono)', boxShadow: '0 0 16px rgba(0,255,65,0.15)' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 36, background: 'var(--accent)', border: '1px solid var(--accent-border)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer', boxShadow: '0 0 16px rgba(0,255,65,0.15)' }}>
             <Plus size={13} /> NEW SKILL
           </button>
         </div>
@@ -165,17 +151,17 @@ export default function Skills() {
 
       {/* Install from URL Modal */}
       {showInstallUrl && (
-        <Modal title="INSTALL FROM URL" onClose={() => { setShowInstallUrl(false); setInstallError('') }}>
+        <Modal width={500} title="INSTALL FROM URL" onClose={() => { setShowInstallUrl(false); setInstallError('') }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div>
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>SKILL FILE URL</label>
               <input value={installUrl} onChange={e => setInstallUrl(e.target.value)}
                 placeholder="https://raw.githubusercontent.com/.../skill.md"
                 onKeyDown={e => e.key === 'Enter' && handleInstallUrl()}
-                style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em', fontFamily: 'var(--font-mono)' }} />
+                style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em' }} />
             </div>
             {installError && (
-              <div style={{ padding: '8px 10px', background: 'rgba(255,0,0,0.1)', border: '1px solid var(--red)', fontSize: 13, color: 'var(--red)', fontFamily: 'var(--font-mono)' }}>
+              <div style={{ padding: '8px 10px', background: 'rgba(255,0,0,0.1)', border: '1px solid var(--red)', fontSize: 13, color: 'var(--red)' }}>
                 {installError}
               </div>
             )}
@@ -184,11 +170,11 @@ export default function Skills() {
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button onClick={() => { setShowInstallUrl(false); setInstallError('') }}
-                style={{ padding: '0 14px', height: 36, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+                style={{ padding: '0 14px', height: 36, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.1em', cursor: 'pointer' }}>
                 CANCEL
               </button>
               <button onClick={handleInstallUrl} disabled={installLoading}
-                style={{ padding: '0 14px', height: 36, border: '1px solid var(--accent-border)', background: installLoading ? 'var(--bg-elevated)' : 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.1em', cursor: installLoading ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)' }}>
+                style={{ padding: '0 14px', height: 36, border: '1px solid var(--accent-border)', background: installLoading ? 'var(--bg-elevated)' : 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.1em', cursor: installLoading ? 'not-allowed' : 'pointer' }}>
                 {installLoading ? 'INSTALLING...' : 'INSTALL'}
               </button>
             </div>
@@ -198,7 +184,7 @@ export default function Skills() {
 
       {/* Import File Modal */}
       {showImport && (
-        <Modal title="IMPORT SKILL FILE" onClose={() => { setShowImport(false); setInstallError('') }}>
+        <Modal width={500} title="IMPORT SKILL FILE" onClose={() => { setShowImport(false); setInstallError('') }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ padding: '20px', background: 'var(--bg-base)', border: '1px dashed var(--border-bright)', textAlign: 'center', cursor: 'pointer' }}
               onClick={() => fileInputRef.current?.click()}>
@@ -208,7 +194,7 @@ export default function Skills() {
               <input ref={fileInputRef} type="file" accept=".md,.markdown,.json" onChange={handleFileImport} style={{ display: 'none' }} />
             </div>
             {installError && (
-              <div style={{ padding: '8px 10px', background: 'rgba(255,0,0,0.1)', border: '1px solid var(--red)', fontSize: 13, color: 'var(--red)', fontFamily: 'var(--font-mono)' }}>
+              <div style={{ padding: '8px 10px', background: 'rgba(255,0,0,0.1)', border: '1px solid var(--red)', fontSize: 13, color: 'var(--red)' }}>
                 {installError}
               </div>
             )}
@@ -233,12 +219,12 @@ export default function Skills() {
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>NAME</label>
               <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                 placeholder="e.g. cve-lookup"
-                style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em', fontFamily: 'var(--font-mono)' }} />
+                style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em' }} />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>CATEGORY</label>
               <select value={form.category || 'tool'} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-mono)' }}>
+                style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14 }}>
                 <option value="tool">TOOL</option>
                 <option value="skill">SKILL</option>
                 <option value="workflow">WORKFLOW</option>
@@ -251,12 +237,12 @@ export default function Skills() {
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>VERSION</label>
               <input value={form.version || '1.0.0'} onChange={e => setForm(f => ({ ...f, version: e.target.value }))}
                 placeholder="1.0.0"
-                style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em', fontFamily: 'var(--font-mono)' }} />
+                style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em' }} />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>PERMISSION</label>
               <select value={form.permission_level || 'medium'} onChange={e => setForm(f => ({ ...f, permission_level: e.target.value }))}
-                style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-mono)' }}>
+                style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14 }}>
                 <option value="low">LOW</option>
                 <option value="medium">MEDIUM</option>
                 <option value="high">HIGH</option>
@@ -266,30 +252,30 @@ export default function Skills() {
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>DESCRIPTION</label>
               <input value={form.description || ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                 placeholder="Skill capability description..."
-                style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em', fontFamily: 'var(--font-mono)' }} />
+                style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em' }} />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>MARKDOWN CONTENT</label>
               <textarea value={mdContent} onChange={e => setMdContent(e.target.value)}
                 rows={10}
                 placeholder={"# Skill Name\n\nDescribe what this skill does..."}
-                style={{ width: '100%', padding: '8px 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 13, letterSpacing: '0.05em', fontFamily: 'var(--font-mono)', resize: 'vertical' }} />
+                style={{ width: '100%', padding: '8px 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 13, letterSpacing: '0.05em', resize: 'vertical' }} />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>TAGS (comma-separated)</label>
               <input value={form.tagsText || ''}
                 onChange={e => setForm(f => ({ ...f, tagsText: e.target.value }))}
                 placeholder="recon, threat-intel"
-                style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em', fontFamily: 'var(--font-mono)' }} />
+                style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em' }} />
             </div>
           </div>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 20 }}>
             <button onClick={() => { setShowForm(false); setEditing(null) }}
-              style={{ padding: '0 16px', height: 36, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+              style={{ padding: '0 16px', height: 36, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer' }}>
               CANCEL
             </button>
             <button onClick={submit}
-              style={{ padding: '0 16px', height: 36, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+              style={{ padding: '0 16px', height: 36, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer' }}>
               {editing ? 'SAVE CHANGES' : 'CREATE SKILL'}
             </button>
           </div>
@@ -301,7 +287,7 @@ export default function Skills() {
         <input value={tagFilter} onChange={e => setTagFilter(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') load() }}
           placeholder="filter by tag…"
-          style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em', fontFamily: 'var(--font-mono)' }} />
+          style={{ width: '100%', height: 38, padding: '0 12px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em' }} />
       </div>
 
       {/* Loading */}
@@ -348,10 +334,10 @@ export default function Skills() {
                   <span style={{ fontSize: 11, color: '#60a5fa' }}>{s.tags.join(', ')}</span>
                 )}
                 {s.version && (
-                  <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', marginBottom: 4 }}>v{s.version}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 4 }}>v{s.version}</div>
                 )}
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>ID: {String(s.id || '').slice(0, 8) || '—'}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>ID: {String(s.id || '').slice(0, 8) || '—'}</span>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={() => openEdit(s)} style={{ padding: 4, color: 'var(--text-muted)', cursor: 'pointer', background: 'none', border: 'none' }}>
                       <Edit2 size={12} />
