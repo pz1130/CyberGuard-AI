@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Save, RotateCcw } from 'lucide-react'
 
@@ -58,6 +59,7 @@ Examples:
 }
 
 export default function Settings() {
+  const { t } = useTranslation()
   const [config, setConfig] = useState<MasterConfig>(DEFAULTS)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -129,7 +131,7 @@ export default function Settings() {
               width: '100%', padding: '10px 12px',
               background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
               color: 'var(--text-primary)', fontSize: 14, lineHeight: 1.6,
-              fontFamily: 'var(--font-mono)', resize: 'vertical',
+              resize: 'vertical',
             }}
           />
         ) : extra?.type === 'slider' ? (
@@ -156,8 +158,7 @@ export default function Settings() {
               width: 120, height: 36, padding: '0 12px',
               background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
               color: 'var(--text-primary)', fontSize: 14,
-              fontFamily: 'var(--font-mono)',
-            }}
+                          }}
           />
         ) : (
           <input
@@ -168,8 +169,7 @@ export default function Settings() {
               width: '100%', height: 36, padding: '0 12px',
               background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
               color: 'var(--text-primary)', fontSize: 14,
-              fontFamily: 'var(--font-mono)',
-            }}
+                          }}
           />
         )}
       </div>
@@ -181,7 +181,7 @@ export default function Settings() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
           <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>SYSTEM CONFIGURATION</div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>SETTINGS</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{t('settings.title').toUpperCase()}</h1>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={reset} style={{
@@ -189,8 +189,7 @@ export default function Settings() {
             padding: '0 14px', height: 36,
             border: '1px solid var(--border-bright)', background: 'transparent',
             color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer',
-            fontFamily: 'var(--font-mono)',
-          }}>
+                      }}>
             <RotateCcw size={11} /> RESET
           </button>
           <button onClick={save} disabled={saving} style={{
@@ -199,8 +198,7 @@ export default function Settings() {
             background: saved ? 'var(--green)' : 'var(--accent)',
             border: '1px solid var(--accent-border)',
             color: '#000', fontWeight: 700, fontSize: 12, letterSpacing: '0.06em',
-            cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)',
-          }}>
+            cursor: saving ? 'not-allowed' : 'pointer',           }}>
             <Save size={11} /> {saving ? 'SAVING...' : saved ? 'SAVED!' : 'SAVE CHANGES'}
           </button>
         </div>
@@ -212,7 +210,7 @@ export default function Settings() {
           <button key={tab} onClick={() => setActiveTab(tab)} style={{
             padding: '8px 20px', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid var(--accent)' : '2px solid transparent',
             color: activeTab === tab ? 'var(--accent)' : 'var(--text-muted)', fontSize: 13, letterSpacing: '0.1em',
-            cursor: 'pointer', fontFamily: 'var(--font-mono)', textTransform: 'uppercase',
+            cursor: 'pointer', textTransform: 'uppercase',
           }}>{tab === 'master' ? 'MASTER AGENT' : 'ABOUT'}</button>
         ))}
       </div>
@@ -234,8 +232,7 @@ export default function Settings() {
                   width: '100%', height: 36, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
                   color: 'var(--text-primary)', fontSize: 14,
-                  fontFamily: 'var(--font-mono)',
-                }}>
+                                  }}>
                 {availableModels.length === 0 && <option value={config.model}>{config.model} (无法加载 Provider)</option>}
                 {availableModels.map(m => (
                   <option key={`${m.provider_id}:${m.model}`} value={m.model}>

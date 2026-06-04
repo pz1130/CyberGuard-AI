@@ -1,26 +1,23 @@
 import { useState, useEffect } from 'react'
+import { ShieldCheck } from 'lucide-react'
 import { api } from '../api/client'
-
-const SSO_ERROR_LABELS: Record<string, string> = {
-  sso_unavailable: 'SSO IS NOT CONFIGURED',
-  sso_failed: 'MICROSOFT SIGN-IN FAILED',
-  sso_state: 'SSO SESSION EXPIRED — TRY AGAIN',
-  sso_inactive: 'ACCOUNT DISABLED',
-  sso_no_account: 'NO MATCHING ACCOUNT — CONTACT ADMIN',
-}
+import { useTranslation } from 'react-i18next'
 
 export default function Login() {
+  const { t } = useTranslation()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState(() => {
+    const err = new URLSearchParams(window.location.search).get('error')
+    return err ? (t(`login.${err}` as any) || t('login.ssoError')) : ''
+  })
   const [loading, setLoading] = useState(false)
   const [ssoEnabled, setSsoEnabled] = useState(false)
 
   useEffect(() => {
-    api.getSsoStatus().then((d: any) => setSsoEnabled(!!d?.enabled)).catch(() => {})
+    api.getSsoStatus().then((d: unknown) => setSsoEnabled(!!(d as { enabled?: boolean } | null)?.enabled)).catch(() => {})
     const err = new URLSearchParams(window.location.search).get('error')
     if (err) {
-      setError(SSO_ERROR_LABELS[err] || 'SIGN-IN ERROR')
       window.history.replaceState(null, '', window.location.pathname)
     }
   }, [])
@@ -30,50 +27,81 @@ export default function Login() {
     if (!username || !password) return
     setLoading(true); setError('')
     try {
-      const data = await api.login({ username, password }) as any
+      const data = await api.login({ username, password }) as { access_token: string }
       localStorage.setItem('token', data.access_token)
       window.location.reload()
     } catch {
-      setError('AUTHENTICATION FAILED — CHECK CREDENTIALS')
+      setError(t('login.authFailed'))
     } finally { setLoading(false) }
   }
 
   return (
     <div style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'var(--bg-base)',
+      background: 'radial-gradient(circle at top, rgba(0, 212, 106, 0.06), transparent 30%), var(--bg-base)',
       position: 'relative', overflow: 'hidden',
     }}>
       {/* Grid BG */}
       <div style={{
         position: 'absolute', inset: 0,
-        backgroundImage: 'linear-gradient(rgba(0,255,65,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,65,0.03) 1px, transparent 1px)',
-        backgroundSize: '40px 40px',
+        backgroundImage: 'linear-gradient(rgba(0,212,106,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,106,0.03) 1px, transparent 1px)',
+        backgroundSize: '44px 44px',
         pointerEvents: 'none',
       }} />
+
+      {/* Green wave dots flowing left-to-right randomly along the horizontal grid lines */}
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+        {Array.from({ length: 18 }).map((_, i) => {
+          // Much denser distribution across full height (step ~5.3% for many more grid lines)
+          // Small per-dot jitter to feel organic and aligned with the 44px grid rhythm
+          const topPercent = ((i * 5.3) + (i % 5) * 1.1) % 97;
+          const duration = 6.2 + (i % 8) * 0.9; // faster overall: 6.2s ~ 12.5s for quicker, lively flow
+          const delay = - (i * 0.95 + (i % 4) * 0.55) % duration;
+          return (
+            <div
+              key={i}
+              style={{
+                position: 'absolute',
+                top: `${topPercent}%`,
+                left: -8,
+                width: 3.5,
+                height: 3.5,
+                background: 'var(--accent)',
+                borderRadius: '50%',
+                boxShadow: '0 0 5px var(--accent), 0 0 10px rgba(74,222,128,0.55)',
+                animation: `flow-dot ${duration}s linear infinite`,
+                animationDelay: `${delay}s`,
+                opacity: 0.9,
+              }}
+            />
+          );
+        })}
+      </div>
 
       {/* Glow orb */}
       <div style={{
         position: 'absolute', top: '50%', left: '50%',
         transform: 'translate(-50%, -50%)',
         width: 600, height: 600, borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(0,255,65,0.04) 0%, transparent 70%)',
+        background: 'radial-gradient(circle, rgba(0,212,106,0.05) 0%, transparent 70%)',
         pointerEvents: 'none',
       }} />
 
       {/* Card */}
-      <div style={{
+      <div className="login-frame-animated login-border-glow" style={{
         position: 'relative', width: '100%', maxWidth: 400, margin: 16,
-        border: '1px solid var(--border-bright)',
-        background: 'var(--bg-surface)',
-        padding: '40px 36px',
         animation: 'fade-in-up 0.4s ease',
+        borderRadius: 'var(--radius-lg)',
       }}>
-        {/* Top border accent */}
-        <div style={{
-          position: 'absolute', top: 0, left: 0, right: 0, height: 2,
-          background: 'linear-gradient(90deg, transparent, var(--accent), transparent)',
-        }} />
+        <div className="login-card-shell" style={{
+          background: 'var(--shell-backdrop)',
+          boxShadow: 'var(--shadow-xl)',
+          backdropFilter: 'blur(16px)',
+          padding: '40px 36px',
+          borderRadius: 'var(--radius-lg)',
+          position: 'relative',
+          zIndex: 1,
+        }}>
 
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 32 }}>
@@ -86,23 +114,23 @@ export default function Login() {
             <span style={{ color: 'var(--accent)' }}>⬡</span>
           </div>
           <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 20, letterSpacing: '0.06em' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 20, letterSpacing: '0.06em', color: 'var(--shell-text-strong)' }}>
               CYBERGUARD
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
+            <div style={{ fontSize: 11, color: 'var(--shell-text-muted)', letterSpacing: '0.08em' }}>
               AI AGENT PLATFORM · AUTH GATE
             </div>
           </div>
         </div>
 
-        <div style={{ height: 1, background: 'var(--border)', marginBottom: 28 }} />
+        <div style={{ height: 1, background: 'var(--shell-border-subtle)', marginBottom: 28 }} />
 
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <div>
             <label style={{
-              display: 'block', fontSize: 12, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 8,
+              display: 'block', fontSize: 12, letterSpacing: '0.08em', color: 'var(--shell-text-muted)', marginBottom: 8,
             }}>
-              USERNAME
+              {t('login.username').toUpperCase()}
             </label>
             <input
               type="text"
@@ -112,10 +140,10 @@ export default function Login() {
               placeholder="operator"
               style={{
                 width: '100%', height: 40, padding: '0 12px',
-                background: 'var(--bg-base)',
-                border: '1px solid var(--border-bright)',
-                color: 'var(--text-primary)', fontSize: 15,
-                fontFamily: 'var(--font-mono)', letterSpacing: '0.05em',
+                background: 'var(--shell-backdrop-strong)',
+                border: '1px solid var(--shell-border)',
+                color: 'var(--shell-text-strong)', fontSize: 15,
+                letterSpacing: '0.05em',
                 transition: 'border-color 0.15s',
               }}
               onFocus={e => (e.target.style.borderColor = 'var(--accent)')}
@@ -124,8 +152,8 @@ export default function Login() {
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: 12, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 8 }}>
-              PASSWORD
+            <label style={{ display: 'block', fontSize: 12, letterSpacing: '0.08em', color: 'var(--shell-text-muted)', marginBottom: 8 }}>
+              {t('login.password').toUpperCase()}
             </label>
             <input
               type="password"
@@ -135,10 +163,10 @@ export default function Login() {
               placeholder="••••••••"
               style={{
                 width: '100%', height: 40, padding: '0 12px',
-                background: 'var(--bg-base)',
-                border: '1px solid var(--border-bright)',
-                color: 'var(--text-primary)', fontSize: 15,
-                fontFamily: 'var(--font-mono)', letterSpacing: '0.1em',
+                background: 'var(--shell-backdrop-strong)',
+                border: '1px solid var(--shell-border)',
+                color: 'var(--shell-text-strong)', fontSize: 15,
+                letterSpacing: '0.1em',
                 transition: 'border-color 0.15s',
               }}
               onFocus={e => (e.target.style.borderColor = 'var(--accent)')}
@@ -167,44 +195,38 @@ export default function Login() {
               color: loading ? 'var(--text-muted)' : '#000',
               fontWeight: 700, fontSize: 14, letterSpacing: '0.08em',
               cursor: loading ? 'not-allowed' : 'pointer',
-              transition: 'all 0.15s', fontFamily: 'var(--font-mono)',
-              boxShadow: loading ? 'none' : '0 0 20px rgba(0,255,65,0.2)',
+              transition: 'all 0.15s',               boxShadow: loading ? 'none' : '0 0 20px rgba(0,212,106,0.2)',
             }}
           >
-            {loading ? 'AUTHENTICATING...' : 'AUTHENTICATE'}
+            {loading ? t('login.authenticating').toUpperCase() : t('login.authenticate').toUpperCase()}
           </button>
         </form>
 
         {ssoEnabled && (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '20px 0' }}>
-              <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-              <span style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>OR</span>
-              <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+              <div style={{ flex: 1, height: 1, background: 'var(--shell-border-subtle)' }} />
+              <span style={{ fontSize: 10, color: 'var(--shell-text-muted)', letterSpacing: '0.1em' }}>OR</span>
+              <div style={{ flex: 1, height: 1, background: 'var(--shell-border-subtle)' }} />
             </div>
             <a
               href="/api/v1/auth/sso/login"
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
                 height: 40, width: '100%', textDecoration: 'none',
-                background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                color: 'var(--text-primary)', fontWeight: 700, fontSize: 13,
-                letterSpacing: '0.06em', fontFamily: 'var(--font-mono)',
-              }}
+                background: 'var(--shell-backdrop-strong)', border: '1px solid var(--shell-border)',
+                color: 'var(--shell-text-strong)', fontWeight: 700, fontSize: 13,
+                letterSpacing: '0.06em',               }}
             >
-              <svg width="16" height="16" viewBox="0 0 23 23" aria-hidden="true">
-                <rect x="1" y="1" width="10" height="10" fill="#f25022" />
-                <rect x="12" y="1" width="10" height="10" fill="#7fba00" />
-                <rect x="1" y="12" width="10" height="10" fill="#00a4ef" />
-                <rect x="12" y="12" width="10" height="10" fill="#ffb900" />
-              </svg>
+              <ShieldCheck size={16} color="var(--accent)" />
               SIGN IN WITH MICROSOFT
             </a>
           </>
         )}
 
-        <div style={{ marginTop: 24, fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.1em', textAlign: 'center' }}>
+        <div style={{ marginTop: 24, fontSize: 11, color: 'var(--shell-text-muted)', letterSpacing: '0.1em', textAlign: 'center' }}>
           SECURE · ENCRYPTED · ZERO-TRUST
+        </div>
         </div>
       </div>
     </div>

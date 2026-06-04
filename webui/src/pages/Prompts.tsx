@@ -1,7 +1,10 @@
 import { useEffect, useState, useContext } from 'react'
-import { Plus, Edit2, Trash2, X, Save, Copy, Check } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { Plus, Edit2, Trash2, Save, Copy, Check } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 import { api } from '../api/client'
 import { SearchContext } from '../context/SearchContext'
+import Modal from '../components/Modal'
 
 type Category = 'system' | 'intent_parser' | 'summarizer' | 'general'
 
@@ -49,6 +52,7 @@ const EMPTY_EDIT: EditState = {
 }
 
 export default function Prompts() {
+  const { t } = useTranslation()
   const [items, setItems] = useState<PromptTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | Category>('all')
@@ -150,23 +154,16 @@ export default function Prompts() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ fontSize: 20, letterSpacing: '0.06em', color: 'var(--text-primary)' }}>PROMPT TEMPLATES</div>
-          <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-dim)', marginTop: 4 }}>
-            预定义可复用的 system prompt，会话中可一键填入
-          </div>
-        </div>
-        <button onClick={openCreate} style={{
-          padding: '8px 16px', fontSize: 13, letterSpacing: '0.06em',
-          background: 'var(--accent)', border: '1px solid var(--accent-border)',
-          color: '#000', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontWeight: 700,
-          display: 'flex', alignItems: 'center', gap: 6,
-        }}>
-          <Plus size={12} /> NEW TEMPLATE
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="PROMPT LIBRARY"
+        title={t('prompts.title').toUpperCase()}
+        description="预定义可复用的 system prompt，会话中可一键填入"
+        actions={
+          <button onClick={openCreate} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Plus size={12} /> NEW TEMPLATE
+          </button>
+        }
+      />
 
       {/* Filter */}
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -174,13 +171,17 @@ export default function Prompts() {
         {(['all', 'system', 'intent_parser', 'summarizer', 'general'] as const).map(f => {
           const active = filter === f
           return (
-            <button key={f} onClick={() => setFilter(f)} style={{
-              padding: '4px 10px', fontSize: 12, letterSpacing: '0.1em',
-              background: active ? 'var(--accent-dim)' : 'transparent',
-              border: `1px solid ${active ? 'var(--accent-border)' : 'var(--border-bright)'}`,
-              color: active ? 'var(--accent)' : 'var(--text-muted)',
-              cursor: 'pointer', fontFamily: 'var(--font-mono)',
-            }}>
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className="btn btn-sm"
+              style={{
+                background: active ? 'var(--accent-dim)' : 'transparent',
+                borderColor: active ? 'var(--accent-border)' : 'var(--border-bright)',
+                color: active ? 'var(--accent)' : 'var(--text-muted)',
+                height: 28,
+              }}
+            >
               {f === 'all' ? 'ALL' : CATEGORY_LABELS[f as Category]}
             </button>
           )
@@ -200,54 +201,55 @@ export default function Prompts() {
           NO TEMPLATES — CLICK "NEW TEMPLATE" TO CREATE ONE
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 12 }}>
           {filtered.map(item => (
-            <div key={item.id} data-item-id={item.id} style={{
-              border: '1px solid var(--border)', background: 'var(--bg-surface)',
-              padding: 14, display: 'flex', flexDirection: 'column', gap: 8,
-              opacity: item.is_active ? 1 : 0.5,
-            }}>
+            <div
+              key={item.id}
+              data-item-id={item.id}
+              className="item-card"
+              style={{ opacity: item.is_active ? 1 : 0.55, padding: '14px 16px', gap: 10 }}
+            >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                  <span style={{
-                    fontSize: 11, letterSpacing: '0.12em', padding: '2px 6px',
-                    border: `1px solid ${CATEGORY_COLORS[item.category]}`,
-                    color: CATEGORY_COLORS[item.category],
-                  }}>
+                  <span
+                    className="item-card-badge"
+                    style={{ borderColor: CATEGORY_COLORS[item.category], color: CATEGORY_COLORS[item.category] }}
+                  >
                     {CATEGORY_LABELS[item.category]}
                   </span>
-                  <span style={{
-                    fontSize: 15, color: 'var(--text-primary)', fontWeight: 600,
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                  }}>{item.name}</span>
+                  <span className="item-card-title" style={{ fontSize: 14 }}>{item.name}</span>
                 </div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  <button onClick={() => copyContent(item)} title="Copy content"
-                    style={{ padding: 4, background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}>
+                <div style={{ display: 'flex', gap: 2 }}>
+                  <button onClick={() => copyContent(item)} title="Copy content" className="item-card-icon-btn">
                     {copiedId === item.id ? <Check size={12} style={{ color: 'var(--accent)' }} /> : <Copy size={12} />}
                   </button>
-                  <button onClick={() => openEdit(item)} title="Edit"
-                    style={{ padding: 4, background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}>
+                  <button onClick={() => openEdit(item)} title="Edit" className="item-card-icon-btn">
                     <Edit2 size={12} />
                   </button>
-                  <button onClick={() => remove(item)} title="Delete"
-                    style={{ padding: 4, background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer' }}>
+                  <button onClick={() => remove(item)} title="Delete" className="item-card-icon-btn danger">
                     <Trash2 size={12} />
                   </button>
                 </div>
               </div>
+
               {item.description && (
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>{item.description}</div>
+                <div className="item-card-desc">{item.description}</div>
               )}
+
               <div style={{
-                fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5,
-                fontFamily: 'var(--font-mono)', background: 'var(--bg-base)',
-                border: '1px solid var(--border)', padding: '8px 10px',
-                maxHeight: 96, overflow: 'hidden',
-                whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                position: 'relative',
+                fontSize: 12,
+                color: 'var(--text-dim)',
+                lineHeight: 1.45,
+                background: 'var(--bg-base)',
+                border: '1px solid var(--border)',
+                padding: '8px 10px',
+                maxHeight: 88,
+                overflow: 'hidden',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                borderRadius: 'var(--radius-sm)',
               }}>
-                {item.content.length > 280 ? item.content.slice(0, 280) + '\n…' : item.content}
+                {item.content.length > 260 ? item.content.slice(0, 260) + ' …' : item.content}
               </div>
             </div>
           ))}
@@ -256,103 +258,61 @@ export default function Prompts() {
 
       {/* Editor modal */}
       {editorOpen && (
-        <div onClick={() => !saving && setEditorOpen(false)} style={{
-          position: 'fixed', inset: 0, zIndex: 9999,
-          background: 'rgba(0,0,0,0.75)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: 20,
-        }}>
-          <div onClick={e => e.stopPropagation()} style={{
-            width: '100%', maxWidth: 720, maxHeight: '90vh',
-            background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
-            display: 'flex', flexDirection: 'column',
-          }}>
-            <div style={{
-              padding: '14px 18px', borderBottom: '1px solid var(--border)',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            }}>
-              <span style={{ fontSize: 14, letterSpacing: '0.06em', color: 'var(--accent)' }}>
-                {edit.id == null ? '+ NEW PROMPT TEMPLATE' : '◆ EDIT PROMPT TEMPLATE'}
-              </span>
-              <button onClick={() => !saving && setEditorOpen(false)} disabled={saving}
-                style={{ padding: 4, background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}>
-                <X size={14} />
-              </button>
-            </div>
-            <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
-                <div>
-                  <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 6 }}>NAME</div>
-                  <input value={edit.name} onChange={e => setEdit(s => ({ ...s, name: e.target.value }))}
-                    placeholder="e.g. Security Auditor"
-                    style={inputStyle}
-                  />
-                </div>
-                <div>
-                  <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 6 }}>CATEGORY</div>
-                  <select value={edit.category} onChange={e => setEdit(s => ({ ...s, category: e.target.value as Category }))} style={inputStyle}>
-                    <option value="system">System Prompt</option>
-                    <option value="intent_parser">Intent Parser</option>
-                    <option value="summarizer">Summarizer</option>
-                    <option value="general">General</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 6 }}>DESCRIPTION (OPTIONAL)</div>
-                <input value={edit.description} onChange={e => setEdit(s => ({ ...s, description: e.target.value }))}
-                  placeholder="Short note shown next to the name"
-                  style={inputStyle}
-                />
-              </div>
-              <div>
-                <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 6 }}>CONTENT</div>
-                <textarea value={edit.content} onChange={e => setEdit(s => ({ ...s, content: e.target.value }))}
-                  rows={14}
-                  placeholder="The full prompt text. Will be applied verbatim."
-                  style={{ ...inputStyle, height: 'auto', minHeight: 280, resize: 'vertical', lineHeight: 1.6 }}
-                />
-              </div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-muted)', cursor: 'pointer' }}>
-                <input type="checkbox" checked={edit.is_active} onChange={e => setEdit(s => ({ ...s, is_active: e.target.checked }))} />
-                <span style={{ letterSpacing: '0.1em' }}>ACTIVE (shown in Chat picker)</span>
-              </label>
-            </div>
-            <div style={{
-              padding: '12px 18px', borderTop: '1px solid var(--border)',
-              display: 'flex', justifyContent: 'flex-end', gap: 8,
-            }}>
-              <button onClick={() => setEditorOpen(false)} disabled={saving}
-                style={{
-                  padding: '8px 16px', fontSize: 13, letterSpacing: '0.1em',
-                  border: '1px solid var(--border-bright)', background: 'transparent',
-                  color: 'var(--text-muted)', cursor: saving ? 'not-allowed' : 'pointer',
-                  fontFamily: 'var(--font-mono)',
-                }}>
+        <Modal
+          width={720}
+          title={edit.id == null ? 'NEW PROMPT TEMPLATE' : 'EDIT PROMPT TEMPLATE'}
+          onClose={() => { if (!saving) setEditorOpen(false) }}
+          footer={(
+            <>
+              <button onClick={() => setEditorOpen(false)} disabled={saving} className="btn btn-secondary">
                 CANCEL
               </button>
-              <button onClick={save} disabled={saving}
-                style={{
-                  padding: '8px 16px', fontSize: 13, letterSpacing: '0.1em',
-                  background: 'var(--accent)', border: '1px solid var(--accent-border)',
-                  color: '#000', cursor: saving ? 'not-allowed' : 'pointer',
-                  fontFamily: 'var(--font-mono)', fontWeight: 700,
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  opacity: saving ? 0.6 : 1,
-                }}>
+              <button onClick={save} disabled={saving} className="btn btn-primary" style={{ opacity: saving ? 0.6 : 1 }}>
                 <Save size={12} /> {saving ? 'SAVING...' : 'SAVE'}
               </button>
+            </>
+          )}
+        >
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
+            <div>
+              <label className="form-label">NAME</label>
+              <input value={edit.name} onChange={e => setEdit(s => ({ ...s, name: e.target.value }))}
+                placeholder="e.g. Security Auditor"
+                className="form-input"
+              />
+            </div>
+            <div>
+              <label className="form-label">CATEGORY</label>
+              <select value={edit.category} onChange={e => setEdit(s => ({ ...s, category: e.target.value as Category }))} className="form-input">
+                <option value="system">System Prompt</option>
+                <option value="intent_parser">Intent Parser</option>
+                <option value="summarizer">Summarizer</option>
+                <option value="general">General</option>
+              </select>
             </div>
           </div>
-        </div>
+          <div>
+            <label className="form-label">DESCRIPTION (OPTIONAL)</label>
+            <input value={edit.description} onChange={e => setEdit(s => ({ ...s, description: e.target.value }))}
+              placeholder="Short note shown next to the name"
+              className="form-input"
+            />
+          </div>
+          <div>
+            <label className="form-label">CONTENT</label>
+            <textarea value={edit.content} onChange={e => setEdit(s => ({ ...s, content: e.target.value }))}
+              rows={14}
+              placeholder="The full prompt text. Will be applied verbatim."
+              className="form-textarea"
+              style={{ minHeight: 280, lineHeight: 1.6 }}
+            />
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-muted)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={edit.is_active} onChange={e => setEdit(s => ({ ...s, is_active: e.target.checked }))} />
+            <span style={{ letterSpacing: '0.1em' }}>ACTIVE (shown in Chat picker)</span>
+          </label>
+        </Modal>
       )}
     </div>
   )
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%', height: 32, padding: '0 10px',
-  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-  color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-mono)',
-  outline: 'none',
 }

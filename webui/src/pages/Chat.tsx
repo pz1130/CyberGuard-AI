@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import ReactMarkdown from 'react-markdown'
 import { Send, Plus, X, Check, Edit2, Trash2, Settings, Paperclip, Image as ImageIcon, FileText } from 'lucide-react'
+import { useSearch } from '../context/SearchContext'
 
 interface Message {
   role: 'user' | 'assistant' | 'system'
@@ -91,6 +93,7 @@ interface AttachmentFile {
 }
 
 export default function Chat() {
+  const { t } = useTranslation()
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
@@ -134,6 +137,18 @@ export default function Chat() {
   const [attachments, setAttachments] = useState<AttachmentFile[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
+
+  // React to search target — open conversation when selected from GlobalSearch
+  const { searchTarget, setSearchTarget } = useSearch()
+  useEffect(() => {
+    if (searchTarget && searchTarget.tab === 'chat' && searchTarget.id) {
+      const convId = Number(searchTarget.id)
+      if (convId && convId !== activeConvId) {
+        selectConversation(convId)
+      }
+      setSearchTarget(null)
+    }
+  }, [searchTarget])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -559,29 +574,38 @@ export default function Chat() {
   }
 
   return (
-    <div style={{ display: 'flex', height: 'calc(100vh - var(--header-height) - 48px)', gap: 0 }}>
+    <div className="chat-page" style={{ display: 'flex', height: 'calc(100vh - var(--header-height) - 48px)', gap: 0 }}>
       {/* Conversation sidebar */}
       {showConvPanel && (
         <div style={{
-          width: 220, flexShrink: 0, borderRight: '1px solid var(--border)',
+          width: 240, flexShrink: 0, borderRight: '1px solid var(--border)',
           display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)',
         }}>
-          <div style={{ padding: '0 12px', height: 42, flexShrink: 0, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)' }}>CONVERSATIONS</span>
-            <button onClick={createConversation} style={{ padding: 4, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none' }}>
-              <Plus size={13} />
+          <div style={{ padding: '0 14px', height: 44, flexShrink: 0, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', fontFamily: 'var(--font-sans)', fontWeight: 600, textTransform: 'uppercase' }}>{t('chat.history').toUpperCase()}</span>
+            <button onClick={createConversation} style={{ padding: 4, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', borderRadius: 'var(--radius-sm)' }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent-dim)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+            >
+              <Plus size={14} />
             </button>
           </div>
-          <div style={{ flex: 1, overflowY: 'auto' }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '6px 6px' }}>
             {conversations.map(conv => (
               <div key={conv.id} onClick={() => selectConversation(conv.id)}
                 style={{
-                  padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border)',
+                  padding: '10px 12px', cursor: 'pointer', marginBottom: 2,
                   background: activeConvId === conv.id ? 'var(--accent-dim)' : 'transparent',
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4,
-                }}>
+                  borderRadius: 'var(--radius-md)',
+                  transition: 'background 0.1s ease',
+                }}
+                onMouseEnter={e => { if (activeConvId !== conv.id) e.currentTarget.style.background = 'var(--bg-hover)' }}
+                onMouseLeave={e => { if (activeConvId !== conv.id) e.currentTarget.style.background = 'transparent' }}
+              >
                 {editingConvId === conv.id ? (
-                  <div style={{ flex: 1, display: 'flex', gap: 4 }}>
+                  <div style={{ flex: 1, display: 'flex', gap: 4, alignItems: 'center' }}>
+                    <span className="nav-pulse-dot" />
                     <input
                       value={editingTitle}
                       onChange={e => setEditingTitle(e.target.value)}
@@ -591,7 +615,7 @@ export default function Chat() {
                         else if (e.key === 'Escape') cancelEditTitle()
                       }}
                       autoFocus
-                      style={{ flex: 1, height: 24, padding: '0 6px', background: 'var(--bg-base)', border: '1px solid var(--accent)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-mono)' }}
+                      style={{ flex: 1, height: 24, padding: '0 6px', background: 'var(--bg-base)', border: '1px solid var(--accent)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-sans)', borderRadius: 'var(--radius-sm)' }}
                       onClick={e => e.stopPropagation()}
                     />
                     <button onClick={(e) => { e.stopPropagation(); saveEditTitle() }} style={{ padding: 2, color: 'var(--accent)', background: 'none', border: 'none' }}><Check size={10} /></button>
@@ -600,17 +624,25 @@ export default function Chat() {
                 ) : (
                   <>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, color: activeConvId === conv.id ? 'var(--accent)' : 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{conv.title}</div>
-                      {conv.updated_at && <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>{formatTime(conv.updated_at)}</div>}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {activeConvId === conv.id && <span className="nav-pulse-dot" />}
+                        <div style={{ fontSize: 13, color: activeConvId === conv.id ? 'var(--accent)' : 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: 'var(--font-sans)', fontWeight: activeConvId === conv.id ? 500 : 400, flex: 1, minWidth: 0 }}>{conv.title}</div>
+                      </div>
+                      {conv.updated_at && <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3, fontFamily: 'var(--font-sans)', paddingLeft: activeConvId === conv.id ? 14 : 0 }}>{formatTime(conv.updated_at)}</div>}
                     </div>
-                    <button onClick={(e) => startEditTitle(conv, e)} style={{ padding: 2, color: 'var(--text-dim)', background: 'none', border: 'none', flexShrink: 0 }}><Edit2 size={10} /></button>
-                    <button onClick={(e) => deleteConversation(conv.id, e)} style={{ padding: 2, color: 'var(--red)', background: 'none', border: 'none', flexShrink: 0 }}><Trash2 size={10} /></button>
+                    <div style={{ display: 'flex', gap: 2, opacity: 0.5, transition: 'opacity 0.1s ease' }}
+                      onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                      onMouseLeave={e => (e.currentTarget.style.opacity = '0.5')}
+                    >
+                      <button onClick={(e) => startEditTitle(conv, e)} style={{ padding: 3, color: 'var(--text-dim)', background: 'none', border: 'none', flexShrink: 0, borderRadius: 'var(--radius-sm)' }}><Edit2 size={11} /></button>
+                      <button onClick={(e) => deleteConversation(conv.id, e)} style={{ padding: 3, color: 'var(--red)', background: 'none', border: 'none', flexShrink: 0, borderRadius: 'var(--radius-sm)' }}><Trash2 size={11} /></button>
+                    </div>
                   </>
                 )}
               </div>
             ))}
             {conversations.length === 0 && (
-              <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-dim)', fontSize: 12, letterSpacing: '0.1em' }}>
+              <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-dim)', fontSize: 12, letterSpacing: '0.06em', fontFamily: 'var(--font-sans)' }}>
                 NO CONVERSATIONS
               </div>
             )}
@@ -621,103 +653,97 @@ export default function Chat() {
       {/* Main Chat Area */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {/* Toolbar */}
-        <div style={{
-          padding: '8px 16px', borderBottom: '1px solid var(--border)',
-          display: 'flex', alignItems: 'center', gap: 12,
-          background: 'var(--bg-surface)',
-        }}>
+        <div className="chat-toolbar">
+          {/* Sidebar toggle */}
           <button onClick={() => setShowConvPanel(p => !p)} style={{
-            padding: 4, color: showConvPanel ? 'var(--accent)' : 'var(--text-dim)', background: 'none', border: 'none', cursor: 'pointer',
+            padding: 5, color: showConvPanel ? 'var(--accent)' : 'var(--text-dim)',
+            background: 'none', border: 'none', cursor: 'pointer',
+            display: 'flex', alignItems: 'center',
           }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/>
             </svg>
           </button>
-          <span style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)' }}>MODE</span>
-          <div style={{ display: 'flex', border: '1px solid var(--border-bright)' }}>
-            {(['normal','fast','expert'] as const).map(m => {
-              const active = chatMode === m
-              const labels: Record<string, string> = { normal: 'NORMAL', fast: 'FAST', expert: 'EXPERT' }
-              const titles: Record<string, string> = {
-                normal: '默认：LLM 解析意图决定是否调用子 agent',
-                fast: '快速：跳过意图解析，只用 Master Agent',
-                expert: '专家：并行派发给所有 active sub-agent，再汇总',
-              }
-              return (
-                <button key={m}
-                  onClick={() => { setChatMode(m); localStorage.setItem('lastChatMode', m) }}
-                  title={titles[m]}
-                  style={{
-                    height: 26, padding: '0 10px',
-                    background: active ? 'var(--accent)' : 'var(--bg-base)',
-                    color: active ? '#000' : 'var(--text-muted)',
-                    border: 'none',
-                    borderRight: m !== 'expert' ? '1px solid var(--border-bright)' : 'none',
-                    fontSize: 12, letterSpacing: '0.1em', fontFamily: 'var(--font-mono)',
-                    fontWeight: active ? 700 : 400,
-                    cursor: 'pointer',
-                  }}>
-                  {labels[m]}
-                </button>
-              )
-            })}
+
+          <div className="chat-toolbar-separator" />
+
+          {/* MODE group */}
+          <div className="chat-toolbar-group">
+            <span className="chat-toolbar-label">MODE</span>
+            <select
+              value={chatMode}
+              onChange={e => {
+                const m = e.target.value as 'normal' | 'fast' | 'expert'
+                setChatMode(m)
+                localStorage.setItem('lastChatMode', m)
+              }}
+              className="chat-settings-select"
+              style={{ width: 'auto', minWidth: 80, height: 30, fontSize: 12 }}
+              title="NORMAL: 默认 LLM 解析意图决定是否调用子 agent | FAST: 跳过意图解析，只用 Master Agent | EXPERT: 并行派发给所有 active sub-agent"
+            >
+              <option value="normal">NORMAL</option>
+              <option value="fast">FAST</option>
+              <option value="expert">EXPERT</option>
+            </select>
           </div>
-          <span style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)' }}>MODEL</span>
-          <select value={providerModel} onChange={e => { localStorage.setItem('lastProviderModel', e.target.value); setProviderModel(e.target.value) }}
-            style={{
-              height: 26, padding: '0 8px',
-              background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-              color: 'var(--text-primary)', fontSize: 12, letterSpacing: '0.05em',
-              fontFamily: 'var(--font-mono)',
-            }}
-            title={availableModels.length === 0 ? 'No verified models — go to Providers and click TEST' : undefined}
-          >
-            <option value="auto">AUTO</option>
-            {availableModels.map(m => <option key={`${m.provider_id}:${m.model}`} value={`${m.provider_id}:${m.model}`}>{m.provider_name} / {m.model}</option>)}
-          </select>
-          {availableModels.length === 0 && (
-            <span style={{ fontSize: 10, letterSpacing: '0.06em', color: 'var(--text-dim)' }}>no verified models — test in Providers</span>
-          )}
-          <span style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)' }}>AGENT</span>
-          <select
-            value={selectedAgentId}
-            onChange={e => {
-              const v = e.target.value
-              setSelectedAgentId(v)
-              if (v) localStorage.setItem('lastSelectedAgentId', v)
-              else localStorage.removeItem('lastSelectedAgentId')
-            }}
-            title={selectedAgentId ? '已锁定到指定 Sub-Agent，绕过意图解析' : '由 Master Agent 解析意图后路由'}
-            style={{
-              height: 26, padding: '0 8px',
-              background: selectedAgentId ? 'rgba(0,255,65,0.08)' : 'var(--bg-base)',
-              border: `1px solid ${selectedAgentId ? 'var(--accent-border)' : 'var(--border-bright)'}`,
-              color: selectedAgentId ? 'var(--accent)' : 'var(--text-primary)',
-              fontSize: 12, letterSpacing: '0.05em',
-              fontFamily: 'var(--font-mono)',
-            }}>
-            <option value="">MASTER (AUTO ROUTE)</option>
-            {availableAgents.map(a => (
-              <option key={a.id} value={a.id}>
-                {a.agent_name}{a.backend_type ? ` · ${a.backend_type.toUpperCase()}` : ''}
-              </option>
-            ))}
-          </select>
+
+          <div className="chat-toolbar-separator" />
+
+          {/* MODEL group */}
+          <div className="chat-toolbar-group">
+            <span className="chat-toolbar-label">MODEL</span>
+            <select value={providerModel} onChange={e => { localStorage.setItem('lastProviderModel', e.target.value); setProviderModel(e.target.value) }}
+              className="chat-settings-select"
+              style={{ width: 'auto', minWidth: 140, maxWidth: 260, height: 30, fontSize: 12 }}
+              title={availableModels.length === 0 ? 'No verified models — go to Providers and click TEST' : undefined}
+            >
+              <option value="auto">AUTO</option>
+              {availableModels.map(m => <option key={`${m.provider_id}:${m.model}`} value={`${m.provider_id}:${m.model}`}>{m.provider_name} / {m.model}</option>)}
+            </select>
+            {availableModels.length === 0 && (
+              <span style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.06em' }}>no verified models</span>
+            )}
+          </div>
+
+          <div className="chat-toolbar-separator" />
+
+          {/* AGENT group */}
+          <div className="chat-toolbar-group">
+            <span className="chat-toolbar-label">AGENT</span>
+            <select
+              value={selectedAgentId}
+              onChange={e => {
+                const v = e.target.value
+                setSelectedAgentId(v)
+                if (v) localStorage.setItem('lastSelectedAgentId', v)
+                else localStorage.removeItem('lastSelectedAgentId')
+              }}
+              title={selectedAgentId ? '已锁定到指定 Sub-Agent，绕过意图解析' : '由 Master Agent 解析意图后路由'}
+              className="chat-settings-select"
+              style={{
+                width: 'auto', minWidth: 160, maxWidth: 280, height: 30, fontSize: 12,
+                background: selectedAgentId ? 'rgba(0,255,65,0.08)' : undefined,
+                border: selectedAgentId ? '1px solid var(--accent-border)' : undefined,
+                color: selectedAgentId ? 'var(--accent)' : undefined,
+              }}>
+              <option value="">MASTER (AUTO ROUTE)</option>
+              {availableAgents.map(a => (
+                <option key={a.id} value={a.id}>
+                  {a.agent_name}{a.backend_type ? ` · ${a.backend_type.toUpperCase()}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Spacer + Actions */}
           {activeConvId && (
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-              <button onClick={() => setShowConvSettings(s => !s)} style={{
-                padding: '4px 10px', fontSize: 12, letterSpacing: '0.1em',
-                border: '1px solid var(--border-bright)', background: showConvSettings ? 'var(--accent-dim)' : 'transparent',
-                color: showConvSettings ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer', fontFamily: 'var(--font-mono)',
-                display: 'flex', alignItems: 'center', gap: 4,
-              }}>
-                <Settings size={10} /> SESSION
+              <button
+                onClick={() => setShowConvSettings(s => !s)}
+                className={`chat-action-btn ${showConvSettings ? 'active' : ''}`}>
+                <Settings size={12} /> SESSION
               </button>
-              <button onClick={clearChat} style={{
-                padding: '4px 12px', fontSize: 12, letterSpacing: '0.1em',
-                border: '1px solid var(--border-bright)', background: 'transparent',
-                color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'var(--font-mono)',
-              }}>
+              <button onClick={clearChat} className="chat-action-btn">
                 CLEAR
               </button>
             </div>
@@ -726,50 +752,32 @@ export default function Chat() {
 
         {/* Session Settings Panel */}
         {showConvSettings && activeConvId && (
-          <div style={{
-            borderBottom: '1px solid var(--border)',
-            background: 'var(--bg-surface)',
-            padding: '16px 20px',
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: 16,
-          }}>
-            <div>
-              <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 8 }}>KNOWLEDGE BASE</div>
+          <div className="chat-settings-panel">
+            <div className="chat-settings-section">
+              <div className="chat-settings-label">KNOWLEDGE BASE</div>
               <select
                 value={convSettings.knowledge_base_id ?? ''}
                 onChange={e => setConvSettings(s => ({ ...s, knowledge_base_id: e.target.value ? Number(e.target.value) : null }))}
-                style={{
-                  width: '100%', height: 32, padding: '0 8px',
-                  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-mono)',
-                }}>
+                className="chat-settings-select">
                 <option value="">— None —</option>
                 {availableKBs.map(kb => <option key={kb.id} value={kb.id}>{kb.name}</option>)}
               </select>
             </div>
-            <div>
-              <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 8 }}>MODEL OVERRIDE</div>
+            <div className="chat-settings-section">
+              <div className="chat-settings-label">MODEL OVERRIDE</div>
               <select
                 value={convSettings.model_override}
                 onChange={e => setConvSettings(s => ({ ...s, model_override: e.target.value }))}
-                style={{
-                  width: '100%', height: 32, padding: '0 8px',
-                  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-mono)',
-                }}>
+                className="chat-settings-select">
                 <option value="">— Global Default —</option>
                 {availableModels.map(m => <option key={`${m.provider_id}:${m.model}`} value={m.model}>{m.provider_name} / {m.model}</option>)}
               </select>
             </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                marginBottom: 8, gap: 12,
-              }}>
-                <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-muted)' }}>CUSTOM SYSTEM PROMPT</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 11, letterSpacing: '0.06em', color: 'var(--text-dim)' }}>TEMPLATE</span>
+            <div style={{ gridColumn: '1 / -1' }} className="chat-settings-section">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div className="chat-settings-label" style={{ marginBottom: 0 }}>CUSTOM SYSTEM PROMPT</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 10, letterSpacing: '0.1em', color: 'var(--text-dim)', fontWeight: 600 }}>TEMPLATE</span>
                   <select
                     value=""
                     onChange={e => {
@@ -777,7 +785,6 @@ export default function Chat() {
                       if (!id) return
                       const tpl = promptTemplates.find(t => String(t.id) === id)
                       if (!tpl) return
-                      // If the textarea is non-empty, ask before overwriting
                       if (convSettings.system_prompt_override.trim() &&
                           !confirm('Replace current system prompt with template "' + tpl.name + '"?')) {
                         e.target.value = ''
@@ -787,39 +794,25 @@ export default function Chat() {
                       e.target.value = ''
                     }}
                     title={promptTemplates.length === 0 ? 'No templates — create one under Prompt Templates' : 'Pick a saved prompt template'}
-                    style={{
-                      height: 24, padding: '0 8px',
-                      background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                      color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)',
-                      minWidth: 180,
-                    }}
-                  >
+                    className="chat-settings-select"
+                    style={{ width: 'auto', minWidth: 180, height: 28, fontSize: 12 }}>
                     <option value="">— Select template —</option>
-                    {/* Show "system" + "general" first as they're most relevant for a system prompt */}
-                    {promptTemplates
-                      .filter(t => t.category === 'system' || t.category === 'general')
-                      .map(t => (
-                        <option key={t.id} value={t.id}>{t.name}{t.category === 'general' ? ' (general)' : ''}</option>
-                      ))}
+                    {promptTemplates.filter(t => t.category === 'system' || t.category === 'general').map(t => (
+                      <option key={t.id} value={t.id}>{t.name}{t.category === 'general' ? ' (general)' : ''}</option>
+                    ))}
                     {promptTemplates.filter(t => t.category !== 'system' && t.category !== 'general').length > 0 && (
                       <optgroup label="Other categories">
-                        {promptTemplates
-                          .filter(t => t.category !== 'system' && t.category !== 'general')
-                          .map(t => (
-                            <option key={t.id} value={t.id}>{t.name} ({t.category})</option>
-                          ))}
+                        {promptTemplates.filter(t => t.category !== 'system' && t.category !== 'general').map(t => (
+                          <option key={t.id} value={t.id}>{t.name} ({t.category})</option>
+                        ))}
                       </optgroup>
                     )}
                   </select>
                   {convSettings.system_prompt_override && (
                     <button
                       onClick={() => setConvSettings(s => ({ ...s, system_prompt_override: '' }))}
-                      title="Clear"
-                      style={{
-                        height: 24, padding: '0 8px', fontSize: 11, letterSpacing: '0.1em',
-                        background: 'transparent', border: '1px solid var(--border-bright)',
-                        color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'var(--font-mono)',
-                      }}>CLEAR</button>
+                      className="chat-action-btn"
+                      style={{ fontSize: 10, padding: '4px 8px' }}>CLEAR</button>
                   )}
                 </div>
               </div>
@@ -828,24 +821,10 @@ export default function Chat() {
                 onChange={e => setConvSettings(s => ({ ...s, system_prompt_override: e.target.value }))}
                 rows={3}
                 placeholder="Leave empty to use global default. Pick a saved template from the dropdown above, or type your own."
-                style={{
-                  width: '100%', padding: '8px 10px',
-                  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 13, lineHeight: 1.5,
-                  fontFamily: 'var(--font-mono)', resize: 'vertical',
-                }}
-              />
+                className="chat-settings-textarea" />
             </div>
-            <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <button
-                onClick={() => setShowConvSettings(false)}
-                style={{
-                  padding: '6px 14px', fontSize: 12, letterSpacing: '0.1em',
-                  border: '1px solid var(--border-bright)', background: 'transparent',
-                  color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'var(--font-mono)',
-                }}>
-                CANCEL
-              </button>
+            <div className="chat-settings-footer">
+              <button onClick={() => setShowConvSettings(false)} className="chat-action-btn">CANCEL</button>
               <button
                 onClick={async () => {
                   try {
@@ -864,11 +843,7 @@ export default function Chat() {
                     setShowConvSettings(false)
                   } catch (e: any) { alert(e.message) }
                 }}
-                style={{
-                  padding: '6px 14px', fontSize: 12, letterSpacing: '0.1em',
-                  background: 'var(--accent)', border: '1px solid var(--accent-border)',
-                  color: '#000', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontWeight: 700,
-                }}>
+                className="btn btn-primary btn-sm" style={{ fontWeight: 700 }}>
                 SAVE SETTINGS
               </button>
             </div>
@@ -876,83 +851,76 @@ export default function Chat() {
         )}
 
         {/* Messages */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="chat-messages">
           {!activeConvId ? (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, color: 'var(--text-dim)' }}>
-              <div style={{ fontSize: 34, color: 'var(--accent)', opacity: 0.5 }}>⬡</div>
-              <div style={{ fontSize: 13, letterSpacing: '0.08em' }}>SELECT OR CREATE A CONVERSATION</div>
-              <button onClick={createConversation} style={{
-                padding: '8px 20px', fontSize: 12, letterSpacing: '0.06em',
-                background: 'var(--accent)', border: 'none', color: '#000',
-                cursor: 'pointer', fontFamily: 'var(--font-mono)', fontWeight: 700,
-              }}>+ NEW CONVERSATION</button>
+            <div className="chat-empty">
+              <div className="chat-empty-icon">⬡</div>
+              <div className="chat-empty-text">SELECT OR CREATE A CONVERSATION</div>
+              <button onClick={createConversation} className="chat-empty-btn">
+                + {t('chat.newChat').toUpperCase()}
+              </button>
             </div>
           ) : messages.length === 0 ? (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: 'var(--text-dim)' }}>
-              <div style={{ fontSize: 26, opacity: 0.3 }}>⬡</div>
-              <div style={{ fontSize: 12, letterSpacing: '0.06em' }}>READY — SEND A MESSAGE</div>
+            <div className="chat-empty">
+              <div style={{ fontSize: 36, opacity: 0.2, color: 'var(--accent)' }}>⬡</div>
+              <div className="chat-empty-text" style={{ opacity: 0.6 }}>READY — SEND A MESSAGE</div>
             </div>
           ) : (
             messages.map((msg, i) => (
-              <div key={i} style={{
-                display: 'flex', flexDirection: 'column',
-                alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
-              }}>
-                <div style={{ fontSize: 11, letterSpacing: '0.06em', color: 'var(--text-dim)', marginBottom: 4 }}>
+              <div key={i} className={`chat-msg ${msg.role}`}>
+                <div className="chat-msg-role">
                   {msg.role === 'user' ? '◆ OPERATOR' : msg.role === 'assistant' ? '◆ CYBERGUARD' : '◆ SYSTEM'}
                 </div>
-                <div style={{
-                  maxWidth: '80%', padding: '10px 14px',
-                  background: msg.role === 'user' ? 'var(--accent)' : msg.role === 'system' ? 'var(--amber-dim)' : 'var(--bg-elevated)',
-                  border: `1px solid ${msg.role === 'user' ? 'var(--accent-border)' : 'var(--border)'}`,
-                  color: msg.role === 'user' ? '#000' : 'var(--text-primary)',
-                  fontSize: 15, lineHeight: 1.6,
-                  fontFamily: 'var(--font-mono)',
-                }}>
+                <div className={`chat-msg-bubble ${msg.role}`}>
                   {msg.role === 'assistant' ? (
-                    <ReactMarkdown
-                      urlTransform={(url) => /^https?:\/\//i.test(url) ? url : '#'}
-                    >{msg.content}</ReactMarkdown>
-                  ) : msg.content}
+                    <div className="chat-markdown">
+                      <ReactMarkdown
+                        urlTransform={(url) => /^https?:\/\//i.test(url) ? url : '#'}
+                      >{msg.content}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span>
+                  )}
                 </div>
                 {/* Render attachment previews for user messages */}
-{msg.role === 'user' && msg.attachments && msg.attachments.length > 0 && (
-  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-    {msg.attachments.map((att, i) =>
-      att.type === 'image' ? (
-        <div key={`${att.name}-${att.size}-${i}`} style={{ position: 'relative' }}>
-          <img
-            src={att.url}
-            onClick={() => setLightboxUrl(att.url || null)}
-            style={{
-              width: 64, height: 64, objectFit: 'cover',
-              border: '1px solid var(--accent-border)',
-              cursor: 'pointer',
-            }}
-          />
-        </div>
-      ) : (
-        <div key={`${att.name}-${att.size}-${i}`} style={{
-          display: 'flex', alignItems: 'center', gap: 4,
-          padding: '4px 8px',
-          border: '1px solid var(--accent-border)',
-          fontSize: 12, fontFamily: 'var(--font-mono)',
-          color: 'var(--text-muted)',
-        }}>
-          <FileText size={10} />
-          <span>{att.name}</span>
-        </div>
-      )
-    )}
-  </div>
-)}
-{msg.created_at && <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3 }}>{formatTime(msg.created_at)}</div>}
+                {msg.role === 'user' && msg.attachments && msg.attachments.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                    {msg.attachments.map((att, idx) =>
+                      att.type === 'image' ? (
+                        <div key={`${att.name}-${att.size}-${idx}`} style={{ position: 'relative' }}>
+                          <img
+                            src={att.url}
+                            onClick={() => setLightboxUrl(att.url || null)}
+                            style={{
+                              width: 72, height: 72, objectFit: 'cover',
+                              border: '1px solid var(--accent-border)',
+                              borderRadius: 'var(--radius-md)',
+                              cursor: 'pointer',
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div key={`${att.name}-${att.size}-${idx}`} style={{
+                          display: 'flex', alignItems: 'center', gap: 5,
+                          padding: '5px 10px',
+                          border: '1px solid var(--accent-border)',
+                          borderRadius: 'var(--radius-md)',
+                          fontSize: 12, color: 'var(--text-muted)',
+                        }}>
+                          <FileText size={11} />
+                          <span>{att.name}</span>
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
+                {msg.created_at && <div className="chat-msg-time">{formatTime(msg.created_at)}</div>}
               </div>
             ))
           )}
           {pollingStatus && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.1em' }}>
-              <div style={{ width: 12, height: 12, border: '1px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+            <div className="chat-polling">
+              <div className="chat-polling-dot" />
               {pollingStatus}
             </div>
           )}
@@ -960,7 +928,7 @@ export default function Chat() {
         </div>
 
         {/* Input */}
-        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+        <div className="chat-input-row">
           <input
             ref={fileInputRef}
             type="file"
@@ -984,44 +952,23 @@ export default function Chat() {
             style={{ display: 'none' }}
           />
           {attachments.length > 0 && (
-            <div style={{
-              padding: '8px 16px',
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 8,
-              borderTop: '1px solid var(--border)',
-              background: 'var(--bg-base)',
-            }}>
+            <div className="chat-attach-preview" style={{ width: '100%' }}>
               {attachments.map((att, i) => (
-                <div key={i} style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  padding: '4px 8px',
-                  border: '1px solid var(--accent-border)',
-                  background: 'var(--accent-dim)',
-                  fontSize: 12,
-                  fontFamily: 'var(--font-mono)',
-                  color: 'var(--text-primary)',
-                }}>
+                <div key={i} className="chat-attach-chip">
                   {ACCEPTED_IMAGE_TYPES.includes(att.file.type) ? (
-                    <ImageIcon size={10} style={{ color: 'var(--accent)' }} />
+                    <ImageIcon size={12} style={{ color: 'var(--accent)' }} />
                   ) : (
-                    <FileText size={10} style={{ color: 'var(--accent)' }} />
+                    <FileText size={12} style={{ color: 'var(--accent)' }} />
                   )}
-                  <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {att.file.name}
                   </span>
                   <button
                     onClick={() => {
                       if (att.previewUrl) URL.revokeObjectURL(att.previewUrl)
                       setAttachments(prev => prev.filter((_, idx) => idx !== i))
-                    }}
-                    style={{
-                      padding: 0, background: 'none', border: 'none',
-                      color: 'var(--text-dim)', cursor: 'pointer', display: 'flex',
                     }}>
-                    <X size={10} />
+                    <X size={11} />
                   </button>
                 </div>
               ))}
@@ -1030,34 +977,19 @@ export default function Chat() {
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={!activeConvId || loading}
-            style={{
-              width: 36, height: 36, flexShrink: 0,
-              border: '1px solid var(--border-bright)',
-              background: 'transparent',
-              color: activeConvId && !loading ? 'var(--text-muted)' : 'var(--text-dim)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: activeConvId && !loading ? 'pointer' : 'not-allowed',
-              opacity: activeConvId && !loading ? 1 : 0.5,
-            }}>
-            <Paperclip size={14} />
+            className="chat-input-btn">
+            <Paperclip size={15} />
           </button>
           <textarea
             ref={textareaRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey}
             placeholder={activeConvId ? 'Type your message...' : 'Select a conversation first...'}
             disabled={!activeConvId || loading}
             rows={1}
-            style={{
-              flex: 1, padding: '10px 12px',
-              background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-              color: 'var(--text-primary)', fontSize: 15,
-              fontFamily: 'var(--font-mono)', resize: 'none', maxHeight: 120,
-              opacity: activeConvId ? 1 : 0.5,
-            }}
+            className="chat-input-textarea"
           />
           <button
             onClick={() => {
               if (loading && activeTaskIdRef.current) {
-                // Cancel the running task
                 api.cancelTask(activeTaskIdRef.current).catch(console.error)
                 if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
                 pollIntervalRef.current = null
@@ -1071,20 +1003,12 @@ export default function Chat() {
               }
             }}
             disabled={!activeConvId || (!loading && !input.trim() && attachments.length === 0)}
-            style={{
-              width: 40, height: 40, flexShrink: 0,
-              background: loading ? 'var(--red)' : 'var(--accent)',
-              border: `1px solid ${loading ? 'var(--red)' : 'var(--accent-border)'}`,
-              color: loading ? '#fff' : '#000',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: (!activeConvId || (!loading && !input.trim() && attachments.length === 0)) ? 'not-allowed' : 'pointer',
-              opacity: (!activeConvId || (!loading && !input.trim() && attachments.length === 0)) ? 0.5 : 1,
-            }}>
+            className={`chat-send-btn ${loading ? 'cancel' : ''}`}>
             {loading ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
               </svg>
-            ) : <Send size={14} />}
+            ) : <Send size={15} />}
           </button>
         </div>
         {lightboxUrl && (
@@ -1108,8 +1032,7 @@ export default function Chat() {
                 padding: 8, background: 'var(--bg-elevated)',
                 border: '1px solid var(--border-bright)',
                 color: 'var(--text-primary)', cursor: 'pointer',
-                fontSize: 13, fontFamily: 'var(--font-mono)',
-              }}>
+                fontSize: 13,               }}>
               CLOSE
             </button>
           </div>

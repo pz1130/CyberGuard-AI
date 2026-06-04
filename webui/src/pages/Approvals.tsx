@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ShieldCheck, Check, X, RefreshCw, Loader2, ChevronDown, ChevronRight } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 import { api } from '../api/client'
 
 type StatusFilter = 'pending' | 'approved' | 'rejected' | 'all'
@@ -26,13 +28,13 @@ interface ApprovalRequest {
 
 const RISK_COLOR: Record<RiskLevel, string> = {
   low: 'var(--accent)',
-  medium: 'var(--cyan)',
+  medium: 'var(--green)',
   high: 'var(--amber, #ffb000)',
   critical: 'var(--red)',
 }
 const RISK_BG: Record<RiskLevel, string> = {
   low: 'rgba(0,255,65,0.08)',
-  medium: 'rgba(0,200,255,0.08)',
+  medium: 'var(--green-dim)',
   high: 'rgba(255,176,0,0.08)',
   critical: 'rgba(255,60,60,0.08)',
 }
@@ -51,6 +53,7 @@ function fmt(iso: string) {
 }
 
 export default function Approvals() {
+  const { t } = useTranslation()
   const [items, setItems] = useState<ApprovalRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<StatusFilter>('pending')
@@ -96,40 +99,20 @@ export default function Approvals() {
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{
-            width: 36, height: 36, border: '1px solid var(--border-bright)',
-            background: 'var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--amber, #ffb000)',
-          }}>
-            <ShieldCheck size={15} />
-          </div>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>
-              APPROVALS
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.08em', marginTop: 2 }}>
-              人工审批队列 · ADMIN ONLY
-            </div>
-          </div>
-        </div>
-        <button
-          onClick={load}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '0 12px', height: 30,
-            background: 'transparent', border: '1px solid var(--border-bright)',
-            color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.1em',
-            cursor: 'pointer', fontFamily: 'var(--font-mono)',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent-border)'; e.currentTarget.style.color = 'var(--accent)' }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-bright)'; e.currentTarget.style.color = 'var(--text-muted)' }}
-        >
-          <RefreshCw size={11} /> REFRESH
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="HUMAN-IN-THE-LOOP"
+        title={t('approvals.title').toUpperCase()}
+        description={t('approvals.subtitle')}
+        actions={
+          <button
+            onClick={load}
+            className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, height: 30 }}
+          >
+            <RefreshCw size={11} /> REFRESH
+          </button>
+        }
+      />
 
       {/* Filter tabs */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
@@ -139,8 +122,7 @@ export default function Approvals() {
             border: `1px solid ${filter === f ? 'var(--accent-border)' : 'var(--border-bright)'}`,
             background: filter === f ? 'var(--accent-dim)' : 'transparent',
             color: filter === f ? 'var(--accent)' : 'var(--text-muted)',
-            cursor: 'pointer', fontFamily: 'var(--font-mono)',
-          }}>
+            cursor: 'pointer',           }}>
             {f.toUpperCase()}
           </button>
         ))}
@@ -158,11 +140,11 @@ export default function Approvals() {
           LOADING...
         </div>
       ) : items.length === 0 ? (
-        <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-dim)', fontSize: 13, letterSpacing: '0.1em' }}>
+        <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-dim)', fontSize: 13, letterSpacing: '0.1em' }}>
           {filter === 'pending' ? 'NO PENDING APPROVALS' : 'NO RECORDS'}
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
           {items.map(item => {
             const risk = item.risk_level as RiskLevel
             const isExpanded = expanded === item.id
@@ -171,11 +153,7 @@ export default function Approvals() {
             const itemNotice = notice?.id === item.id ? notice : null
 
             return (
-              <div key={item.id} style={{
-                background: 'var(--bg-surface)',
-                border: `1px solid ${isPending ? 'var(--border-bright)' : 'var(--border)'}`,
-                borderLeft: `3px solid ${RISK_COLOR[risk] || 'var(--border)'}`,
-              }}>
+              <div key={item.id} className="item-card" style={{ border: `1px solid ${isPending ? 'var(--border-bright)' : 'var(--border)'}` }}>
                 {/* Main row */}
                 <div
                   onClick={() => setExpanded(isExpanded ? null : item.id)}
@@ -187,6 +165,7 @@ export default function Approvals() {
                   <span style={{ color: 'var(--text-dim)', flexShrink: 0 }}>
                     {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                   </span>
+                  <span className="item-card-pip" style={{ background: RISK_COLOR[risk] || 'var(--border)' }} />
 
                   {/* Risk badge */}
                   <span style={{
@@ -290,7 +269,7 @@ export default function Approvals() {
                       ].map(([label, value]) => (
                         <div key={label}>
                           <div style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.12em', marginBottom: 2 }}>{label}</div>
-                          <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>{value}</div>
+                          <div style={{ fontSize: 12, color: 'var(--text-muted)', wordBreak: 'break-all' }}>{value}</div>
                         </div>
                       ))}
                     </div>
@@ -308,8 +287,7 @@ export default function Approvals() {
                         <pre style={{
                           fontSize: 11, color: 'var(--text-muted)', background: 'var(--bg-elevated)',
                           border: '1px solid var(--border)', padding: '8px 12px',
-                          overflowX: 'auto', maxHeight: 200, margin: 0, fontFamily: 'var(--font-mono)',
-                        }}>
+                          overflowX: 'auto', maxHeight: 200, margin: 0,                         }}>
                           {JSON.stringify(item.payload, null, 2)}
                         </pre>
                       </div>
@@ -327,7 +305,7 @@ export default function Approvals() {
                             flex: 1, resize: 'none', padding: '6px 10px',
                             background: 'var(--bg-elevated)', border: '1px solid var(--border-bright)',
                             color: 'var(--text-primary)', fontSize: 12,
-                            fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
+                            letterSpacing: '0.04em',
                           }}
                         />
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -339,8 +317,7 @@ export default function Approvals() {
                               padding: '0 14px', height: 32,
                               background: 'rgba(0,255,65,0.1)', border: '1px solid var(--accent)',
                               color: 'var(--accent)', fontSize: 12, letterSpacing: '0.1em',
-                              cursor: isDeciding ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)',
-                            }}
+                              cursor: isDeciding ? 'not-allowed' : 'pointer',                             }}
                           >
                             {isDeciding ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Check size={11} />}
                             APPROVE
@@ -353,8 +330,7 @@ export default function Approvals() {
                               padding: '0 14px', height: 32,
                               background: 'rgba(255,60,60,0.1)', border: '1px solid var(--red)',
                               color: 'var(--red)', fontSize: 12, letterSpacing: '0.1em',
-                              cursor: isDeciding ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-mono)',
-                            }}
+                              cursor: isDeciding ? 'not-allowed' : 'pointer',                             }}
                           >
                             <X size={11} /> REJECT
                           </button>

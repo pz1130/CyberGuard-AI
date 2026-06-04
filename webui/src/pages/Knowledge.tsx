@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useContext } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Plus, Search, Trash2, Upload, FileText, Database, X, Loader2 } from 'lucide-react'
 import { SearchContext } from '../context/SearchContext'
@@ -63,8 +64,7 @@ function OcrSettingsPanel() {
       onClick={() => setOpen(true)}
       style={{
         fontSize: 12, color: 'var(--accent)', background: 'none', border: 'none',
-        cursor: 'pointer', letterSpacing: '0.06em', fontFamily: 'var(--font-mono)',
-        padding: '0 4px',
+        cursor: 'pointer', letterSpacing: '0.06em',         padding: '0 4px',
       }}>
       OCR 设置 ▾
     </button>
@@ -81,7 +81,7 @@ function OcrSettingsPanel() {
         <select
           value={cfg.engine}
           onChange={e => setCfg({ ...cfg, engine: e.target.value })}
-          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)' }}>
+          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 12 }}>
           <option value="tesseract">Tesseract（本地）</option>
           <option value="vision">Vision LLM</option>
         </select>
@@ -93,13 +93,13 @@ function OcrSettingsPanel() {
               type="number"
               value={cfg.vision_provider_id ?? ''}
               onChange={e => setCfg({ ...cfg, vision_provider_id: e.target.value ? Number(e.target.value) : null })}
-              style={{ width: 70, background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)', padding: '2px 6px' }} />
+              style={{ width: 70, background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 12, padding: '2px 6px' }} />
           </label>
           <label style={{ display: 'block', marginBottom: 6, fontSize: 12, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>Vision 模型:&nbsp;
             <input
               value={cfg.vision_model ?? ''}
               onChange={e => setCfg({ ...cfg, vision_model: e.target.value })}
-              style={{ width: 180, background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)', padding: '2px 6px' }} />
+              style={{ width: 180, background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 12, padding: '2px 6px' }} />
           </label>
         </>
       )}
@@ -107,30 +107,28 @@ function OcrSettingsPanel() {
         <input
           value={cfg.languages}
           onChange={e => setCfg({ ...cfg, languages: e.target.value })}
-          style={{ width: 120, background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)', padding: '2px 6px' }} />
+          style={{ width: 120, background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 12, padding: '2px 6px' }} />
       </label>
       <label style={{ display: 'block', marginBottom: 10, fontSize: 12, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>最大页数:&nbsp;
         <input
           type="number"
           value={cfg.max_pages}
           onChange={e => setCfg({ ...cfg, max_pages: Number(e.target.value) })}
-          style={{ width: 70, background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)', padding: '2px 6px' }} />
+          style={{ width: 70, background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 12, padding: '2px 6px' }} />
       </label>
       <button
         onClick={save}
         style={{
           padding: '4px 14px', background: 'var(--accent)', color: '#000',
           border: 'none', borderRadius: 4, cursor: 'pointer',
-          fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', fontFamily: 'var(--font-mono)',
-        }}>
+          fontSize: 12, fontWeight: 700, letterSpacing: '0.06em',         }}>
         保存
       </button>
       <button
         onClick={() => setOpen(false)}
         style={{
           marginLeft: 8, background: 'none', border: 'none', color: 'var(--text-muted)',
-          cursor: 'pointer', fontSize: 12, letterSpacing: '0.06em', fontFamily: 'var(--font-mono)',
-        }}>
+          cursor: 'pointer', fontSize: 12, letterSpacing: '0.06em',         }}>
         取消
       </button>
     </div>
@@ -138,6 +136,7 @@ function OcrSettingsPanel() {
 }
 
 export default function Knowledge() {
+  const { t } = useTranslation()
   const [bases, setBases] = useState<KB[]>([])
   const [selected, setSelected] = useState<KB | null>(null)
   const [loadingKB, setLoadingKB] = useState(true)
@@ -278,7 +277,7 @@ export default function Knowledge() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
           <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>SEMANTIC SEARCH</div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>KNOWLEDGE BASE</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{t('knowledge.title').toUpperCase()}</h1>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -289,8 +288,7 @@ export default function Knowledge() {
               style={{
                 height: 30, padding: '0 8px',
                 background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)',
-              }}>
+                color: 'var(--text-primary)', fontSize: 12,               }}>
               {providers.length === 0 && <option value="">NOT CONFIGURED</option>}
               {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
@@ -302,8 +300,7 @@ export default function Knowledge() {
               padding: '0 16px', height: 36,
               background: 'var(--accent)', border: '1px solid var(--accent-border)',
               color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em',
-              cursor: 'pointer', fontFamily: 'var(--font-mono)',
-              boxShadow: '0 0 16px rgba(0,255,65,0.15)',
+              cursor: 'pointer',               boxShadow: '0 0 16px rgba(0,255,65,0.15)',
             }}>
             <Plus size={13} /> NEW KB
           </button>
@@ -334,8 +331,7 @@ export default function Knowledge() {
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
                   color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
-                  fontFamily: 'var(--font-mono)',
-                }} />
+                                  }} />
             </div>
             <div>
               <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>
@@ -351,8 +347,7 @@ export default function Knowledge() {
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
                   color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
-                  fontFamily: 'var(--font-mono)',
-                }}>
+                                  }}>
                 <option value="">— None —</option>
                 {providers.flatMap(p => p.models || []).filter((m: ModelInfo) => m.model_type === 'embedding').map((m: ModelInfo) => (
                   <option key={m.name} value={m.name}>{m.name}</option>
@@ -369,8 +364,7 @@ export default function Knowledge() {
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
                   color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
-                  fontFamily: 'var(--font-mono)',
-                }}>
+                                  }}>
                 <option value="">— None —</option>
                 {providers.flatMap(p => p.models || []).filter((m: ModelInfo) => m.model_type === 'rerank').map((m: ModelInfo) => (
                   <option key={m.name} value={m.name}>{m.name}</option>
@@ -384,8 +378,7 @@ export default function Knowledge() {
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
                   color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
-                  fontFamily: 'var(--font-mono)',
-                }} />
+                                  }} />
             </div>
           </div>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 20 }}>
@@ -394,8 +387,7 @@ export default function Knowledge() {
                 padding: '0 16px', height: 36,
                 border: '1px solid var(--border-bright)', background: 'transparent',
                 color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
-                fontFamily: 'var(--font-mono)',
-              }}>
+                              }}>
               CANCEL
             </button>
             <button onClick={submitKB}
@@ -403,8 +395,7 @@ export default function Knowledge() {
                 padding: '0 16px', height: 36,
                 border: '1px solid var(--accent-border)', background: 'var(--accent)',
                 color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
-                fontFamily: 'var(--font-mono)',
-              }}>
+                              }}>
               CREATE
             </button>
           </div>
@@ -440,7 +431,7 @@ export default function Knowledge() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, color: selected?.id === k.id ? 'var(--accent)' : 'var(--text-primary)', letterSpacing: '0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k.name}</div>
                     {(k.embedding_model || k.embedding_dim) && (
-                      <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {k.embedding_model || '—'}{k.embedding_dim ? ` · ${k.embedding_dim}d` : ''}
                       </div>
                     )}
@@ -494,8 +485,7 @@ export default function Knowledge() {
                       flex: 1, height: 36, padding: '0 12px',
                       background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
                       color: 'var(--text-primary)', fontSize: 13, letterSpacing: '0.05em',
-                      fontFamily: 'var(--font-mono)',
-                    }} />
+                                          }} />
                   <input type="number" min={1} max={20} value={topK}
                     onChange={e => setTopK(Number(e.target.value))}
                     title="TOP K"
@@ -503,8 +493,7 @@ export default function Knowledge() {
                       width: 60, height: 36, padding: '0 8px',
                       background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
                       color: 'var(--text-primary)', fontSize: 13, textAlign: 'center',
-                      fontFamily: 'var(--font-mono)',
-                    }} />
+                                          }} />
                   <button onClick={search} disabled={querying || docs.length === 0}
                     style={{
                       padding: '0 14px', height: 36,
@@ -512,8 +501,7 @@ export default function Knowledge() {
                       border: '1px solid var(--accent-border)',
                       color: querying ? 'var(--text-dim)' : '#000',
                       fontSize: 13, fontWeight: 700, letterSpacing: '0.1em', cursor: querying ? 'not-allowed' : 'pointer',
-                      fontFamily: 'var(--font-mono)',
-                    }}>
+                                          }}>
                     {querying ? 'SEARCHING...' : 'SEARCH'}
                   </button>
                 </div>
@@ -568,8 +556,7 @@ export default function Knowledge() {
                         padding: '0 10px', height: 30,
                         border: '1px solid var(--border-bright)', background: 'transparent',
                         color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.1em', cursor: ingesting ? 'not-allowed' : 'pointer',
-                        fontFamily: 'var(--font-mono)',
-                      }}>
+                                              }}>
                       <Upload size={10} /> UPLOAD FILE
                     </button>
                     <button onClick={() => setShowTextForm(s => !s)}
@@ -578,8 +565,7 @@ export default function Knowledge() {
                         padding: '0 10px', height: 30,
                         background: 'var(--accent)', border: '1px solid var(--accent-border)',
                         color: '#000', fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', cursor: 'pointer',
-                        fontFamily: 'var(--font-mono)',
-                      }}>
+                                              }}>
                       <Plus size={10} /> PASTE TEXT
                     </button>
                   </div>
@@ -595,8 +581,7 @@ export default function Knowledge() {
                         width: '100%', height: 34, padding: '0 10px',
                         background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
                         color: 'var(--text-primary)', fontSize: 13, letterSpacing: '0.05em',
-                        fontFamily: 'var(--font-mono)',
-                      }} />
+                                              }} />
                     <textarea
                       value={textForm.content}
                       onChange={e => setTextForm(f => ({ ...f, content: e.target.value }))}
@@ -606,7 +591,7 @@ export default function Knowledge() {
                         width: '100%', padding: '8px 10px',
                         background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
                         color: 'var(--text-primary)', fontSize: 13, letterSpacing: '0.05em',
-                        fontFamily: 'var(--font-mono)', resize: 'none',
+                        resize: 'none',
                       }} />
                     <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                       <button onClick={() => setShowTextForm(false)}
@@ -614,8 +599,7 @@ export default function Knowledge() {
                           padding: '0 12px', height: 30,
                           border: '1px solid var(--border-bright)', background: 'transparent',
                           color: 'var(--text-muted)', fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer',
-                          fontFamily: 'var(--font-mono)',
-                        }}>
+                                                  }}>
                         CANCEL
                       </button>
                       <button onClick={ingestText} disabled={ingesting}
@@ -623,8 +607,7 @@ export default function Knowledge() {
                           padding: '0 12px', height: 30,
                           background: 'var(--accent)', border: '1px solid var(--accent-border)',
                           color: '#000', fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', cursor: ingesting ? 'not-allowed' : 'pointer',
-                          fontFamily: 'var(--font-mono)',
-                        }}>
+                                                  }}>
                         {ingesting ? 'IMPORTING...' : 'IMPORT'}
                       </button>
                     </div>
@@ -656,7 +639,7 @@ export default function Knowledge() {
                               <span title={d.status_detail || ''} style={{ fontSize: 11, color: '#f87171', letterSpacing: '0.08em', flexShrink: 0 }}>● 失败</span>
                             )}
                           </div>
-                          <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
                             {d.metadata_json?.chunk_count ?? 0} CHUNKS
                             {d.file_size != null && ` · ${(d.file_size / 1024).toFixed(1)} KB`}
                           </div>

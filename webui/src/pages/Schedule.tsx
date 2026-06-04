@@ -1,7 +1,9 @@
 import { useState, useEffect, useContext } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Trash2, Plus, Edit2, Clock, X, Loader2 } from 'lucide-react'
 import { SearchContext } from '../context/SearchContext'
+import PageHeader from '../components/PageHeader'
 
 interface Task {
   id?: number
@@ -17,6 +19,7 @@ interface Task {
 }
 
 export default function Schedule() {
+  const { t } = useTranslation()
   const [items, setItems] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -79,25 +82,19 @@ export default function Schedule() {
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <div>
-          <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>AUTOMATION</div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>SCHEDULED TASKS</h1>
-        </div>
-        <button
-          onClick={() => { setShowForm(true); setEditing(null); setForm({ name: '', task_type: 'agent_execution', cron_expression: '', is_active: true, task_config: {} }) }}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '0 16px', height: 36,
-            background: 'var(--accent)', border: '1px solid var(--accent-border)',
-            color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em',
-            cursor: 'pointer', fontFamily: 'var(--font-mono)',
-            boxShadow: '0 0 16px rgba(0,255,65,0.15)',
-          }}>
-          <Plus size={13} /> NEW TASK
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="AUTOMATION"
+        title={t('schedule.title').toUpperCase()}
+        actions={
+          <button
+            onClick={() => { setShowForm(true); setEditing(null); setForm({ name: '', task_type: 'agent_execution', cron_expression: '', is_active: true, task_config: {} }) }}
+            className="btn btn-primary"
+            style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+          >
+            <Plus size={13} /> NEW TASK
+          </button>
+        }
+      />
 
       {/* Form */}
       {showForm && (
@@ -121,8 +118,7 @@ export default function Schedule() {
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
                   color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
-                  fontFamily: 'var(--font-mono)',
-                }} />
+                                  }} />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>TYPE</label>
@@ -130,8 +126,7 @@ export default function Schedule() {
                 style={{
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-primary)', fontSize: 14, fontFamily: 'var(--font-mono)',
-                }}>
+                  color: 'var(--text-primary)', fontSize: 14,                 }}>
                 <option value="agent_execution">AGENT EXECUTION</option>
                 <option value="backup">BACKUP</option>
                 <option value="report_generation">REPORT GENERATION</option>
@@ -145,8 +140,7 @@ export default function Schedule() {
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
                   color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
-                  fontFamily: 'var(--font-mono)',
-                }} />
+                                  }} />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>AGENT ID</label>
@@ -156,8 +150,7 @@ export default function Schedule() {
                   width: '100%', height: 38, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
                   color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
-                  fontFamily: 'var(--font-mono)',
-                }} />
+                                  }} />
             </div>
           </div>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 20 }}>
@@ -166,8 +159,7 @@ export default function Schedule() {
                 padding: '0 16px', height: 36,
                 border: '1px solid var(--border-bright)', background: 'transparent',
                 color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
-                fontFamily: 'var(--font-mono)',
-              }}>
+                              }}>
               CANCEL
             </button>
             <button onClick={submit}
@@ -175,8 +167,7 @@ export default function Schedule() {
                 padding: '0 16px', height: 36,
                 border: '1px solid var(--accent-border)', background: 'var(--accent)',
                 color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
-                fontFamily: 'var(--font-mono)',
-              }}>
+                              }}>
               {editing ? 'SAVE CHANGES' : 'CREATE TASK'}
             </button>
           </div>
@@ -191,8 +182,8 @@ export default function Schedule() {
       )}
 
       {!loading && items.length === 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 0', gap: 12 }}>
-          <div style={{ width: 48, height: 48, border: '1px solid var(--border-bright)', background: 'var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 48, gap: 12 }}>
+          <div style={{ width: 48, height: 48, border: '1px solid var(--border-bright)', background: 'var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-md)' }}>
             <Clock size={18} style={{ color: 'var(--text-dim)' }} />
           </div>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>NO SCHEDULED TASKS</div>
@@ -200,41 +191,50 @@ export default function Schedule() {
       )}
 
       {!loading && items.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
           {items.map(t => (
-            <div key={t.task_id || t.id} data-item-id={t.task_id || t.id} style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                <div style={{ width: 36, height: 36, border: '1px solid var(--border-bright)', background: 'var(--bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
-                  <Clock size={14} />
+            <div key={t.task_id || t.id} data-item-id={t.task_id || t.id} className="item-card">
+              {/* Name row with pip + badges */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                  <span className="item-card-pip" style={{ background: t.is_active ? 'var(--accent)' : 'var(--text-dim)' }} />
+                  <span className="item-card-title">{t.name}</span>
                 </div>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>{t.name}</span>
-                    <span style={{ display: 'inline-block', padding: '2px 6px', border: '1px solid var(--border)', color: 'var(--cyan)', fontSize: 10, letterSpacing: '0.06em', background: 'var(--bg-base)' }}>{t.task_type.toUpperCase()}</span>
-                    {t.is_active ? (
-                      <span style={{ display: 'inline-block', padding: '2px 6px', border: '1px solid var(--green)', color: 'var(--green)', fontSize: 10, letterSpacing: '0.06em', background: 'rgba(0,255,65,0.05)' }}>ACTIVE</span>
-                    ) : (
-                      <span style={{ display: 'inline-block', padding: '2px 6px', border: '1px solid var(--border)', color: 'var(--text-dim)', fontSize: 10, letterSpacing: '0.06em', background: 'var(--bg-base)' }}>INACTIVE</span>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    {t.cron_expression && <span style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em' }}>{t.cron_expression}</span>}
-                    {t.next_run_at && <span style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>NEXT: {t.next_run_at}</span>}
-                  </div>
-                </div>
+                <span className="item-card-badge" style={{ color: 'var(--cyan)' }}>
+                  {t.task_type.toUpperCase()}
+                </span>
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
+
+              {/* Status */}
+              <div className="item-card-status" style={{ color: t.is_active ? 'var(--accent)' : 'var(--text-dim)' }}>
+                {t.is_active ? 'ACTIVE' : 'INACTIVE'}
+              </div>
+
+              {/* Cron + next */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {t.cron_expression && (
+                  <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>
+                    {t.cron_expression}
+                  </div>
+                )}
+                {t.next_run_at && (
+                  <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.05em' }}>
+                    NEXT: {t.next_run_at}
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="item-card-actions">
                 <button onClick={() => { setEditing(t.task_id!); setForm({ ...t }); setShowForm(true) }}
-                  style={{ padding: 6, color: 'var(--text-muted)', cursor: 'pointer', background: 'none', border: '1px solid var(--border-bright)' }}>
-                  <Edit2 size={12} />
+                  className="item-card-btn">
+                  <Edit2 size={12} /> EDIT
                 </button>
-                <button onClick={() => t.task_id && del(t.task_id)}
-                  style={{ padding: 6, color: 'var(--red)', cursor: 'pointer', background: 'none', border: '1px solid rgba(255,59,48,0.2)' }}>
-                  <Trash2 size={12} />
-                </button>
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+                  <button onClick={() => t.task_id && del(t.task_id)} className="item-card-icon-btn danger">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
               </div>
             </div>
           ))}

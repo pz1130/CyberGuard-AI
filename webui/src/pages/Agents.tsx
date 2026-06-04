@@ -1,7 +1,10 @@
 import { useState, useEffect, useContext } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Plus, Loader2, Cpu, Trash, Pencil, Copy, Wifi, WifiOff, Key } from 'lucide-react'
 import { SearchContext } from '../context/SearchContext'
+import Modal from '../components/Modal'
+import PageHeader from '../components/PageHeader'
 
 interface Agent {
   id?: string
@@ -57,17 +60,10 @@ const BACKEND_COLORS: Record<string, string> = {
 }
 
 const label = (text: string) => (
-  <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>
-    {text}
-  </label>
+  <label className="form-label">{text}</label>
 )
 
-const inputStyle: React.CSSProperties = {
-  width: '100%', height: 38, padding: '0 12px',
-  background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-  color: 'var(--text-primary)', fontSize: 14, letterSpacing: '0.05em',
-  fontFamily: 'var(--font-mono)', boxSizing: 'border-box',
-}
+// inputStyle removed — using .form-input / .form-textarea CSS classes
 
 // ── OpenClaw onboarding: single self-installing prompt to paste into OpenClaw ──
 function OpenClawGuide({
@@ -210,7 +206,7 @@ Check CyberGuard inbox using the cyberguard_sync skill and process any pending t
                   color: regenBusy ? 'var(--text-dim)' : '#000',
                   cursor: regenBusy ? 'wait' : 'pointer',
                   display: 'flex', alignItems: 'center', gap: 6,
-                  fontSize: 12, letterSpacing: '0.1em', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap',
+                  fontSize: 12, letterSpacing: '0.1em', whiteSpace: 'nowrap',
                   fontWeight: 700,
                 }}>
                 {regenBusy ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Key size={11} />}
@@ -240,7 +236,7 @@ Check CyberGuard inbox using the cyberguard_sync skill and process any pending t
               <div style={{
                 flex: 1, padding: '6px 10px',
                 background: 'rgba(0,255,65,0.06)', border: '1px solid var(--accent-border)',
-                fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--accent)',
+                fontSize: 13, color: 'var(--accent)',
                 wordBreak: 'break-all',
               }}>{apiKey}</div>
               <button onClick={() => cp(apiKey, 'key')} style={{
@@ -248,7 +244,7 @@ Check CyberGuard inbox using the cyberguard_sync skill and process any pending t
                 background: copied === 'key' ? 'var(--accent)' : 'transparent',
                 color: copied === 'key' ? '#000' : 'var(--accent)',
                 cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
-                fontSize: 12, letterSpacing: '0.1em', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap',
+                fontSize: 12, letterSpacing: '0.1em', whiteSpace: 'nowrap',
               }}>
                 <Copy size={11} /> {copied === 'key' ? 'COPIED' : 'COPY KEY'}
               </button>
@@ -276,7 +272,7 @@ function CodeBlock({ text, onCopy, copied }: { text: string; onCopy: (t: string)
       <pre style={{
         margin: 0, padding: '10px 40px 10px 12px',
         background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-        fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-primary)',
+        fontSize: 12, color: 'var(--text-primary)',
         whiteSpace: 'pre-wrap', wordBreak: 'break-all', lineHeight: 1.7,
         maxHeight: 300, overflowY: 'auto',
       }}>
@@ -289,8 +285,7 @@ function CodeBlock({ text, onCopy, copied }: { text: string; onCopy: (t: string)
           padding: '3px 8px', border: '1px solid var(--border)',
           background: copied ? 'var(--accent)' : 'var(--bg-base)',
           color: copied ? '#000' : 'var(--text-dim)',
-          fontSize: 11, cursor: 'pointer', fontFamily: 'var(--font-mono)',
-          letterSpacing: '0.1em', transition: 'all 0.15s',
+          fontSize: 11, cursor: 'pointer',           letterSpacing: '0.1em', transition: 'all 0.15s',
         }}>
         {copied ? 'COPIED' : 'COPY'}
       </button>
@@ -362,52 +357,41 @@ function AgentRunPanel({ agentId, agentName, onClose }: {
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex',
-      alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 640, maxWidth: '92vw', maxHeight: '86vh',
-        overflow: 'auto', background: 'var(--bg-card, #111)', border: '1px solid var(--border, #333)',
-        borderRadius: 8, padding: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <strong style={{ letterSpacing: '0.08em' }}>运行 · {agentName}</strong>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>✕</button>
+    <Modal width={640} title={`运行 · ${agentName}`} onClose={onClose}>
+      <textarea value={task} onChange={e => setTask(e.target.value)} rows={3}
+        placeholder="输入任务…" disabled={running}
+        className="form-textarea" />
+
+      <button onClick={run} disabled={running || !task.trim()}
+        className="btn btn-primary" style={{ alignSelf: 'flex-start', opacity: running ? 0.6 : 1 }}>
+        {running ? '运行中…' : '运行'}
+      </button>
+
+      {steps.length > 0 && (
+        <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {steps.map((s, i) => s.type === 'tool_call_start' ? (
+            <div key={`s${i}`} style={{ color: 'var(--text-muted)' }}>▸ 调用 {s.name}…</div>
+          ) : s.type === 'tool_call_end' ? (
+            <div key={`e${i}`} style={{ color: s.error ? 'var(--red)' : 'var(--accent)' }}>
+              {s.error ? '✗' : '✓'} {s.name} — {s.result_preview}
+            </div>
+          ) : null)}
         </div>
+      )}
 
-        <textarea value={task} onChange={e => setTask(e.target.value)} rows={3}
-          placeholder="输入任务…" disabled={running}
-          style={{ width: '100%', boxSizing: 'border-box', background: 'var(--bg, #0a0a0a)',
-            color: 'var(--text)', border: '1px solid var(--border, #333)', borderRadius: 6, padding: 8 }} />
+      {answer && (
+        <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5,
+          borderTop: '1px solid var(--border)', paddingTop: 12 }}>{answer}</div>
+      )}
 
-        <button onClick={run} disabled={running || !task.trim()}
-          style={{ marginTop: 8, padding: '6px 16px', background: 'var(--accent)', color: '#000',
-            border: 'none', borderRadius: 6, cursor: running ? 'default' : 'pointer', opacity: running ? 0.6 : 1 }}>
-          {running ? '运行中…' : '运行'}
-        </button>
-
-        {steps.length > 0 && (
-          <div style={{ marginTop: 14, fontSize: 13 }}>
-            {steps.map((s, i) => s.type === 'tool_call_start' ? (
-              <div key={`s${i}`} style={{ color: 'var(--text-muted)' }}>▸ 调用 {s.name}…</div>
-            ) : s.type === 'tool_call_end' ? (
-              <div key={`e${i}`} style={{ color: s.error ? '#f87171' : '#4ade80' }}>
-                {s.error ? '✗' : '✓'} {s.name} — {s.result_preview}
-              </div>
-            ) : null)}
-          </div>
-        )}
-
-        {answer && (
-          <div style={{ marginTop: 14, whiteSpace: 'pre-wrap', lineHeight: 1.5,
-            borderTop: '1px solid var(--border, #333)', paddingTop: 12 }}>{answer}</div>
-        )}
-
-        {err && <div style={{ marginTop: 12, color: '#f87171' }}>错误: {err}</div>}
-      </div>
-    </div>
+      {err && <div style={{ color: 'var(--red)' }}>错误: {err}</div>}
+    </Modal>
   )
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function Agents() {
+  const { t } = useTranslation()
   const [items, setItems] = useState<Agent[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -590,22 +574,15 @@ export default function Agents() {
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <div>
-          <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>AGENT INFRASTRUCTURE</div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>SUB-AGENTS</h1>
-        </div>
-        <button onClick={() => setShowKindPicker(true)} style={{
-          display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 36,
-          background: 'var(--accent)', border: '1px solid var(--accent-border)',
-          color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em',
-          cursor: 'pointer', fontFamily: 'var(--font-mono)',
-          boxShadow: '0 0 16px rgba(0,255,65,0.15)',
-        }}>
-          <Plus size={13} /> NEW AGENT
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="AGENT INFRASTRUCTURE"
+        title={t('agents.title').toUpperCase()}
+        actions={
+          <button onClick={() => setShowKindPicker(true)} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Plus size={13} /> NEW AGENT
+          </button>
+        }
+      />
 
       {/* Kind filter */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
@@ -616,7 +593,7 @@ export default function Agents() {
               background: kindFilter === k ? 'var(--accent)' : 'transparent',
               color: kindFilter === k ? '#000' : 'var(--text-muted)',
               fontSize: 11, letterSpacing: '0.1em', cursor: 'pointer',
-              fontFamily: 'var(--font-mono)', fontWeight: 700,
+              fontWeight: 700,
             }}>
             {k === 'all' ? 'ALL' : k.toUpperCase()}
           </button>
@@ -649,52 +626,38 @@ export default function Agents() {
             const thisRegenKey = regenKey[a.id!]
 
             return (
-              <div key={a.id} data-item-id={a.id} style={{
-                padding: 18, background: 'var(--bg-surface)',
-                border: '1px solid var(--border-bright)',
-                borderLeft: `3px solid ${bc}`,
-              }}>
+              <div key={a.id} data-item-id={a.id} className="item-card">
                 {/* Name + kind badge */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>
-                    {agentName(a)}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                    <span className="item-card-pip" style={{ background: bc }} />
+                    <span className="item-card-title">{agentName(a)}</span>
                   </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <div style={{
-                      padding: '2px 7px', border: `1px solid ${isInternal ? '#60a5fa' : bc}`,
-                      fontSize: 10, letterSpacing: '0.06em', color: isInternal ? '#60a5fa' : bc, background: 'var(--bg-base)',
-                    }}>
-                      {isInternal ? 'INTERNAL' : (a.backend_type || 'CUSTOM').toUpperCase()}
-                    </div>
-                  </div>
+                  <span className="item-card-badge" style={{ color: isInternal ? '#60a5fa' : bc }}>
+                    {isInternal ? 'INTERNAL' : (a.backend_type || 'CUSTOM').toUpperCase()}
+                  </span>
                 </div>
 
                 {/* Internal agents run in-process — always ready, no poll */}
                 {isInternal && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-                    <Cpu size={13} style={{ color: '#60a5fa' }} />
-                    <span style={{ fontSize: 13, letterSpacing: '0.1em', color: '#60a5fa' }}>
-                      READY · 进程内运行
-                    </span>
+                  <div className="item-card-status" style={{ color: '#60a5fa' }}>
+                    <Cpu size={13} />
+                    <span>READY · 进程内运行</span>
                   </div>
                 )}
 
                 {/* Online status (OpenClaw only) */}
                 {isOpenClaw && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-                    {online
-                      ? <Wifi size={11} style={{ color: 'var(--accent)' }} />
-                      : <WifiOff size={11} style={{ color: 'var(--text-dim)' }} />}
-                    <span style={{ fontSize: 11, letterSpacing: '0.1em', color: online ? 'var(--accent)' : 'var(--text-dim)' }}>
-                      {online ? 'ONLINE' : 'OFFLINE'}
-                    </span>
+                  <div className="item-card-status" style={{ color: online ? 'var(--accent)' : 'var(--text-dim)' }}>
+                    {online ? <Wifi size={12} /> : <WifiOff size={12} />}
+                    <span>{online ? 'ONLINE' : 'OFFLINE'}</span>
                     {a.openclaw_last_seen && (
-                      <span style={{ fontSize: 11, color: 'var(--text-dim)', marginLeft: 4 }}>
+                      <span style={{ color: 'var(--text-dim)' }}>
                         · 最近: {new Date(a.openclaw_last_seen).toLocaleTimeString()}
                       </span>
                     )}
                     {!a.has_api_key && (
-                      <span style={{ marginLeft: 'auto', fontSize: 11, color: '#f59e0b', letterSpacing: '0.08em' }}>
+                      <span style={{ marginLeft: 'auto', color: '#f59e0b' }}>
                         ⚠ NO KEY
                       </span>
                     )}
@@ -702,17 +665,16 @@ export default function Agents() {
                 )}
 
                 {a.description && (
-                  <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6, marginBottom: 10 }}>
-                    {a.description}
-                  </div>
+                  <div className="item-card-desc">{a.description}</div>
                 )}
 
                 {/* Regenerated key display */}
                 {!isInternal && thisRegenKey && (
                   <div style={{
-                    padding: '8px 10px', marginBottom: 10,
+                    padding: '8px 10px',
                     background: 'rgba(0,255,65,0.06)', border: '1px solid var(--accent-border)',
-                    fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--accent)',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: 11, color: 'var(--accent)',
                     wordBreak: 'break-all', lineHeight: 1.7,
                   }}>
                     <div style={{ marginBottom: 4, letterSpacing: '0.1em' }}>⚠ NEW KEY — COPY NOW:</div>
@@ -723,59 +685,43 @@ export default function Agents() {
                 {/* Test result */}
                 {testResult[a.id!] && (
                   <div style={{
-                    padding: '6px 10px', marginBottom: 10,
+                    padding: '6px 10px',
                     background: 'var(--bg-base)', border: `1px solid ${testResult[a.id!].ok ? 'var(--accent-border)' : 'rgba(255,60,60,0.3)'}`,
+                    borderRadius: 'var(--radius-md)',
                     fontSize: 12, color: testResult[a.id!].ok ? 'var(--accent)' : '#f87171',
-                    fontFamily: 'var(--font-mono)', letterSpacing: '0.03em',
                   }}>
                     {testResult[a.id!].ok ? '✓' : '✗'} {testResult[a.id!].msg}
                   </div>
                 )}
 
                 {/* Action row */}
-                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <div className="item-card-actions">
                   <button onClick={() => test(a.id!)} disabled={testing === a.id}
-                    style={{
-                      padding: '0 10px', height: 28, border: '1px solid var(--border-bright)',
-                      background: 'transparent', color: testing === a.id ? 'var(--text-dim)' : 'var(--accent)',
-                      fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer',
-                      fontFamily: 'var(--font-mono)',
-                    }}>
+                    className={`item-card-btn ${testing !== a.id ? 'accent' : ''}`}>
                     {testing === a.id ? '…' : 'TEST'}
                   </button>
 
                   <button onClick={() => setRunningAgent({ id: a.id!, name: a.agent_name || a.id! })}
-                    style={{
-                      padding: '0 10px', height: 28, border: '1px solid var(--border-bright)',
-                      background: 'transparent', color: 'var(--accent)',
-                      fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer',
-                      fontFamily: 'var(--font-mono)',
-                    }}>
+                    className="item-card-btn accent">
                     RUN
                   </button>
 
                   {!isInternal && (
                     <button onClick={() => regenApiKey(a.id!)} disabled={regenLoading === a.id}
                       title="重新生成 API Key"
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 4,
-                        padding: '0 10px', height: 28, border: '1px solid var(--border-bright)',
-                        background: 'transparent', color: 'var(--text-muted)',
-                        fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer',
-                        fontFamily: 'var(--font-mono)',
-                      }}>
+                      className="item-card-btn">
                       {regenLoading === a.id
-                        ? <Loader2 size={10} style={{ animation: 'spin 1s linear infinite' }} />
-                        : <><Key size={10} /> REGEN KEY</>}
+                        ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} />
+                        : <><Key size={11} /> REGEN KEY</>}
                     </button>
                   )}
 
-                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-                    <button onClick={() => openEdit(a)} style={{ padding: 4, color: 'var(--text-muted)', cursor: 'pointer', background: 'none', border: 'none' }}>
-                      <Pencil size={12} />
+                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+                    <button onClick={() => openEdit(a)} className="item-card-icon-btn">
+                      <Pencil size={13} />
                     </button>
-                    <button onClick={() => del(a.id!)} style={{ padding: 4, color: '#f87171', cursor: 'pointer', background: 'none', border: 'none' }}>
-                      <Trash size={12} />
+                    <button onClick={() => del(a.id!)} className="item-card-icon-btn danger">
+                      <Trash size={13} />
                     </button>
                   </div>
                 </div>
@@ -787,78 +733,64 @@ export default function Agents() {
 
       {/* Kind chooser modal */}
       {showKindPicker && (
-        <div
-          onClick={e => e.target === e.currentTarget && setShowKindPicker(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 101, overflowY: 'auto', padding: '40px 20px' }}>
-          <div style={{
-            width: '100%', maxWidth: 480, background: 'var(--bg-surface)',
-            border: '1px solid var(--border-bright)',
-          }}>
-            <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 4 }}>NEW AGENT</div>
-              <h3 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)', margin: 0 }}>
-                CHOOSE AGENT KIND
-              </h3>
+        <Modal
+          width={480}
+          eyebrow="NEW AGENT"
+          title="CHOOSE AGENT KIND"
+          onClose={() => setShowKindPicker(false)}
+          footer={(
+            <button onClick={() => setShowKindPicker(false)} className="btn btn-secondary">
+              CANCEL
+            </button>
+          )}
+        >
+          <button
+            onClick={() => { setShowKindPicker(false); openCreate(false) }}
+            style={{
+              padding: '18px 20px', border: '1px solid var(--border-bright)', borderRadius: 'var(--radius-md)',
+              background: 'var(--bg-base)', cursor: 'pointer', textAlign: 'left',
+            }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 6 }}>EXTERNAL AGENT</div>
+            <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6 }}>
+              OpenClaw, Hermes, or Custom HTTP endpoint. Deploy a separate process and connect via protocol.
             </div>
-            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <button
-                onClick={() => { setShowKindPicker(false); openCreate(false) }}
-                style={{
-                  padding: '18px 20px', border: '1px solid var(--border-bright)',
-                  background: 'var(--bg-base)', cursor: 'pointer', textAlign: 'left',
-                }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 6 }}>EXTERNAL AGENT</div>
-                <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6 }}>
-                  OpenClaw, Hermes, or Custom HTTP endpoint. Deploy a separate process and connect via protocol.
-                </div>
-              </button>
-              <button
-                onClick={() => {
-                  setShowKindPicker(false)
-                  openCreate(true)
-                }}
-                style={{
-                  padding: '18px 20px', border: '1px solid rgba(96,165,250,0.4)',
-                  background: 'rgba(96,165,250,0.04)', cursor: 'pointer', textAlign: 'left',
-                }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#60a5fa', letterSpacing: '0.1em', marginBottom: 6 }}>INTERNAL AGENT</div>
-                <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6 }}>
-                  Configured fully in-app. Select system prompt, LLM provider, skills, MCP tools, and optional knowledge base.
-                </div>
-              </button>
+          </button>
+          <button
+            onClick={() => {
+              setShowKindPicker(false)
+              openCreate(true)
+            }}
+            style={{
+              padding: '18px 20px', border: '1px solid rgba(96,165,250,0.4)', borderRadius: 'var(--radius-md)',
+              background: 'rgba(96,165,250,0.04)', cursor: 'pointer', textAlign: 'left',
+            }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#60a5fa', letterSpacing: '0.1em', marginBottom: 6 }}>INTERNAL AGENT</div>
+            <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6 }}>
+              Configured fully in-app. Select system prompt, LLM provider, skills, MCP tools, and optional knowledge base.
             </div>
-            <div style={{ padding: '12px 24px', borderTop: '1px solid var(--border)' }}>
-              <button onClick={() => setShowKindPicker(false)} style={{
-                padding: '0 16px', height: 32, border: '1px solid var(--border-bright)',
-                background: 'transparent', color: 'var(--text-muted)',
-                fontSize: 12, letterSpacing: '0.1em', cursor: 'pointer',
-                fontFamily: 'var(--font-mono)',
-              }}>
-                CANCEL
-              </button>
-            </div>
-          </div>
-        </div>
+          </button>
+        </Modal>
       )}
 
       {/* Form Modal */}
       {showForm && (
-        <div
-          onClick={e => e.target === e.currentTarget && !createdApiKey && setShowForm(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 100, overflowY: 'auto', padding: '40px 20px' }}>
-          <div style={{
-            width: '100%', maxWidth: 620, background: 'var(--bg-surface)',
-            border: '1px solid var(--border-bright)',
-          }}>
-            {/* Modal header */}
-            <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 4 }}>AGENT CONFIGURATION</div>
-              <h3 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)', margin: 0 }}>
-                {editing ? 'EDIT AGENT' : form.backend_type === '__internal__' ? 'DEPLOY INTERNAL AGENT' : 'DEPLOY EXTERNAL AGENT'}
-              </h3>
-            </div>
-
-            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <Modal
+          width={620}
+          eyebrow="AGENT CONFIGURATION"
+          title={editing ? 'EDIT AGENT' : form.backend_type === '__internal__' ? 'DEPLOY INTERNAL AGENT' : 'DEPLOY EXTERNAL AGENT'}
+          closeOnOverlay={!createdApiKey}
+          onClose={() => { if (!createdApiKey) setShowForm(false) }}
+          footer={createdApiKey ? (
+            <button onClick={() => { setShowForm(false); setCreatedApiKey(null) }} className="btn btn-primary" style={{ flex: 1 }}>
+              我已保存 KEY，关闭
+            </button>
+          ) : (
+            <>
+              <button onClick={() => setShowForm(false)} className="btn btn-secondary">CANCEL</button>
+              <button onClick={submit} className="btn btn-primary">{editing ? 'SAVE CHANGES' : 'DEPLOY AGENT'}</button>
+            </>
+          )}
+        >
 
               {/* Name + Kind/Backend */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -867,14 +799,14 @@ export default function Agents() {
                   <input value={form.agent_name}
                     onChange={e => setForm(f => ({ ...f, agent_name: e.target.value }))}
                     placeholder="e.g. Threat Intel Agent"
-                    style={inputStyle} />
+                    className="form-input" />
                 </div>
                 <div>
                   {label('AGENT KIND')}
                   <div style={{
                     height: 38, padding: '0 12px', display: 'flex', alignItems: 'center',
                     background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-                    fontSize: 14, fontFamily: 'var(--font-mono)', letterSpacing: '0.05em',
+                    fontSize: 14, letterSpacing: '0.05em',
                     color: form.backend_type === '__internal__' ? '#60a5fa' : 'var(--accent)',
                   }}>
                     {form.backend_type === '__internal__' ? 'INTERNAL' : 'EXTERNAL'}
@@ -891,7 +823,7 @@ export default function Agents() {
                       {label('LLM PROVIDER *')}
                       <select value={form.llm_provider_id || ''}
                         onChange={e => setForm(f => ({ ...f, llm_provider_id: e.target.value, llm_model: '' }))}
-                        style={{ ...inputStyle, height: 38 }}>
+                        className="form-input">
                         <option value="">— 选择 Provider —</option>
                         {providers.map(p => (
                           <option key={p.id} value={String(p.id)}>
@@ -905,7 +837,7 @@ export default function Agents() {
                       {selectedProvider?.models?.length ? (
                         <select value={form.llm_model || ''}
                           onChange={e => setForm(f => ({ ...f, llm_model: e.target.value }))}
-                          style={{ ...inputStyle, height: 38 }}>
+                          className="form-input">
                           <option value="">AUTO（Provider 默认）</option>
                           {selectedProvider.models.map(m => (
                             <option key={m.name} value={m.name}>{m.name}</option>
@@ -915,7 +847,7 @@ export default function Agents() {
                         <input value={form.llm_model || ''}
                           onChange={e => setForm(f => ({ ...f, llm_model: e.target.value }))}
                           placeholder="auto / gpt-4o / etc."
-                          style={inputStyle} />
+                          className="form-input" />
                       )}
                     </div>
                   </div>
@@ -926,13 +858,13 @@ export default function Agents() {
                       {label('TOOL LOOP MAX STEPS')}
                       <input type="number" value="8"
                         readOnly
-                        style={{ ...inputStyle, color: 'var(--text-dim)' }} />
+                        style={{ color: 'var(--text-dim)' }} className="form-input" />
                     </div>
                     <div>
                       {label('MEMORY WINDOW')}
                       <input type="number" value="20"
                         readOnly
-                        style={{ ...inputStyle, color: 'var(--text-dim)' }} />
+                        style={{ color: 'var(--text-dim)' }} className="form-input" />
                     </div>
                   </div>
 
@@ -949,7 +881,7 @@ export default function Agents() {
                   {label('BACKEND TYPE')}
                   <select value={form.backend_type}
                     onChange={e => setForm(f => ({ ...f, backend_type: e.target.value }))}
-                    style={{ ...inputStyle, height: 38 }}>
+                    className="form-input">
                     <option value="openclaw">OPENCLAW (推荐)</option>
                     <option value="hermes">HERMES</option>
                     <option value="custom">CUSTOM</option>
@@ -963,7 +895,7 @@ export default function Agents() {
                 <input value={form.description}
                   onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                   placeholder="这个 Agent 的职责..."
-                  style={inputStyle} />
+                  className="form-input" />
               </div>
 
               {/* Endpoint URL — 仅非 OpenClaw */}
@@ -973,7 +905,7 @@ export default function Agents() {
                   <input value={form.endpoint_url}
                     onChange={e => setForm(f => ({ ...f, endpoint_url: e.target.value }))}
                     placeholder="http://your-agent-host:8001"
-                    style={inputStyle} />
+                    className="form-input" />
                   <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-dim)' }}>
                     需要暴露 POST /execute 和 GET /health 端点
                   </div>
@@ -985,7 +917,7 @@ export default function Agents() {
                 {label('PERMISSION LEVEL')}
                 <select value={form.permission_level}
                   onChange={e => setForm(f => ({ ...f, permission_level: e.target.value }))}
-                  style={{ ...inputStyle, height: 38 }}>
+                  className="form-input">
                   <option value="low">LOW — 无需审批</option>
                   <option value="medium">MEDIUM — 可能触发审批</option>
                   <option value="high">HIGH — 始终需要 Admin 审批</option>
@@ -999,7 +931,7 @@ export default function Agents() {
                   onChange={e => setForm(f => ({ ...f, system_prompt: e.target.value }))}
                   placeholder="你是 CyberGuard 的威胁情报专家，负责..."
                   rows={3}
-                  style={{ ...inputStyle, height: 'auto', padding: '8px 12px', resize: 'vertical' }} />
+                  className="form-textarea" />
               </div>
 
               {/* OpenClaw Guide */}
@@ -1029,9 +961,9 @@ export default function Agents() {
                     ◆ GATEWAY API KEY
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.7 }}>
-                    外部节点使用此 Key 通过 <code style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>X-Api-Key</code> 请求头调用{' '}
-                    <code style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>/gateway/manifest</code>、
-                    <code style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>/gateway/poll</code> 等接口。
+                    外部节点使用此 Key 通过 <code style={{ color: 'var(--text-primary)' }}>X-Api-Key</code> 请求头调用{' '}
+                    <code style={{ color: 'var(--text-primary)' }}>/gateway/manifest</code>、
+                    <code style={{ color: 'var(--text-primary)' }}>/gateway/poll</code> 等接口。
                   </div>
                   {createdApiKey ? (
                     <>
@@ -1040,7 +972,7 @@ export default function Agents() {
                         <div style={{
                           flex: 1, padding: '6px 10px',
                           background: 'rgba(0,255,65,0.06)', border: '1px solid var(--accent-border)',
-                          fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--accent)',
+                          fontSize: 13, color: 'var(--accent)',
                           wordBreak: 'break-all',
                         }}>{createdApiKey}</div>
                         <button
@@ -1049,7 +981,7 @@ export default function Agents() {
                             padding: '6px 12px', border: '1px solid var(--accent-border)',
                             background: 'transparent', color: 'var(--accent)',
                             cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
-                            fontSize: 12, letterSpacing: '0.1em', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap',
+                            fontSize: 12, letterSpacing: '0.1em', whiteSpace: 'nowrap',
                           }}>
                           <Copy size={11} /> COPY KEY
                         </button>
@@ -1074,53 +1006,14 @@ export default function Agents() {
                         border: '1px solid var(--accent-border)', background: 'transparent',
                         color: 'var(--accent)', cursor: 'pointer',
                         display: 'flex', alignItems: 'center', gap: 6,
-                        fontSize: 12, letterSpacing: '0.1em', fontFamily: 'var(--font-mono)',
-                      }}>
+                        fontSize: 12, letterSpacing: '0.1em',                       }}>
                       <Key size={11} /> GENERATE NEW KEY
                     </button>
                   )}
                 </div>
               )}
 
-            </div>
-
-            {/* Footer buttons */}
-            <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', display: 'flex', gap: 12 }}>
-              {createdApiKey ? (
-                <button onClick={() => { setShowForm(false); setCreatedApiKey(null) }}
-                  style={{
-                    flex: 1, height: 40, border: '1px solid var(--accent-border)',
-                    background: 'var(--accent)', color: '#000',
-                    fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
-                    fontFamily: 'var(--font-mono)',
-                  }}>
-                  我已保存 KEY，关闭
-                </button>
-              ) : (
-                <>
-                  <button onClick={() => setShowForm(false)}
-                    style={{
-                      flex: 1, height: 40, border: '1px solid var(--border-bright)',
-                      background: 'transparent', color: 'var(--text-muted)',
-                      fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
-                      fontFamily: 'var(--font-mono)',
-                    }}>
-                    CANCEL
-                  </button>
-                  <button onClick={submit}
-                    style={{
-                      flex: 1, height: 40, border: '1px solid var(--accent-border)',
-                      background: 'var(--accent)', color: '#000',
-                      fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
-                      fontFamily: 'var(--font-mono)',
-                    }}>
-                    {editing ? 'SAVE CHANGES' : 'DEPLOY AGENT'}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {runningAgent && (
