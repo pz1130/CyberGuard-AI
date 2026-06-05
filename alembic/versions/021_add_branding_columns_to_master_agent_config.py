@@ -6,14 +6,14 @@ to support the 品牌/Branding feature in Settings.
 Idempotent using inspector (safe if table/cols already present).
 
 Revision ID: 021_add_branding_columns_to_master_agent_config
-Revises: de050ef94897
+Revises: 020d_master_agent_config
 """
 
 import sqlalchemy as sa
 from alembic import op
 
 revision = "021_branding_master"
-down_revision = "de050ef94897"
+down_revision = "020d_master_agent_config"
 branch_labels = None
 depends_on = None
 
