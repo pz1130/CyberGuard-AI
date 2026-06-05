@@ -512,7 +512,7 @@ export default function N8N() {
                       value={genDescription}
                       onChange={e => setGenDescription(e.target.value)}
                       rows={4}
-                      placeholder="e.g., 每小时检查邮箱，重要客户邮件发送 Slack 通知"
+                      placeholder={t('n8n.examplePh') || 'e.g., 每小时检查邮箱，重要客户邮件发送 Slack 通知'}
                     />
                   </div>
                   <button

@@ -209,8 +209,8 @@ export default function Webhooks() {
         background: 'var(--bg-surface)', border: '1px solid var(--border)',
         fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.7,
       }}>
-        <span style={{ color: 'var(--cyan)' }}>◆ INCOMING</span>：外部服务通过 token URL 调用 CyberGuard（请求转给 Master Agent 处理）。
-        　<span style={{ color: 'var(--accent)' }}>◆ OUTGOING</span>：订阅事件（如 <code>approval.required</code>），CyberGuard 主动 POST 到你的 URL，可选 HMAC 签名。
+        <span style={{ color: 'var(--cyan)' }}>◆ INCOMING</span>：{t('webhooks.incomingDesc')}
+        　<span style={{ color: 'var(--accent)' }}>◆ OUTGOING</span>：{t('webhooks.outgoingDesc')}
       </div>
 
       {/* List */}
@@ -337,7 +337,7 @@ export default function Webhooks() {
           footer={createdToken ? (
             <button onClick={() => { setShowForm(false); setCreatedToken(null); setCreatedUrl(null) }}
               className="btn btn-primary" style={{ flex: 1 }}>
-              我已保存 TOKEN，关闭
+              {t('webhooks.savedTokenClose')}
             </button>
           ) : (
             <>
@@ -372,7 +372,7 @@ export default function Webhooks() {
                     </button>
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-dim)', lineHeight: 1.6 }}>
-                    将上面这条 URL 配置到外部服务（curl/SIEM/Slack action 等），POST JSON 体例：
+                    {t('webhooks.configUrlNote')}
                     <code style={{ display: 'block', marginTop: 4, padding: 6, background: 'var(--bg-base)', color: 'var(--text-primary)' }}>
                       {'{"message": "扫描 192.168.1.0/24"}'}
                     </code>
@@ -429,18 +429,18 @@ export default function Webhooks() {
                                 style={{ accentColor: 'var(--accent)' }}
                               />
                               <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{ev}</span>
-                              <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>— Human-in-the-Loop 审批请求创建时</span>
+                              <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>— {t('approvals.pending') || 'Human-in-the-Loop 审批请求创建时'}</span>
                             </label>
                           ))}
                         </div>
                       </div>
                       <div>
-                        {label('HMAC SECRET（可选，启用签名）')}
+                        {label(t('webhooks.hmacLabel'))}
                         <input value={form.outgoing_secret} onChange={e => setForm(f => ({ ...f, outgoing_secret: e.target.value }))}
-                          placeholder={editing ? '留空 = 不变 / 输入 = 替换' : 'whsec_...'}
+                          placeholder={editing ? t('webhooks.hmacPh') : 'whsec_...'}
                           className="form-input" />
                         <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-dim)' }}>
-                          填了即会在每次请求加 <code>X-CyberGuard-Signature: sha256=&lt;hex&gt;</code> 头
+                          {t('webhooks.hmacNote')}
                         </div>
                       </div>
                     </>
@@ -448,9 +448,9 @@ export default function Webhooks() {
 
                   {form.direction === 'incoming' && !editing && (
                     <div className="card" style={{ background: 'var(--bg-base)', borderLeft: '3px solid var(--cyan)', padding: '10px 12px', fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.7 }}>
-                      创建后会生成一条 <code>POST /api/v1/webhooks/incoming/&lt;token&gt;</code> 公网端点。
-                      外部服务 POST JSON 体，其中 <code>message</code> 字段会作为 Master Agent 的用户输入。
-                      Token 明文**只显示一次**。
+                      {t('webhooks.incomingEndpointNote')}
+                      {t('webhooks.webhookUsage')}
+                      {t('webhooks.tokenOnceNote')}
                     </div>
                   )}
 

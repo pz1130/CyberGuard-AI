@@ -55,12 +55,26 @@ const PAGES: Record<Tab, { labelKey: string; component: React.ReactNode }> = {
 
 export default function App() {
   const { i18n } = useTranslation()
-  const [tab, setTab] = useState<Tab>('chat')
+  const [tab, setTab] = useState<Tab>(() => {
+    const saved = localStorage.getItem('lastTab') as Tab | null
+    return saved && PAGES[saved] ? saved : 'chat'
+  })
   const [authed, setAuthed] = useState(false)
   const [checking, setChecking] = useState(true)
   const [dark, setDark] = useState(true)
   const [searchOpen, setSearchOpen] = useState(false)
-  const [recentTabs, setRecentTabs] = useState<Tab[]>([])
+  const [recentTabs, setRecentTabs] = useState<Tab[]>(() => {
+    try {
+      const saved = localStorage.getItem('recentTabs')
+      if (!saved) return []
+      const parsed: Tab[] = JSON.parse(saved)
+      return Array.isArray(parsed)
+        ? parsed.filter((t: Tab) => PAGES[t]).slice(0, 3)
+        : []
+    } catch {
+      return []
+    }
+  })
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme')
@@ -99,7 +113,12 @@ export default function App() {
 
   const handleSetTab = (t: Tab) => {
     setTab(t)
-    setRecentTabs(prev => [t, ...prev.filter(x => x !== t)].slice(0, 3))
+    localStorage.setItem('lastTab', t)
+    setRecentTabs(prev => {
+      const next = [t, ...prev.filter(x => x !== t)].slice(0, 3)
+      localStorage.setItem('recentTabs', JSON.stringify(next))
+      return next
+    })
   }
 
   const toggleLang = () => {

@@ -272,6 +272,7 @@ export const api = {
   exportConfig: () => request('/config/export', { method: 'POST' }),
   getMasterConfig: () => request('/master-config'),
   updateMasterConfig: (body: any) => request('/master-config', { method: 'PUT', body: JSON.stringify(body) }),
+  getBranding: () => request('/branding'),
 
   // OCR
   getOcrConfig: () => request('/ocr/config'),

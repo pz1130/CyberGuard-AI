@@ -10,7 +10,7 @@ from alembic import context
 
 from app.config import settings
 from app.core.database import Base
-from app.models import User, RoleModel, AgentConfig, AgentExecution, Skill, Tool, KnowledgeBase, Document, DocumentChunk  # noqa: F401
+from app.models import User, RoleModel, AgentConfig, AgentExecution, Skill, Tool, KnowledgeBase, Document, DocumentChunk, ApprovalRequest, BackupRecord, Webhook, PromptTemplate, ScheduledTask, Conversation, SecuritySettings, OcrConfig, AgentEpisode, N8NConnection, MasterAgentConfig  # noqa: F401
 
 # this is the Alembic Config object
 config = context.config

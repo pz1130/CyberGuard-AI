@@ -59,7 +59,9 @@
     "switchLang": "Switch language",
     "logout": "Logout",
     "darkMode": "Dark mode",
-    "lightMode": "Light mode"
+    "lightMode": "Light mode",
+    "signedInAs": "Signed in as",
+    "signOut": "Sign out"
   },
   "login": {
     "title": "Welcome Back",
@@ -92,7 +94,37 @@
     "noAgents": "No agents yet",
     "endpointPlaceholder": "http://localhost:8001",
     "modelPlaceholder": "gpt-4o",
-    "envVarsPlaceholder": "OPENAI_API_KEY=sk-......xx"
+    "envVarsPlaceholder": "OPENAI_API_KEY=sk-......xx",
+    "runAgent": "Run · {{name}}",
+    "inputTask": "Enter task…",
+    "run": "Run",
+    "running": "Running…",
+    "stepCall": "▸ Call {{name}}…",
+    "errorPrefix": "Error: ",
+    "reissueKey": "Reissue API Key? Old key will be invalid immediately. Deployed OpenClaw nodes will need the new key to reconnect.",
+    "reissueKeyShort": "Regenerate API Key? Old key will be invalidated immediately.",
+    "connectionOk": "Connection OK",
+    "connectionFail": "Connection failed",
+    "readyProcess": "READY · In-process",
+    "lastSeen": "Last seen: ",
+    "reissueTitle": "Regenerate API Key",
+    "savedKeyClose": "I have saved the KEY, close",
+    "selectProvider": "— Select Provider —",
+    "autoProvider": "AUTO (Provider default)",
+    "openClawType": "OPENCLAW (recommended)",
+    "systemPromptPh": "You are CyberGuard's threat intel expert, responsible for...",
+    "externalKeyNote": "External nodes use this key via the <code style=\"color:var(--text-primary)\">X-Api-Key</code> header to call <code style=\"color:var(--text-primary)\">/gateway/poll</code> etc.",
+    "showOnceWarning": "⚠ Shown only once, save immediately",
+    "keyExistsNote": "Key exists (plaintext not viewable). To rotate, click the button below to reissue.",
+    "manualAccess": "› API Key only (manual access)",
+    "openClawOneClick": "◆ OPENCLAW one-click onboarding",
+    "openClawPasteNote": "Copy the prompt below and paste it into the OpenClaw node's chat. It will auto-create the skill, configure heartbeat and verify — no manual file editing needed.",
+    "keyPlaceholderWarning": "⚠ The prompt contains a placeholder Key. Click the button on the right to **reissue** API Key (old one invalidates immediately); the new key will be injected.",
+    "keyPlaceholderWarning2": "⚠ The current prompt has a placeholder API Key. Please click <span style={{ color: 'var(--accent)' }}>DEPLOY AGENT</span> first to generate a real key.",
+    "pasteSuccessNote": "After pasting, OpenClaw will reply <span style={{ color: 'var(--accent)' }}>✅ 已接入 CyberGuard</span>. Refresh this page; when the Agent card shows <span style={{ color: 'var(--accent)' }}>● ONLINE</span> in top-right, onboarding succeeded.",
+    "exposeEndpointNote": "Must expose POST /execute and GET /health endpoints",
+    "systemPromptLabel": "SYSTEM PROMPT (optional, overrides default)",
+    "genKeyFail": "Failed to generate key"
   },
   "users": {
     "title": "User Management",
@@ -121,11 +153,34 @@
     "baseUrl": "Base URL",
     "models": "Models",
     "confirmDelete": "Confirm deleting this provider?",
+    "confirmDeleteName": "Delete \"{{name}}\"?",
     "noProviders": "No providers yet",
     "latency": "Latency",
     "connectionFailed": "Connection failed",
     "failed": "Failed",
-    "compatible": "Compatible"
+    "compatible": "Compatible",
+    "localOllama": "Local Ollama endpoint",
+    "configuredUpdate": "Configured (enter new value to update)",
+    "leaveBlank": "leave blank to keep",
+    "keepThink": "Keep <think> tags",
+    "forThinkingModels": "For thinking models like DeepSeek-R1 / QwQ",
+    "saveToProbe": "Save provider first to probe capabilities",
+    "autoDiscover": "Auto-discover models",
+    "fetching": "FETCHING...",
+    "probeHelp": "Send tiny requests per model to detect tools / vision support",
+    "probing": "PROBING...",
+    "probeBtn": "Probe capabilities",
+    "noModels": "No models yet — click \"Auto-discover\" or add manually",
+    "toolsCap": "Supports function-calling / tools",
+    "visionCap": "Supports image input / vision",
+    "modelNamePh": "Model name, e.g. gpt-4o",
+    "addCustom": "+ Add",
+    "unconfiguredTip": "Please configure API Key first",
+    "refresh": "Refresh",
+    "customProvider": "CUSTOM PROVIDER",
+    "searchPh": "Search providers…",
+    "configuredCount": "Configured · {count}",
+    "noMatch": "No matching providers"
   },
   "skills": {
     "title": "Skill Pool",
@@ -150,7 +205,21 @@
     "enterKbName": "Enter knowledge base name",
     "fillNameContent": "Please fill in file name and content",
     "importFailed": "Import failed",
-    "uploadFailed": "Upload failed"
+    "uploadFailed": "Upload failed",
+    "ocrSettings": "OCR Settings",
+    "loading": "Loading…",
+    "enableOcr": "Enable OCR",
+    "engine": "Engine:",
+    "tesseractLocal": "Tesseract (local)",
+    "visionModel": "Vision model:",
+    "lang": "Language:",
+    "maxPages": "Max pages:",
+    "save": "Save",
+    "cancel": "Cancel",
+    "scanUploadedOcr": "Scan uploaded, OCR processing in background…",
+    "dimNote": "Dimension cannot be changed after creation. 3-large=3072, others=1536.",
+    "ocrInProgress": "● OCR in progress…",
+    "failed": "● Failed"
   },
   "groupchat": {
     "title": "Group Chat",
@@ -261,7 +330,13 @@
     "logAnomaly": "Log Anomaly",
     "vulnScan": "Vulnerability Scan",
     "remediation": "Remediation",
-    "compliance": "Compliance Check"
+    "compliance": "Compliance Check",
+    "selectOrCreateFirst": "Please create or select a conversation first",
+    "attachments": "attachments",
+    "normalModeTip": "NORMAL: Default LLM parses intent to decide sub-agents | FAST: Skip intent parsing, use only Master Agent | EXPERT: Dispatch to all active sub-agents in parallel",
+    "lockedSubAgent": "Locked to specific Sub-Agent, bypassing intent parsing",
+    "masterRoute": "Routed by Master Agent after intent parsing",
+    "maxFiles": "Max upload {{max}} files"
   },
   "tools": {
     "title": "Tool Pool",
@@ -299,7 +374,8 @@
     "noWorkflows": "No workflows",
     "noMatchingWorkflows": "No matching workflows",
     "update": "Update",
-    "create": "Create"
+    "create": "Create",
+    "examplePh": "e.g., check email every hour, send important customer mail to Slack"
   },
   "webhooks": {
     "title": "Webhooks",
@@ -317,7 +393,17 @@
     "copied": "Copied",
     "save": "Save",
     "create": "Create",
-    "noWebhooks": "No webhooks yet"
+    "noWebhooks": "No webhooks yet",
+    "incomingDesc": "External services call CyberGuard via the token URL (requests are forwarded to the Master Agent).",
+    "outgoingDesc": "Subscribe to events (e.g. approval.required); CyberGuard will actively POST to your URL. Optional HMAC signature.",
+    "savedTokenClose": "I have saved the TOKEN, close",
+    "configUrlNote": "Configure the URL above in your external service (curl/SIEM/Slack action etc.). Example POST JSON body:",
+    "hmacLabel": "HMAC SECRET (optional, enable signing)",
+    "hmacPh": "leave blank = no change / enter = replace",
+    "hmacNote": "If set, every request will include X-CyberGuard-Signature: sha256=<hex> header",
+    "incomingEndpointNote": "After creation, a public endpoint POST /api/v1/webhooks/incoming/<token> will be generated.",
+    "webhookUsage": "External service POSTs JSON; the \"message\" field becomes user input to the Master Agent.",
+    "tokenOnceNote": "Token plaintext is **shown only once**."
   },
   "prompts": {
     "title": "Prompt Templates",
@@ -329,7 +415,8 @@
     "all": "All",
     "save": "Save",
     "saving": "Saving...",
-    "noPrompts": "No templates yet"
+    "noPrompts": "No templates yet",
+    "description": "Pre-defined reusable system prompts that can be inserted into conversations with one click"
   },
   "governance": {
     "title": "Governance & Compliance",
@@ -349,7 +436,8 @@
     "assess": "Assess (Preview)",
     "judging": "Judging...",
     "saving": "Saving...",
-    "add": "Add"
+    "add": "Add",
+    "subtitle": "Compliance frameworks · Audits · Evidence · AI assessments"
   },
   "approvals": {
     "title": "Approvals",
@@ -371,6 +459,30 @@
     "reject": "Reject"
   },
   "settings": {
-    "title": "Settings"
+    "title": "Settings",
+    "master": "MASTER AGENT",
+    "branding": "BRANDING",
+    "about": "ABOUT",
+    "systemConfig": "SYSTEM CONFIGURATION",
+    "modelConfig": "MODEL CONFIGURATION",
+    "modelLabel": "MODEL",
+    "promptConfig": "PROMPT CONFIGURATION",
+    "brandingTitle": "BRANDING",
+    "companyName": "Company Name",
+    "logo": "Company Logo",
+    "logoHelp": "Supports PNG / JPG / SVG / WebP. Recommended 200x200 or 1:1 ratio, <2MB",
+    "preview": "Preview",
+    "reset": "Reset",
+    "resetBtn": "RESET",
+    "saveBtn": "SAVE CHANGES",
+    "saving": "SAVING...",
+    "saved": "SAVED!",
+    "resetConfirm": "Reset to defaults?",
+    "saveFailedPrefix": "Save failed: ",
+    "logoTooLarge": "Logo max 2MB",
+    "modelLoadFail": "Failed to load Provider",
+    "aboutVersion": "Version 1.0.0",
+    "aboutPlatform": "Enterprise Security Operations Platform",
+    "aboutDesc": "Multi-agent orchestration with LangGraph · MCP tool protocol · Real-time group chat · Knowledge base RAG · Full audit trail"
   }
 }

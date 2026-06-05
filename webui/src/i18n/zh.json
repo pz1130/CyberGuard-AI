@@ -59,7 +59,9 @@
     "switchLang": "切换语言",
     "logout": "退出登录",
     "darkMode": "深色模式",
-    "lightMode": "浅色模式"
+    "lightMode": "浅色模式",
+    "signedInAs": "登录身份",
+    "signOut": "退出登录"
   },
   "login": {
     "title": "欢迎回来",
@@ -92,7 +94,37 @@
     "noAgents": "暂无 Agent",
     "endpointPlaceholder": "http://localhost:8001",
     "modelPlaceholder": "gpt-4o",
-    "envVarsPlaceholder": "OPENAI_API_KEY=sk-......xx"
+    "envVarsPlaceholder": "OPENAI_API_KEY=sk-......xx",
+    "runAgent": "运行 · {{name}}",
+    "inputTask": "输入任务…",
+    "run": "运行",
+    "running": "运行中…",
+    "stepCall": "▸ 调用 {{name}}…",
+    "errorPrefix": "错误: ",
+    "reissueKey": "重新签发 API Key？旧 Key 立即失效，已部署的 OpenClaw 节点需要用新 Key 重新接入。",
+    "reissueKeyShort": "重新生成 API Key？旧 Key 将立即失效。",
+    "connectionOk": "连接正常",
+    "connectionFail": "连接失败",
+    "readyProcess": "READY · 进程内运行",
+    "lastSeen": "最近: ",
+    "reissueTitle": "重新生成 API Key",
+    "savedKeyClose": "我已保存 KEY，关闭",
+    "selectProvider": "— 选择 Provider —",
+    "autoProvider": "AUTO（Provider 默认）",
+    "openClawType": "OPENCLAW (推荐)",
+    "systemPromptPh": "你是 CyberGuard 的威胁情报专家，负责...",
+    "externalKeyNote": "外部节点使用此 Key 通过 <code style=\"color:var(--text-primary)\">X-Api-Key</code> 请求头调用 <code style=\"color:var(--text-primary)\">/gateway/poll</code> 等接口。",
+    "showOnceWarning": "⚠ 只显示一次，请立即保存",
+    "keyExistsNote": "Key 已存在（明文不可查看）。如需更换，点下方按钮重新签发。",
+    "manualAccess": "› 只需要 API Key（手动接入）",
+    "openClawOneClick": "◆ OPENCLAW 一键接入",
+    "openClawPasteNote": "复制下方一段提示词，粘贴到 OpenClaw 节点的对话窗口里。OpenClaw 会自动创建 skill、配置 heartbeat 并验证接入——你**无需手动建文件**。",
+    "keyPlaceholderWarning": "⚠ 提示词里的 Key 是占位符。点右侧按钮**重新签发** API Key（旧 Key 立即失效），新 Key 会自动塞进提示词。",
+    "keyPlaceholderWarning2": "⚠ 当前提示词中的 API Key 是占位符。请先点击 <span style={{ color: 'var(--accent)' }}>DEPLOY AGENT</span> 生成真实 Key。",
+    "pasteSuccessNote": "粘贴后 OpenClaw 会回复 <span style={{ color: 'var(--accent)' }}>✅ 已接入 CyberGuard</span>。回到此页面刷新，Agent 卡片右上角出现 <span style={{ color: 'var(--accent)' }}>● ONLINE</span> 即接入成功。",
+    "exposeEndpointNote": "需要暴露 POST /execute 和 GET /health 端点",
+    "systemPromptLabel": "SYSTEM PROMPT（可选，覆盖 Agent 默认提示词）",
+    "genKeyFail": "生成 Key 失败"
   },
   "users": {
     "title": "用户管理",
@@ -121,11 +153,34 @@
     "baseUrl": "Base URL",
     "models": "模型列表",
     "confirmDelete": "确认删除此 Provider？",
+    "confirmDeleteName": "删除 \"{{name}}\"？",
     "noProviders": "暂无 Provider",
     "latency": "延迟",
     "connectionFailed": "连接失败",
     "failed": "失败",
-    "compatible": "兼容"
+    "compatible": "兼容",
+    "localOllama": "本地 Ollama 服务地址",
+    "configuredUpdate": "已配置（输入新值以更新）",
+    "leaveBlank": "留空保持不变",
+    "keepThink": "保留 <think> 标签",
+    "forThinkingModels": "适用于 DeepSeek-R1 / QwQ 等思维链模型",
+    "saveToProbe": "保存 Provider 后才能探测能力",
+    "autoDiscover": "自动发现模型",
+    "fetching": "FETCHING...",
+    "probeHelp": "对每个模型发极小请求，探测是否支持 tools / vision",
+    "probing": "PROBING...",
+    "probeBtn": "探测能力",
+    "noModels": "暂无模型 — 点击\"自动发现\"或手动添加",
+    "toolsCap": "支持 function-calling / tools",
+    "visionCap": "支持图像输入 / vision",
+    "modelNamePh": "模型名称，如 gpt-4o",
+    "addCustom": "+ 添加",
+    "unconfiguredTip": "请先配置 API Key",
+    "refresh": "刷新",
+    "customProvider": "自定义 PROVIDER",
+    "searchPh": "搜索 Provider…",
+    "configuredCount": "已配置 · {count}",
+    "noMatch": "未找到匹配的 Provider"
   },
   "skills": {
     "title": "Skill Pool",
@@ -150,7 +205,21 @@
     "enterKbName": "请输入知识库名称",
     "fillNameContent": "请填写文件名和内容",
     "importFailed": "导入失败",
-    "uploadFailed": "上传失败"
+    "uploadFailed": "上传失败",
+    "ocrSettings": "OCR 设置",
+    "loading": "加载中…",
+    "enableOcr": "启用 OCR",
+    "engine": "引擎:",
+    "tesseractLocal": "Tesseract（本地）",
+    "visionModel": "Vision 模型:",
+    "lang": "语言:",
+    "maxPages": "最大页数:",
+    "save": "保存",
+    "cancel": "取消",
+    "scanUploadedOcr": "扫描件已上传，正在后台 OCR 识别…",
+    "dimNote": "创建后维度不可改。3-large=3072，其他=1536。",
+    "ocrInProgress": "● OCR 识别中…",
+    "failed": "● 失败"
   },
   "groupchat": {
     "title": "群聊室",
@@ -261,7 +330,13 @@
     "logAnomaly": "日志异常",
     "vulnScan": "漏洞扫描",
     "remediation": "修复建议",
-    "compliance": "合规检查"
+    "compliance": "合规检查",
+    "selectOrCreateFirst": "请先创建或选择一个会话",
+    "attachments": "个附件",
+    "normalModeTip": "NORMAL: 默认 LLM 解析意图决定是否调用子 agent | FAST: 跳过意图解析，只用 Master Agent | EXPERT: 并行派发给所有 active sub-agent",
+    "lockedSubAgent": "已锁定到指定 Sub-Agent，绕过意图解析",
+    "masterRoute": "由 Master Agent 解析意图后路由",
+    "maxFiles": "最多上传 {{max}} 个文件"
   },
   "tools": {
     "title": "工具池",
@@ -299,7 +374,8 @@
     "noWorkflows": "暂无工作流",
     "noMatchingWorkflows": "无匹配工作流",
     "update": "更新",
-    "create": "创建"
+    "create": "创建",
+    "examplePh": "e.g., 每小时检查邮箱，重要客户邮件发送 Slack 通知"
   },
   "webhooks": {
     "title": "Webhook",
@@ -317,7 +393,17 @@
     "copied": "已复制",
     "save": "保存",
     "create": "创建",
-    "noWebhooks": "暂无 Webhook"
+    "noWebhooks": "暂无 Webhook",
+    "incomingDesc": "外部服务通过 token URL 调用 CyberGuard（请求转给 Master Agent 处理）。",
+    "outgoingDesc": "订阅事件（如 approval.required），CyberGuard 主动 POST 到你的 URL，可选 HMAC 签名。",
+    "savedTokenClose": "我已保存 TOKEN，关闭",
+    "configUrlNote": "将上面这条 URL 配置到外部服务（curl/SIEM/Slack action 等），POST JSON 体例：",
+    "hmacLabel": "HMAC SECRET（可选，启用签名）",
+    "hmacPh": "留空 = 不变 / 输入 = 替换",
+    "hmacNote": "填了即会在每次请求加 X-CyberGuard-Signature: sha256=<hex> 头",
+    "incomingEndpointNote": "创建后会生成一条 POST /api/v1/webhooks/incoming/<token> 公网端点。",
+    "webhookUsage": "外部服务 POST JSON 体，其中 message 字段会作为 Master Agent 的用户输入。",
+    "tokenOnceNote": "Token 明文**只显示一次**。"
   },
   "prompts": {
     "title": "Prompt 模板",
@@ -329,7 +415,8 @@
     "all": "全部",
     "save": "保存",
     "saving": "保存中...",
-    "noPrompts": "暂无模板"
+    "noPrompts": "暂无模板",
+    "description": "预定义可复用的 system prompt，会话中可一键填入"
   },
   "governance": {
     "title": "治理合规",
@@ -349,7 +436,8 @@
     "assess": "评估（预览）",
     "judging": "评判中...",
     "saving": "保存中...",
-    "add": "添加"
+    "add": "添加",
+    "subtitle": "合规框架 · 审计 · 证据 · AI 评估"
   },
   "approvals": {
     "title": "审批管理",
@@ -371,6 +459,30 @@
     "reject": "拒绝"
   },
   "settings": {
-    "title": "设置"
+    "title": "设置",
+    "master": "MASTER AGENT",
+    "branding": "品牌",
+    "about": "关于",
+    "systemConfig": "SYSTEM CONFIGURATION",
+    "modelConfig": "MODEL CONFIGURATION",
+    "modelLabel": "MODEL",
+    "promptConfig": "PROMPT CONFIGURATION",
+    "brandingTitle": "品牌 / BRANDING",
+    "companyName": "公司名称",
+    "logo": "公司 Logo",
+    "logoHelp": "支持 PNG / JPG / SVG / WebP，建议 200x200 或 1:1 比例，<2MB",
+    "preview": "预览",
+    "reset": "重置",
+    "resetBtn": "RESET",
+    "saveBtn": "SAVE CHANGES",
+    "saving": "SAVING...",
+    "saved": "SAVED!",
+    "resetConfirm": "重置为默认值？",
+    "saveFailedPrefix": "保存失败: ",
+    "logoTooLarge": "Logo 最大 2MB",
+    "modelLoadFail": "无法加载 Provider",
+    "aboutVersion": "Version 1.0.0",
+    "aboutPlatform": "Enterprise Security Operations Platform",
+    "aboutDesc": "Multi-agent orchestration with LangGraph · MCP tool protocol · Real-time group chat · Knowledge base RAG · Full audit trail"
   }
 }

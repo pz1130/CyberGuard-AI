@@ -51,6 +51,7 @@ services:
     volumes:
       - ./app:/app/app
       - evidence_data:/data/evidence
+      - backup_data:/backups
 
   tool-runner:
     build:
@@ -131,3 +132,4 @@ volumes:
   redis_data:
   celerybeat_data:
   evidence_data:
+  backup_data:

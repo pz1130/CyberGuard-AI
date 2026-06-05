@@ -26,13 +26,15 @@ Agent types: threat_intel, log_anomaly, vuln_scanner, remediation, compliance, o
         default_system = "You are CyberGuard, a security operations assistant. You help users with threat analysis, vulnerability assessment, log analysis, and security compliance. Be precise and actionable."
         config = MasterAgentConfig(
             id=1,
-            model="MiniMax-m2.7",
+            llm_model="MiniMax-m2.7",
             temperature=0.7,
             system_prompt=default_system,
             intent_parser_prompt=default_intent,
             summarizer_prompt=default_summary,
             max_rounds=10,
             auto_approve_threshold=0,
+            branding_logo=None,
+            branding_company_name=None,
         )
         db.add(config)
         await db.commit()
@@ -46,7 +48,7 @@ async def _apply_and_refresh(db: AsyncSession, data: dict) -> MasterAgentConfig:
     if not config:
         return await _load_or_create(db)
     for key, value in data.items():
-        if hasattr(config, key) and value is not None:
+        if hasattr(config, key):
             setattr(config, key, value)
     await db.commit()
     await db.refresh(config)

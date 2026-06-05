@@ -82,6 +82,10 @@ class BackupRequest(BaseModel):
         default=None,
         description="Optional S3/OSS bucket name for remote backup upload.",
     )
+    exclude_chat: bool = Field(
+        default=False,
+        description="If true, exclude chat history (conversations table) from the backup for a configuration-only dump.",
+    )
 
 
 class RestoreRequest(BaseModel):

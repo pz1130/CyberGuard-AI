@@ -50,6 +50,7 @@ const PRESETS: Preset[] = [
   { name: 'OpenRouter',     provider_type: 'openai',     base_url: 'https://openrouter.ai/api/v1',        default_models: ['openai/gpt-4o', 'google/gemini-2.0-flash'],    key_placeholder: 'sk-or-...', color: '#8b5cf6' },
   { name: 'SiliconFlow',    provider_type: 'openai',     base_url: 'https://api.siliconflow.cn/v1',       default_models: ['Qwen/Qwen2.5-72B-Instruct', 'deepseek-ai/DeepSeek-V2.5'], key_placeholder: 'sk-...', color: '#06b6d4' },
   { name: 'Zhipu AI',       provider_type: 'openai',     base_url: 'https://open.bigmodel.cn/api/paas/v4', default_models: ['glm-4-plus', 'glm-4-flash'],                  key_placeholder: '...', color: '#3b82f6' },
+  { name: 'Bailian (阿里云百炼)', provider_type: 'openai', base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', default_models: ['qwen-max', 'qwen-plus', 'qwen-turbo', 'qwq-plus'], key_placeholder: 'sk-...', color: '#ff6a00' },
   { name: 'Azure OpenAI',   provider_type: 'azure',      base_url: '',                                    default_models: ['gpt-4o', 'gpt-4o-mini'],                      key_placeholder: 'Azure API Key', color: '#0078d4' },
   { name: 'Ollama',         provider_type: 'openai',     base_url: 'http://localhost:11434/v1',           default_models: ['llama3.2', 'qwen2.5', 'deepseek-r1'],         key_placeholder: 'ollama', color: '#22c55e' },
   { name: 'LM Studio',      provider_type: 'openai',     base_url: 'http://localhost:1234/v1',            default_models: ['local-model'],                                key_placeholder: 'lm-studio', color: '#a855f7' },
@@ -111,6 +112,7 @@ function SettingsModal({
   onClose: () => void
   onSaved: () => void
 }) {
+  const { t } = useTranslation()
   const isNew = !provider
   const [name, setName] = useState(provider?.name || preset?.name || '')
   const [type, setType] = useState(provider?.provider_type || preset?.provider_type || 'openai')
@@ -224,7 +226,7 @@ function SettingsModal({
         <div>
           <label className="form-label">
             BASE URL
-            {type === 'ollama' && <span style={{ marginLeft: 8, color: 'var(--text-dim)' }}>本地 Ollama 服务地址</span>}
+            {type === 'ollama' && <span style={{ marginLeft: 8, color: 'var(--text-dim)' }}>{t('providers.localOllama')}</span>}
           </label>
           <input
             className="form-input"
@@ -237,21 +239,21 @@ function SettingsModal({
         <div>
           <label className="form-label">
             API KEY
-            {provider?.api_key && <span style={{ marginLeft: 8, color: 'var(--text-dim)' }}>已配置（输入新值以更新）</span>}
+            {provider?.api_key && <span style={{ marginLeft: 8, color: 'var(--text-dim)' }}>{t('providers.configuredUpdate')}</span>}
           </label>
           <input
             className="form-input"
             type="password"
             value={apiKey}
             onChange={e => setApiKey(e.target.value)}
-            placeholder={provider?.api_key ? '留空保持不变' : keyPlaceholder}
+            placeholder={provider?.api_key ? t('providers.leaveBlank') : keyPlaceholder}
           />
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: '1px solid var(--border-bright)', background: 'var(--bg-base)', borderRadius: 'var(--radius-md)' }}>
           <div>
-            <div style={{ fontSize: 12, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>保留 &lt;think&gt; 标签</div>
-            <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>适用于 DeepSeek-R1 / QwQ 等思维链模型</div>
+            <div style={{ fontSize: 12, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>{t('providers.keepThink')}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>{t('providers.forThinkingModels')}</div>
           </div>
           <input type="checkbox" checked={preserveThink} onChange={e => setPreserveThink(e.target.checked)} style={{ width: 16, height: 16, accentColor: 'var(--accent)' }} />
         </div>
@@ -276,6 +278,7 @@ function SettingsModal({
 // ── Models Modal — manage per-provider models ─────────────────────────────────
 
 function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClose: () => void; onSaved: () => void }) {
+  const { t } = useTranslation()
   const [models, setModels] = useState<ModelInfo[]>(() => {
     if (!provider.models?.length) return []
     return provider.models.map(m => typeof m === 'string' ? { name: m, model_type: 'chat' as const } : m)
@@ -321,7 +324,7 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
   }
 
   const probe = async () => {
-    if (!provider.id) { setFetchErr('保存 Provider 后才能探测能力'); return }
+    if (!provider.id) { setFetchErr(t('providers.saveToProbe')); return }
     setProbing(true); setFetchErr('')
     try {
       const data = await api.probeProviderModels(provider.id) as any
@@ -440,17 +443,17 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
             }}
           >
             {fetching ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Zap size={11} />}
-            {fetching ? 'FETCHING...' : '自动发现模型'}
+            {fetching ? t('providers.fetching') : t('providers.autoDiscover')}
           </button>
           <button
             onClick={probe}
             disabled={probing || !models.length}
-            title="对每个模型发极小请求，探测是否支持 tools / vision"
+            title={t('providers.probeHelp')}
             className="btn btn-secondary"
             style={{ height: 34, fontSize: 12, letterSpacing: '0.12em' }}
           >
             {probing ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Settings2 size={11} />}
-            {probing ? 'PROBING...' : '探测能力'}
+            {probing ? t('providers.probing') : t('providers.probeBtn')}
           </button>
         </div>
         {fetchErr && <div style={{ fontSize: 11, color: '#f87171' }}>{fetchErr}</div>}
@@ -459,7 +462,7 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
         <div style={{ border: '1px solid var(--border-bright)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
           {models.length === 0 ? (
             <div style={{ padding: '24px 0', textAlign: 'center', fontSize: 12, color: 'var(--text-dim)' }}>
-              暂无模型 — 点击"自动发现"或手动添加
+              {t('providers.noModels')}
             </div>
           ) : (
             models.map(m => {
@@ -478,10 +481,10 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
                   {modelStatusBadge(m)}
                   {/* Capability badges (after probe) */}
                   {m.capabilities?.tools && (
-                    <span title="支持 function-calling / tools" style={{ fontSize: 10, padding: '2px 5px', border: '1px solid #10b981', color: '#10b981', letterSpacing: '0.05em', flexShrink: 0 }}>🔧 TOOLS</span>
+                    <span title={t('providers.toolsCap')} style={{ fontSize: 10, padding: '2px 5px', border: '1px solid #10b981', color: '#10b981', letterSpacing: '0.05em', flexShrink: 0 }}>🔧 TOOLS</span>
                   )}
                   {m.capabilities?.vision && (
-                    <span title="支持图像输入 / vision" style={{ fontSize: 10, padding: '2px 5px', border: '1px solid #8b5cf6', color: '#8b5cf6', letterSpacing: '0.05em', flexShrink: 0 }}>👁 VISION</span>
+                    <span title={t('providers.visionCap')} style={{ fontSize: 10, padding: '2px 5px', border: '1px solid #8b5cf6', color: '#8b5cf6', letterSpacing: '0.05em', flexShrink: 0 }}>👁 VISION</span>
                   )}
                   {/* Test result */}
                   {r && (
@@ -521,7 +524,7 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
             value={newName}
             onChange={e => setNewName(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && add()}
-            placeholder="模型名称，如 gpt-4o"
+            placeholder={t('providers.modelNamePh')}
             style={{ flex: 1, height: 34, fontSize: 13 }}
           />
           <select
@@ -539,7 +542,7 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
             className="btn"
             style={{ height: 34, border: '1px solid var(--accent-border)', background: 'var(--accent-dim)', color: 'var(--accent)', fontSize: 12, letterSpacing: '0.1em' }}
           >
-            + 添加
+            {t('providers.addCustom')}
           </button>
         </div>
       </div>
@@ -560,6 +563,7 @@ function ProviderCard({
   onModels: () => void
   onDelete: () => void
 }) {
+  const { t } = useTranslation()
   const status = providerStatus(provider)
   const sc = STATUS_COLOR[status]
   const preset = PRESETS.find(p => p.name.toLowerCase() === provider.name.toLowerCase() || p.provider_type === provider.provider_type)
@@ -597,7 +601,7 @@ function ProviderCard({
         </button>
         <button onClick={onModels}
           className={`item-card-btn ${status !== 'unconfigured' ? 'accent' : ''}`}
-          disabled={status === 'unconfigured'} title={status === 'unconfigured' ? '请先配置 API Key' : ''}>
+          disabled={status === 'unconfigured'} title={status === 'unconfigured' ? t('providers.unconfiguredTip') : ''}>
           <Database size={12} /> MODELS
         </button>
         <button onClick={onDelete} className="item-card-icon-btn danger" style={{ marginLeft: 'auto' }}>
@@ -647,7 +651,7 @@ export default function Providers() {
   useEffect(() => { load() }, [])
 
   const del = async (p: Provider) => {
-    if (!confirm(`删除 "${p.name}"？`)) return
+    if (!confirm(t('providers.confirmDeleteName', { name: p.name }))) return
     try { await api.deleteProvider(String(p.id)); load() } catch (e: any) { alert(e.message) }
   }
 
@@ -677,7 +681,7 @@ export default function Providers() {
           <div style={{ display: 'flex', gap: 10 }}>
             <button
               onClick={load}
-              title="刷新"
+              title={t('providers.refresh')}
               className="btn btn-secondary"
               style={{ width: 36, height: 36, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
@@ -688,7 +692,7 @@ export default function Providers() {
               className="btn btn-primary"
               style={{ display: 'flex', alignItems: 'center', gap: 8 }}
             >
-              <Plus size={13} /> 自定义 PROVIDER
+              <Plus size={13} /> {t('providers.customProvider')}
             </button>
           </div>
         }
@@ -701,7 +705,7 @@ export default function Providers() {
           className="form-input"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="搜索 Provider…"
+          placeholder={t('providers.searchPh')}
           style={{ paddingLeft: 36 }}
         />
       </div>
@@ -715,7 +719,7 @@ export default function Providers() {
           {/* Configured providers */}
           {sortedProviders.length > 0 && (
             <div style={{ marginBottom: 28 }}>
-              <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 12 }}>已配置 · {sortedProviders.length}</div>
+              <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 12 }}>{t('providers.configuredCount', { count: sortedProviders.length })}</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
                 {sortedProviders.map(p => (
                   <ProviderCard
@@ -739,7 +743,7 @@ export default function Providers() {
 
           {sortedProviders.length === 0 && (
             <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--text-dim)', fontSize: 13 }}>
-              未找到匹配的 Provider
+              {t('providers.noMatch')}
             </div>
           )}
         </>

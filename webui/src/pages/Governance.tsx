@@ -141,7 +141,7 @@ export default function Governance() {
         <div>
           <div style={{ fontSize: 20, letterSpacing: '0.06em', color: 'var(--text-primary)' }}>{t('governance.title').toUpperCase()}</div>
           <div style={{ fontSize: 12, letterSpacing: '0.1em', color: 'var(--text-dim)', marginTop: 4 }}>
-            合规框架 · 审计 · 证据 · AI 评估
+            {t('governance.subtitle') || '合规框架 · 审计 · 证据 · AI 评估'}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>

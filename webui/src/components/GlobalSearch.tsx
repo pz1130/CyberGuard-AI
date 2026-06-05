@@ -70,11 +70,16 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
       if (agents.status === 'fulfilled') {
         const d = agents.value as any
         const list = Array.isArray(d) ? d : (d?.agents || [])
-        list.forEach((a: any) => items.push({
-          id: a.id, name: a.agent_name || a.name || String(a.id),
-          subtitle: (a.backend_type || 'AGENT').toUpperCase(),
-          tab: 'agents', category: 'AGENTS', icon: '◆',
-        }))
+        list.forEach((a: any) => {
+          const k = (a.kind || '').toLowerCase()
+          const isInternal = k === 'internal' || a.backend_type === '__internal__'
+          const suffix = isInternal ? 'INTERNAL' : (a.backend_type || 'AGENT').toUpperCase()
+          items.push({
+            id: a.id, name: a.agent_name || a.name || String(a.id),
+            subtitle: suffix,
+            tab: 'agents', category: 'AGENTS', icon: '◆',
+          })
+        })
       }
 
       if (providers.status === 'fulfilled') {

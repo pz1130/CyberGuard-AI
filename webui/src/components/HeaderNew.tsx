@@ -7,6 +7,7 @@
  */
 import { Sun, Moon, Globe, Search, Bell, ChevronDown, LogOut, Shield } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 
 interface HeaderProps {
@@ -30,10 +31,12 @@ export default function HeaderNew({
   toggleLang,
   onSearchOpen,
 }: HeaderProps) {
+  const { t } = useTranslation()
   const [username, setUsername] = useState('Admin')
   const [role, setRole] = useState('Administrator')
   const [menuOpen, setMenuOpen] = useState(false)
   const [sysStatus, setSysStatus] = useState<SysStatus>('online')
+  const [branding, setBranding] = useState<{ branding_logo?: string | null; branding_company_name?: string | null }>({})
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -63,6 +66,18 @@ export default function HeaderNew({
       cancelled = true
       clearInterval(id)
     }
+  }, [])
+
+  useEffect(() => {
+    const load = () => {
+      api.getBranding().then((d: any) => {
+        if (d) setBranding(d)
+      }).catch(() => {})
+    }
+    load()
+    const onBranding = () => load()
+    window.addEventListener('branding-updated', onBranding)
+    return () => window.removeEventListener('branding-updated', onBranding)
   }, [])
 
   const logout = () => {
@@ -114,22 +129,37 @@ export default function HeaderNew({
           flexShrink: 0,
         }}
       >
-        <div
-          aria-hidden
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 28,
-            height: 28,
-            borderRadius: 'var(--radius-md)',
-            background: 'var(--accent-dim)',
-            border: '1px solid var(--accent-border)',
-            color: 'var(--accent)',
-          }}
-        >
-          <Shield size={15} strokeWidth={2.25} />
-        </div>
+        {branding.branding_logo ? (
+          <img
+            src={branding.branding_logo}
+            alt="logo"
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--accent-border)',
+              objectFit: 'contain',
+              background: '#fff',
+            }}
+          />
+        ) : (
+          <div
+            aria-hidden
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 28,
+              height: 28,
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--accent-dim)',
+              border: '1px solid var(--accent-border)',
+              color: 'var(--accent)',
+            }}
+          >
+            <Shield size={15} strokeWidth={2.25} />
+          </div>
+        )}
         <div
           style={{
             fontSize: 15,
@@ -138,7 +168,7 @@ export default function HeaderNew({
             letterSpacing: '-0.01em',
           }}
         >
-          CyberGuard
+          {branding.branding_company_name || 'CyberGuard'}
         </div>
 
         {/* Semantic status pill */}
@@ -352,7 +382,7 @@ export default function HeaderNew({
                       marginBottom: 2,
                     }}
                   >
-                    Signed in as
+                    {t('header.signedInAs')}
                   </div>
                   <div
                     style={{
@@ -393,7 +423,7 @@ export default function HeaderNew({
                   }}
                 >
                   <LogOut size={14} />
-                  <span>Sign out</span>
+                  <span>{t('header.signOut')}</span>
                 </button>
               </div>
             </>

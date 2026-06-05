@@ -157,7 +157,7 @@ export default function Prompts() {
       <PageHeader
         eyebrow="PROMPT LIBRARY"
         title={t('prompts.title').toUpperCase()}
-        description="预定义可复用的 system prompt，会话中可一键填入"
+        description={t('prompts.description') || '预定义可复用的 system prompt，会话中可一键填入'}
         actions={
           <button onClick={openCreate} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Plus size={12} /> NEW TEMPLATE

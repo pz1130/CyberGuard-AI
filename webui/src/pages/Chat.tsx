@@ -65,9 +65,10 @@ interface ProviderModel {
 }
 
 interface AgentOption {
-  id: string
+  id: string | number
   agent_name: string
   backend_type?: string
+  kind?: string
   is_active?: boolean
 }
 
@@ -183,7 +184,11 @@ export default function Chat() {
   const loadAvailableAgents = async () => {
     try {
       const data = await api.getAgents() as any
-      const list: AgentOption[] = Array.isArray(data) ? data : (data?.agents || [])
+      const rawList: any[] = Array.isArray(data) ? data : (data?.agents || [])
+      const list: AgentOption[] = rawList.map((a: any) => ({
+        ...a,
+        id: String(a.id),  // normalize for consistent selectedAgentId matching (localStorage strings)
+      }))
       setAvailableAgents(list.filter(a => a.is_active !== false))
     } catch { setAvailableAgents([]) }
   }
@@ -231,7 +236,7 @@ export default function Chat() {
   // Create new conversation
   const createConversation = async () => {
     try {
-      const conv = await api.createConversation({ title: '新对话' }) as Conversation
+      const conv = await api.createConversation({ title: t('chat.newChat') }) as Conversation
       setConversations(prev => [conv, ...prev])
       setActiveConvId(conv.id)
       setMessages([])
@@ -419,7 +424,7 @@ export default function Chat() {
   const send = async () => {
     if ((!input.trim() && attachments.length === 0) || loading) return
     if (!activeConvId) {
-      alert('请先创建或选择一个会话')
+      alert(t('chat.selectOrCreateFirst') || '请先创建或选择一个会话')
       return
     }
 
@@ -434,7 +439,7 @@ export default function Chat() {
 
     const userMsg: Message = {
       role: 'user',
-      content: userText || (files.length > 0 ? `[${files.length} 个附件]` : ''),
+      content: userText || (files.length > 0 ? `[${files.length} ${t('chat.attachments')}]` : ''),
       created_at: new Date().toISOString(),
       attachments: attachments.map(att => ({
         type: (ACCEPTED_IMAGE_TYPES.includes(att.file.type) ? 'image' : 'doc') as 'image' | 'doc',
@@ -679,7 +684,7 @@ export default function Chat() {
               }}
               className="chat-settings-select"
               style={{ width: 'auto', minWidth: 80, height: 30, fontSize: 12 }}
-              title="NORMAL: 默认 LLM 解析意图决定是否调用子 agent | FAST: 跳过意图解析，只用 Master Agent | EXPERT: 并行派发给所有 active sub-agent"
+              title={t('chat.normalModeTip')}
             >
               <option value="normal">NORMAL</option>
               <option value="fast">FAST</option>
@@ -718,7 +723,7 @@ export default function Chat() {
                 if (v) localStorage.setItem('lastSelectedAgentId', v)
                 else localStorage.removeItem('lastSelectedAgentId')
               }}
-              title={selectedAgentId ? '已锁定到指定 Sub-Agent，绕过意图解析' : '由 Master Agent 解析意图后路由'}
+              title={selectedAgentId ? t('chat.lockedSubAgent') : t('chat.masterRoute')}
               className="chat-settings-select"
               style={{
                 width: 'auto', minWidth: 160, maxWidth: 280, height: 30, fontSize: 12,
@@ -727,11 +732,16 @@ export default function Chat() {
                 color: selectedAgentId ? 'var(--accent)' : undefined,
               }}>
               <option value="">MASTER (AUTO ROUTE)</option>
-              {availableAgents.map(a => (
-                <option key={a.id} value={a.id}>
-                  {a.agent_name}{a.backend_type ? ` · ${a.backend_type.toUpperCase()}` : ''}
-                </option>
-              ))}
+              {availableAgents.map(a => {
+                const k = (a.kind || '').toLowerCase()
+                const isInternal = k === 'internal' || a.backend_type === '__internal__'
+                const suffix = isInternal ? 'INTERNAL' : (a.backend_type || 'CUSTOM').toUpperCase()
+                return (
+                  <option key={a.id} value={a.id}>
+                    {a.agent_name} · {suffix}
+                  </option>
+                )
+              })}
             </select>
           </div>
 
@@ -937,7 +947,7 @@ export default function Chat() {
             onChange={(e) => {
               const files = Array.from(e.target.files || [])
               if (files.length + attachments.length > MAX_FILES) {
-                alert(`最多上传 ${MAX_FILES} 个文件`)
+                alert(t('chat.maxFiles', { max: MAX_FILES }))
                 return
               }
               const newAttachments = files.map(f => ({

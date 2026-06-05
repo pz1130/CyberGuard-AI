@@ -13,9 +13,11 @@ export default function Login() {
   })
   const [loading, setLoading] = useState(false)
   const [ssoEnabled, setSsoEnabled] = useState(false)
+  const [branding, setBranding] = useState<{ branding_logo?: string | null; branding_company_name?: string | null }>({})
 
   useEffect(() => {
     api.getSsoStatus().then((d: unknown) => setSsoEnabled(!!(d as { enabled?: boolean } | null)?.enabled)).catch(() => {})
+    api.getBranding().then((d: any) => { if (d) setBranding(d) }).catch(() => {})
     const err = new URLSearchParams(window.location.search).get('error')
     if (err) {
       window.history.replaceState(null, '', window.location.pathname)
@@ -105,17 +107,31 @@ export default function Login() {
 
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 32 }}>
-          <div style={{
-            width: 40, height: 40,
-            border: '1px solid var(--accent-border)',
-            background: 'var(--accent-dim)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24,
-          }}>
-            <span style={{ color: 'var(--accent)' }}>⬡</span>
-          </div>
+          {branding.branding_logo ? (
+            <img
+              src={branding.branding_logo}
+              alt="logo"
+              style={{
+                width: 40, height: 40,
+                border: '1px solid var(--accent-border)',
+                borderRadius: 'var(--radius-md)',
+                objectFit: 'contain',
+                background: '#fff',
+              }}
+            />
+          ) : (
+            <div style={{
+              width: 40, height: 40,
+              border: '1px solid var(--accent-border)',
+              background: 'var(--accent-dim)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24,
+            }}>
+              <span style={{ color: 'var(--accent)' }}>⬡</span>
+            </div>
+          )}
           <div>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 20, letterSpacing: '0.06em', color: 'var(--shell-text-strong)' }}>
-              CYBERGUARD
+              {(branding.branding_company_name || 'CYBERGUARD').toUpperCase()}
             </div>
             <div style={{ fontSize: 11, color: 'var(--shell-text-muted)', letterSpacing: '0.08em' }}>
               AI AGENT PLATFORM · AUTH GATE

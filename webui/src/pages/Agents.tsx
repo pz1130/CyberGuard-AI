@@ -73,6 +73,7 @@ function OpenClawGuide({
   apiKey?: string
   onRequestKey?: () => Promise<void>
 }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState<string | null>(null)
   const [regenBusy, setRegenBusy] = useState(false)
 
@@ -166,7 +167,7 @@ Check CyberGuard inbox using the cyberguard_sync skill and process any pending t
         border: '1px solid var(--accent-border)', borderBottom: 'none',
         fontSize: 12, color: 'var(--accent)', letterSpacing: '0.12em', fontWeight: 700,
       }}>
-        ◆ OPENCLAW 一键接入
+        {t('agents.openClawOneClick')}
       </div>
 
       <div style={{
@@ -177,7 +178,7 @@ Check CyberGuard inbox using the cyberguard_sync skill and process any pending t
 
         {/* Intro */}
         <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.7 }}>
-          复制下方一段提示词，粘贴到 OpenClaw 节点的对话窗口里。OpenClaw 会自动创建 skill、配置 heartbeat 并验证接入——你**无需手动建文件**。
+          {t('agents.openClawPasteNote')}
         </div>
 
         {!apiKey && (
@@ -189,14 +190,14 @@ Check CyberGuard inbox using the cyberguard_sync skill and process any pending t
           }}>
             <div style={{ ...dimText, flex: 1, minWidth: 200 }}>
               {onRequestKey
-                ? <>⚠ 提示词里的 Key 是占位符。点右侧按钮**重新签发** API Key（旧 Key 立即失效），新 Key 会自动塞进提示词。</>
-                : <>⚠ 当前提示词中的 API Key 是占位符。请先点击 <span style={{ color: 'var(--accent)' }}>DEPLOY AGENT</span> 生成真实 Key。</>}
+                ? <>⚠ {t('agents.keyPlaceholderWarning')}</>
+                : <>⚠ {t('agents.keyPlaceholderWarning2')}</>}
             </div>
             {onRequestKey && (
               <button
                 disabled={regenBusy}
                 onClick={async () => {
-                  if (!confirm('重新签发 API Key？旧 Key 立即失效，已部署的 OpenClaw 节点需要用新 Key 重新接入。')) return
+                  if (!confirm(t('agents.reissueKey'))) return
                   setRegenBusy(true)
                   try { await onRequestKey() } finally { setRegenBusy(false) }
                 }}
@@ -230,7 +231,7 @@ Check CyberGuard inbox using the cyberguard_sync skill and process any pending t
               ...dimText, cursor: 'pointer', userSelect: 'none',
               listStyle: 'none', letterSpacing: '0.05em',
             }}>
-              › 只需要 API Key（手动接入）
+              {t('agents.manualAccess')}
             </summary>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
               <div style={{
@@ -258,7 +259,7 @@ Check CyberGuard inbox using the cyberguard_sync skill and process any pending t
           background: 'var(--bg-elevated)', border: '1px solid var(--border)',
           borderLeft: '3px solid var(--accent)',
         }}>
-          粘贴后 OpenClaw 会回复 <span style={{ color: 'var(--accent)' }}>✅ 已接入 CyberGuard</span>。回到此页面刷新，Agent 卡片右上角出现 <span style={{ color: 'var(--accent)' }}>● ONLINE</span> 即接入成功。
+          {t('agents.pasteSuccessNote')}
         </div>
 
       </div>
@@ -332,6 +333,7 @@ type RunEvent =
 function AgentRunPanel({ agentId, agentName, onClose }: {
   agentId: string | number; agentName: string; onClose: () => void
 }) {
+  const { t } = useTranslation()
   const [task, setTask] = useState('')
   const [running, setRunning] = useState(false)
   const [answer, setAnswer] = useState('')
@@ -357,20 +359,20 @@ function AgentRunPanel({ agentId, agentName, onClose }: {
   }
 
   return (
-    <Modal width={640} title={`运行 · ${agentName}`} onClose={onClose}>
+    <Modal width={640} title={t('agents.runAgent', { name: agentName })} onClose={onClose}>
       <textarea value={task} onChange={e => setTask(e.target.value)} rows={3}
-        placeholder="输入任务…" disabled={running}
+        placeholder={t('agents.inputTask')} disabled={running}
         className="form-textarea" />
 
       <button onClick={run} disabled={running || !task.trim()}
         className="btn btn-primary" style={{ alignSelf: 'flex-start', opacity: running ? 0.6 : 1 }}>
-        {running ? '运行中…' : '运行'}
+        {running ? t('agents.running') : t('agents.run')}
       </button>
 
       {steps.length > 0 && (
         <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 4 }}>
           {steps.map((s, i) => s.type === 'tool_call_start' ? (
-            <div key={`s${i}`} style={{ color: 'var(--text-muted)' }}>▸ 调用 {s.name}…</div>
+            <div key={`s${i}`} style={{ color: 'var(--text-muted)' }}>{t('agents.stepCall', { name: s.name })}</div>
           ) : s.type === 'tool_call_end' ? (
             <div key={`e${i}`} style={{ color: s.error ? 'var(--red)' : 'var(--accent)' }}>
               {s.error ? '✗' : '✓'} {s.name} — {s.result_preview}
@@ -384,7 +386,7 @@ function AgentRunPanel({ agentId, agentName, onClose }: {
           borderTop: '1px solid var(--border)', paddingTop: 12 }}>{answer}</div>
       )}
 
-      {err && <div style={{ color: 'var(--red)' }}>错误: {err}</div>}
+      {err && <div style={{ color: 'var(--red)' }}>{t('agents.errorPrefix')}{err}</div>}
     </Modal>
   )
 }
@@ -546,7 +548,7 @@ export default function Agents() {
   }
 
   const del = async (id: string) => {
-    if (!confirm('确认删除此 Agent？')) return
+    if (!confirm(t('agents.confirmDelete'))) return
     await api.deleteAgent(id); load()
   }
 
@@ -554,14 +556,14 @@ export default function Agents() {
     setTesting(id)
     try {
       const res = await api.testAgent(id, {}) as any
-      setTestResult(r => ({ ...r, [id]: { ok: res.success, msg: res.error || (res.success ? '连接正常' : '连接失败') } }))
+      setTestResult(r => ({ ...r, [id]: { ok: res.success, msg: res.error || (res.success ? t('agents.connectionOk') : t('agents.connectionFail')) } }))
     } catch (e: any) {
       setTestResult(r => ({ ...r, [id]: { ok: false, msg: e.message } }))
     } finally { setTesting(null) }
   }
 
   const regenApiKey = async (id: string) => {
-    if (!confirm('重新生成 API Key？旧 Key 将立即失效。')) return
+    if (!confirm(t('agents.reissueKeyShort'))) return
     setRegenLoading(id)
     try {
       const res = await (api as any).regenAgentApiKey(id) as any
@@ -642,7 +644,7 @@ export default function Agents() {
                 {isInternal && (
                   <div className="item-card-status" style={{ color: '#60a5fa' }}>
                     <Cpu size={13} />
-                    <span>READY · 进程内运行</span>
+                    <span>{t('agents.readyProcess')}</span>
                   </div>
                 )}
 
@@ -653,7 +655,7 @@ export default function Agents() {
                     <span>{online ? 'ONLINE' : 'OFFLINE'}</span>
                     {a.openclaw_last_seen && (
                       <span style={{ color: 'var(--text-dim)' }}>
-                        · 最近: {new Date(a.openclaw_last_seen).toLocaleTimeString()}
+                        · {t('agents.lastSeen')}{new Date(a.openclaw_last_seen).toLocaleTimeString()}
                       </span>
                     )}
                     {!a.has_api_key && (
@@ -708,7 +710,7 @@ export default function Agents() {
 
                   {!isInternal && (
                     <button onClick={() => regenApiKey(a.id!)} disabled={regenLoading === a.id}
-                      title="重新生成 API Key"
+                      title={t('agents.reissueTitle')}
                       className="item-card-btn">
                       {regenLoading === a.id
                         ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} />
@@ -782,7 +784,7 @@ export default function Agents() {
           onClose={() => { if (!createdApiKey) setShowForm(false) }}
           footer={createdApiKey ? (
             <button onClick={() => { setShowForm(false); setCreatedApiKey(null) }} className="btn btn-primary" style={{ flex: 1 }}>
-              我已保存 KEY，关闭
+              {t('agents.savedKeyClose')}
             </button>
           ) : (
             <>
@@ -824,7 +826,7 @@ export default function Agents() {
                       <select value={form.llm_provider_id || ''}
                         onChange={e => setForm(f => ({ ...f, llm_provider_id: e.target.value, llm_model: '' }))}
                         className="form-input">
-                        <option value="">— 选择 Provider —</option>
+                        <option value="">— {t('agents.selectProvider').replace('— ', '')} —</option>
                         {providers.map(p => (
                           <option key={p.id} value={String(p.id)}>
                             {p.name}{p.provider_type ? ` (${p.provider_type})` : ''}
@@ -838,7 +840,7 @@ export default function Agents() {
                         <select value={form.llm_model || ''}
                           onChange={e => setForm(f => ({ ...f, llm_model: e.target.value }))}
                           className="form-input">
-                          <option value="">AUTO（Provider 默认）</option>
+                          <option value="">{t('agents.autoProvider')}</option>
                           {selectedProvider.models.map(m => (
                             <option key={m.name} value={m.name}>{m.name}</option>
                           ))}
@@ -882,7 +884,7 @@ export default function Agents() {
                   <select value={form.backend_type}
                     onChange={e => setForm(f => ({ ...f, backend_type: e.target.value }))}
                     className="form-input">
-                    <option value="openclaw">OPENCLAW (推荐)</option>
+                    <option value="openclaw">{t('agents.openClawType')}</option>
                     <option value="hermes">HERMES</option>
                     <option value="custom">CUSTOM</option>
                   </select>
@@ -894,7 +896,7 @@ export default function Agents() {
                 {label('DESCRIPTION')}
                 <input value={form.description}
                   onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  placeholder="这个 Agent 的职责..."
+                  placeholder={t('agents.systemPromptPh')}
                   className="form-input" />
               </div>
 
@@ -907,7 +909,7 @@ export default function Agents() {
                     placeholder="http://your-agent-host:8001"
                     className="form-input" />
                   <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-dim)' }}>
-                    需要暴露 POST /execute 和 GET /health 端点
+                    {t('agents.exposeEndpointNote') || '需要暴露 POST /execute 和 GET /health 端点'}
                   </div>
                 </div>
               )}
@@ -926,10 +928,10 @@ export default function Agents() {
 
               {/* System Prompt */}
               <div>
-                {label('SYSTEM PROMPT（可选，覆盖 Agent 默认提示词）')}
+                {label(t('agents.systemPromptLabel') || 'SYSTEM PROMPT（可选，覆盖 Agent 默认提示词）')}
                 <textarea value={form.system_prompt}
                   onChange={e => setForm(f => ({ ...f, system_prompt: e.target.value }))}
-                  placeholder="你是 CyberGuard 的威胁情报专家，负责..."
+                  placeholder={t('agents.systemPromptPh')}
                   rows={3}
                   className="form-textarea" />
               </div>
@@ -943,7 +945,7 @@ export default function Agents() {
                       const res = await (api as any).regenAgentApiKey(editing) as { api_key?: string }
                       if (res?.api_key) setCreatedApiKey(res.api_key)
                     } catch (e: any) {
-                      alert(e?.message || '生成 Key 失败')
+                      alert(e?.message || t('agents.genKeyFail') || '生成 Key 失败')
                     }
                   } : undefined}
                 />
@@ -960,14 +962,10 @@ export default function Agents() {
                   <div style={{ fontSize: 12, color: 'var(--accent)', letterSpacing: '0.12em', fontWeight: 700 }}>
                     ◆ GATEWAY API KEY
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.7 }}>
-                    外部节点使用此 Key 通过 <code style={{ color: 'var(--text-primary)' }}>X-Api-Key</code> 请求头调用{' '}
-                    <code style={{ color: 'var(--text-primary)' }}>/gateway/manifest</code>、
-                    <code style={{ color: 'var(--text-primary)' }}>/gateway/poll</code> 等接口。
-                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.7 }} dangerouslySetInnerHTML={{ __html: t('agents.externalKeyNote') }} />
                   {createdApiKey ? (
                     <>
-                      <div style={{ fontSize: 11, color: '#f59e0b', letterSpacing: '0.08em' }}>⚠ 只显示一次，请立即保存</div>
+                      <div style={{ fontSize: 11, color: '#f59e0b', letterSpacing: '0.08em' }}>{t('agents.showOnceWarning')}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div style={{
                           flex: 1, padding: '6px 10px',
@@ -989,17 +987,17 @@ export default function Agents() {
                     </>
                   ) : (
                     <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>
-                      Key 已存在（明文不可查看）。如需更换，点下方按钮重新签发。
+                      {t('agents.keyExistsNote')}
                     </div>
                   )}
                   {editing && (
                     <button
                       onClick={async () => {
-                        if (!confirm('重新签发 API Key？旧 Key 立即失效。')) return
+                        if (!confirm(t('agents.reissueKeyShort'))) return
                         try {
                           const res = await (api as any).regenAgentApiKey(editing) as { api_key?: string }
                           if (res?.api_key) setCreatedApiKey(res.api_key)
-                        } catch (e: any) { alert(e?.message || '生成 Key 失败') }
+                        } catch (e: any) { alert(e?.message || t('agents.genKeyFail')) }
                       }}
                       style={{
                         alignSelf: 'flex-start', padding: '6px 12px',

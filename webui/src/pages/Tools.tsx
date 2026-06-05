@@ -135,7 +135,7 @@ export default function Tools() {
       input_schema_json: t.input_schema_json || '',
       timeout_seconds: t.timeout_seconds ?? 60,
       required_permission: t.required_permission || '',
-      md_content: (t as any).md_content || '',
+      md_content: t.md_content || '',
       tagsText: (t.tags || []).join(', '),
     })
     setShowForm(true)

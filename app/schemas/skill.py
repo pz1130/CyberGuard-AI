@@ -47,6 +47,7 @@ class SkillResponse(BaseModel):
     is_active: bool
     metadata_json: Optional[Dict[str, Any]]
     tags: Optional[List[str]] = None
+    md_content: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -109,6 +110,7 @@ class ToolResponse(BaseModel):
     requires_approval: bool
     is_active: bool
     metadata_json: Optional[Dict[str, Any]]
+    md_content: Optional[str] = None
     command_template: Optional[str] = None
     input_schema_json: Optional[str] = None
     timeout_seconds: int = 60

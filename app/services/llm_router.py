@@ -83,7 +83,7 @@ class LLMRouter:
             async with get_db_context() as session:
                 config = await get_master_config(session)
                 self._master_config = {
-                    "model": config.model,
+                    "model": getattr(config, "llm_model", None) or getattr(config, "model", None),
                     "temperature": config.temperature,
                     "system_prompt": config.system_prompt,
                     "intent_parser_prompt": config.intent_parser_prompt,

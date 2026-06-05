@@ -17,6 +17,7 @@ interface Skill {
   metadata_json?: Record<string, any>
   tags?: string[]
   tagsText?: string
+  md_content?: string
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -88,7 +89,7 @@ export default function Skills() {
   const openEdit = (s: Skill) => {
     setEditing(String(s.id))
     setForm({ name: s.name, category: s.category || 'tool', description: s.description || '', version: s.version || '1.0.0', permission_level: s.permission_level || 'medium', tagsText: (s.tags || []).join(', ') })
-    setMdContent((s as any).md_content || '')
+    setMdContent(s.md_content || '')
     setShowForm(true)
   }
 
@@ -160,7 +161,7 @@ export default function Skills() {
                 className="form-input"
                 value={installUrl}
                 onChange={e => setInstallUrl(e.target.value)}
-                placeholder="https://raw.githubusercontent.com/.../skill.md"
+                placeholder="https://www.skills.sh/... or https://raw.githubusercontent.com/.../SKILL.md"
                 onKeyDown={e => e.key === 'Enter' && handleInstallUrl()}
               />
             </div>
@@ -170,7 +171,7 @@ export default function Skills() {
               </div>
             )}
             <div style={{ padding: '8px 10px', background: 'var(--bg-base)', border: '1px solid var(--border)', fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6 }}>
-              Paste a raw URL to a markdown skill file. Supports YAML frontmatter for metadata (name, description, version, category). If the skill name already exists, it will be updated.
+              Paste a raw .md URL, or a skills.sh page URL (e.g. https://www.skills.sh/vercel-labs/skills/find-skills). We auto-resolve to the raw SKILL.md. Supports YAML frontmatter. If the skill name already exists, it will be updated.
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button onClick={() => { setShowInstallUrl(false); setInstallError('') }}

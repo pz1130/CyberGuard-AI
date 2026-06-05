@@ -93,6 +93,18 @@ _PRESET_PROVIDERS: list[ProviderCreate] = [
         api_key="",
         models=["glm-4-flash", "glm-4-plus", "glm-3-turbo"],
     ),
+    # Bailian (阿里云百炼) — OpenAI-compatible endpoint for Qwen / 通义千问 series.
+    # Docs: https://help.aliyun.com/zh/model-studio/compatibility-of-openai-with-dashscope
+    # Beijing: https://dashscope.aliyuncs.com/compatible-mode/v1
+    # Intl (US): https://dashscope-us.aliyuncs.com/compatible-mode/v1
+    # Get key from https://bailian.console.aliyun.com/ (DASHSCOPE_API_KEY)
+    ProviderCreate(
+        name="Bailian (阿里云百炼)",
+        provider_type="openai",
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        api_key="",
+        models=["qwen-max", "qwen-plus", "qwen-turbo", "qwen-long", "qwq-plus", "deepseek-r1"],
+    ),
     # MiniMax — use the OpenAI-compatible endpoint (/v1), NOT the Anthropic
     # endpoint (/anthropic) the MiniMax quickstart suggests: this platform speaks
     # the OpenAI wire protocol (AsyncOpenAI -> /chat/completions) for every

@@ -5,7 +5,7 @@ import subprocess
 import io
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -34,11 +34,18 @@ def _ensure_backup_dir():
     os.makedirs(BACKUP_DIR, exist_ok=True)
 
 
-async def _run_pg_dump() -> bytes:
-    """Run pg_dump and return compressed output."""
+async def _run_pg_dump(exclude_tables: list[str] = None) -> bytes:
+    """Run pg_dump and return compressed output.
+    exclude_tables: optional list of table names to exclude *data* only (using --exclude-table-data).
+    Schema is still included so that restore keeps the tables (empty).
+    """
     db_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+    cmd = ["pg_dump", "--dbname", db_url, "--format=custom", "--compress=6"]
+    if exclude_tables:
+        for table in exclude_tables:
+            cmd.extend(["--exclude-table-data", table])  # exclude data only; keep table schema so restore doesn't drop it permanently
     proc = await asyncio.create_subprocess_exec(
-        "pg_dump", "--dbname", db_url, "--format=custom", "--compress=6",
+        *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -396,7 +403,7 @@ async def _cleanup_old_backups() -> int:
         most_recent = all_backups[0]
 
         cleaned_count = 0
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
 
         for backup in all_backups[1:]:  # Skip the most recent
             if backup.status != "completed":
@@ -431,15 +438,16 @@ async def create_backup(
     session: AsyncSession = Depends(get_db_session),
 ):
     """
-    Trigger a full system backup.
-    1. Runs pg_dump on the PostgreSQL database
+    Trigger a system backup.
+    1. Runs pg_dump on the PostgreSQL database (optionally excluding chat data via --exclude-table-data)
     2. Encrypts with AES-256
     3. Saves locally (and optionally to S3/OSS)
     """
     _ensure_backup_dir()
     backup_id = str(uuid.uuid4())
-    timestamp = datetime.now(timezone.utc)
+    timestamp = datetime.utcnow()
     retention_days = body.retention_days if hasattr(body, "retention_days") and body.retention_days else 30
+    exclude_chat = getattr(body, 'exclude_chat', False)
 
     # Create DB record first with pending status
     db_record = BackupRecordModel(
@@ -455,7 +463,8 @@ async def create_backup(
 
     try:
         # 1. pg_dump
-        dump_data = await _run_pg_dump()
+        exclude_tables = ["conversations"] if exclude_chat else None
+        dump_data = await _run_pg_dump(exclude_tables=exclude_tables)
 
         # 2. Encrypt
         encrypted_data = _encrypt_dump(dump_data)
@@ -490,7 +499,7 @@ async def create_backup(
             config_id=0,
             status="completed",
             started_at=timestamp,
-            completed_at=datetime.now(timezone.utc),
+            completed_at=datetime.utcnow(),
             file_size=file_size,
         )
     except Exception as e:
@@ -503,7 +512,7 @@ async def create_backup(
             config_id=0,
             status="failed",
             started_at=timestamp,
-            completed_at=datetime.now(timezone.utc),
+            completed_at=datetime.utcnow(),
             error=str(e),
         )
 
@@ -566,7 +575,7 @@ async def restore_backup(
         raise HTTPException(status_code=404, detail="Backup not found")
 
     execution_id = str(uuid.uuid4())
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.utcnow()
 
     try:
         # 1. Get encrypted data
@@ -598,7 +607,7 @@ async def restore_backup(
             backup_id=backup_id,
             status="completed",
             started_at=started_at,
-            completed_at=datetime.now(timezone.utc),
+            completed_at=datetime.utcnow(),
         )
     except Exception as e:
         return RestoreResponse(
@@ -606,7 +615,7 @@ async def restore_backup(
             backup_id=backup_id,
             status="failed",
             started_at=started_at,
-            completed_at=datetime.now(timezone.utc),
+            completed_at=datetime.utcnow(),
             error=str(e),
         )
 

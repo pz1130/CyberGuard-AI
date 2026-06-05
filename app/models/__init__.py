@@ -21,6 +21,9 @@ from app.models.conversation import Conversation
 from app.models.security_settings import SecuritySettings
 from app.models.ocr import OcrConfig
 from app.models.episode import AgentEpisode
+from app.models.n8n import N8NConnection
+from app.models.master_config import MasterAgentConfig
+from app.models.sso import SsoConfig, SsoRoleMapping
 
 __all__ = [
     "User", "RoleModel",
@@ -43,4 +46,7 @@ __all__ = [
     "SecuritySettings",
     "OcrConfig",
     "AgentEpisode",
+    "N8NConnection",
+    "MasterAgentConfig",
+    "SsoConfig", "SsoRoleMapping",
 ]

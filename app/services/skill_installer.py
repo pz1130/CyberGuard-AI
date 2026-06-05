@@ -67,6 +67,44 @@ def _normalize_skill_data(
     }
 
 
+def _resolve_to_raw_skill_url(url: str) -> str:
+    """
+    Resolve common skill viewer / blob URLs to direct raw Markdown URLs.
+
+    Supports:
+    - https://www.skills.sh/{owner}/{repo}/{skill}  → raw .../skills/{skill}/SKILL.md
+    - GitHub blob URLs → raw.githubusercontent.com
+    """
+    from urllib.parse import urlparse, urlunparse
+
+    parsed = urlparse(url.strip())
+    host = parsed.netloc.lower()
+    path = parsed.path.strip("/")
+
+    # skills.sh viewer pages (e.g. https://www.skills.sh/vercel-labs/skills/find-skills)
+    if host in ("skills.sh", "www.skills.sh"):
+        parts = [p for p in path.split("/") if p]
+        if len(parts) >= 3:
+            owner, repo, skill = parts[0], parts[1], parts[2]
+            # Common layout in vercel-labs style repos
+            return f"https://raw.githubusercontent.com/{owner}/{repo}/main/skills/{skill}/SKILL.md"
+        # Fallback: try to treat last segment as skill and guess
+        if len(parts) >= 2:
+            owner, repo = parts[0], parts[1]
+            if len(parts) > 2:
+                skill = parts[2]
+                return f"https://raw.githubusercontent.com/{owner}/{repo}/main/skills/{skill}/SKILL.md"
+        return url
+
+    # GitHub blob view → raw
+    if "github.com" in host and "/blob/" in path:
+        raw_path = path.replace("/blob/", "/raw/", 1)
+        return urlunparse(("https", "raw.githubusercontent.com", raw_path, "", "", ""))
+
+    # Already raw or direct .md link — leave as-is
+    return url
+
+
 async def install_skill_from_url(
     url: str,
     headers: Optional[Dict[str, str]] = None,
@@ -74,18 +112,29 @@ async def install_skill_from_url(
     """
     Fetch a skill from a URL and parse its frontmatter.
 
-    Args:
-        url: Raw file URL (e.g. GitHub raw content)
-        headers: Optional HTTP headers (e.g. Authorization)
-
-    Returns:
-        Dict with success status and either skill_data or error
+    Automatically resolves skills.sh pages and GitHub blob URLs to raw .md.
     """
+    original_url = url
+    url = _resolve_to_raw_skill_url(url)
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.get(url, headers=headers or {})
             response.raise_for_status()
             content = response.text
+
+            # Guard against still getting HTML (e.g. wrong path, private repo without auth, etc.)
+            c = content.strip().lower()
+            if c.startswith("<!doctype") or c.startswith("<html") or "<html" in c[:200]:
+                hint = ""
+                if "skills.sh" in original_url.lower():
+                    hint = " (skills.sh page resolved; check that the skill name matches the repo layout)"
+                return {
+                    "success": False,
+                    "error": "Fetched content looks like an HTML web page (not raw Markdown). "
+                             "Use the raw URL (e.g. raw.githubusercontent.com or 'Raw' button on GitHub)."
+                             + hint,
+                }
     except httpx.TimeoutException:
         return {"success": False, "error": "Request timed out"}
     except httpx.HTTPStatusError as e:

@@ -51,6 +51,7 @@ export default function Backup() {
   const [creating, setCreating] = useState(false)
   const [restoring, setRestoring] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [excludeChat, setExcludeChat] = useState(false)
 
   const load = async () => {
     try {
@@ -67,6 +68,7 @@ export default function Backup() {
       await api.createBackup({
         name: `backup-${Date.now()}`,
         backup_type: 'full',
+        exclude_chat: excludeChat,
       })
       await load()
     } catch (e: any) { alert(e.message) } finally { setCreating(false) }
@@ -107,7 +109,7 @@ export default function Backup() {
         eyebrow="DATA RESILIENCE"
         title={t('backup.title').toUpperCase()}
         actions={
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
               onClick={exportConfig}
               className="btn btn-secondary"
@@ -115,6 +117,15 @@ export default function Backup() {
             >
               <Download size={11} /> EXPORT CONFIG
             </button>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={excludeChat}
+                onChange={e => setExcludeChat(e.target.checked)}
+                style={{ accentColor: 'var(--accent)' }}
+              />
+              Exclude chat records
+            </label>
             <button
               onClick={create}
               disabled={creating}
@@ -134,7 +145,7 @@ export default function Backup() {
         background: 'var(--accent-dim)', border: '1px solid var(--accent-border)', borderRadius: 'var(--radius-md)',
         fontSize: 12, color: 'var(--accent)', letterSpacing: '0.05em', lineHeight: 1.8,
       }}>
-        PG_DUMP + AES-256 ENCRYPTION · S3/OSS UPLOAD OPTIONAL · CONFIGURE S3_ENDPOINT AND S3_ACCESS_KEY TO ENABLE REMOTE BACKUP
+        FULL DB BACKUP (PG_DUMP + AES-256) OR "EXPORT CONFIG" (JSON: providers, users, agents, skills, tools, prompts, kbs, schedules, webhooks, MCP, N8N, env, security, master config, governance etc. - no chat/audit/executions) · CHECK "Exclude chat records" FOR DB BACKUP WITHOUT HISTORY · S3 OPTIONAL
       </div>
 
       {/* Loading */}
