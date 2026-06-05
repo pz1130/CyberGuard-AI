@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ShieldCheck, Check, X, RefreshCw, Loader2, ChevronDown, ChevronRight } from 'lucide-react'
+import { Check, X, RefreshCw, Loader2, ChevronDown, ChevronRight } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import { api } from '../api/client'
 
