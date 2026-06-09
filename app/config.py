@@ -71,6 +71,13 @@ class Settings(BaseSettings):
     # Auto-approve approval requests without human intervention
     AUTO_APPROVE: bool = True
 
+    # Kill switch file trigger (NDB Std §Kill Switch)
+    KILL_SWITCH_FILE: str = "var/governance/kill_switch"
+
+    # PII filter settings (NDB Std §Data Lineage & PII / A5)
+    PII_FILTER_ENABLED: bool = True
+    PII_HANDLING_POLICY: str = "redact"
+
     @model_validator(mode="after")
     def validate_security_keys(self) -> "Settings":
         """Ensure security keys are properly configured."""

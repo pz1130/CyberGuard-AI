@@ -107,8 +107,27 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Internal agent seed skipped: {e}")
 
+    # Kill switch file poller (NDB Std §Kill Switch — file trigger)
+    import os as _os
+    import asyncio as _aio
+    from app.services import kill_switch as _ks
+
+    async def _killswitch_file_poller():
+        while True:
+            try:
+                if _os.path.exists(settings.KILL_SWITCH_FILE):
+                    if not await _ks.is_halted():
+                        await _ks.engage("global", by="file-trigger",
+                                         reason=settings.KILL_SWITCH_FILE)
+            except Exception:
+                pass
+            await _aio.sleep(1)
+
+    _ks_task = _aio.create_task(_killswitch_file_poller())
+
     yield
     # Shutdown
+    _ks_task.cancel()
     try:
         from app.core.langfuse_tracing import flush_langfuse
         flush_langfuse()
@@ -220,7 +239,7 @@ async def startup_probe():
 # ---------------------------------------------------------------------------
 # Routers (imported here to avoid circular imports)
 # ---------------------------------------------------------------------------
-from app.routers import auth, users, agents, skills, knowledge, chat, tasks, groupchat, schedule, audit, backup, config, providers, mcp, envvars, approval, token_usage, master_config, conversations, n8n, webhooks, prompt_templates, governance, security
+from app.routers import auth, users, agents, skills, knowledge, chat, tasks, groupchat, schedule, audit, backup, config, providers, mcp, envvars, approval, token_usage, master_config, conversations, n8n, webhooks, prompt_templates, governance, security, kill_switch
 from app.routers import chat_stream, gateway, sso
 
 app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
@@ -233,6 +252,7 @@ app.include_router(chat_stream.router, prefix="/api/v1", tags=["Chat"])
 app.include_router(tasks.router, prefix="/api/v1", tags=["Tasks"])
 app.include_router(schedule.router, prefix="/api/v1", tags=["Scheduled Tasks"])
 app.include_router(audit.router, prefix="/api/v1", tags=["Audit"])
+app.include_router(kill_switch.router, prefix="/api/v1", tags=["Kill Switch"])
 app.include_router(backup.router, prefix="/api/v1", tags=["Backup"])
 app.include_router(config.router, prefix="/api/v1", tags=["Configuration"])
 app.include_router(providers.router, prefix="/api/v1", tags=["AI Providers"])

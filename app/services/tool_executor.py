@@ -100,6 +100,16 @@ async def execute_tool(tool, args: Dict[str, Any], user_id: int, *,
                        governance: "GovernanceContext | None" = None,
                        confidence: Optional[float] = None) -> Dict[str, Any]:
     """Validate args, gate on RBAC/approval, run in the tool-runner. JSON-safe result."""
+    # Kill switch — hardest gate, checked before anything else (NDB Std §Kill Switch).
+    from app.services.kill_switch import is_halted
+    if await is_halted(agent_id=getattr(tool, "agent_id", None)):
+        from app.core.audit import record_action
+        await record_action(user_id=user_id, agent_name=getattr(tool, "name", None),
+                            action="EMERGENCY_HALT", action_category=getattr(tool, "action_category", None),
+                            input_data={"tool": getattr(tool, "name", None), "args": args},
+                            output_data={"blocked": True})
+        return {"status": "halted", "error": "kill switch engaged"}
+
     # RBAC: only enforced when caller_permissions is provided (API path). The
     # internal-agent path passes None — assignment to the agent is the authorization.
     req = getattr(tool, "required_permission", None)
