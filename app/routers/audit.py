@@ -93,3 +93,14 @@ async def audit_verify(
 ):
     ok, broken_at = await verify_chain()
     return {"intact": ok, "first_broken_row_id": broken_at}
+
+
+from app.services.audit_worm import export_new
+
+
+@router.post("/audit/worm-export")
+async def audit_worm_export(
+    retain_days: int = 365,
+    _=Depends(require_permission(Permission.AUDIT_READ)),
+):
+    return await export_new(retain_days=retain_days)

@@ -317,6 +317,25 @@ class MasterAgent:
             agent_id = task.get("agent_id")  # explicit ID override
             agent_name = task.get("agent_name")  # explicit name override
 
+            # Kill switch — do not dispatch new work while halted (NDB Std §Kill Switch).
+            from app.services.kill_switch import is_halted
+            if await is_halted(agent_id=agent_id):
+                from app.core.audit import record_action
+                await record_action(
+                    user_id=user_id, agent_id=agent_id, agent_name=agent_name or agent_type,
+                    action="dispatch:halted", action_category="annotate",
+                    input_data={"task": task_desc[:500]}, output_data={"halted": True})
+                return str(agent_id or agent_type), {"status": "halted",
+                                                     "error": "kill switch engaged — dispatch refused"}
+
+            # Audit the dispatch decision (NDB Std §Audit Trail).
+            from app.core.audit import record_action
+            await record_action(
+                user_id=user_id, agent_id=agent_id, agent_name=agent_name or agent_type,
+                action="dispatch", action_category="annotate",
+                input_data={"task": task_desc[:500], "agent_type": agent_type},
+                output_data={"dispatched": True})
+
             # Try remote if registered AND has endpoint URL
             if agent_id:
                 result = await self.executor.execute(
