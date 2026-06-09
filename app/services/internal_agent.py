@@ -150,7 +150,14 @@ class InternalAgentRunner:
             else TOOL_CALL_BUDGET_DEFAULT
         )
         _gov = meta.get("governance") or {}
-        self._governance_cfg = _gov
+        # Prefer first-class governance columns (Plan 2); fall back to metadata_json.
+        self._governance_cfg = {
+            "autonomy_tier": config.get("autonomy_tier") or _gov.get("autonomy_tier", "L2"),
+            "allowed_categories": config.get("allowed_categories") or _gov.get("allowed_categories"),
+            "escalate_to_human_below": config.get("escalate_to_human_below") or _gov.get("escalate_to_human_below", 0.60),
+            "is_poc": config.get("is_poc") if config.get("is_poc") is not None else _gov.get("is_poc", True),
+            "agent_name": config.get("agent_name"),
+        }
         self._pii_policy: Optional[str] = config.get("pii_handling_policy")
 
     # -------- Memory --------

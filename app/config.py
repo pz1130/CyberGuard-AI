@@ -68,7 +68,8 @@ class Settings(BaseSettings):
     GROUPCHAT_CONSENSUS_LOW: float = 0.65       # min cosine < LOW  => no consensus
     GROUPCHAT_JACCARD_THRESHOLD: float = 0.7    # lexical fallback threshold
 
-    # Auto-approve approval requests without human intervention
+    # Auto-approve approval requests without human intervention.
+    # NDB Std §B5: security actions must never auto-approve. Default off outside dev.
     AUTO_APPROVE: bool = True
 
     # Kill switch file trigger (NDB Std §Kill Switch)
@@ -99,6 +100,14 @@ class Settings(BaseSettings):
             )
         if errors:
             raise ValueError("\n".join(errors))
+        # NDB Std §B5: never auto-approve security actions outside development.
+        if self.ENVIRONMENT != "development" and self.AUTO_APPROVE:
+            import warnings
+            warnings.warn(
+                "AUTO_APPROVE is enabled in non-development environment. "
+                "NDB Standard requires human approval for security actions.",
+                stacklevel=2,
+            )
         return self
 
     @property
