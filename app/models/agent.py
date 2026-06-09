@@ -1,6 +1,6 @@
 """Agent configuration database models."""
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, JSON, Float
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -24,6 +24,16 @@ class AgentConfig(Base):
     associated_tools = Column(JSON, nullable=True)       # List of Tool IDs
     associated_mcp_tools = Column(JSON, nullable=True)   # List of MCPTool IDs
     metadata_json = Column(JSON, nullable=True)
+    # --- Declarative governance (NDB Std §Mandatory Governance Taxonomy / B1) ---
+    autonomy_tier = Column(String(8), nullable=False, server_default="L2", default="L2")
+    l3_authorization_ref = Column(String(255), nullable=True)
+    allowed_categories = Column(JSON, nullable=True)
+    auto_execute_min_confidence = Column(Float, nullable=False, server_default="0.85", default=0.85)
+    escalate_to_human_below = Column(Float, nullable=False, server_default="0.60", default=0.60)
+    pii_handling_policy = Column(String(20), nullable=False, server_default="redact", default="redact")
+    kill_switch_enabled = Column(Boolean, nullable=False, server_default="true", default=True)
+    is_poc = Column(Boolean, nullable=False, server_default="true", default=True)
+    requires_approval_rules = Column(JSON, nullable=True)
     # Kind discriminator: 'external' (HTTP / OpenClaw) or 'internal' (in-app)
     kind = Column(String(20), nullable=False, default="external", index=True)
     # Internal-agent only fields (nullable for external rows)

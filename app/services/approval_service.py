@@ -46,6 +46,8 @@ class ApprovalService:
             expires_at = datetime.utcnow() + timedelta(minutes=expires_in_minutes)
 
         async with AsyncSessionLocal() as session:
+            from app.services.governance_config import approver_for_risk
+            routing = approver_for_risk(risk_level)
             record = ApprovalRequest(
                 request_id=request_id,
                 user_id=user_id,
@@ -55,6 +57,8 @@ class ApprovalService:
                 action_description=action_description,
                 payload=payload or {},
                 risk_level=risk_level,
+                required_approver_role=routing["min_role"],
+                required_approver_label=routing["label"],
                 urgency=urgency,
                 status="pending",
                 expires_at=expires_at,

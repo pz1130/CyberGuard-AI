@@ -90,7 +90,7 @@ async def _create_approval(tool, args: Dict[str, Any], user_id: int) -> None:
         action_type="tool.execute",
         action_description=f"Execute tool {getattr(tool, 'name', '?')}",
         payload={"tool": getattr(tool, "name", None), "args": args},
-        risk_level="high",
+        risk_level=getattr(tool, "risk_tier", None) or "high",
     )
 
 

@@ -239,7 +239,7 @@ async def startup_probe():
 # ---------------------------------------------------------------------------
 # Routers (imported here to avoid circular imports)
 # ---------------------------------------------------------------------------
-from app.routers import auth, users, agents, skills, knowledge, chat, tasks, groupchat, schedule, audit, backup, config, providers, mcp, envvars, approval, token_usage, master_config, conversations, n8n, webhooks, prompt_templates, governance, security, kill_switch
+from app.routers import auth, users, agents, skills, knowledge, chat, tasks, groupchat, schedule, audit, backup, config, providers, mcp, envvars, approval, token_usage, master_config, conversations, n8n, webhooks, prompt_templates, governance, security, kill_switch, governance_config
 from app.routers import chat_stream, gateway, sso
 
 app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
@@ -253,6 +253,7 @@ app.include_router(tasks.router, prefix="/api/v1", tags=["Tasks"])
 app.include_router(schedule.router, prefix="/api/v1", tags=["Scheduled Tasks"])
 app.include_router(audit.router, prefix="/api/v1", tags=["Audit"])
 app.include_router(kill_switch.router, prefix="/api/v1", tags=["Kill Switch"])
+app.include_router(governance_config.router, prefix="/api/v1", tags=["Agent Governance Config"])
 app.include_router(backup.router, prefix="/api/v1", tags=["Backup"])
 app.include_router(config.router, prefix="/api/v1", tags=["Configuration"])
 app.include_router(providers.router, prefix="/api/v1", tags=["AI Providers"])
