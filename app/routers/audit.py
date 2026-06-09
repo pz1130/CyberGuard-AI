@@ -82,3 +82,14 @@ async def export_audit_logs(
         "logs": [AuditLogRead.model_validate(l).model_dump() for l in logs],
         "filename": f"audit_export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json",
     }
+
+
+from app.core.audit import verify_chain
+
+
+@router.get("/audit/verify")
+async def audit_verify(
+    _=Depends(require_permission(Permission.AUDIT_READ)),
+):
+    ok, broken_at = await verify_chain()
+    return {"intact": ok, "first_broken_row_id": broken_at}
