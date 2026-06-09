@@ -149,6 +149,8 @@ class InternalAgentRunner:
             TOOL_CALL_BUDGET_LIMITED if self.permission_level == "low"
             else TOOL_CALL_BUDGET_DEFAULT
         )
+        _gov = meta.get("governance") or {}
+        self._governance_cfg = _gov
 
     # -------- Memory --------
 
@@ -402,7 +404,18 @@ class InternalAgentRunner:
         # 4. Executable pool Tool
         if getattr(self, "_pool_tools_by_name", None) and name in self._pool_tools_by_name:
             tool_row = self._pool_tools_by_name[name]
-            res = await execute_tool(tool_row, args, user_id=getattr(self, "_user_id", 0))
+            from app.services.gatekeeper import GovernanceContext
+            _gc = self._governance_cfg
+            governance = GovernanceContext(
+                autonomy_tier=_gc.get("autonomy_tier", "L2"),
+                allowed_categories=_gc.get("allowed_categories",
+                    ["observe", "annotate", "notify", "contain_soft"]),
+                escalate_below=float(_gc.get("escalate_to_human_below", 0.60)),
+                is_poc=_gc.get("is_poc", True),
+                halted=False,
+            )
+            res = await execute_tool(tool_row, args, user_id=getattr(self, "_user_id", 0),
+                                     governance=governance, confidence=None)
             if res.get("status") == "completed":
                 return res.get("stdout", "") or "(no output)"
             if res.get("status") == "needs_approval":

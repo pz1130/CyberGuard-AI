@@ -49,6 +49,8 @@ class MCPTool(Base):
     # P2-2: Per-tool RBAC permission requirement (e.g. "knowledge:write", "admin:all")
     # Empty/null = any authenticated user with TASK_EXECUTE may execute it.
     required_permission = Column(String(100), nullable=True, index=True)
+    action_category = Column(String(20), nullable=True)
+    risk_tier = Column(String(20), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     last_used_at = Column(DateTime, nullable=True)
     use_count = Column(Integer, default=0)

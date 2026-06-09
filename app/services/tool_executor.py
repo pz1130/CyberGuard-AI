@@ -96,13 +96,37 @@ async def _create_approval(tool, args: Dict[str, Any], user_id: int) -> None:
 
 async def execute_tool(tool, args: Dict[str, Any], user_id: int, *,
                        approved: bool = False,
-                       caller_permissions: Optional[set] = None) -> Dict[str, Any]:
+                       caller_permissions: Optional[set] = None,
+                       governance: "GovernanceContext | None" = None,
+                       confidence: Optional[float] = None) -> Dict[str, Any]:
     """Validate args, gate on RBAC/approval, run in the tool-runner. JSON-safe result."""
     # RBAC: only enforced when caller_permissions is provided (API path). The
     # internal-agent path passes None — assignment to the agent is the authorization.
     req = getattr(tool, "required_permission", None)
     if req and caller_permissions is not None and req not in caller_permissions:
         return {"status": "error", "error": f"missing required permission: {req}"}
+
+    # --- Governance gatekeeper (NDB Std §Action Gatekeeper) ---
+    if governance is not None:
+        from app.services.gatekeeper import gatekeeper_check, Decision
+        from app.core.audit import record_action
+        tool_meta = {"action_category": getattr(tool, "action_category", None),
+                     "risk_tier": getattr(tool, "risk_tier", None),
+                     "has_rollback": bool(getattr(tool, "rollback_command_template", None))}
+        verdict = gatekeeper_check(tool_meta, governance, confidence=confidence)
+        await record_action(
+            user_id=user_id, agent_name=getattr(tool, "name", None),
+            action=f"gatekeeper:{verdict.decision.value}",
+            action_category=verdict.category, risk_tier=verdict.risk_tier,
+            confidence=confidence, rollback_possible=None,
+            input_data={"tool": getattr(tool, "name", None), "args": args},
+            output_data={"decision": verdict.decision.value, "reason": verdict.reason},
+        )
+        if verdict.decision is Decision.DENY:
+            return {"status": "denied", "error": verdict.reason}
+        if verdict.decision is Decision.NEEDS_APPROVAL and not approved:
+            await _create_approval(tool, args, user_id)
+            return {"status": "needs_approval", "error": verdict.reason}
 
     # Approval gate for high-permission tools.
     if getattr(tool, "permission_level", "medium") == "high" and not approved:
