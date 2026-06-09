@@ -45,6 +45,9 @@ class Tool(Base):
     permission_level = Column(String(20), default="medium")
     action_category = Column(String(20), nullable=True)   # observe|annotate|notify|contain_soft|contain_hard|remediate|mutate
     risk_tier = Column(String(20), nullable=True)         # critical|high|medium|low
+    validation_command_template = Column(Text, nullable=True)
+    verification_command_template = Column(Text, nullable=True)
+    rollback_command_template = Column(Text, nullable=True)
     requires_approval = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True, nullable=False)
     metadata_json = Column(JSON, nullable=True)

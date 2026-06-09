@@ -154,6 +154,15 @@ async def execute_tool(tool, args: Dict[str, Any], user_id: int, *,
         return {"status": "error", "error": str(e)}
 
     timeout = int(getattr(tool, "timeout_seconds", 60) or 60)
+
+    from app.services.safety_envelope import requires_envelope
+    _envelope = requires_envelope(getattr(tool, "action_category", None))
+    if _envelope and getattr(tool, "validation_command_template", None):
+        from app.services.safety_envelope import run_command
+        pre = await run_command(tool.validation_command_template, tool, args)
+        if pre.get("exit_code") != 0:
+            return {"status": "error", "error": f"pre-action validation failed: {pre.get('stderr')}"}
+
     try:
         async with httpx.AsyncClient(timeout=timeout + 10) as client:
             r = await client.post(
@@ -167,7 +176,7 @@ async def execute_tool(tool, args: Dict[str, Any], user_id: int, *,
     if r.status_code != 200:
         return {"status": "error", "error": f"tool-runner {r.status_code}: {r.text[:200]}"}
     data = r.json()
-    return {
+    result = {
         "status": "completed",
         "stdout": _truncate(data.get("stdout", "")),
         "stderr": _truncate(data.get("stderr", "")),
@@ -175,3 +184,9 @@ async def execute_tool(tool, args: Dict[str, Any], user_id: int, *,
         "duration_ms": data.get("duration_ms"),
         "timed_out": data.get("timed_out", False),
     }
+    if _envelope and getattr(tool, "rollback_command_template", None):
+        action_id = str(uuid.uuid4())
+        from app.services.safety_envelope import register_rollback
+        await register_rollback(action_id, tool, args, ttl_seconds=3600)
+        result["action_id"] = action_id
+    return result
