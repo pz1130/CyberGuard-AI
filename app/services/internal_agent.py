@@ -151,6 +151,7 @@ class InternalAgentRunner:
         )
         _gov = meta.get("governance") or {}
         self._governance_cfg = _gov
+        self._pii_policy: Optional[str] = config.get("pii_handling_policy")
 
     # -------- Memory --------
 
@@ -527,6 +528,7 @@ class InternalAgentRunner:
                 provider_id=self.llm_provider_id,
                 model=self.llm_model,
                 tools=None,
+                pii_policy=self._pii_policy,
             )
             if not isinstance(summary, str):
                 summary = getattr(summary, "content", None) or ""
@@ -593,6 +595,7 @@ class InternalAgentRunner:
                         provider_id=self.llm_provider_id,
                         model=self.llm_model,
                         tools=tools if tools else None,
+                        pii_policy=self._pii_policy,
                     )
                     break
                 except Exception as e:
@@ -835,6 +838,7 @@ class InternalAgentRunner:
                             messages=messages,
                             provider_id=self.llm_provider_id,
                             model=self.llm_model,
+                            pii_policy=self._pii_policy,
                         ):
                             parts.append(delta)
                             yield {"type": "text", "content": delta}

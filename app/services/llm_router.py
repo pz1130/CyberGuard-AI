@@ -230,6 +230,43 @@ class LLMRouter:
         )
         return text.strip()
 
+    def _guard_messages(self, messages, pii_policy=None):
+        """Redact PII + block secrets across all message contents (A5).
+
+        Returns a NEW message list (originals untouched). Best-effort proof
+        record; raises SecretsDetectedError/PIIBlockedError to abort the call.
+        """
+        from app.config import settings
+        if not settings.PII_FILTER_ENABLED or not messages:
+            return messages
+        from app.core.pii import apply_policy
+        policy = pii_policy or settings.PII_HANDLING_POLICY
+        cleaned, total = [], 0
+        for m in messages:
+            content = m.get("content")
+            if isinstance(content, str) and content:
+                new_content, findings = apply_policy(content, policy=policy)
+                total += len(findings)
+                cleaned.append({**m, "content": new_content})
+            else:
+                cleaned.append(m)
+        if total:
+            self._emit_pii_proof(total, policy)
+        return cleaned
+
+    def _emit_pii_proof(self, count, policy):
+        """POC proof: log redaction COUNT only — never the values."""
+        try:
+            import asyncio
+            from app.core.audit import record_action
+            asyncio.get_event_loop().create_task(record_action(
+                user_id=None, action="pii_redaction", action_category="annotate",
+                input_data={"policy": policy, "redactions": count},
+                output_data={"redactions": count}))
+        except Exception:
+            import logging
+            logging.getLogger("pii").info("pii_redaction policy=%s count=%d", policy, count)
+
     @staticmethod
     def _extract_json_object(text: str) -> Optional[Dict[str, Any]]:
         """
@@ -596,12 +633,13 @@ Examples:
         }) as span:
             try:
                 await rate_limit(provider_id, await self._provider_rpm(provider_id))
+                _pi_messages = self._guard_messages([
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_input},
+                ])
                 response = await acall_with_retry(lambda: client.chat.completions.create(
                     model=active_model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_input},
-                    ],
+                    messages=_pi_messages,
                     temperature=temperature_override if temperature_override is not None else (master_config.get("temperature") or settings.MASTER_AGENT_TEMPERATURE),
                     response_format={"type": "json_object"},
                 ), label="parse_intent")
@@ -683,12 +721,13 @@ Examples:
             )
 
             await rate_limit(provider_id, await self._provider_rpm(provider_id))
+            _gs_messages = self._guard_messages([
+                {"role": "system", "content": summarizer_prompt},
+                {"role": "user", "content": f"Results:\n{results_text}"},
+            ])
             response = await acall_with_retry(lambda: client.chat.completions.create(
                 model=active_model,
-                messages=[
-                    {"role": "system", "content": summarizer_prompt},
-                    {"role": "user", "content": f"Results:\n{results_text}"},
-                ],
+                messages=_gs_messages,
                 temperature=temperature_override if temperature_override is not None else (master_config.get("temperature") or 0.3),
             ), label="generate_summary")
             raw_content = response.choices[0].message.content or ""
@@ -716,6 +755,7 @@ Examples:
         model_override: Optional[str] = None,
         temperature_override: Optional[float] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
+        pii_policy: Optional[str] = None,
     ):
         """General chat completion.
 
@@ -757,6 +797,7 @@ Examples:
                 "llm.has_tools": bool(tools),
             },
         ) as span:
+            messages = self._guard_messages(messages, pii_policy)
             kwargs = {
                 "model": active_model,
                 "messages": messages,
@@ -792,6 +833,7 @@ Examples:
         provider_id: Optional[int] = None,
         model_override: Optional[str] = None,
         temperature_override: Optional[float] = None,
+        pii_policy: Optional[str] = None,
     ):
         """Stream chat completion tokens as an async generator.
 
@@ -800,6 +842,7 @@ Examples:
             async for chunk in router.stream_chat(messages, provider_id=1):
                 yield f"data: {chunk}\\n\\n"
         """
+        messages = self._guard_messages(messages, pii_policy)
         active_model = model_override or model
         if not active_model and provider_id:
             config = await self.get_provider_config_async(provider_id)

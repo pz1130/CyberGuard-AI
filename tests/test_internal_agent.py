@@ -456,7 +456,7 @@ async def test_tool_call_budget_caps_dispatch_and_forces_answer(monkeypatch):
     n = {"i": 0}
     # A model that keeps requesting (distinct, so the loop guard never trips)
     # tools while tools are offered, and only answers once tools are withdrawn.
-    async def fake_chat(*, messages, provider_id, model, tools):
+    async def fake_chat(*, messages, provider_id, model, tools, **kwargs):
         if not tools:
             return SimpleNamespace(content="final after budget", tool_calls=None)
         n["i"] += 1
