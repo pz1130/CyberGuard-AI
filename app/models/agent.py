@@ -34,6 +34,7 @@ class AgentConfig(Base):
     kill_switch_enabled = Column(Boolean, nullable=False, server_default="true", default=True)
     is_poc = Column(Boolean, nullable=False, server_default="true", default=True)
     requires_approval_rules = Column(JSON, nullable=True)
+    governed = Column(Boolean, nullable=False, server_default="false", default=False)
     # Kind discriminator: 'external' (HTTP / OpenClaw) or 'internal' (in-app)
     kind = Column(String(20), nullable=False, default="external", index=True)
     # Internal-agent only fields (nullable for external rows)

@@ -79,6 +79,10 @@ class Settings(BaseSettings):
     PII_FILTER_ENABLED: bool = True
     PII_HANDLING_POLICY: str = "redact"
 
+    # Egress allowlist (defense-in-depth over SSRF block-list)
+    EGRESS_ALLOWLIST_ENABLED: bool = False
+    EGRESS_ALLOWLIST: str = ""
+
     @model_validator(mode="after")
     def validate_security_keys(self) -> "Settings":
         """Ensure security keys are properly configured."""

@@ -43,7 +43,7 @@ def _resolve_api_key(config: Dict[str, Any]) -> str:
     # 3. metadata_json.api_key (plain)
     return meta.get("api_key", "")
 
-from app.core.ssrf import validate_outbound_url as _validate_endpoint_url
+from app.core.egress import enforce_egress as _validate_endpoint_url
 
 
 class SubAgentWrapper:

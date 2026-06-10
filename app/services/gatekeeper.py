@@ -31,6 +31,7 @@ class GovernanceContext:
     escalate_below: float = 0.60
     is_poc: bool = True
     halted: bool = False
+    external_unwrapped: bool = False
 
 
 @dataclass
@@ -55,6 +56,9 @@ def gatekeeper_check(tool_meta: dict, gov: GovernanceContext, *, confidence: flo
 
     if gov.halted:
         return R(Decision.DENY, "kill switch / halt engaged")
+    SAFE_FOR_UNWRAPPED = {"observe", "annotate", "notify"}
+    if gov.external_unwrapped and cat not in SAFE_FOR_UNWRAPPED:
+        return R(Decision.DENY, f"external agent is not wrapped; '{cat}' requires a governed (brokered) agent")
     if gov.is_poc and cat in FORBIDDEN_IN_POC:
         return R(Decision.DENY, f"category '{cat}' is forbidden in a POC")
     if cat not in ALWAYS_ALLOWED and cat not in gov.allowed_categories:

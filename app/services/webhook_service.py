@@ -30,10 +30,11 @@ from app.schemas.webhook import SUPPORTED_EVENTS
 logger = logging.getLogger(__name__)
 
 def _validate_url(url: str) -> None:
-    from app.core.ssrf import validate_outbound_url, SSRFError
+    from app.core.egress import enforce_egress, EgressBlocked
+    from app.core.ssrf import SSRFError
     try:
-        validate_outbound_url(url)
-    except SSRFError as e:
+        enforce_egress(url)
+    except (SSRFError, EgressBlocked) as e:
         raise ValueError(str(e))
 
 
