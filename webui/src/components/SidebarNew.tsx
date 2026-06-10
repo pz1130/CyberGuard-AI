@@ -9,7 +9,7 @@
 import {
   MessageSquare, Cpu, Plug, Wrench, Terminal, BookOpen, Users,
   Clock, Settings, Shield, Coins, Database, FileText, UserCog,
-  GitBranch, Webhook, ScrollText, ClipboardCheck, ShieldCheck,
+  GitBranch, Webhook, ScrollText, ClipboardCheck, ShieldCheck, ShieldAlert,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 

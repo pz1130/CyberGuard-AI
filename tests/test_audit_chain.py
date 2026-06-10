@@ -4,26 +4,36 @@ from app.core import audit
 
 
 @pytest.fixture(autouse=True)
-async def _clean_chain():
+async def uid():
+    """Clean the hash chain and get-or-create a real user for the FK."""
     from app.core.database import get_db_context
     from app.models.audit import AuditLog
-    from sqlalchemy import delete
+    from app.models.user import User
+    from sqlalchemy import delete, select
     async with get_db_context() as s:
         await s.execute(delete(AuditLog).where(AuditLog.entry_hash.is_not(None)))
+        user = (await s.execute(select(User).where(
+            User.username == "audit-chain-test"))).scalar_one_or_none()
+        if user is None:
+            user = User(username="audit-chain-test",
+                        email="audit-chain-test@example.com", role="admin")
+            s.add(user)
         await s.commit()
-    yield
+        await s.refresh(user)
+        user_id = user.id
+    yield user_id
 
 
 @pytest.mark.asyncio
-async def test_record_action_chains_and_verifies():
+async def test_record_action_chains_and_verifies(uid):
     a = await audit.record_action(
-        user_id=1, agent_name="threat_intel", action="isolate_host",
+        user_id=uid, agent_name="threat_intel", action="isolate_host",
         action_category="contain_hard", risk_tier="high", confidence=0.91,
         human_reviewer="alice@ndb", rollback_possible=True,
         input_data={"host": "h1"}, output_data={"ok": True},
     )
     b = await audit.record_action(
-        user_id=1, agent_name="threat_intel", action="block_ip",
+        user_id=uid, agent_name="threat_intel", action="block_ip",
         action_category="contain_hard", risk_tier="high", confidence=0.88,
         human_reviewer=None, rollback_possible=True,
         input_data={"ip": "1.2.3.4"}, output_data={"ok": True},
@@ -36,13 +46,13 @@ async def test_record_action_chains_and_verifies():
 
 
 @pytest.mark.asyncio
-async def test_tampering_breaks_verification():
+async def test_tampering_breaks_verification(uid):
     from app.core.database import get_db_context
     from app.models.audit import AuditLog
     from sqlalchemy import select
-    await audit.record_action(user_id=1, action="a", action_category="observe",
+    await audit.record_action(user_id=uid, action="a", action_category="observe",
                               input_data={"x": 1}, output_data={"y": 1})
-    row = await audit.record_action(user_id=1, action="b", action_category="observe",
+    row = await audit.record_action(user_id=uid, action="b", action_category="observe",
                                     input_data={"x": 2}, output_data={"y": 2})
     async with get_db_context() as s:
         rec = (await s.execute(select(AuditLog).where(
