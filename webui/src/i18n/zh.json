@@ -50,6 +50,7 @@
     "webhooks": "Webhook",
     "prompts": "Prompt 模板",
     "governance": "治理合规",
+    "govDashboard": "智能体治理",
     "search": "搜索",
     "empty": "无匹配",
     "quickJump": "快速跳转"
@@ -484,5 +485,19 @@
     "aboutVersion": "Version 1.0.0",
     "aboutPlatform": "Enterprise Security Operations Platform",
     "aboutDesc": "Multi-agent orchestration with LangGraph · MCP tool protocol · Real-time group chat · Knowledge base RAG · Full audit trail"
+  },
+  "govDash": {
+    "subtitle": "运行时治理：指标、紧急停止、回滚、审计完整性",
+    "pocMetrics": "POC 验收指标", "allPass": "全部达标", "someFail": "需关注",
+    "target": "目标", "runningState": "智能体运行中", "haltedState": "紧急停止已启用",
+    "emergencyStop": "紧急停止", "resume": "恢复", "haltReason": "停止原因：",
+    "auditIntegrity": "审计链完整性", "chainIntact": "链完整", "chainBroken": "链已损坏",
+    "pendingApprovals": "待审批", "activeRollbacks": "活动回滚", "noRollbacks": "无活动回滚",
+    "tool": "工具", "expires": "过期时间", "revert": "回滚", "confirmRollback": "立即触发此回滚？",
+    "metric": {
+      "governance_violation_rate": "治理违规率", "human_override_rate": "人工否决率",
+      "kill_switch_response_seconds": "紧急停止响应", "audit_completeness": "审计完整性",
+      "rollback_success_rate": "回滚成功率"
+    }
   }
 }

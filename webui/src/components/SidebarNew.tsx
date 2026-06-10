@@ -17,7 +17,7 @@ export type Tab =
   | 'chat' | 'agents' | 'providers' | 'skills' | 'tools'
   | 'knowledge' | 'groupchat' | 'schedule' | 'mcp' | 'envvars'
   | 'security' | 'token' | 'backup' | 'audit' | 'approvals'
-  | 'users' | 'settings' | 'n8n' | 'webhooks' | 'prompts' | 'governance'
+  | 'users' | 'settings' | 'n8n' | 'webhooks' | 'prompts' | 'governance' | 'govDashboard'
 
 type NavItem = {
   key: Tab
@@ -73,6 +73,7 @@ const NAV_GROUPS: NavGroup[] = [
       { key: 'backup', labelKey: 'nav.backup', icon: <Database size={16} /> },
       { key: 'audit', labelKey: 'nav.audit', icon: <FileText size={16} /> },
       { key: 'approvals', labelKey: 'nav.approvals', icon: <ShieldCheck size={16} /> },
+      { key: 'govDashboard', labelKey: 'nav.govDashboard', icon: <ShieldAlert size={16} /> },
       { key: 'users', labelKey: 'nav.users', icon: <UserCog size={16} /> },
       { key: 'settings', labelKey: 'nav.settings', icon: <Settings size={16} /> },
     ],

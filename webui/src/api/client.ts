@@ -444,6 +444,18 @@ export const api = {
   aiGenerateReport: (assessmentId: number) =>
     request(`/governance/assessments/${assessmentId}/ai-report`, { method: 'POST' }),
 
+  // ---- Agent Governance Operations ----
+  getGovernanceMetrics: (windowDays = 30) =>
+    request(`/governance/metrics?window_days=${windowDays}`),
+  getHaltStatus: () => request('/agents/halt/status'),
+  haltAll: (reason: string) =>
+    request('/agents/halt', { method: 'POST', body: JSON.stringify({ reason }) }),
+  resumeAll: () => request('/agents/halt', { method: 'DELETE' }),
+  getRollbacks: () => request('/governance/rollback'),
+  triggerRollback: (actionId: string) =>
+    request(`/governance/rollback/${actionId}`, { method: 'POST' }),
+  verifyAudit: () => request('/audit/verify'),
+
   // ---- Prompt Templates ----
   getPromptTemplates: (category?: string) =>
     request(category ? `/prompt-templates?category=${encodeURIComponent(category)}` : '/prompt-templates'),

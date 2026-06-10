@@ -50,6 +50,7 @@
     "webhooks": "Webhooks",
     "prompts": "Prompt Templates",
     "governance": "Governance",
+    "govDashboard": "Agent Governance",
     "search": "Search",
     "empty": "No matches",
     "quickJump": "Quick jump"
@@ -484,5 +485,19 @@
     "aboutVersion": "Version 1.0.0",
     "aboutPlatform": "Enterprise Security Operations Platform",
     "aboutDesc": "Multi-agent orchestration with LangGraph · MCP tool protocol · Real-time group chat · Knowledge base RAG · Full audit trail"
+  },
+  "govDash": {
+    "subtitle": "Runtime governance: metrics, kill switch, rollbacks, audit integrity",
+    "pocMetrics": "POC Success Metrics", "allPass": "ALL PASS", "someFail": "ATTENTION",
+    "target": "target", "runningState": "Agents running", "haltedState": "KILL SWITCH ENGAGED",
+    "emergencyStop": "EMERGENCY STOP", "resume": "Resume", "haltReason": "Reason for halt:",
+    "auditIntegrity": "Audit Chain Integrity", "chainIntact": "Chain intact", "chainBroken": "CHAIN BROKEN",
+    "pendingApprovals": "Pending Approvals", "activeRollbacks": "Active Rollbacks", "noRollbacks": "No active rollbacks",
+    "tool": "Tool", "expires": "Expires", "revert": "Revert", "confirmRollback": "Trigger this rollback now?",
+    "metric": {
+      "governance_violation_rate": "Governance violations", "human_override_rate": "Human override rate",
+      "kill_switch_response_seconds": "Kill-switch response", "audit_completeness": "Audit completeness",
+      "rollback_success_rate": "Rollback success"
+    }
   }
 }
