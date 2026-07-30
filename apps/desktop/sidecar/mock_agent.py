@@ -114,6 +114,7 @@ class MockAgentHost:
             "run_id": run_id,
             "tier": caps.tier,
             "capabilities": caps.describe(),
+            "policy": caps.policy.public_status(),
             "provider": provider.public_status(),
             "mcp_tools": [t["function"]["name"] for t in mcp_tools],
             "mcp_server_count": len({r[0].id for r in mcp_routing.values()}),

@@ -189,7 +189,7 @@ function EventCard({ ev }: { ev: Ev }) {
       "";
     return (
       <div className="ev type-answer_ready report">
-        <div className="ev-label">分诊报告</div>
+        <div className="ev-label">报告</div>
         {report ? (
           <SimpleMarkdown text={report} />
         ) : (
@@ -251,6 +251,8 @@ export function App() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [dataRoot, setDataRoot] = useState<string>("");
   const [providerMode, setProviderMode] = useState<string>("mock");
+  const [sandboxImpl, setSandboxImpl] = useState<string>("unknown");
+  const [sandboxMode, setSandboxMode] = useState<string>("—");
   const [fvWarning, setFvWarning] = useState<string | null>(null);
   const [mcpTools, setMcpTools] = useState<string[]>([]);
   const [lastSubmitted, setLastSubmitted] = useState<string | null>(null);
@@ -280,6 +282,14 @@ export function App() {
         if (typeof r?.data_root === "string") setDataRoot(r.data_root);
         const prov = r?.provider as { mode?: string } | undefined;
         if (prov?.mode) setProviderMode(prov.mode);
+        const sb = r?.sandbox as { sandbox_impl?: string; warning?: string | null } | undefined;
+        if (sb?.sandbox_impl) setSandboxImpl(sb.sandbox_impl);
+        const defaults = r?.policy_defaults as
+          | { readonly?: { sandbox_mode?: string } }
+          | undefined;
+        if (defaults?.readonly?.sandbox_mode) {
+          setSandboxMode(String(defaults.readonly.sandbox_mode));
+        }
         const fv = r?.filevault as { warning?: string | null } | undefined;
         setFvWarning(fv?.warning || null);
       })
@@ -289,7 +299,14 @@ export function App() {
 
   useEffect(() => {
     if (!api) return;
-    api.capabilities(tier).then(setCaps).catch(() => setCaps(null));
+    api
+      .capabilities(tier)
+      .then((c) => {
+        setCaps(c);
+        const pol = (c as Caps & { policy?: { sandbox_mode?: string } }).policy;
+        if (pol?.sandbox_mode) setSandboxMode(pol.sandbox_mode);
+      })
+      .catch(() => setCaps(null));
   }, [api, tier]);
 
   useEffect(() => {
@@ -405,7 +422,18 @@ export function App() {
 
       <div className="status-bar">
         <span className={pingOk ? "ok" : "bad"}>● {statusLabel}</span>
-        <span>sandbox: none</span>
+        <span
+          className={
+            sandboxImpl === "none" ? "bad" : sandboxImpl === "seatbelt" ? "ok" : ""
+          }
+          title={
+            sandboxImpl === "none"
+              ? "无 OS 沙箱 — 真实本机工具保持禁用"
+              : `impl=${sandboxImpl}`
+          }
+        >
+          sandbox: {sandboxImpl}/{sandboxMode}
+        </span>
         <span>llm: {providerMode}</span>
         <span>tier: {tier}</span>
         <span>ports: none (JSONL stdio)</span>

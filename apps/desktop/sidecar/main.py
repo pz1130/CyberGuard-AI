@@ -49,8 +49,12 @@ class SidecarServer:
         try:
             if method == "ping":
                 from apps.desktop.sidecar.filevault import filevault_status
+                from apps.desktop.sidecar.paths import tmp_dir
+                from apps.desktop.sidecar.policy import policy_for_tier
                 from apps.desktop.sidecar.provider import load_provider_config
+                from apps.desktop.sidecar.sandbox import sandbox_public_status
 
+                root = data_root()
                 self._write(
                     result_msg(
                         req_id,
@@ -58,9 +62,23 @@ class SidecarServer:
                             "ok": True,
                             "role": "sidecar",
                             "m1": True,
-                            "data_root": str(data_root()),
+                            "m2": True,
+                            "data_root": str(root),
                             "provider": load_provider_config().public_status(),
                             "filevault": filevault_status(),
+                            "sandbox": sandbox_public_status(),
+                            "policy_defaults": {
+                                "readonly": policy_for_tier(
+                                    "readonly",
+                                    workspace_root=str(root),
+                                    managed_tmp=str(tmp_dir()),
+                                ).public_status(),
+                                "full": policy_for_tier(
+                                    "full",
+                                    workspace_root=str(root),
+                                    managed_tmp=str(tmp_dir()),
+                                ).public_status(),
+                            },
                         },
                     )
                 )

@@ -1,8 +1,9 @@
-"""Capability tiers → OperationsBundle (M1).
+"""Capability tiers → OperationsBundle + dual-knob policy (M1/M2).
 
 readonly: ReadOperations only — ExecOperations and EditOperations are None
            (type-level guarantee: no local exec port exists on the instance).
-full:     mock Read + Exec + Edit (still fake — no real host I/O in M1).
+full:     mock Read + Exec + Edit until M2 real tools land; policy already
+          declares workspace-write for status/UI.
 """
 from __future__ import annotations
 
@@ -10,6 +11,10 @@ from dataclasses import dataclass
 from typing import Any, Literal, Mapping, Optional, Sequence
 
 from agent_core.operations import EditOperations, ExecOperations, OperationsBundle, ReadOperations
+
+from apps.desktop.sidecar.paths import data_root, tmp_dir
+from apps.desktop.sidecar.policy import DualKnobPolicy, policy_for_tier
+from apps.desktop.sidecar.sandbox import detect_sandbox_impl
 
 Tier = Literal["readonly", "full"]
 
@@ -51,6 +56,7 @@ class MockEditOperations:
 class SessionCapabilities:
     tier: Tier
     operations: OperationsBundle
+    policy: DualKnobPolicy
 
     def has_local_exec(self) -> bool:
         return self.operations.exec is not None
@@ -61,12 +67,20 @@ class SessionCapabilities:
             "has_read": self.operations.read is not None,
             "has_exec": self.operations.exec is not None,
             "has_edit": self.operations.edit is not None,
+            # Host I/O still mock until M2 real Operations are wired
             "mock": True,
+            "sandbox_impl": detect_sandbox_impl(),
+            "policy": self.policy.public_status(),
         }
 
 
 def capabilities_for_tier(tier: str) -> SessionCapabilities:
     t: Tier = "readonly" if tier == "readonly" else "full"
+    policy = policy_for_tier(
+        t,
+        workspace_root=str(data_root()),
+        managed_tmp=str(tmp_dir()),
+    )
     if t == "readonly":
         # INV / M1: readonly instances must not carry ExecOperations
         bundle = OperationsBundle(
@@ -75,11 +89,11 @@ def capabilities_for_tier(tier: str) -> SessionCapabilities:
             edit=None,
         )
         assert bundle.exec is None and bundle.edit is None
-        return SessionCapabilities(tier="readonly", operations=bundle)
+        return SessionCapabilities(tier="readonly", operations=bundle, policy=policy)
 
     bundle = OperationsBundle(
         read=MockReadOperations(),  # type: ignore[arg-type]
         exec=MockExecOperations(),  # type: ignore[arg-type]
         edit=MockEditOperations(),  # type: ignore[arg-type]
     )
-    return SessionCapabilities(tier="full", operations=bundle)
+    return SessionCapabilities(tier="full", operations=bundle, policy=policy)
