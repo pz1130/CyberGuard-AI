@@ -3,10 +3,16 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("cyberguard", {
   ping: () => ipcRenderer.invoke("sidecar:ping"),
   capabilities: (tier) => ipcRenderer.invoke("sidecar:capabilities", tier),
-  run: (task, tier) => ipcRenderer.invoke("sidecar:run", { task, tier }),
+  run: (task, tier, sessionId) =>
+    ipcRenderer.invoke("sidecar:run", { task, tier, sessionId }),
   abort: (runId) => ipcRenderer.invoke("sidecar:abort", runId),
   steer: (runId, message) =>
     ipcRenderer.invoke("sidecar:steer", { runId, message }),
+  listSessions: () => ipcRenderer.invoke("sidecar:sessions:list"),
+  createSession: (title, tier) =>
+    ipcRenderer.invoke("sidecar:sessions:create", { title, tier }),
+  sessionEvents: (sessionId) =>
+    ipcRenderer.invoke("sidecar:sessions:events", sessionId),
   onEvent: (handler) => {
     const listener = (_event, payload) => handler(payload);
     ipcRenderer.on("sidecar:event", listener);

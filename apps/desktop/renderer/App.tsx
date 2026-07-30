@@ -12,17 +12,34 @@ type Caps = {
 
 type Ev = { type: string; [k: string]: unknown };
 
+type SessionRow = {
+  session_id: string;
+  title: string;
+  tier: string;
+  updated_at: number;
+  event_count: number;
+};
+
 declare global {
   interface Window {
     cyberguard?: {
-      ping: () => Promise<{ ok: boolean }>;
+      ping: () => Promise<{ ok: boolean; data_root?: string }>;
       capabilities: (tier: Tier) => Promise<Caps>;
       run: (
         task: string,
-        tier: Tier
+        tier: Tier,
+        sessionId?: string
       ) => Promise<{ result: unknown; events: Ev[] }>;
       abort: (runId: string) => Promise<{ ok: boolean }>;
       steer: (runId: string, message: string) => Promise<{ ok: boolean }>;
+      listSessions: () => Promise<{ sessions: SessionRow[] }>;
+      createSession: (
+        title: string,
+        tier: Tier
+      ) => Promise<{ session_id: string; title: string }>;
+      sessionEvents: (
+        sessionId: string
+      ) => Promise<{ events: Ev[] }>;
       onEvent: (handler: (ev: Ev) => void) => () => void;
     };
   }
@@ -39,9 +56,20 @@ export function App() {
   const [running, setRunning] = useState(false);
   const [runId, setRunId] = useState<string | null>(null);
   const [steerText, setSteerText] = useState("");
+  const [sessions, setSessions] = useState<SessionRow[]>([]);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [dataRoot, setDataRoot] = useState<string>("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const api = window.cyberguard;
+
+  const refreshSessions = useCallback(() => {
+    if (!api?.listSessions) return;
+    api
+      .listSessions()
+      .then((r) => setSessions(r.sessions || []))
+      .catch(() => setSessions([]));
+  }, [api]);
 
   useEffect(() => {
     if (!api) {
@@ -50,9 +78,13 @@ export function App() {
     }
     api
       .ping()
-      .then(() => setPingOk(true))
+      .then((r) => {
+        setPingOk(true);
+        if (r?.data_root) setDataRoot(r.data_root);
+      })
       .catch(() => setPingOk(false));
-  }, [api]);
+    refreshSessions();
+  }, [api, refreshSessions]);
 
   useEffect(() => {
     if (!api) return;
@@ -82,7 +114,12 @@ export function App() {
     setEvents([]);
     setRunId(null);
     try {
-      await api.run(task, tier);
+      const res = await api.run(task, tier, sessionId || undefined);
+      const sid =
+        (res?.result as { session_id?: string } | undefined)?.session_id ||
+        sessionId;
+      if (sid) setSessionId(sid);
+      refreshSessions();
     } catch (e) {
       setEvents((prev) => [
         ...prev,
@@ -91,7 +128,21 @@ export function App() {
     } finally {
       setRunning(false);
     }
-  }, [api, task, tier, running]);
+  }, [api, task, tier, running, sessionId, refreshSessions]);
+
+  const onSelectSession = useCallback(
+    async (sid: string) => {
+      if (!api) return;
+      setSessionId(sid);
+      try {
+        const r = await api.sessionEvents(sid);
+        setEvents(r.events || []);
+      } catch {
+        setEvents([]);
+      }
+    },
+    [api]
+  );
 
   const onAbort = useCallback(async () => {
     if (!api || !runId) return;
@@ -129,13 +180,35 @@ export function App() {
         <div className="col">
           <h2>Sessions</h2>
           <div className="col-body session-list">
-            <button className="active" type="button">
-              Investigation · mock
+            <button
+              type="button"
+              className={!sessionId ? "active" : ""}
+              onClick={() => {
+                setSessionId(null);
+                setEvents([]);
+              }}
+            >
+              + New investigation
             </button>
-            <p style={{ color: "var(--muted)", fontSize: 12 }}>
-              Session tree is a skeleton in M1. Real local JSONL sessions land
-              later.
-            </p>
+            {sessions.map((s) => (
+              <button
+                key={s.session_id}
+                type="button"
+                className={sessionId === s.session_id ? "active" : ""}
+                onClick={() => onSelectSession(s.session_id)}
+              >
+                {s.title || s.session_id.slice(0, 8)}
+                <div style={{ color: "var(--muted)", fontSize: 11 }}>
+                  {s.event_count} events · {s.tier}
+                </div>
+              </button>
+            ))}
+            {sessions.length === 0 && (
+              <p style={{ color: "var(--muted)", fontSize: 12 }}>
+                No local sessions yet. Run a task to create JSONL under the
+                managed data root.
+              </p>
+            )}
           </div>
         </div>
 
@@ -233,18 +306,27 @@ export function App() {
               <span style={{ fontFamily: "monospace", fontSize: 11 }}>
                 {runId ?? "—"}
               </span>
+              <span>session_id</span>
+              <span style={{ fontFamily: "monospace", fontSize: 11 }}>
+                {sessionId ?? "—"}
+              </span>
+              <span>data_root</span>
+              <span style={{ fontFamily: "monospace", fontSize: 10 }}>
+                {dataRoot || "—"}
+              </span>
             </div>
             <p style={{ color: "var(--muted)", fontSize: 12, marginTop: 16 }}>
               Readonly tier must not expose local <code>ExecOperations</code>{" "}
               (M1 exit criterion). Full tier still uses mock exec — no host I/O
-              until M2.
+              until M2. Sessions are JSONL under the managed data root (not{" "}
+              <code>/tmp</code>).
             </p>
           </div>
         </div>
       </div>
 
       <div className="footer">
-        CyberGuard Desktop · M1 skeleton · agent-core mock loop · not for
+        CyberGuard Desktop · M1 · mock loop · tray + local sessions · not for
         distribution
       </div>
     </div>

@@ -84,14 +84,37 @@ Error:
 
 | method | params | notes |
 |--------|--------|--------|
-| `ping` | `{}` | liveness |
-| `agent.run` | `task`, `tier`=`readonly`\|`full`, `system_prompt?` | mock loop |
+| `ping` | `{}` | liveness + `data_root` |
+| `agent.run` | `task`, `tier`, `session_id?`, `system_prompt?` | mock loop; auto-creates session JSONL |
 | `agent.abort` | `run_id` | sets abort flag |
 | `agent.steer` | `run_id`, `message` | inject user text mid-run |
 | `session.capabilities` | `tier` | inspect Operations ports (exec is null in readonly) |
+| `sessions.create` / `list` / `events` | … | local JSONL + SQLite index |
+| `mcp.spawn_mock` / `stop` / `list` | … | lifecycle drill (orphan governance) |
+
+## Local data (managed root)
+
+Default: `~/Library/Application Support/CyberGuard` (macOS) or `~/.cyberguard`.
+
+Override: `CYBERGUARD_DATA_DIR=/path`.
+
+```
+sessions/*.jsonl   # append-only event log per investigation
+sessions/index.sqlite3
+tmp/               # managed temp — not system /tmp
+logs/ audit/
+```
+
+## Orphan governance (MCP)
+
+1. Sidecar `setsid` + process-group `killpg` on exit  
+2. PPID watchdog (if reparented to 1 → kill children + exit)  
+3. Electron `before-quit` SIGTERM with timeout → SIGKILL  
+
+`mcp.spawn_mock` starts a long-lived mock child for drills; never use real MCP creds in M1.
 
 ## Security notes (M1)
 
 - No listening sockets
-- Sidecar is a child process; MCP children must be in the same process group (orphan governance hooks stubbed for M1 mock)
 - Real tool execution blocked until M2 sandbox exit criteria
+- Dev build banner: no sandbox / no at-rest encryption

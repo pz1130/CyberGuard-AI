@@ -2,10 +2,18 @@
  * Electron main process (M1).
  * - Spawns Python sidecar (JSONL over stdio) — no listen ports
  * - contextIsolation + no nodeIntegration
- * - Dev: load Vite; Prod: load built renderer
- * - Crash recovery: restart sidecar once
+ * - Tray + graceful sidecar SIGTERM (orphan layer ③)
+ * - Crash recovery: restart sidecar
  */
-const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  Tray,
+  Menu,
+  nativeImage,
+} = require("electron");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const readline = require("node:readline");
@@ -21,11 +29,59 @@ const pending = new Map();
 let reqSeq = 0;
 let sidecarRestarts = 0;
 const MAX_SIDECAR_RESTARTS = 3;
+/** @type {BrowserWindow | null} */
+let mainWindow = null;
+/** @type {Tray | null} */
+let tray = null;
+let isQuitting = false;
+
+// Disable crash reporter / breakpad (sensitive-data design §7)
+try {
+  app.commandLine.appendSwitch("disable-breakpad");
+  app.commandLine.appendSwitch("disable-crash-reporter");
+} catch (_) {
+  /* ignore */
+}
 
 function findPython() {
   const venvPy = path.join(REPO_ROOT, ".venv", "bin", "python");
   if (fs.existsSync(venvPy)) return venvPy;
   return process.platform === "win32" ? "python" : "python3";
+}
+
+function stopSidecar(timeoutMs = 5000) {
+  return new Promise((resolve) => {
+    if (!sidecar) {
+      resolve();
+      return;
+    }
+    const child = sidecar;
+    sidecar = null;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      try {
+        child.kill("SIGKILL");
+      } catch (_) {
+        /* ignore */
+      }
+      finish();
+    }, timeoutMs);
+    child.once("exit", () => {
+      clearTimeout(timer);
+      finish();
+    });
+    try {
+      child.kill("SIGTERM");
+    } catch (_) {
+      clearTimeout(timer);
+      finish();
+    }
+  });
 }
 
 function startSidecar() {
@@ -53,7 +109,6 @@ function startSidecar() {
     stdio: ["pipe", "pipe", "pipe"],
   });
 
-  // Process group: future MCP children should share this for orphan cleanup (M1 stub)
   sidecar.on("error", (err) => {
     console.error("[main] sidecar spawn error", err);
   });
@@ -68,10 +123,7 @@ function startSidecar() {
       return;
     }
     const id = msg.id != null ? String(msg.id) : null;
-    if (!id || !pending.has(id)) {
-      // unsolicited — ignore
-      return;
-    }
+    if (!id || !pending.has(id)) return;
     const slot = pending.get(id);
     if (msg.event && slot.onEvent) {
       slot.onEvent(msg.event);
@@ -95,14 +147,15 @@ function startSidecar() {
   sidecar.on("exit", (code, signal) => {
     console.error(`[main] sidecar exited code=${code} signal=${signal}`);
     sidecar = null;
-    // Fail pending
     for (const [id, slot] of pending) {
       slot.reject(new Error("sidecar exited"));
       pending.delete(id);
     }
-    if (!app.isQuitting && sidecarRestarts < MAX_SIDECAR_RESTARTS) {
+    if (!isQuitting && sidecarRestarts < MAX_SIDECAR_RESTARTS) {
       sidecarRestarts += 1;
-      console.error(`[main] restarting sidecar (${sidecarRestarts}/${MAX_SIDECAR_RESTARTS})`);
+      console.error(
+        `[main] restarting sidecar (${sidecarRestarts}/${MAX_SIDECAR_RESTARTS})`
+      );
       startSidecar();
     }
   });
@@ -125,8 +178,47 @@ function rpc(method, params = {}, onEvent) {
   });
 }
 
+function createTray() {
+  // 1x1 empty icon fallback — Electron needs a nativeImage
+  const icon = nativeImage.createEmpty();
+  tray = new Tray(icon);
+  tray.setToolTip("CyberGuard Desktop (M1 dev)");
+  const menu = Menu.buildFromTemplate([
+    {
+      label: "Show",
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        } else createWindow();
+      },
+    },
+    {
+      label: "Hide",
+      click: () => mainWindow && mainWindow.hide(),
+    },
+    { type: "separator" },
+    {
+      label: "Quit",
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+  tray.setContextMenu(menu);
+  tray.on("click", () => {
+    if (!mainWindow) return;
+    if (mainWindow.isVisible()) mainWindow.hide();
+    else {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
 function createWindow() {
-  const win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     title: "CyberGuard Desktop (M1 dev)",
@@ -138,35 +230,38 @@ function createWindow() {
     },
   });
 
-  // Disable Chromium crash upload / telemetry-ish defaults where possible
-  app.commandLine.appendSwitch("disable-breakpad");
-
   if (isDev) {
-    win.loadURL("http://127.0.0.1:5173");
-    win.webContents.openDevTools({ mode: "detach" });
+    mainWindow.loadURL("http://127.0.0.1:5173");
+    mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
-    win.loadFile(path.join(__dirname, "../dist-renderer/index.html"));
+    mainWindow.loadFile(path.join(__dirname, "../dist-renderer/index.html"));
   }
 
-  // Dev banner
-  win.webContents.on("did-finish-load", () => {
-    win.webContents
+  mainWindow.webContents.on("did-finish-load", () => {
+    mainWindow.webContents
       .executeJavaScript(
         'console.info("%cCyberGuard Desktop M1 — mock only; no sandbox; do not use real sensitive data.", "color:#f59e0b")'
       )
       .catch(() => {});
   });
+
+  mainWindow.on("close", (e) => {
+    // On macOS, close-to-tray keeps agent available
+    if (!isQuitting && process.platform === "darwin") {
+      e.preventDefault();
+      mainWindow.hide();
+    }
+  });
 }
 
 app.whenReady().then(() => {
-  // Dev-only warning once
   if (isDev) {
     dialog
       .showMessageBox({
         type: "warning",
         title: "CyberGuard Desktop — development build",
         message:
-          "M1 development version.\n\nSandbox and at-rest encryption are NOT enabled.\nDo not process real sensitive production data.\nMock LLM/tools only.",
+          "M1 development version.\n\nSandbox and at-rest encryption are NOT enabled.\nDo not process real sensitive production data.\nMock LLM/tools only.\nData root: ~/Library/Application Support/CyberGuard",
         buttons: ["I understand"],
       })
       .catch(() => {});
@@ -174,38 +269,47 @@ app.whenReady().then(() => {
 
   startSidecar();
   createWindow();
+  createTray();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    else if (mainWindow) mainWindow.show();
   });
 });
 
-app.on("before-quit", () => {
-  app.isQuitting = true;
+app.on("before-quit", async (e) => {
+  if (isQuitting && !sidecar) return;
+  isQuitting = true;
+  // Layer ③: give sidecar time to killpg / stop MCP children
   if (sidecar) {
-    try {
-      sidecar.kill("SIGTERM");
-    } catch (_) {
-      /* ignore */
-    }
+    e.preventDefault();
+    await stopSidecar(5000);
+    app.exit(0);
   }
 });
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+  if (process.platform !== "darwin") {
+    isQuitting = true;
+    app.quit();
+  }
 });
 
-// IPC bridge (preload whitelist)
+// IPC bridge
 ipcMain.handle("sidecar:ping", async () => rpc("ping", {}));
 ipcMain.handle("sidecar:capabilities", async (_e, tier) =>
   rpc("session.capabilities", { tier })
 );
-ipcMain.handle("sidecar:run", async (event, { task, tier }) => {
+ipcMain.handle("sidecar:run", async (event, { task, tier, sessionId }) => {
   const events = [];
-  const result = await rpc("agent.run", { task, tier: tier || "readonly" }, (ev) => {
-    events.push(ev);
-    event.sender.send("sidecar:event", ev);
-  });
+  const result = await rpc(
+    "agent.run",
+    { task, tier: tier || "readonly", session_id: sessionId || undefined },
+    (ev) => {
+      events.push(ev);
+      event.sender.send("sidecar:event", ev);
+    }
+  );
   return { result, events };
 });
 ipcMain.handle("sidecar:abort", async (_e, runId) =>
@@ -213,4 +317,11 @@ ipcMain.handle("sidecar:abort", async (_e, runId) =>
 );
 ipcMain.handle("sidecar:steer", async (_e, { runId, message }) =>
   rpc("agent.steer", { run_id: runId, message })
+);
+ipcMain.handle("sidecar:sessions:list", async () => rpc("sessions.list", {}));
+ipcMain.handle("sidecar:sessions:create", async (_e, { title, tier }) =>
+  rpc("sessions.create", { title, tier })
+);
+ipcMain.handle("sidecar:sessions:events", async (_e, sessionId) =>
+  rpc("sessions.events", { session_id: sessionId })
 );
