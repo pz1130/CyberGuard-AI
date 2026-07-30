@@ -67,11 +67,24 @@ async def test_run_loop_abort_within_steps():
 
 
 @pytest.mark.asyncio
-async def test_mock_agent_readonly_no_tool_calls():
+async def test_mock_agent_readonly_no_local_exec(tmp_path, monkeypatch):
+    """Readonly has no ExecOperations; without MCP config there are no tools."""
+    monkeypatch.setenv("CYBERGUARD_DATA_DIR", str(tmp_path / "cg"))
+    import importlib
+    import apps.desktop.sidecar.paths as paths
+    import apps.desktop.sidecar.mcp_config as mcp_config
+    importlib.reload(paths)
+    importlib.reload(mcp_config)
+
     host = MockAgentHost()
     types = []
+    started = None
     async for ev in host.run(task="hello", tier="readonly"):
         types.append(ev["type"])
+        if ev["type"] == "run_started":
+            started = ev
+    assert started and started["capabilities"]["has_exec"] is False
+    assert started.get("mcp_tools") == []
     assert "tool_call_start" not in types
     assert "answer_ready" in types or "error" in types
 

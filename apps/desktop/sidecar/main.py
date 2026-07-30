@@ -197,10 +197,15 @@ class SidecarServer:
                 else:
                     session_id = str(session_id)
 
-                self.sessions.append_event(
-                    session_id,
-                    {"type": "user_task", "task": task, "tier": tier},
-                )
+                # Stream user_task so UI can confirm the exact text that ran
+                user_ev = {
+                    "type": "user_task",
+                    "task": task,
+                    "tier": tier,
+                    "session_id": session_id,
+                }
+                self.sessions.append_event(session_id, user_ev)
+                self._write(event_msg(req_id, user_ev))
 
                 async for ev in self.agent.run(
                     task=task,
@@ -243,11 +248,21 @@ class SidecarServer:
 
 
 def _install_signals() -> None:
+    _shutting_down = {"v": False}
+
     def _shutdown(signum, _frame) -> None:
-        logger.info("signal %s — cleanup children", signum)
-        MCP.stop_all()
-        REGISTRY.kill_all(sig=signal.SIGTERM)
-        sys.exit(0)
+        if _shutting_down["v"]:
+            return
+        _shutting_down["v"] = True
+        try:
+            logger.info("signal %s — cleanup children", signum)
+            MCP.stop_all()
+            REGISTRY.kill_all(sig=signal.SIGTERM)
+        except Exception:
+            pass
+        os._exit(0)
+
+    import os
 
     for sig in (signal.SIGTERM, signal.SIGINT):
         try:

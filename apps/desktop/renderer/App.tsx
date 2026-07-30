@@ -45,13 +45,204 @@ declare global {
   }
 }
 
+/** Minimal markdown → React nodes (headings, bold, lists, paragraphs). */
+function SimpleMarkdown({ text }: { text: string }) {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const blocks: React.ReactNode[] = [];
+  let list: string[] = [];
+
+  const flushList = () => {
+    if (!list.length) return;
+    blocks.push(
+      <ul key={`ul-${blocks.length}`}>
+        {list.map((item, i) => (
+          <li key={i}>{inlineMd(item)}</li>
+        ))}
+      </ul>
+    );
+    list = [];
+  };
+
+  const inlineMd = (s: string): React.ReactNode => {
+    // **bold** and `code`
+    const parts: React.ReactNode[] = [];
+    const re = /(\*\*[^*]+\*\*|`[^`]+`)/g;
+    let last = 0;
+    let m: RegExpExecArray | null;
+    let k = 0;
+    while ((m = re.exec(s))) {
+      if (m.index > last) parts.push(s.slice(last, m.index));
+      const tok = m[0];
+      if (tok.startsWith("**")) {
+        parts.push(<strong key={k++}>{tok.slice(2, -2)}</strong>);
+      } else {
+        parts.push(<code key={k++}>{tok.slice(1, -1)}</code>);
+      }
+      last = m.index + tok.length;
+    }
+    if (last < s.length) parts.push(s.slice(last));
+    return parts.length === 1 ? parts[0] : <>{parts}</>;
+  };
+
+  for (const line of lines) {
+    if (/^\s*[-*]\s+/.test(line)) {
+      list.push(line.replace(/^\s*[-*]\s+/, ""));
+      continue;
+    }
+    flushList();
+    if (/^###\s+/.test(line)) {
+      blocks.push(
+        <h4 key={`h-${blocks.length}`}>{inlineMd(line.replace(/^###\s+/, ""))}</h4>
+      );
+    } else if (/^##\s+/.test(line)) {
+      blocks.push(
+        <h3 key={`h-${blocks.length}`}>{inlineMd(line.replace(/^##\s+/, ""))}</h3>
+      );
+    } else if (/^#\s+/.test(line)) {
+      blocks.push(
+        <h2 key={`h-${blocks.length}`}>{inlineMd(line.replace(/^#\s+/, ""))}</h2>
+      );
+    } else if (line.trim() === "") {
+      blocks.push(<div key={`sp-${blocks.length}`} className="md-sp" />);
+    } else {
+      blocks.push(
+        <p key={`p-${blocks.length}`}>{inlineMd(line)}</p>
+      );
+    }
+  }
+  flushList();
+  return <div className="md-body">{blocks}</div>;
+}
+
+function EventCard({ ev }: { ev: Ev }) {
+  const t = String(ev.type || "event");
+
+  if (t === "user_task") {
+    return (
+      <div className="ev type-user_task">
+        <div className="ev-label">你提交的任务</div>
+        <div className="ev-task">{String(ev.task || "")}</div>
+        {ev.tier ? (
+          <div className="ev-meta">档位: {String(ev.tier)}</div>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (t === "run_started") {
+    const prov = (ev.provider || {}) as {
+      mode?: string;
+      model?: string;
+    };
+    const tools = Array.isArray(ev.mcp_tools)
+      ? (ev.mcp_tools as string[]).join(", ")
+      : "—";
+    return (
+      <div className="ev type-run_started">
+        <div className="ev-label">开始运行</div>
+        <div className="ev-meta">
+          LLM: {prov.mode || "?"}
+          {prov.model ? ` · ${prov.model}` : ""} · MCP: {tools}
+        </div>
+      </div>
+    );
+  }
+
+  if (t === "start") {
+    return (
+      <div className="ev type-start muted-ev">
+        <span className="ev-label">agent 循环</span>
+        <span className="ev-meta"> {String(ev.agent_name || "desktop-agent")}</span>
+      </div>
+    );
+  }
+
+  if (t === "tool_call_start") {
+    return (
+      <div className="ev type-tool_call_start">
+        <div className="ev-label">调用工具</div>
+        <code>{String(ev.name || "")}</code>
+        {ev.arguments ? (
+          <pre className="ev-pre">{String(ev.arguments)}</pre>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (t === "tool_call_end") {
+    const err = Boolean(ev.error);
+    return (
+      <div className={`ev type-tool_call_end${err ? " type-error" : ""}`}>
+        <div className="ev-label">{err ? "工具失败" : "工具结果"}</div>
+        <code>{String(ev.name || "")}</code>
+        {ev.result_preview ? (
+          <pre className="ev-pre">{String(ev.result_preview)}</pre>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (t === "answer_ready") {
+    const report =
+      (typeof ev.candidate_text === "string" && ev.candidate_text) ||
+      extractAssistantText(ev) ||
+      "";
+    return (
+      <div className="ev type-answer_ready report">
+        <div className="ev-label">分诊报告</div>
+        {report ? (
+          <SimpleMarkdown text={report} />
+        ) : (
+          <div className="ev-meta">（无 candidate_text）</div>
+        )}
+        <details className="raw-details">
+          <summary>原始事件 JSON</summary>
+          <pre className="ev-pre">{JSON.stringify(ev, null, 2)}</pre>
+        </details>
+      </div>
+    );
+  }
+
+  if (t === "error") {
+    return (
+      <div className="ev type-error">
+        <div className="ev-label">错误</div>
+        <pre className="ev-pre">
+          {String(ev.error || ev.message || JSON.stringify(ev))}
+        </pre>
+      </div>
+    );
+  }
+
+  // fallback: compact one-liner + collapsible raw
+  return (
+    <div className={`ev type-${t}`}>
+      <div className="ev-label">{t}</div>
+      <details className="raw-details">
+        <summary>详情</summary>
+        <pre className="ev-pre">{JSON.stringify(ev, null, 2)}</pre>
+      </details>
+    </div>
+  );
+}
+
+function extractAssistantText(ev: Ev): string {
+  const messages = ev.messages;
+  if (!Array.isArray(messages)) return "";
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i] as { role?: string; content?: string };
+    if (m?.role === "assistant" && m.content && m.content.trim()) {
+      return m.content;
+    }
+  }
+  return "";
+}
+
 export function App() {
   const [pingOk, setPingOk] = useState<boolean | null>(null);
   const [tier, setTier] = useState<Tier>("readonly");
   const [caps, setCaps] = useState<Caps | null>(null);
-  const [task, setTask] = useState(
-    "Triage these sample alerts and list what to look at first."
-  );
+  const [task, setTask] = useState("");
   const [events, setEvents] = useState<Ev[]>([]);
   const [running, setRunning] = useState(false);
   const [runId, setRunId] = useState<string | null>(null);
@@ -62,7 +253,10 @@ export function App() {
   const [providerMode, setProviderMode] = useState<string>("mock");
   const [fvWarning, setFvWarning] = useState<string | null>(null);
   const [mcpTools, setMcpTools] = useState<string[]>([]);
+  const [lastSubmitted, setLastSubmitted] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const taskRef = useRef(task);
+  taskRef.current = task;
 
   const api = window.cyberguard;
 
@@ -121,14 +315,21 @@ export function App() {
 
   const onRun = useCallback(async () => {
     if (!api || running) return;
+    // Always read latest textarea value (avoid stale closure / IME edge cases)
+    const text = (taskRef.current || task).trim();
+    if (!text) return;
+
     setRunning(true);
     setEvents([]);
     setRunId(null);
+    setLastSubmitted(text);
+    // Always start a NEW investigation so Run = current textarea, not old session title
+    setSessionId(null);
     try {
-      const res = await api.run(task, tier, sessionId || undefined);
+      const res = await api.run(text, tier, undefined);
       const sid =
         (res?.result as { session_id?: string } | undefined)?.session_id ||
-        sessionId;
+        null;
       if (sid) setSessionId(sid);
       refreshSessions();
     } catch (e) {
@@ -139,7 +340,7 @@ export function App() {
     } finally {
       setRunning(false);
     }
-  }, [api, task, tier, running, sessionId, refreshSessions]);
+  }, [api, task, tier, running, refreshSessions]);
 
   const onSelectSession = useCallback(
     async (sid: string) => {
@@ -147,13 +348,30 @@ export function App() {
       setSessionId(sid);
       try {
         const r = await api.sessionEvents(sid);
-        setEvents(r.events || []);
+        const evs = r.events || [];
+        setEvents(evs);
+        // Prefill composer with last user_task so you see what that run used
+        for (let i = evs.length - 1; i >= 0; i--) {
+          if (evs[i].type === "user_task" && typeof evs[i].task === "string") {
+            setTask(String(evs[i].task));
+            setLastSubmitted(String(evs[i].task));
+            break;
+          }
+        }
       } catch {
         setEvents([]);
       }
     },
     [api]
   );
+
+  const onNewInvestigation = useCallback(() => {
+    setSessionId(null);
+    setEvents([]);
+    setRunId(null);
+    setLastSubmitted(null);
+    setTask("");
+  }, []);
 
   const onAbort = useCallback(async () => {
     if (!api || !runId) return;
@@ -177,7 +395,7 @@ export function App() {
       <div className="banner">
         <strong>M1/M1.5 development build</strong> — sandbox and at-rest encryption
         are <em>not</em> enabled. Do not process real sensitive production data.
-        Tools remain mock until M2. LLM: <code>{providerMode}</code>.
+        LLM: <code>{providerMode}</code>.
       </div>
       {fvWarning && (
         <div className="banner" style={{ background: "#7f1d1d", color: "#fecaca" }}>
@@ -200,10 +418,7 @@ export function App() {
             <button
               type="button"
               className={!sessionId ? "active" : ""}
-              onClick={() => {
-                setSessionId(null);
-                setEvents([]);
-              }}
+              onClick={onNewInvestigation}
             >
               + New investigation
             </button>
@@ -222,8 +437,7 @@ export function App() {
             ))}
             {sessions.length === 0 && (
               <p style={{ color: "var(--muted)", fontSize: 12 }}>
-                No local sessions yet. Run a task to create JSONL under the
-                managed data root.
+                No local sessions yet. Type a task below and click Run.
               </p>
             )}
           </div>
@@ -232,19 +446,19 @@ export function App() {
         <div className="col">
           <h2>Execution</h2>
           <div className="col-body">
+            {lastSubmitted && (
+              <div className="submitted-banner">
+                本次提交：<strong>{lastSubmitted}</strong>
+              </div>
+            )}
             <div className="timeline">
               {events.length === 0 && (
                 <div className="ev" style={{ color: "var(--muted)" }}>
-                  Events from the mock agent loop appear here (tool calls,
-                  answers, abort).
+                  在下方输入任务后点 <strong>Run</strong>。工具调用与报告会显示在这里。
                 </div>
               )}
               {events.map((ev, i) => (
-                <div key={i} className={`ev type-${ev.type}`}>
-                  <strong>{ev.type}</strong>
-                  {"\n"}
-                  {JSON.stringify(ev, null, 2)}
-                </div>
+                <EventCard key={i} ev={ev} />
               ))}
               <div ref={bottomRef} />
             </div>
@@ -253,7 +467,14 @@ export function App() {
             <textarea
               value={task}
               onChange={(e) => setTask(e.target.value)}
-              placeholder="Task for the mock agent…"
+              onKeyDown={(e) => {
+                // Cmd/Ctrl+Enter to run
+                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                  e.preventDefault();
+                  void onRun();
+                }
+              }}
+              placeholder="在这里输入任务，例如：这批告警里哪些值得优先处理？给出理由与建议动作。"
               disabled={running}
             />
             <div className="row">
@@ -262,13 +483,13 @@ export function App() {
                 onChange={(e) => setTier(e.target.value as Tier)}
                 disabled={running}
               >
-                <option value="readonly">readonly (no ExecOperations)</option>
-                <option value="full">full (mock exec only)</option>
+                <option value="readonly">readonly（无本机 Exec）</option>
+                <option value="full">full（本机工具仍 mock）</option>
               </select>
               <button
                 className="primary"
                 type="button"
-                onClick={onRun}
+                onClick={() => void onRun()}
                 disabled={!api || running || !task.trim()}
               >
                 {running ? "Running…" : "Run"}
@@ -276,11 +497,15 @@ export function App() {
               <button
                 className="secondary"
                 type="button"
-                onClick={onAbort}
+                onClick={() => void onAbort()}
                 disabled={!running || !runId}
               >
                 Abort
               </button>
+            </div>
+            <div className="hint">
+              Run 始终使用<strong>上方输入框当前文字</strong>（新建调查，不沿用旧会话标题）。
+              ⌘/Ctrl+Enter 也可运行。
             </div>
             <div className="row">
               <input
@@ -294,13 +519,13 @@ export function App() {
                 }}
                 value={steerText}
                 onChange={(e) => setSteerText(e.target.value)}
-                placeholder="Steer mid-run (user message)…"
+                placeholder="运行中途补充说明（Steer）…"
                 disabled={!running || !runId}
               />
               <button
                 className="secondary"
                 type="button"
-                onClick={onSteer}
+                onClick={() => void onSteer()}
                 disabled={!running || !runId || !steerText.trim()}
               >
                 Steer
@@ -333,15 +558,13 @@ export function App() {
               </span>
             </div>
             <p style={{ color: "var(--muted)", fontSize: 12, marginTop: 16 }}>
-              Readonly tier must not expose local <code>ExecOperations</code>.
-              MCP tools (stdio) load from{" "}
-              <code>mcp_servers.json</code>. Host destructive tools wait for M2
-              sandbox.
+              Readonly 档不暴露本机 Exec。MCP 来自{" "}
+              <code>mcp_servers.json</code>。破坏性主机工具等 M2 沙箱。
             </p>
             {mcpTools.length > 0 && (
               <div style={{ marginTop: 12, fontSize: 12 }}>
                 <div style={{ color: "var(--muted)", marginBottom: 6 }}>
-                  MCP tools (last run)
+                  MCP tools（上次运行）
                 </div>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
                   {mcpTools.map((n) => (
@@ -357,8 +580,7 @@ export function App() {
       </div>
 
       <div className="footer">
-        CyberGuard Desktop · M1 · mock loop · tray + local sessions · not for
-        distribution
+        CyberGuard Desktop · M1.5 · live LLM path · not for distribution
       </div>
     </div>
   );

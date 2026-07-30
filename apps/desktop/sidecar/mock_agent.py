@@ -170,17 +170,26 @@ class MockAgentHost:
             if active.abort_event.is_set():
                 raise RuntimeError("aborted")
             step["n"] += 1
-            # If MCP tools exist, mock LLM calls the first one once for demos
+            # Demo policy: for triage-like tasks prefer list_alerts; else first MCP tool
             if tools and step["n"] == 1:
-                first = tools[0]["function"]["name"]
-                if first.startswith("mcp__"):
-                    # empty args — fixture server should accept
+                names = [t["function"]["name"] for t in tools]
+                preferred = None
+                task_l = (messages[-1].get("content") or "").lower() if messages else ""
+                if any(k in task_l for k in ("告警", "alert", "分诊", "triage")):
+                    preferred = next(
+                        (n for n in names if "list_alerts" in n), None
+                    )
+                preferred = preferred or next(
+                    (n for n in names if n.startswith("mcp__")), None
+                )
+                if preferred and preferred.startswith("mcp__"):
+                    args = '{"limit": 5}' if "list_alerts" in preferred else "{}"
                     call = SimpleNamespace(
                         id="mock_call_1",
-                        function=SimpleNamespace(name=first, arguments="{}"),
+                        function=SimpleNamespace(name=preferred, arguments=args),
                     )
                     return SimpleNamespace(content="", tool_calls=[call])
-                if first == "mock_scan":
+                if "mock_scan" in names:
                     call = SimpleNamespace(
                         id="mock_call_1",
                         function=SimpleNamespace(
@@ -189,6 +198,30 @@ class MockAgentHost:
                         ),
                     )
                     return SimpleNamespace(content="", tool_calls=[call])
+
+            # Second step: if we already have tool results, produce a demo triage report
+            if step["n"] >= 2 and tools:
+                tool_bits = []
+                for m in messages:
+                    if m.get("role") == "tool":
+                        tool_bits.append(str(m.get("content") or "")[:2000])
+                blob = "\n".join(tool_bits)
+                if "A-1001" in blob or "severity" in blob.lower():
+                    return (
+                        "## 告警分诊报告（mock LLM 演示）\n\n"
+                        "### Top 发现\n"
+                        "1. **A-1001 high** — Suspicious PowerShell from workstation (ws-042, count=12)\n"
+                        "2. **A-1002 medium** — Failed SSH bursts (jump-01, count=84)\n"
+                        "3. **A-1003 low** — AV signature update lag（若工具返回）\n\n"
+                        "### 为什么重要\n"
+                        "- A-1001：工作站异常脚本执行，优先怀疑初始入侵或恶意软件落地。\n"
+                        "- A-1002：跳板机暴力尝试，需结合是否成功登录。\n\n"
+                        "### 建议动作\n"
+                        "- A-1001：隔离取证 → 查进程/父进程与外连（只读优先）\n"
+                        "- A-1002：核对认证日志与封禁策略；必要时限流\n\n"
+                        "### 不确定性\n"
+                        "_当前为 MOCK LLM；接 live Provider 后由模型基于完整工具输出生成报告。_\n"
+                    )
             mcp_note = (
                 f" MCP tools: {len(mcp_tools)}."
                 if mcp_tools

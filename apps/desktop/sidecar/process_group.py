@@ -55,10 +55,13 @@ class ProcessRegistry:
             return set(self._children.keys())
 
     def kill_all(self, *, sig: int = signal.SIGTERM) -> None:
-        """Terminate registered children, then process group if we lead one."""
+        """Terminate registered children only (never killpg self — that re-enters SIGTERM)."""
         with self._lock:
             pids = list(self._children.items())
+        me = os.getpid()
         for pid, label in pids:
+            if pid == me:
+                continue
             try:
                 os.kill(pid, sig)
                 logger.info("sent signal %s to pid=%s (%s)", sig, pid, label)
@@ -66,15 +69,8 @@ class ProcessRegistry:
                 pass
             except OSError as exc:
                 logger.warning("kill pid=%s failed: %s", pid, exc)
-        # Group kill (covers unregistered grandchildren that stayed in pg)
-        if self._pgid is not None and self._pgid != 0:
-            try:
-                os.killpg(self._pgid, sig)
-            except ProcessLookupError:
-                pass
-            except OSError as exc:
-                # Killing our own group may raise if we are the only member
-                logger.debug("killpg: %s", exc)
+        # Do NOT killpg(self): the sidecar is session leader; killpg would signal
+        # ourselves and re-enter the SIGTERM handler (RecursionError on shutdown).
         with self._lock:
             self._children.clear()
 
