@@ -31,6 +31,7 @@ from agent_core.loop_utils import (
     tool_call_fingerprint,
     truncate_tool_result,
 )
+from agent_core.messages import messages_for_model
 from agent_core.tool_result import normalize_tool_result
 
 if TYPE_CHECKING:
@@ -80,6 +81,9 @@ class RunLoopConfig:
     llm_retry_max: int = LLM_RETRY_MAX
     llm_retry_backoff: float = LLM_RETRY_BACKOFF
     tool_result_max_chars: int = TOOL_RESULT_MAX_CHARS
+    tool_result_max_lines: Optional[int] = None
+    # "tail" keep head (default); "head" keep tail — for log-like tools
+    tool_truncate_mode: str = "tail"
     reflect_guidance: str = REFLECT_GUIDANCE
     agent_run_id: Optional[str] = None
     # INV-31: default sequential; parallel only if every tool opts in
@@ -158,8 +162,10 @@ async def run_loop(
             last_err: Optional[Exception] = None
             for attempt in range(config.llm_retry_max + 1):
                 try:
+                    # exclude_from_context: UI/audit may keep them; model never sees them
+                    model_messages = messages_for_model(messages)
                     msg = await chat(
-                        messages=messages,
+                        messages=model_messages,
                         tools=active_tools if active_tools else None,
                     )
                     break
@@ -350,8 +356,13 @@ async def run_loop(
 
             for call, raw in zip(tool_calls, results):
                 tr = normalize_tool_result(raw)
+                # Per-tool override via execution_mode_for metadata is future work;
+                # config.tool_truncate_mode applies to the whole run (default tail).
                 result_str = truncate_tool_result(
-                    tr.for_model(), max_chars=config.tool_result_max_chars
+                    tr.for_model(),
+                    max_chars=config.tool_result_max_chars,
+                    max_lines=config.tool_result_max_lines,
+                    mode=config.tool_truncate_mode or "tail",
                 )
                 tool_call_log.append(
                     {

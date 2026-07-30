@@ -572,10 +572,13 @@ class MasterAgent:
                     "context_window": _cw,
                     "reserve_output": _mo,
                 }
+                from agent_core.messages import messages_for_model
+
                 messages: List[Dict[str, str]] = [
                     {"role": "system", "content": system_prompt}
                 ]
-                messages.extend(history)
+                # History may include exclude_from_context rows (evidence, etc.)
+                messages.extend(messages_for_model(history))
                 messages.append({"role": "user", "content": user_input})
                 state["final_summary"] = await self.llm_router.chat(
                     messages=messages,
@@ -583,6 +586,7 @@ class MasterAgent:
                     model=state.get("model"),
                     model_override=state.get("model_override"),
                     temperature_override=state.get("temperature_override"),
+                    enable_prompt_cache=True,
                 )
                 logger.debug(f"_summarizer_node chat() returned: {state['final_summary'][:100]}")
             except Exception as e:

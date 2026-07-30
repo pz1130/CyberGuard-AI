@@ -258,7 +258,10 @@ class LLMRouter:
         try:
             async with get_db_context() as session:
                 result = await session.execute(
-                    text("SELECT name, api_key_encrypted, base_url, models, metadata_json FROM providers WHERE id = :id AND is_active = true"),
+                    text(
+                        "SELECT name, api_key_encrypted, base_url, models, metadata_json, provider_type "
+                        "FROM providers WHERE id = :id AND is_active = true"
+                    ),
                     {"id": provider_id}
                 )
                 row = result.fetchone()
@@ -292,6 +295,7 @@ class LLMRouter:
                     "base_url": base_url,
                     "models": models,
                     "metadata_json": row[4] or {},
+                    "provider_type": row[5],
                 }
         except Exception:
             return None
@@ -689,6 +693,9 @@ Examples:
         temperature_override: Optional[float] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
         pii_policy: Optional[str] = None,
+        thinking: Optional[str] = None,
+        enable_prompt_cache: bool = False,
+        prompt_cache_key: Optional[str] = None,
     ):
         """General chat completion.
 
@@ -696,20 +703,33 @@ Examples:
             - str (final text) when `tools` is None — backward-compatible.
             - openai ChatCompletionMessage when `tools` is provided, so callers
               can inspect `.tool_calls`.
+
+        M0a-2 extras:
+            thinking — portable level off|minimal|low|medium|high|xhigh
+            enable_prompt_cache — mark system content for Anthropic-style cache
+            prompt_cache_key — optional OpenAI-style cache routing key
         """
         from app.core.telemetry import get_tracer
+        from llm_router.cache_control import apply_prompt_cache_key, mark_system_for_cache
+        from llm_router.thinking import apply_thinking_to_kwargs
+        from agent_core.messages import messages_for_model
+
         tracer = get_tracer()
 
         # Determine active model
         active_model = model_override or model
         active_provider_id = provider_id
+        provider_config = None
         if not active_model and provider_id:
-            config = await self.get_provider_config_async(provider_id)
-            if config and config.get("models"):
-                active_model = config["models"][0]
+            provider_config = await self.get_provider_config_async(provider_id)
+            if provider_config and provider_config.get("models"):
+                active_model = provider_config["models"][0]
         active_model = _model_name(active_model or settings.MASTER_AGENT_MODEL)
 
         master_config = await self._load_master_config()
+
+        # Drop exclude_from_context before any provider call (M0a-2)
+        messages = messages_for_model(messages)
 
         # Mock mode — return a simple acknowledgment
         if settings.MOCK_MODE:
@@ -720,6 +740,11 @@ Examples:
             return mock_text
 
         client = await self.get_client_async(provider_id=provider_id)
+        if provider_config is None and provider_id:
+            provider_config = await self.get_provider_config_async(provider_id)
+        provider_type = (provider_config or {}).get("provider_type") or (
+            provider_config or {}
+        ).get("name")
 
         with tracer.start_as_current_span(
             f"llm.chat/{active_model}",
@@ -731,6 +756,10 @@ Examples:
             },
         ) as span:
             messages = self._guard_messages(messages, pii_policy)
+            if enable_prompt_cache:
+                messages = mark_system_for_cache(
+                    messages, provider_type=str(provider_type or ""), enabled=True
+                )
             kwargs = {
                 "model": active_model,
                 "messages": messages,
@@ -739,6 +768,16 @@ Examples:
             if tools:
                 kwargs["tools"] = tools
                 kwargs["tool_choice"] = "auto"
+
+            # Thinking / reasoning effort (portable level → provider params)
+            thinking_level = thinking or (master_config or {}).get("thinking_level")
+            kwargs = apply_thinking_to_kwargs(
+                kwargs,
+                level=thinking_level,
+                model=active_model or "",
+                provider_type=str(provider_type or ""),
+            )
+            kwargs = apply_prompt_cache_key(kwargs, cache_key=prompt_cache_key)
 
             await rate_limit(provider_id, await self._provider_rpm(provider_id))
             response = await acall_with_retry(

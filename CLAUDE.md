@@ -149,7 +149,10 @@ docs/
 - ✅ INV-32 结构化 `is_error`（不再靠 `ERROR` 子串）
 - ✅ 加权 token 估算 + 六段摘要 + Constraints 注入 + 当前 turn 保留（INV-33/34 基础）
 - ✅ 模型 `context_window` / `max_output_tokens`（JSON ModelInfo + 目录默认值）；压缩按 remaining_budget
-- ⏳ 方向性截断、exclude_from_context、llm-router cache/thinking
+- ✅ 方向性截断（head/tail + 行/字双重约束）
+- ✅ `exclude_from_context`（UI/审计可留、模型不可见）
+- ✅ llm-router thinking 档位 + prompt cache 标记
+- **M0a-2 主路径完成** → 下一阶段见路线图 M0b / M1
 
 ---
 

@@ -59,15 +59,16 @@ def budget_notice(budget: int) -> str:
 
 
 def truncate_tool_result(
-    text: Optional[str], *, max_chars: int = TOOL_RESULT_MAX_CHARS
+    text: Optional[str],
+    *,
+    max_chars: int = TOOL_RESULT_MAX_CHARS,
+    max_lines: Optional[int] = None,
+    mode: str = "tail",
 ) -> str:
-    """Cap a single tool result so noisy tools can't blow the context."""
-    if text is None:
-        return ""
-    if len(text) <= max_chars:
-        return text
-    dropped = len(text) - max_chars
-    return text[:max_chars] + f"\n…[truncated {dropped} chars]"
+    """Cap a single tool result — delegates to directional truncate (M0a-2)."""
+    from agent_core.truncate import truncate_tool_result as _dir
+
+    return _dir(text, max_chars=max_chars, max_lines=max_lines, mode=mode)  # type: ignore[arg-type]
 
 
 def estimate_message_chars(messages: List[Dict[str, Any]]) -> int:

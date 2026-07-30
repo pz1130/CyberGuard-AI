@@ -22,6 +22,12 @@ from agent_core.model_limits import (
 )
 from agent_core.schema_validate import SchemaValidationError, validate_tool_arguments
 from agent_core.tool_result import ToolResult, normalize_tool_result
+from agent_core.messages import (
+    is_excluded,
+    mark_exclude_from_context,
+    messages_for_model,
+)
+from agent_core.truncate import truncate_text, truncate_tool_result as directional_truncate
 from agent_core.events import (
     AuditBus,
     AuditEvent,
@@ -106,6 +112,11 @@ __all__ = [
     "validate_tool_arguments",
     "ToolResult",
     "normalize_tool_result",
+    "is_excluded",
+    "mark_exclude_from_context",
+    "messages_for_model",
+    "truncate_text",
+    "directional_truncate",
     "TOOL_RESULT_MAX_CHARS",
     "AUTO_CONTINUE_MAX",
     "CONTEXT_COMPACT_CHARS",

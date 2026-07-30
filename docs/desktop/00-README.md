@@ -83,8 +83,8 @@ Web 端 21 个 Tab 功能不减。**对已部署 CyberGuard 的客户，桌面�
 
 **M0a-1 内核抽取主路径已完成。**
 
-**M0a-2 已落地（核心）**：schema 校验、默认串行、`is_error`、加权 token、六段压缩+Constraints、当前 turn 保留；**`context_window` / `max_output_tokens` + remaining_budget 阈值**（`tests/test_model_limits.py`）。  
-仍待：方向性截断、exclude_from_context、Provider cache/thinking。
+**M0a-2 主路径完成**：schema / 串行 / is_error / 加权 token / 六段压缩 / context_window 预算 / 方向性截断 / exclude_from_context / thinking + cache（`tests/test_m0a2_*.py`、`test_model_limits.py`）。  
+**下一阶段**：M0b（ui-shared）或 **M1**（Electron 壳 + sidecar，mock）。
 
 **硬判据：基线测试集全绿，服务端对外行为零变化。** 当前本地可收集到 365 个测试用例；精确数量由 CI 的 `pytest --collect-only` 固定并输出。参数校验、默认串行、结构化错误、压缩加固全部属于 M0a-2。
 
