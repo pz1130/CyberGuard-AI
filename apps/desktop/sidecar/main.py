@@ -10,7 +10,12 @@ from typing import Any, Dict, Optional, TextIO
 
 from apps.desktop.sidecar.capabilities import capabilities_for_tier
 from apps.desktop.sidecar.mcp_manager import MCP
+from apps.desktop.sidecar.mcp_stdio import STDIO_CLIENT
 from apps.desktop.sidecar.mock_agent import MockAgentHost
+
+
+async def STDIO_CLIENT_STOP(server_id: str) -> bool:
+    return await STDIO_CLIENT.stop(server_id)
 from apps.desktop.sidecar.paths import data_root, logs_dir
 from apps.desktop.sidecar.process_group import REGISTRY
 from apps.desktop.sidecar.rpc import (
@@ -105,7 +110,46 @@ class SidecarServer:
                 return
 
             if method == "mcp.list":
-                self._write(result_msg(req_id, {"servers": MCP.list()}))
+                self._write(
+                    result_msg(
+                        req_id,
+                        {
+                            "running": MCP.list(),
+                            "configured": MCP.configured_servers(),
+                        },
+                    )
+                )
+                return
+
+            if method == "mcp.discover":
+                tier = str(params.get("tier") or "readonly")
+                tools, routing = await MCP.discover_tools_for_agent(tier=tier)
+                self._write(
+                    result_msg(
+                        req_id,
+                        {
+                            "tools": [
+                                {
+                                    "name": t["function"]["name"],
+                                    "description": t["function"].get("description"),
+                                }
+                                for t in tools
+                            ],
+                            "servers": list({r[0].id for r in routing.values()}),
+                        },
+                    )
+                )
+                return
+
+            if method == "mcp.call":
+                # Direct call for debugging: exposed name + arguments
+                tools, routing = await MCP.discover_tools_for_agent(
+                    tier=str(params.get("tier") or "readonly")
+                )
+                name = str(params.get("name") or "")
+                args = params.get("arguments") or {}
+                result = await MCP.call_routed(routing, name, args)
+                self._write(result_msg(req_id, {"result": result}))
                 return
 
             if method == "mcp.spawn_mock":
@@ -118,6 +162,8 @@ class SidecarServer:
             if method == "mcp.stop":
                 server_id = str(params.get("server_id") or "")
                 ok = MCP.stop(server_id)
+                if not ok:
+                    ok = await STDIO_CLIENT_STOP(server_id)
                 self._write(result_msg(req_id, {"ok": ok, "server_id": server_id}))
                 return
 
@@ -237,7 +283,10 @@ def main() -> None:
         traceback.print_exc(file=sys.stderr)
         sys.exit(1)
     finally:
-        MCP.stop_all()
+        try:
+            asyncio.run(MCP.stop_all_async())
+        except Exception:
+            MCP.stop_all()
         REGISTRY.kill_all()
         REGISTRY.stop_watchdog()
 

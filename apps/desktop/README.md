@@ -115,6 +115,61 @@ logs/ audit/
 
 `mcp.spawn_mock` starts a long-lived mock child for drills; never use real MCP creds in M1.
 
+## Real MCP (stdio, M1.5)
+
+Config file: `{data_root}/mcp_servers.json`
+
+```json
+{
+  "servers": [
+    {
+      "id": "alerts",
+      "command": "python3",
+      "args": ["/absolute/path/to/your_mcp_server.py"],
+      "readonly": true,
+      "enabled": true,
+      "timeout_seconds": 30,
+      "description": "Read-only alert source"
+    }
+  ]
+}
+```
+
+Or env (single server):
+
+```bash
+export CYBERGUARD_MCP_ID=echo
+export CYBERGUARD_MCP_COMMAND="$(pwd)/.venv/bin/python"
+export CYBERGUARD_MCP_ARGS="$(pwd)/tests/fixtures/echo_mcp_server.py"
+```
+
+Tools appear as `mcp__{server_id}__{tool_name}` in the agent loop.  
+`readonly: true` servers are available on **readonly** and **full** tiers; non-readonly only on **full**.
+
+RPC helpers: `mcp.list`, `mcp.discover`, `mcp.call`.
+
+Demo with fixture server:
+
+```bash
+export CYBERGUARD_DATA_DIR=/tmp/cg-mcp-demo
+mkdir -p "$CYBERGUARD_DATA_DIR"
+cat > "$CYBERGUARD_DATA_DIR/mcp_servers.json" <<EOF
+{
+  "servers": [{
+    "id": "echo",
+    "command": "$(pwd)/.venv/bin/python",
+    "args": ["$(pwd)/tests/fixtures/echo_mcp_server.py"],
+    "readonly": true
+  }]
+}
+EOF
+export PYTHONPATH="packages:$(pwd)"
+printf '%s\n' \
+  '{"id":"1","method":"mcp.discover","params":{"tier":"readonly"}}' \
+  '{"id":"2","method":"agent.run","params":{"task":"list sample alerts with MCP","tier":"readonly"}}' \
+  | .venv/bin/python -m apps.desktop.sidecar
+```
+
 ## Live LLM (M1.5 self-use)
 
 ```bash

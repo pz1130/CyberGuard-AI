@@ -61,6 +61,7 @@ export function App() {
   const [dataRoot, setDataRoot] = useState<string>("");
   const [providerMode, setProviderMode] = useState<string>("mock");
   const [fvWarning, setFvWarning] = useState<string | null>(null);
+  const [mcpTools, setMcpTools] = useState<string[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const api = window.cyberguard;
@@ -107,6 +108,10 @@ export function App() {
       setEvents((prev) => [...prev, ev]);
       if (ev.type === "run_started" && typeof ev.run_id === "string") {
         setRunId(ev.run_id);
+        const tools = ev.mcp_tools;
+        if (Array.isArray(tools)) {
+          setMcpTools(tools.map(String));
+        }
       }
       if (ev.type === "start" && typeof ev.agent_run_id === "string") {
         setRunId(String(ev.agent_run_id));
@@ -328,11 +333,25 @@ export function App() {
               </span>
             </div>
             <p style={{ color: "var(--muted)", fontSize: 12, marginTop: 16 }}>
-              Readonly tier must not expose local <code>ExecOperations</code>{" "}
-              (M1 exit criterion). Full tier still uses mock exec — no host I/O
-              until M2. Sessions are JSONL under the managed data root (not{" "}
-              <code>/tmp</code>).
+              Readonly tier must not expose local <code>ExecOperations</code>.
+              MCP tools (stdio) load from{" "}
+              <code>mcp_servers.json</code>. Host destructive tools wait for M2
+              sandbox.
             </p>
+            {mcpTools.length > 0 && (
+              <div style={{ marginTop: 12, fontSize: 12 }}>
+                <div style={{ color: "var(--muted)", marginBottom: 6 }}>
+                  MCP tools (last run)
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                  {mcpTools.map((n) => (
+                    <li key={n} style={{ fontFamily: "monospace", fontSize: 11 }}>
+                      {n}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         </div>
       </div>

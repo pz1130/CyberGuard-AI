@@ -1,7 +1,8 @@
-"""Agent host: agent_core.run_loop + mock or live LLM (M1 / M1.5)."""
+"""Agent host: agent_core.run_loop + mock/live LLM + MCP tools (M1.5)."""
 from __future__ import annotations
 
 import asyncio
+import json
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -11,6 +12,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 from agent_core.run_loop import RunLoopConfig, run_loop
 
 from apps.desktop.sidecar.capabilities import capabilities_for_tier
+from apps.desktop.sidecar.mcp_manager import MCP
 from apps.desktop.sidecar.provider import load_provider_config, live_chat
 
 
@@ -29,6 +31,36 @@ def _load_builtin_skills() -> str:
     return "\n\n---\n\n".join(parts)
 
 
+def _format_mcp_result(result: Any) -> str:
+    """Normalize tools/call result to a string for the model."""
+    if result is None:
+        return "(empty)"
+    if isinstance(result, str):
+        return result
+    if isinstance(result, dict):
+        # MCP content blocks
+        content = result.get("content")
+        if isinstance(content, list):
+            parts = []
+            for block in content:
+                if isinstance(block, dict):
+                    if block.get("type") == "text":
+                        parts.append(str(block.get("text") or ""))
+                    else:
+                        parts.append(json.dumps(block, ensure_ascii=False, default=str))
+                else:
+                    parts.append(str(block))
+            text = "\n".join(parts)
+            if result.get("isError"):
+                return f"ERROR: {text}"
+            return text or json.dumps(result, ensure_ascii=False, default=str)
+        return json.dumps(result, ensure_ascii=False, default=str)
+    try:
+        return json.dumps(result, ensure_ascii=False, default=str)
+    except TypeError:
+        return str(result)
+
+
 @dataclass
 class ActiveRun:
     run_id: str
@@ -38,7 +70,7 @@ class ActiveRun:
 
 
 class MockAgentHost:
-    """Name kept for compatibility; supports mock + live provider modes."""
+    """Supports mock + live provider; MCP tools when configured."""
 
     def __init__(self) -> None:
         self._runs: Dict[str, ActiveRun] = {}
@@ -74,18 +106,25 @@ class MockAgentHost:
         active = ActiveRun(run_id=run_id)
         self._runs[run_id] = active
 
+        # Discover MCP tools (readonly servers on all tiers)
+        mcp_tools, mcp_routing = await MCP.discover_tools_for_agent(tier=tier)
+
         yield {
             "type": "run_started",
             "run_id": run_id,
             "tier": caps.tier,
             "capabilities": caps.describe(),
             "provider": provider.public_status(),
+            "mcp_tools": [t["function"]["name"] for t in mcp_tools],
+            "mcp_server_count": len({r[0].id for r in mcp_routing.values()}),
         }
 
-        # Tools: still mock until M2 sandbox (safety gate). Live LLM may call them.
-        tools: Optional[List[Dict[str, Any]]] = None
-        if caps.has_local_exec():
-            tools = [
+        tools: List[Dict[str, Any]] = list(mcp_tools)
+
+        # Legacy mock_scan only when full tier AND no real MCP tools
+        # (keeps old demos working; not used when MCP is configured)
+        if caps.has_local_exec() and not mcp_tools:
+            tools.append(
                 {
                     "type": "function",
                     "function": {
@@ -98,17 +137,22 @@ class MockAgentHost:
                         },
                     },
                 }
-            ]
+            )
 
+        tools_arg: Optional[List[Dict[str, Any]]] = tools or None
         step = {"n": 0}
         skills = _load_builtin_skills()
         default_prompt = (
             "You are CyberGuard desktop security agent (self-use M1.5).\n"
             "Be precise and actionable. Prefer read-only investigation.\n"
+            "MCP tools prefixed with mcp__ are real connectors — use them for data.\n"
             "Tools named mock_* do not touch the real host.\n"
         )
         if skills:
             default_prompt += "\n## Built-in SOPs\n" + skills
+        if mcp_tools:
+            names = ", ".join(t["function"]["name"] for t in mcp_tools)
+            default_prompt += f"\n\n## Available MCP tools\n{names}\n"
         if not provider.is_live:
             default_prompt += (
                 "\n\n(Running in MOCK mode — no real LLM. "
@@ -122,33 +166,67 @@ class MockAgentHost:
             if provider.is_live:
                 return await live_chat(provider, list(messages), tools=tools)
 
-            # ---- mock LLM ----
             await asyncio.sleep(0.05)
             if active.abort_event.is_set():
                 raise RuntimeError("aborted")
             step["n"] += 1
+            # If MCP tools exist, mock LLM calls the first one once for demos
             if tools and step["n"] == 1:
-                call = SimpleNamespace(
-                    id="mock_call_1",
-                    function=SimpleNamespace(
-                        name="mock_scan",
-                        arguments='{"target":"10.0.0.0/24"}',
-                    ),
-                )
-                return SimpleNamespace(content="", tool_calls=[call])
+                first = tools[0]["function"]["name"]
+                if first.startswith("mcp__"):
+                    # empty args — fixture server should accept
+                    call = SimpleNamespace(
+                        id="mock_call_1",
+                        function=SimpleNamespace(name=first, arguments="{}"),
+                    )
+                    return SimpleNamespace(content="", tool_calls=[call])
+                if first == "mock_scan":
+                    call = SimpleNamespace(
+                        id="mock_call_1",
+                        function=SimpleNamespace(
+                            name="mock_scan",
+                            arguments='{"target":"10.0.0.0/24"}',
+                        ),
+                    )
+                    return SimpleNamespace(content="", tool_calls=[call])
+            mcp_note = (
+                f" MCP tools: {len(mcp_tools)}."
+                if mcp_tools
+                else " No MCP servers configured."
+            )
             return (
-                f"[mock LLM] Task received. Tier={caps.tier}. "
-                f"Local exec available={caps.has_local_exec()}. "
-                f"Summary: nothing real was scanned (M1 mock). "
+                f"[mock LLM] Task received. Tier={caps.tier}.{mcp_note} "
                 f"Configure live provider for real analysis."
             )
 
         async def dispatch(call):
-            await asyncio.sleep(0.05)
             if active.abort_event.is_set():
                 return {"status": "error", "error": "aborted", "is_error": True}
             name = call.function.name
-            # M1/M1.5 safety: tools remain mock until M2 sandbox exit criteria
+            try:
+                args = json.loads(call.function.arguments or "{}")
+            except json.JSONDecodeError:
+                args = {}
+
+            if name in mcp_routing:
+                try:
+                    result = await MCP.call_routed(mcp_routing, name, args)
+                    text = _format_mcp_result(result)
+                    is_err = isinstance(result, dict) and bool(result.get("isError"))
+                    return {
+                        "status": "error" if is_err else "completed",
+                        "stdout": text,
+                        "is_error": is_err or text.startswith("ERROR:"),
+                    }
+                except Exception as exc:  # noqa: BLE001
+                    return {
+                        "status": "error",
+                        "error": f"MCP {name}: {exc}",
+                        "is_error": True,
+                    }
+
+            # mock_scan fallback
+            await asyncio.sleep(0.05)
             return {
                 "status": "completed",
                 "stdout": f"[mock-tool {name}] args={call.function.arguments}",
@@ -167,7 +245,7 @@ class MockAgentHost:
                 task=task,
                 system_prompt=prompt,
                 history=[],
-                tools=tools,
+                tools=tools_arg,
                 config=cfg,
                 chat=chat,
                 dispatch=dispatch,
