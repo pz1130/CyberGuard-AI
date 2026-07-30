@@ -198,7 +198,7 @@ AUTO_APPROVE=false # true bypasses the human approval gate (dev only)
 pytest -q
 ```
 
-The suite has **309 tests** (29 `tests/test_*.py` files) covering the LLM router,
+The suite currently collects **365 tests** locally (the exact count is enforced by CI) across 42 `tests/test_*.py` files, covering the LLM router,
 tool executor, approval state machine, backup helpers (SSRF guards, encryption
 roundtrip), group-chat/multi-worker, OCR, governance, providers, and more.
 

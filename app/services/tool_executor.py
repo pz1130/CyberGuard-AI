@@ -1,6 +1,10 @@
 """Executable Tool pool — validate args, build an injection-safe argv, and run
 it in the isolated tool-runner container. See:
   docs/superpowers/specs/2026-05-29-tool-pool-executable-design.md
+
+M0a-1: execution is routed through ``agent_core`` five-step policy pipeline.
+``validate_arguments`` remains pass-through; argv/schema checks still run inside
+``execute`` so external behavior is unchanged.
 """
 import json
 import os
@@ -9,6 +13,8 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 import httpx
+
+from agent_core.pipeline import BlockedResult, ToolCallContext, run_tool_call
 
 
 TOOL_RUNNER_URL = os.environ.get("TOOL_RUNNER_URL", "http://tool-runner:9000")
@@ -94,12 +100,18 @@ async def _create_approval(tool, args: Dict[str, Any], user_id: int) -> None:
     )
 
 
-async def execute_tool(tool, args: Dict[str, Any], user_id: int, *,
-                       approved: bool = False,
-                       caller_permissions: Optional[set] = None,
-                       governance: "GovernanceContext | None" = None,
-                       confidence: Optional[float] = None) -> Dict[str, Any]:
-    """Validate args, gate on RBAC/approval, run in the tool-runner. JSON-safe result."""
+async def _pool_before_tool_call(
+    ctx: ToolCallContext, args: Dict[str, Any]
+) -> Optional[BlockedResult]:
+    """Gates that historically ran before the tool-runner call (behavior preserved)."""
+    tool = ctx.tool
+    user_id = ctx.user_id or 0
+    meta = ctx.metadata
+    approved = bool(meta.get("approved"))
+    caller_permissions = meta.get("caller_permissions")
+    governance = meta.get("governance")
+    confidence = meta.get("confidence")
+
     # Kill switch — hardest gate, checked before anything else (NDB Std §Kill Switch).
     from app.services.kill_switch import is_halted
     if await is_halted(agent_id=getattr(tool, "agent_id", None)):
@@ -108,13 +120,19 @@ async def execute_tool(tool, args: Dict[str, Any], user_id: int, *,
                             action="EMERGENCY_HALT", action_category=getattr(tool, "action_category", None),
                             input_data={"tool": getattr(tool, "name", None), "args": args},
                             output_data={"blocked": True})
-        return {"status": "halted", "error": "kill switch engaged"}
+        return BlockedResult(
+            payload={"status": "halted", "error": "kill switch engaged"},
+            reason="kill_switch",
+        )
 
     # RBAC: only enforced when caller_permissions is provided (API path). The
     # internal-agent path passes None — assignment to the agent is the authorization.
     req = getattr(tool, "required_permission", None)
     if req and caller_permissions is not None and req not in caller_permissions:
-        return {"status": "error", "error": f"missing required permission: {req}"}
+        return BlockedResult(
+            payload={"status": "error", "error": f"missing required permission: {req}"},
+            reason="rbac",
+        )
 
     # --- Governance gatekeeper (NDB Std §Action Gatekeeper) ---
     if governance is not None:
@@ -133,17 +151,32 @@ async def execute_tool(tool, args: Dict[str, Any], user_id: int, *,
             output_data={"decision": verdict.decision.value, "reason": verdict.reason},
         )
         if verdict.decision is Decision.DENY:
-            return {"status": "denied", "error": verdict.reason}
+            return BlockedResult(
+                payload={"status": "denied", "error": verdict.reason},
+                reason="gatekeeper_deny",
+            )
         if verdict.decision is Decision.NEEDS_APPROVAL and not approved:
             await _create_approval(tool, args, user_id)
-            return {"status": "needs_approval", "error": verdict.reason}
+            return BlockedResult(
+                payload={"status": "needs_approval", "error": verdict.reason},
+                reason="gatekeeper_approval",
+            )
 
     # Approval gate for high-permission tools.
     if getattr(tool, "permission_level", "medium") == "high" and not approved:
         await _create_approval(tool, args, user_id)
-        return {"status": "needs_approval",
-                "error": "High-permission tool requires approval"}
+        return BlockedResult(
+            payload={"status": "needs_approval",
+                     "error": "High-permission tool requires approval"},
+            reason="high_permission",
+        )
 
+    return None
+
+
+async def _pool_execute(ctx: ToolCallContext, args: Dict[str, Any]) -> Dict[str, Any]:
+    """Build argv + run tool-runner (+ safety envelope). Unchanged semantics."""
+    tool = ctx.tool
     try:
         schema = json.loads(tool.input_schema_json) if tool.input_schema_json else {}
     except json.JSONDecodeError:
@@ -190,3 +223,29 @@ async def execute_tool(tool, args: Dict[str, Any], user_id: int, *,
         await register_rollback(action_id, tool, args, ttl_seconds=3600)
         result["action_id"] = action_id
     return result
+
+
+async def execute_tool(tool, args: Dict[str, Any], user_id: int, *,
+                       approved: bool = False,
+                       caller_permissions: Optional[set] = None,
+                       governance: "GovernanceContext | None" = None,
+                       confidence: Optional[float] = None) -> Dict[str, Any]:
+    """Validate args, gate on RBAC/approval, run in the tool-runner. JSON-safe result.
+
+    All stages go through ``agent_core.pipeline.run_tool_call`` (INV-28).
+    """
+    return await run_tool_call(
+        tool_name=getattr(tool, "name", None) or "pool_tool",
+        arguments=args,
+        tool=tool,
+        user_id=user_id,
+        metadata={
+            "approved": approved,
+            "caller_permissions": caller_permissions,
+            "governance": governance,
+            "confidence": confidence,
+            "backend": "pool",
+        },
+        before_tool_call=_pool_before_tool_call,
+        execute=_pool_execute,
+    )

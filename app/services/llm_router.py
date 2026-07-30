@@ -1,31 +1,26 @@
-"""LLM model routing service."""
+"""LLM model routing service.
+
+M0a-1: pure helpers and resilience live in ``packages/llm_router``. This module
+keeps DB/provider/master-config/PII wiring and business methods (parse_intent,
+generate_summary, build_chat_system_prompt).
+"""
 import asyncio
 import json
 import logging
-import re
 from types import SimpleNamespace
 from typing import Dict, Any, Optional, List
 from openai import AsyncOpenAI
 
+from llm_router import acall_with_retry, rate_limit
+from llm_router.utils import (
+    extract_json_object as _extract_json_object_pure,
+    model_name as _model_name,
+    strip_think_blocks as _strip_think_blocks_pure,
+)
+
 logger = logging.getLogger(__name__)
 
 from app.config import settings
-from app.core.llm_resilience import acall_with_retry, rate_limit
-
-
-def _model_name(model) -> Optional[str]:
-    """Normalize a model reference to the bare model-name string the provider expects.
-
-    A provider's ``models`` are stored as ``{"name": ..., "model_type": ...}`` dicts,
-    and the UI may pass a model picked from that list as the whole object. The OpenAI
-    client must receive just the name string, or the provider rejects the request with
-    ``unknown model '{'name': ...}'``. Accepts str, dict, pydantic ModelInfo, or None.
-    """
-    if model is None or isinstance(model, str):
-        return model
-    if isinstance(model, dict):
-        return model.get("name")
-    return getattr(model, "name", None) or str(model)
 
 
 def _record_generation(name, model, input_messages, output, response,
@@ -209,26 +204,8 @@ class LLMRouter:
 
     @staticmethod
     def _strip_think_blocks(text: str) -> str:
-        """Remove provider-specific reasoning tags from visible output.
-
-        <think>...</think> (and variants like <think>0, <think>_1) and
-        <reasoning>...</reasoning> are always stripped — they are internal model
-        chain-of-thought, never meant for the end user. Other markup follows
-        ``_should_strip_think()`` via the caller.
-        """
-        if not text:
-            return text
-        # Internal CoT blocks — always stripped regardless of preserve_think.
-        # Multiple tag variants observed across providers (MiniMax M3, Qwen3,
-        # DeepSeek, etc.): <think>, <think>0, <think>_1, <think>abc; and
-        # <reasoning>...</reasoning>.
-        text = re.sub(
-            r"<think[^>]*>[\s\S]*?</think>\s*", "", text, flags=re.IGNORECASE
-        )
-        text = re.sub(
-            r"<reasoning>[\s\S]*?</reasoning>\s*", "", text, flags=re.IGNORECASE
-        )
-        return text.strip()
+        """Remove provider-specific reasoning tags from visible output."""
+        return _strip_think_blocks_pure(text)
 
     def _guard_messages(self, messages, pii_policy=None):
         """Redact PII + block secrets across all message contents (A5).
@@ -269,52 +246,8 @@ class LLMRouter:
 
     @staticmethod
     def _extract_json_object(text: str) -> Optional[Dict[str, Any]]:
-        """
-        Extract and parse the first balanced top-level JSON object from text.
-        Handles provider outputs like: <think>...</think>{...json...}
-        """
-        cleaned = LLMRouter._strip_think_blocks(text)
-
-        # Fast path: pure JSON
-        try:
-            data = json.loads(cleaned)
-            if isinstance(data, dict):
-                return data
-        except json.JSONDecodeError:
-            pass
-
-        # Balanced-brace scan
-        start = cleaned.find("{")
-        if start < 0:
-            return None
-        depth = 0
-        in_str = False
-        esc = False
-        for i in range(start, len(cleaned)):
-            ch = cleaned[i]
-            if in_str:
-                if esc:
-                    esc = False
-                elif ch == "\\":
-                    esc = True
-                elif ch == '"':
-                    in_str = False
-                continue
-            if ch == '"':
-                in_str = True
-            elif ch == "{":
-                depth += 1
-            elif ch == "}":
-                depth -= 1
-                if depth == 0:
-                    candidate = cleaned[start:i + 1]
-                    try:
-                        data = json.loads(candidate)
-                        if isinstance(data, dict):
-                            return data
-                    except json.JSONDecodeError:
-                        return None
-        return None
+        """Extract and parse the first balanced top-level JSON object from text."""
+        return _extract_json_object_pure(text)
 
     async def _get_provider_from_db(self, provider_id: int) -> Optional[Dict[str, Any]]:
         """Fetch provider config from database by ID."""
