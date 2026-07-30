@@ -117,6 +117,8 @@ M0b ────────────┘                                     
 
 ## M1 · 壳 + Sidecar + 单工作台骨架
 
+**状态：骨架已落盘（2026-07-30）** — `apps/desktop/` + `tests/test_desktop_sidecar.py`。仍待：托盘、真实 MCP 孤儿治理实装、本地会话 JSONL 持久化、敏感目录规范完整落地。
+
 **范围**：Electron 主进程（窗口 / 托盘 / sidecar 生命周期）、stdin/stdout JSONL 通道、单工作台布局骨架、`_run_loop` 接入 `steer` / `abort`、**MCP 连接器 spawn 与孤儿治理**、**能力档位骨架**（会话创建时确定，Operations 按档位注入；只读档不注入本地 `ExecOperations`）、**敏感数据落位规范**（临时目录统一管理、禁用崩溃上报、日志脱敏与保留上限）。M1 只允许 fake/mock Operations 和本地 mock LLM；不得执行真实宿主工具，不得连接真实 Provider。
 
 **关键改动**：`_run_loop` 每轮检查中断信号（`asyncio.Event`）；`steer` 表现为追加一条 user 消息并跳过当前步。改动很小——`_run_loop` 本就是 yield 语义事件的生成器。

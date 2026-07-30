@@ -102,11 +102,19 @@ async def run_loop(
     compact: Optional[CompactPort] = None,
     audit_bus: Optional["AuditBus"] = None,
     execution_mode_for: Optional[ExecutionModePort] = None,
+    abort_event: Optional[asyncio.Event] = None,
+    steer_queue: Optional[asyncio.Queue] = None,
 ) -> AsyncIterator[Dict[str, Any]]:
     """Shared tool-call loop. Yields semantic events (same shape as before).
 
     Audit events (INV-29) are emitted via ``audit_bus`` / process default and
     are always awaited. With zero subscribers this is a no-op.
+
+    M1 controls:
+      * ``abort_event`` — if set, stop at the next step boundary (status=aborted)
+      * ``steer_queue`` — drained each step; each item is a user message string
+        appended to the context (skip current model step semantics: inject then
+        continue so the next chat sees the steer)
     """
     agent_run_id = config.agent_run_id or str(uuid.uuid4())
     messages: List[Dict[str, Any]] = [{"role": "system", "content": system_prompt}]
@@ -144,6 +152,31 @@ async def run_loop(
 
     try:
         for step in range(config.max_steps):
+            if abort_event is not None and abort_event.is_set():
+                terminal_status = "aborted"
+                terminal_error = "aborted by user"
+                yield {
+                    "type": "error",
+                    "status": "aborted",
+                    "error": terminal_error,
+                    "tool_call_log": tool_call_log,
+                }
+                return
+
+            # Steer: inject user messages before the model step (M1)
+            if steer_queue is not None:
+                while True:
+                    try:
+                        steered = steer_queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
+                    if steered is None:
+                        continue
+                    text = str(steered)
+                    messages.append({"role": "user", "content": text})
+                    new_messages.append({"role": "user", "content": text})
+                    yield {"type": "steer", "message": text}
+
             turn_id = f"{agent_run_id}:{step}"
             await emit_audit(
                 audit_bus,
@@ -161,6 +194,8 @@ async def run_loop(
             msg = None
             last_err: Optional[Exception] = None
             for attempt in range(config.llm_retry_max + 1):
+                if abort_event is not None and abort_event.is_set():
+                    break
                 try:
                     # exclude_from_context: UI/audit may keep them; model never sees them
                     model_messages = messages_for_model(messages)
@@ -178,6 +213,16 @@ async def run_loop(
                             "attempt": attempt + 1,
                         }
                         await asyncio.sleep(config.llm_retry_backoff * (attempt + 1))
+            if abort_event is not None and abort_event.is_set():
+                terminal_status = "aborted"
+                terminal_error = "aborted by user"
+                yield {
+                    "type": "error",
+                    "status": "aborted",
+                    "error": terminal_error,
+                    "tool_call_log": tool_call_log,
+                }
+                return
             if msg is None:
                 terminal_status = "failed"
                 terminal_error = (

@@ -64,7 +64,7 @@ Web 端 21 个 Tab 功能不减。**对已部署 CyberGuard 的客户，桌面�
 
 ## 当前状态
 
-**M0a-1 · 结构：只搬不改。**（进行中）
+**M1 · 壳 + Sidecar + 单工作台骨架**（进行中；mock only）
 
 抽取 `packages/llm_router` 与 `packages/agent_core`、建立 Operations 抽象、工具执行五步管线骨架就位、审计事件流。纯服务端重构，不写任何桌面端代码。
 
