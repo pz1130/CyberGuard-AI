@@ -4,6 +4,7 @@ Moved from ``InternalAgentRunner._run_loop`` with I/O behind ports:
   * ``chat`` — LLM completion (may return str or message with tool_calls)
   * ``dispatch`` — execute one tool_call, return string result
   * ``compact`` — optional in-run history compaction
+  * ``audit_bus`` — optional AuditBus (default process bus; empty = no-op)
 
 No app.*, DB, or FastAPI imports.
 """
@@ -11,10 +12,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from collections import Counter
 from dataclasses import dataclass
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Optional, Sequence
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict, List, Optional, Sequence, TYPE_CHECKING
 
+from agent_core.events import AuditLayer, AuditPhase, emit_audit
 from agent_core.loop_utils import (
     AUTO_CONTINUE_MAX,
     LLM_RETRY_BACKOFF,
@@ -28,6 +31,9 @@ from agent_core.loop_utils import (
     tool_call_fingerprint,
     truncate_tool_result,
 )
+
+if TYPE_CHECKING:
+    from agent_core.events import AuditBus
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +55,7 @@ class RunLoopConfig:
     llm_retry_backoff: float = LLM_RETRY_BACKOFF
     tool_result_max_chars: int = TOOL_RESULT_MAX_CHARS
     reflect_guidance: str = REFLECT_GUIDANCE
+    agent_run_id: Optional[str] = None
 
 
 async def run_loop(
@@ -61,17 +68,14 @@ async def run_loop(
     chat: ChatPort,
     dispatch: DispatchPort,
     compact: Optional[CompactPort] = None,
+    audit_bus: Optional["AuditBus"] = None,
 ) -> AsyncIterator[Dict[str, Any]]:
     """Shared tool-call loop. Yields semantic events (same shape as before).
 
-      {"type": "start", "agent_id", "agent_name"}
-      {"type": "tool_call_start", "name", "arguments", "call_id"}
-      {"type": "tool_call_end", "name", "call_id", "result_preview", "error"}
-      {"type": "answer_ready", "messages", "new_messages",
-                               "candidate_text", "tool_call_log"}
-      {"type": "error", "status": "failed"|"error", "error", ["tool_call_log"]}
-      {"type": "reflection", ...}
+    Audit events (INV-29) are emitted via ``audit_bus`` / process default and
+    are always awaited. With zero subscribers this is a no-op.
     """
+    agent_run_id = config.agent_run_id or str(uuid.uuid4())
     messages: List[Dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     messages.extend(list(history))
     messages.append({"role": "user", "content": task})
@@ -86,207 +90,335 @@ async def run_loop(
     tool_calls_made = 0
     active_tools = tools
 
+    await emit_audit(
+        audit_bus,
+        layer=AuditLayer.AGENT,
+        phase=AuditPhase.START,
+        name=config.agent_name or "agent",
+        payload={"task_preview": (task or "")[:200]},
+        agent_run_id=agent_run_id,
+    )
+
     yield {
         "type": "start",
         "agent_id": config.agent_id,
         "agent_name": config.agent_name,
+        "agent_run_id": agent_run_id,
     }
 
-    for step in range(config.max_steps):
-        if compact is not None:
-            messages = await compact(messages)
+    terminal_status = "error"
+    terminal_error: Optional[str] = None
 
-        msg = None
-        last_err: Optional[Exception] = None
-        for attempt in range(config.llm_retry_max + 1):
-            try:
-                msg = await chat(
-                    messages=messages,
-                    tools=active_tools if active_tools else None,
-                )
-                break
-            except Exception as e:
-                last_err = e
-                if attempt < config.llm_retry_max:
-                    yield {
-                        "type": "reflection",
-                        "reason": "llm_error",
-                        "attempt": attempt + 1,
-                    }
-                    await asyncio.sleep(config.llm_retry_backoff * (attempt + 1))
-        if msg is None:
-            yield {
-                "type": "error",
-                "status": "failed",
-                "error": (
+    try:
+        for step in range(config.max_steps):
+            turn_id = f"{agent_run_id}:{step}"
+            await emit_audit(
+                audit_bus,
+                layer=AuditLayer.TURN,
+                phase=AuditPhase.START,
+                name=f"step_{step}",
+                payload={"step": step},
+                agent_run_id=agent_run_id,
+                turn_id=turn_id,
+            )
+
+            if compact is not None:
+                messages = await compact(messages)
+
+            msg = None
+            last_err: Optional[Exception] = None
+            for attempt in range(config.llm_retry_max + 1):
+                try:
+                    msg = await chat(
+                        messages=messages,
+                        tools=active_tools if active_tools else None,
+                    )
+                    break
+                except Exception as e:
+                    last_err = e
+                    if attempt < config.llm_retry_max:
+                        yield {
+                            "type": "reflection",
+                            "reason": "llm_error",
+                            "attempt": attempt + 1,
+                        }
+                        await asyncio.sleep(config.llm_retry_backoff * (attempt + 1))
+            if msg is None:
+                terminal_status = "failed"
+                terminal_error = (
                     f"LLM error at step {step} after "
                     f"{config.llm_retry_max + 1} attempts: {last_err}"
-                ),
+                )
+                await emit_audit(
+                    audit_bus,
+                    layer=AuditLayer.TURN,
+                    phase=AuditPhase.END,
+                    name=f"step_{step}",
+                    payload={"status": "failed", "error": terminal_error},
+                    agent_run_id=agent_run_id,
+                    turn_id=turn_id,
+                )
+                yield {
+                    "type": "error",
+                    "status": "failed",
+                    "error": terminal_error,
+                }
+                return
+
+            if isinstance(msg, str):
+                tool_calls = None
+                text_only = True
+                candidate_text = msg
+            else:
+                tool_calls = getattr(msg, "tool_calls", None)
+                text_only = not tool_calls
+                candidate_text = getattr(msg, "content", None) or ""
+
+            if text_only:
+                if (
+                    active_tools
+                    and not tool_used_ever
+                    and auto_continue_used < config.auto_continue_max
+                ):
+                    auto_continue_used += 1
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                "如果任务尚未完成，请调用相应工具继续；"
+                                "如果确认已完成，请直接给出最终答复。"
+                            ),
+                        }
+                    )
+                    await emit_audit(
+                        audit_bus,
+                        layer=AuditLayer.TURN,
+                        phase=AuditPhase.END,
+                        name=f"step_{step}",
+                        payload={"status": "auto_continue"},
+                        agent_run_id=agent_run_id,
+                        turn_id=turn_id,
+                    )
+                    continue
+                await emit_audit(
+                    audit_bus,
+                    layer=AuditLayer.MESSAGE,
+                    phase=AuditPhase.END,
+                    name="assistant",
+                    payload={"kind": "answer", "preview": (candidate_text or "")[:200]},
+                    agent_run_id=agent_run_id,
+                    turn_id=turn_id,
+                )
+                await emit_audit(
+                    audit_bus,
+                    layer=AuditLayer.TURN,
+                    phase=AuditPhase.END,
+                    name=f"step_{step}",
+                    payload={"status": "answer_ready"},
+                    agent_run_id=agent_run_id,
+                    turn_id=turn_id,
+                )
+                terminal_status = "ok"
+                yield {
+                    "type": "answer_ready",
+                    "messages": messages,
+                    "new_messages": new_messages,
+                    "candidate_text": candidate_text,
+                    "tool_call_log": tool_call_log,
+                }
+                return
+
+            tool_used_ever = True
+            assistant_msg = {
+                "role": "assistant",
+                "content": getattr(msg, "content", None) or "",
+                "tool_calls": [
+                    {
+                        "id": c.id,
+                        "type": "function",
+                        "function": {
+                            "name": c.function.name,
+                            "arguments": c.function.arguments,
+                        },
+                    }
+                    for c in tool_calls
+                ],
             }
-            return
+            messages.append(assistant_msg)
+            new_messages.append(assistant_msg)
 
-        if isinstance(msg, str):
-            tool_calls = None
-            text_only = True
-            candidate_text = msg
-        else:
-            tool_calls = getattr(msg, "tool_calls", None)
-            text_only = not tool_calls
-            candidate_text = getattr(msg, "content", None) or ""
+            for c in tool_calls:
+                yield {
+                    "type": "tool_call_start",
+                    "name": c.function.name,
+                    "arguments": c.function.arguments,
+                    "call_id": c.id,
+                }
 
-        if text_only:
-            if (
-                active_tools
-                and not tool_used_ever
-                and auto_continue_used < config.auto_continue_max
-            ):
-                auto_continue_used += 1
+            loop_hit = False
+            budget_hit = False
+
+            async def _dispatch_or_reflect(call):
+                nonlocal loop_hit, budget_hit, tool_calls_made
+                if tool_calls_made >= config.tool_call_budget:
+                    budget_hit = True
+                    logger.warning(
+                        "agent %s: tool-call budget (%d) exhausted",
+                        config.agent_name,
+                        config.tool_call_budget,
+                    )
+                    return budget_notice(config.tool_call_budget)
+                tool_calls_made += 1
+                fp = tool_call_fingerprint(call.function.name, call.function.arguments)
+                fingerprints[fp] += 1
+                if fingerprints[fp] >= config.loop_detect_threshold:
+                    loop_hit = True
+                    logger.warning(
+                        "agent %s: tool-call loop on %r (x%d)",
+                        config.agent_name,
+                        call.function.name,
+                        fingerprints[fp],
+                    )
+                    return loop_notice(call.function.name, fingerprints[fp])
+                await emit_audit(
+                    audit_bus,
+                    layer=AuditLayer.TOOL_EXECUTION,
+                    phase=AuditPhase.START,
+                    name=call.function.name,
+                    payload={"arguments_preview": (call.function.arguments or "")[:200]},
+                    agent_run_id=agent_run_id,
+                    turn_id=turn_id,
+                    tool_call_id=getattr(call, "id", None),
+                )
+                try:
+                    out = await dispatch(call)
+                finally:
+                    await emit_audit(
+                        audit_bus,
+                        layer=AuditLayer.TOOL_EXECUTION,
+                        phase=AuditPhase.END,
+                        name=call.function.name,
+                        payload={},
+                        agent_run_id=agent_run_id,
+                        turn_id=turn_id,
+                        tool_call_id=getattr(call, "id", None),
+                    )
+                return out
+
+            results = await asyncio.gather(
+                *[_dispatch_or_reflect(c) for c in tool_calls]
+            )
+            for call, result_str in zip(tool_calls, results):
+                result_str = truncate_tool_result(
+                    result_str, max_chars=config.tool_result_max_chars
+                )
+                tool_call_log.append(
+                    {
+                        "name": call.function.name,
+                        "arguments": call.function.arguments,
+                        "result_preview": result_str[:200],
+                    }
+                )
+                tool_msg = {
+                    "role": "tool",
+                    "tool_call_id": call.id,
+                    "content": result_str,
+                }
+                messages.append(tool_msg)
+                new_messages.append(tool_msg)
+                yield {
+                    "type": "tool_call_end",
+                    "name": call.function.name,
+                    "call_id": call.id,
+                    "result_preview": result_str[:200],
+                    "error": result_str.startswith(
+                        ("ERROR", "LOOP_DETECTED", "BUDGET_EXHAUSTED")
+                    ),
+                }
+
+            if budget_hit:
+                active_tools = None
+                yield {
+                    "type": "reflection",
+                    "reason": "budget",
+                    "tool_calls_made": tool_calls_made,
+                }
                 messages.append(
                     {
                         "role": "user",
                         "content": (
-                            "如果任务尚未完成，请调用相应工具继续；"
-                            "如果确认已完成，请直接给出最终答复。"
+                            f"已达到本次任务的工具调用上限（{config.tool_call_budget} 次），"
+                            f"不会再执行任何工具。请基于已获取的信息直接给出最终答复。"
                         ),
                     }
                 )
+                await emit_audit(
+                    audit_bus,
+                    layer=AuditLayer.TURN,
+                    phase=AuditPhase.END,
+                    name=f"step_{step}",
+                    payload={"status": "budget"},
+                    agent_run_id=agent_run_id,
+                    turn_id=turn_id,
+                )
                 continue
-            yield {
-                "type": "answer_ready",
-                "messages": messages,
-                "new_messages": new_messages,
-                "candidate_text": candidate_text,
-                "tool_call_log": tool_call_log,
-            }
-            return
 
-        tool_used_ever = True
-        assistant_msg = {
-            "role": "assistant",
-            "content": getattr(msg, "content", None) or "",
-            "tool_calls": [
-                {
-                    "id": c.id,
-                    "type": "function",
-                    "function": {
-                        "name": c.function.name,
-                        "arguments": c.function.arguments,
-                    },
-                }
-                for c in tool_calls
-            ],
-        }
-        messages.append(assistant_msg)
-        new_messages.append(assistant_msg)
-
-        for c in tool_calls:
-            yield {
-                "type": "tool_call_start",
-                "name": c.function.name,
-                "arguments": c.function.arguments,
-                "call_id": c.id,
-            }
-
-        loop_hit = False
-        budget_hit = False
-
-        async def _dispatch_or_reflect(call):
-            nonlocal loop_hit, budget_hit, tool_calls_made
-            if tool_calls_made >= config.tool_call_budget:
-                budget_hit = True
-                logger.warning(
-                    "agent %s: tool-call budget (%d) exhausted",
-                    config.agent_name,
-                    config.tool_call_budget,
-                )
-                return budget_notice(config.tool_call_budget)
-            tool_calls_made += 1
-            fp = tool_call_fingerprint(call.function.name, call.function.arguments)
-            fingerprints[fp] += 1
-            if fingerprints[fp] >= config.loop_detect_threshold:
-                loop_hit = True
-                logger.warning(
-                    "agent %s: tool-call loop on %r (x%d)",
-                    config.agent_name,
-                    call.function.name,
-                    fingerprints[fp],
-                )
-                return loop_notice(call.function.name, fingerprints[fp])
-            return await dispatch(call)
-
-        results = await asyncio.gather(
-            *[_dispatch_or_reflect(c) for c in tool_calls]
-        )
-        for call, result_str in zip(tool_calls, results):
-            result_str = truncate_tool_result(
-                result_str, max_chars=config.tool_result_max_chars
-            )
-            tool_call_log.append(
-                {
-                    "name": call.function.name,
-                    "arguments": call.function.arguments,
-                    "result_preview": result_str[:200],
-                }
-            )
-            tool_msg = {
-                "role": "tool",
-                "tool_call_id": call.id,
-                "content": result_str,
-            }
-            messages.append(tool_msg)
-            new_messages.append(tool_msg)
-            yield {
-                "type": "tool_call_end",
-                "name": call.function.name,
-                "call_id": call.id,
-                "result_preview": result_str[:200],
-                "error": result_str.startswith(
-                    ("ERROR", "LOOP_DETECTED", "BUDGET_EXHAUSTED")
-                ),
-            }
-
-        if budget_hit:
-            active_tools = None
-            yield {
-                "type": "reflection",
-                "reason": "budget",
-                "tool_calls_made": tool_calls_made,
-            }
-            messages.append(
-                {
-                    "role": "user",
-                    "content": (
-                        f"已达到本次任务的工具调用上限（{config.tool_call_budget} 次），"
-                        f"不会再执行任何工具。请基于已获取的信息直接给出最终答复。"
-                    ),
-                }
-            )
-            continue
-
-        if loop_hit:
-            reflections_used += 1
-            yield {
-                "type": "reflection",
-                "reason": "loop",
-                "count": reflections_used,
-            }
-            if reflections_used > config.reflect_max:
+            if loop_hit:
+                reflections_used += 1
                 yield {
-                    "type": "error",
-                    "status": "error",
-                    "error": (
+                    "type": "reflection",
+                    "reason": "loop",
+                    "count": reflections_used,
+                }
+                if reflections_used > config.reflect_max:
+                    terminal_status = "error"
+                    terminal_error = (
                         f"aborted: agent stuck in a tool-call loop "
                         f"(repeated identical calls); reflector gave up "
                         f"after {config.reflect_max} nudges"
-                    ),
-                    "tool_call_log": tool_call_log,
-                }
-                return
-            messages.append({"role": "user", "content": config.reflect_guidance})
+                    )
+                    await emit_audit(
+                        audit_bus,
+                        layer=AuditLayer.TURN,
+                        phase=AuditPhase.END,
+                        name=f"step_{step}",
+                        payload={"status": "loop_abort"},
+                        agent_run_id=agent_run_id,
+                        turn_id=turn_id,
+                    )
+                    yield {
+                        "type": "error",
+                        "status": "error",
+                        "error": terminal_error,
+                        "tool_call_log": tool_call_log,
+                    }
+                    return
+                messages.append({"role": "user", "content": config.reflect_guidance})
 
-    yield {
-        "type": "error",
-        "status": "error",
-        "error": f"exceeded tool_loop_max_steps ({config.max_steps})",
-        "tool_call_log": tool_call_log,
-    }
+            await emit_audit(
+                audit_bus,
+                layer=AuditLayer.TURN,
+                phase=AuditPhase.END,
+                name=f"step_{step}",
+                payload={"status": "tools_done", "tool_count": len(tool_calls)},
+                agent_run_id=agent_run_id,
+                turn_id=turn_id,
+            )
+
+        terminal_status = "error"
+        terminal_error = f"exceeded tool_loop_max_steps ({config.max_steps})"
+        yield {
+            "type": "error",
+            "status": "error",
+            "error": terminal_error,
+            "tool_call_log": tool_call_log,
+        }
+    finally:
+        await emit_audit(
+            audit_bus,
+            layer=AuditLayer.AGENT,
+            phase=AuditPhase.END,
+            name=config.agent_name or "agent",
+            payload={"status": terminal_status, "error": terminal_error},
+            agent_run_id=agent_run_id,
+        )

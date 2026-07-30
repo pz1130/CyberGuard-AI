@@ -19,7 +19,14 @@ from agent_core.compressor import (
     maybe_compress,
     select_window,
 )
-from agent_core.events import AuditBus, AuditEvent, AuditLayer, AuditPhase
+from agent_core.events import (
+    AuditBus,
+    AuditEvent,
+    AuditLayer,
+    AuditPhase,
+    emit_audit,
+    get_default_audit_bus,
+)
 from agent_core.loop_utils import (
     AUTO_CONTINUE_MAX,
     CONTEXT_COMPACT_CHARS,
@@ -68,6 +75,8 @@ __all__ = [
     "AuditEvent",
     "AuditLayer",
     "AuditPhase",
+    "emit_audit",
+    "get_default_audit_bus",
     "estimate_tokens",
     "select_window",
     "build_summary_user_message",

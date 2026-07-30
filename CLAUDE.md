@@ -139,8 +139,11 @@ docs/
 
 1. ~~`packages/llm_router`：resilience + pure utils~~ ✅（业务方法仍在 `app/`；chat/stream/embed 纯路径可再迁）
 2. ~~Operations 抽象 + 工具五步管线骨架（`validate_arguments` pass-through）~~ ✅
-3. ~~`packages/agent_core`：run loop / compressor / compact / loop_utils~~ ✅（`InternalAgentRunner` 薄适配）
-4. 包内 lint：`llm_router` 无 agent 概念；`agent_core` 无 `app.*` / sqlalchemy / redis / celery / fastapi（已有 AST 用例）
+3. ~~`packages/agent_core`：run loop / compressor / compact / loop_utils~~ ✅
+4. ~~审计事件流骨架（emit await，默认无订阅）~~ ✅
+5. 包内 lint：`llm_router` 无 agent 概念；`agent_core` 无 `app.*` / sqlalchemy / redis / celery / fastapi（已有 AST 用例）
+
+**M0a-1 主路径完成。** 下一阶段见 `docs/desktop/03-ROADMAP.md` **M0a-2**（schema 校验、默认串行、结构化错误、压缩加固）。
 
 ---
 

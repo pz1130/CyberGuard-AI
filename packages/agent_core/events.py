@@ -61,3 +61,38 @@ class AuditBus:
         """
         for handler in self._subscribers:
             await handler(event)
+
+
+# Process-default bus: empty until app/desktop subscribes. Emit is a no-op
+# with zero subscribers (zero product behavior change).
+_default_bus = AuditBus()
+
+
+def get_default_audit_bus() -> AuditBus:
+    return _default_bus
+
+
+async def emit_audit(
+    bus: Optional[AuditBus],
+    *,
+    layer: AuditLayer,
+    phase: AuditPhase,
+    name: str,
+    payload: Optional[Dict[str, Any]] = None,
+    agent_run_id: Optional[str] = None,
+    turn_id: Optional[str] = None,
+    tool_call_id: Optional[str] = None,
+) -> None:
+    """Emit on ``bus`` or the process default. Always awaited by callers."""
+    target = bus if bus is not None else _default_bus
+    await target.emit(
+        AuditEvent(
+            layer=layer,
+            phase=phase,
+            name=name,
+            payload=dict(payload or {}),
+            agent_run_id=agent_run_id,
+            turn_id=turn_id,
+            tool_call_id=tool_call_id,
+        )
+    )

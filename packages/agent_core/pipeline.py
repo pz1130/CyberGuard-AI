@@ -14,7 +14,10 @@ lands in M0a-2 (INV-30). Existing argv/schema checks may still live inside
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Dict, Mapping, MutableMapping, Optional
+from typing import Any, Awaitable, Callable, Dict, Mapping, MutableMapping, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from agent_core.events import AuditBus
 
 
 @dataclass
@@ -83,12 +86,25 @@ class PipelineHooks:
 class ToolPipeline:
     """Runs the five stages in order. All tool execution should go through this."""
 
-    def __init__(self, hooks: PipelineHooks):
+    def __init__(self, hooks: PipelineHooks, audit_bus: Optional["AuditBus"] = None):
         if hooks.execute is None:
             raise ValueError("PipelineHooks.execute is required")
         self.hooks = hooks
+        self.audit_bus = audit_bus
 
     async def run(self, ctx: ToolCallContext) -> Any:
+        from agent_core.events import AuditLayer, AuditPhase, emit_audit
+
+        await emit_audit(
+            self.audit_bus,
+            layer=AuditLayer.TOOL_EXECUTION,
+            phase=AuditPhase.START,
+            name=ctx.tool_name,
+            payload={"arguments": dict(ctx.arguments)},
+            tool_call_id=str(ctx.metadata.get("tool_call_id") or "") or None,
+            agent_run_id=str(ctx.metadata.get("agent_run_id") or "") or None,
+        )
+
         args = await self.hooks.prepare_arguments(ctx)
         ctx.prepared_arguments = args
 
@@ -100,11 +116,29 @@ class ToolPipeline:
             ctx.blocked = True
             ctx.block_reason = blocked.reason
             ctx.result = blocked.payload
+            await emit_audit(
+                self.audit_bus,
+                layer=AuditLayer.TOOL_EXECUTION,
+                phase=AuditPhase.END,
+                name=ctx.tool_name,
+                payload={"blocked": True, "reason": blocked.reason},
+                tool_call_id=str(ctx.metadata.get("tool_call_id") or "") or None,
+                agent_run_id=str(ctx.metadata.get("agent_run_id") or "") or None,
+            )
             return blocked.payload
 
         result = await self.hooks.execute(ctx, args)  # type: ignore[misc]
         result = await self.hooks.after_tool_call(ctx, result)
         ctx.result = result
+        await emit_audit(
+            self.audit_bus,
+            layer=AuditLayer.TOOL_EXECUTION,
+            phase=AuditPhase.END,
+            name=ctx.tool_name,
+            payload={"blocked": False},
+            tool_call_id=str(ctx.metadata.get("tool_call_id") or "") or None,
+            agent_run_id=str(ctx.metadata.get("agent_run_id") or "") or None,
+        )
         return result
 
 
@@ -120,6 +154,7 @@ async def run_tool_call(
     validate_arguments: Optional[ValidateFn] = None,
     before_tool_call: Optional[BeforeFn] = None,
     after_tool_call: Optional[AfterFn] = None,
+    audit_bus: Optional["AuditBus"] = None,
 ) -> Any:
     """Convenience entry: build context + hooks and run the pipeline.
 
@@ -140,4 +175,4 @@ async def run_tool_call(
         user_id=user_id,
         metadata=metadata if metadata is not None else {},
     )
-    return await ToolPipeline(hooks).run(ctx)
+    return await ToolPipeline(hooks, audit_bus=audit_bus).run(ctx)

@@ -134,6 +134,103 @@ async def test_run_loop_loop_detection_aborts():
 
 
 @pytest.mark.asyncio
+async def test_run_loop_emits_audit_agent_and_turn():
+    from agent_core.events import AuditBus, AuditLayer, AuditPhase
+
+    bus = AuditBus()
+    seen = []
+
+    async def sub(ev):
+        seen.append((ev.layer, ev.phase, ev.name))
+
+    bus.subscribe(sub)
+
+    async def chat(*, messages, tools=None):
+        return "ok"
+
+    async def dispatch(call):
+        raise AssertionError("no tools")
+
+    async for _ in run_loop(
+        task="t",
+        system_prompt="s",
+        history=[],
+        tools=None,
+        config=RunLoopConfig(max_steps=2, tool_call_budget=5, agent_name="a1"),
+        chat=chat,
+        dispatch=dispatch,
+        audit_bus=bus,
+    ):
+        pass
+
+    layers = [s[0] for s in seen]
+    assert AuditLayer.AGENT in layers
+    assert AuditLayer.TURN in layers
+    # agent start then end (finally)
+    assert seen[0][0] is AuditLayer.AGENT and seen[0][1] is AuditPhase.START
+    assert seen[-1][0] is AuditLayer.AGENT and seen[-1][1] is AuditPhase.END
+
+
+@pytest.mark.asyncio
+async def test_audit_emit_failure_aborts_turn():
+    """INV-29: subscriber errors must propagate (not swallowed)."""
+    from agent_core.events import AuditBus
+
+    bus = AuditBus()
+
+    async def bad(ev):
+        raise RuntimeError("audit disk full")
+
+    bus.subscribe(bad)
+
+    async def chat(*, messages, tools=None):
+        return "x"
+
+    async def dispatch(call):
+        return "y"
+
+    with pytest.raises(RuntimeError, match="audit disk full"):
+        async for _ in run_loop(
+            task="t",
+            system_prompt="s",
+            history=[],
+            tools=None,
+            config=RunLoopConfig(max_steps=1, tool_call_budget=1, agent_name="a"),
+            chat=chat,
+            dispatch=dispatch,
+            audit_bus=bus,
+        ):
+            pass
+
+
+@pytest.mark.asyncio
+async def test_pipeline_emits_tool_execution_events():
+    from agent_core.events import AuditBus, AuditLayer, AuditPhase
+    from agent_core.pipeline import run_tool_call
+
+    bus = AuditBus()
+    seen = []
+
+    async def sub(ev):
+        seen.append((ev.layer, ev.phase, ev.name))
+
+    bus.subscribe(sub)
+
+    async def execute(ctx, args):
+        return {"status": "completed"}
+
+    out = await run_tool_call(
+        tool_name="nmap",
+        arguments={"t": "1"},
+        execute=execute,
+        audit_bus=bus,
+    )
+    assert out["status"] == "completed"
+    assert (AuditLayer.TOOL_EXECUTION, AuditPhase.START, "nmap") in seen
+    assert (AuditLayer.TOOL_EXECUTION, AuditPhase.END, "nmap") in seen
+
+
+@pytest.mark.asyncio
 async def test_maybe_compact_messages_summarizes():
     messages = [{"role": "system", "content": "sys"}]
     for i in range(20):
