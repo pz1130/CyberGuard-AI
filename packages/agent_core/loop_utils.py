@@ -99,13 +99,22 @@ def split_for_compact(
 ) -> tuple[Dict[str, Any], List[Dict[str, Any]], List[Dict[str, Any]]] | None:
     """Split into (system, middle, recent) or None if too short to compact.
 
-    Drops orphaned leading ``tool`` messages from the recent window so a tool
-    message never precedes its assistant tool_calls pair.
+    INV-34: recent always includes the current turn (from last user message)
+    *and* at least ``keep_recent`` messages when possible.
+    Drops orphaned leading ``tool`` messages from the recent window.
     """
     if len(messages) <= keep_recent + 2:
         return None
     system = messages[0]
-    recent = messages[-keep_recent:]
+    turn_start = 1
+    for i in range(len(messages) - 1, 0, -1):
+        if messages[i].get("role") == "user":
+            turn_start = i
+            break
+    tail_start = max(1, len(messages) - keep_recent)
+    # Earlier index keeps more history in "recent" so the full current turn survives.
+    recent_start = min(turn_start, tail_start)
+    recent = list(messages[recent_start:])
     while recent and recent[0].get("role") == "tool":
         recent = recent[1:]
     middle = messages[1 : len(messages) - len(recent)]

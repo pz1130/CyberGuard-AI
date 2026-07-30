@@ -14,10 +14,10 @@ from agent_core.compressor import (  # noqa: F401
     _build_summary_user_message,
     build_summary_user_message,
     compress_history,
-    estimate_tokens,
     select_window,
 )
 from agent_core.compressor import maybe_compress as _maybe_compress_core
+from agent_core.tokens import estimate_tokens, remaining_budget  # noqa: F401
 
 
 def _read_settings() -> tuple[int, int]:

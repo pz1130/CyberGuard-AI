@@ -81,7 +81,10 @@ Web 端 21 个 Tab 功能不减。**对已部署 CyberGuard 的客户，桌面�
 - 用例：`tests/test_agent_core_run_loop.py` + 既有 `test_context_compressor` / 无 DB 的 `test_internal_agent` 守卫
 - 审计事件流：`run_loop` / `ToolPipeline` 经 `emit_audit`（await）；默认 bus 无订阅者 = 产品行为不变；订阅失败向上抛（INV-29）
 
-**M0a-1 内核抽取主路径已完成。** 可选：`llm_router` chat/stream/embed 纯路径、app 侧订阅 bus 写 DB。其后 **M0a-2 语义**。
+**M0a-1 内核抽取主路径已完成。**
+
+**M0a-2 首批已落地**（`tests/test_m0a2_semantics.py`）：schema 校验、默认串行、`is_error`、加权 token、六段压缩+Constraints、当前 turn 保留。  
+仍待：模型 `context_window` 列、方向性截断、exclude_from_context、Provider cache/thinking。
 
 **硬判据：基线测试集全绿，服务端对外行为零变化。** 当前本地可收集到 365 个测试用例；精确数量由 CI 的 `pytest --collect-only` 固定并输出。参数校验、默认串行、结构化错误、压缩加固全部属于 M0a-2。
 

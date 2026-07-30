@@ -1,13 +1,6 @@
-"""Deployment-agnostic agent kernel primitives (M0a-1).
+"""Deployment-agnostic agent kernel primitives (M0a-1/M0a-2).
 
 No ``app.*``, sqlalchemy, redis, celery, or fastapi imports.
-
-Contains:
-- Operations ports (Read / Exec / Edit)
-- Five-step tool policy pipeline
-- Audit event bus skeleton
-- Context compressor pure helpers + async orchestrators
-- Tool-loop utilities, in-run compaction, and ``run_loop`` generator
 """
 
 from agent_core.compact import maybe_compact_messages
@@ -15,10 +8,12 @@ from agent_core.compressor import (
     SUMMARY_PROMPT,
     build_summary_user_message,
     compress_history,
-    estimate_tokens,
     maybe_compress,
     select_window,
 )
+from agent_core.tokens import estimate_tokens, remaining_budget
+from agent_core.schema_validate import SchemaValidationError, validate_tool_arguments
+from agent_core.tool_result import ToolResult, normalize_tool_result
 from agent_core.events import (
     AuditBus,
     AuditEvent,
@@ -78,6 +73,7 @@ __all__ = [
     "emit_audit",
     "get_default_audit_bus",
     "estimate_tokens",
+    "remaining_budget",
     "select_window",
     "build_summary_user_message",
     "compress_history",
@@ -92,6 +88,10 @@ __all__ = [
     "messages_to_text",
     "RunLoopConfig",
     "run_loop",
+    "SchemaValidationError",
+    "validate_tool_arguments",
+    "ToolResult",
+    "normalize_tool_result",
     "TOOL_RESULT_MAX_CHARS",
     "AUTO_CONTINUE_MAX",
     "CONTEXT_COMPACT_CHARS",

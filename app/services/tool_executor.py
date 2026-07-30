@@ -2,9 +2,8 @@
 it in the isolated tool-runner container. See:
   docs/superpowers/specs/2026-05-29-tool-pool-executable-design.md
 
-M0a-1: execution is routed through ``agent_core`` five-step policy pipeline.
-``validate_arguments`` remains pass-through; argv/schema checks still run inside
-``execute`` so external behavior is unchanged.
+M0a-2: schema validation runs in the pipeline (INV-30); build_argv still
+validates placeholders. Results include ``is_error`` (INV-32).
 """
 import json
 import os
@@ -15,6 +14,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 
 from agent_core.pipeline import BlockedResult, ToolCallContext, run_tool_call
+from agent_core.schema_validate import SchemaValidationError, validate_tool_arguments
 
 
 TOOL_RUNNER_URL = os.environ.get("TOOL_RUNNER_URL", "http://tool-runner:9000")
@@ -35,33 +35,12 @@ def build_argv(command_template: str, input_schema: Optional[Dict[str, Any]],
     making command injection structurally impossible.
     """
     schema = input_schema or {}
+    try:
+        args = validate_tool_arguments(args, schema if schema.get("properties") else schema)
+    except SchemaValidationError as e:
+        raise ToolArgError(str(e)) from e
+
     props = schema.get("properties", {}) or {}
-    required = schema.get("required", []) or []
-
-    for k in args:
-        if k not in props:
-            raise ToolArgError(f"unknown argument: {k!r}")
-    for k in required:
-        if k not in args:
-            raise ToolArgError(f"missing required argument: {k!r}")
-
-    for k, v in args.items():
-        prop = props.get(k, {})
-        enum = prop.get("enum")
-        if enum is not None and v not in enum:
-            raise ToolArgError(f"argument {k!r}={v!r} not in enum {enum}")
-        t = prop.get("type")
-        if t == "integer":
-            ok = (isinstance(v, int) and not isinstance(v, bool)) or (isinstance(v, str) and v.lstrip("-").isdigit())
-            if not ok:
-                raise ToolArgError(f"argument {k!r} must be an integer, got {v!r}")
-        elif t == "number":
-            ok = (isinstance(v, (int, float)) and not isinstance(v, bool))
-            if not ok and isinstance(v, str):
-                try: float(v); ok = True
-                except ValueError: ok = False
-            if not ok:
-                raise ToolArgError(f"argument {k!r} must be a number, got {v!r}")
 
     if not command_template:
         raise ToolArgError("tool has no command_template")
@@ -209,13 +188,17 @@ async def _pool_execute(ctx: ToolCallContext, args: Dict[str, Any]) -> Dict[str,
     if r.status_code != 200:
         return {"status": "error", "error": f"tool-runner {r.status_code}: {r.text[:200]}"}
     data = r.json()
+    exit_code = data.get("exit_code")
+    timed_out = data.get("timed_out", False)
+    is_error = bool(timed_out) or (exit_code not in (0, None))
     result = {
-        "status": "completed",
+        "status": "error" if is_error else "completed",
         "stdout": _truncate(data.get("stdout", "")),
         "stderr": _truncate(data.get("stderr", "")),
-        "exit_code": data.get("exit_code"),
+        "exit_code": exit_code,
         "duration_ms": data.get("duration_ms"),
-        "timed_out": data.get("timed_out", False),
+        "timed_out": timed_out,
+        "is_error": is_error,
     }
     if _envelope and getattr(tool, "rollback_command_template", None):
         action_id = str(uuid.uuid4())

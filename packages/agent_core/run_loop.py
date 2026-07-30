@@ -31,6 +31,7 @@ from agent_core.loop_utils import (
     tool_call_fingerprint,
     truncate_tool_result,
 )
+from agent_core.tool_result import normalize_tool_result
 
 if TYPE_CHECKING:
     from agent_core.events import AuditBus
@@ -40,6 +41,31 @@ logger = logging.getLogger(__name__)
 ChatPort = Callable[..., Awaitable[Any]]
 DispatchPort = Callable[[Any], Awaitable[str]]
 CompactPort = Callable[[List[Dict[str, Any]]], Awaitable[List[Dict[str, Any]]]]
+# Returns "sequential" | "parallel" for a tool_call object
+ExecutionModePort = Callable[[Any], str]
+
+
+def _should_run_parallel(
+    tool_calls: Sequence[Any],
+    *,
+    default_mode: str,
+    execution_mode_for: Optional[ExecutionModePort],
+) -> bool:
+    """INV-31 one-vote veto: parallel only if default is parallel OR every tool is parallel.
+
+    Default is sequential. A single sequential (or unknown) tool forces sequential.
+    """
+    if not tool_calls:
+        return False
+    modes = []
+    for c in tool_calls:
+        if execution_mode_for is not None:
+            modes.append((execution_mode_for(c) or "sequential").lower())
+        else:
+            modes.append((default_mode or "sequential").lower())
+    if any(m != "parallel" for m in modes):
+        return False
+    return True
 
 
 @dataclass
@@ -56,6 +82,8 @@ class RunLoopConfig:
     tool_result_max_chars: int = TOOL_RESULT_MAX_CHARS
     reflect_guidance: str = REFLECT_GUIDANCE
     agent_run_id: Optional[str] = None
+    # INV-31: default sequential; parallel only if every tool opts in
+    default_execution_mode: str = "sequential"
 
 
 async def run_loop(
@@ -69,6 +97,7 @@ async def run_loop(
     dispatch: DispatchPort,
     compact: Optional[CompactPort] = None,
     audit_bus: Optional["AuditBus"] = None,
+    execution_mode_for: Optional[ExecutionModePort] = None,
 ) -> AsyncIterator[Dict[str, Any]]:
     """Shared tool-call loop. Yields semantic events (same shape as before).
 
@@ -305,18 +334,31 @@ async def run_loop(
                     )
                 return out
 
-            results = await asyncio.gather(
-                *[_dispatch_or_reflect(c) for c in tool_calls]
-            )
-            for call, result_str in zip(tool_calls, results):
+            # INV-31: sequential by default; parallel only when every tool opts in
+            if _should_run_parallel(
+                tool_calls,
+                default_mode=config.default_execution_mode,
+                execution_mode_for=execution_mode_for,
+            ):
+                results = await asyncio.gather(
+                    *[_dispatch_or_reflect(c) for c in tool_calls]
+                )
+            else:
+                results = []
+                for c in tool_calls:
+                    results.append(await _dispatch_or_reflect(c))
+
+            for call, raw in zip(tool_calls, results):
+                tr = normalize_tool_result(raw)
                 result_str = truncate_tool_result(
-                    result_str, max_chars=config.tool_result_max_chars
+                    tr.for_model(), max_chars=config.tool_result_max_chars
                 )
                 tool_call_log.append(
                     {
                         "name": call.function.name,
                         "arguments": call.function.arguments,
                         "result_preview": result_str[:200],
+                        "is_error": tr.is_error,
                     }
                 )
                 tool_msg = {
@@ -331,9 +373,7 @@ async def run_loop(
                     "name": call.function.name,
                     "call_id": call.id,
                     "result_preview": result_str[:200],
-                    "error": result_str.startswith(
-                        ("ERROR", "LOOP_DETECTED", "BUDGET_EXHAUSTED")
-                    ),
+                    "error": tr.is_error,
                 }
 
             if budget_hit:

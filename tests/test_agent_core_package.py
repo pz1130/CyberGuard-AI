@@ -107,8 +107,8 @@ async def test_pipeline_before_blocks_execute():
 
 
 @pytest.mark.asyncio
-async def test_validate_arguments_default_is_passthrough():
-    """M0a-1: no schema rejection at validate stage."""
+async def test_validate_arguments_passthrough_without_schema():
+    """No input_schema → still pass-through."""
 
     async def execute(ctx, args):
         return args

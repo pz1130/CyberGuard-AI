@@ -143,7 +143,12 @@ docs/
 4. ~~审计事件流骨架（emit await，默认无订阅）~~ ✅
 5. 包内 lint：`llm_router` 无 agent 概念；`agent_core` 无 `app.*` / sqlalchemy / redis / celery / fastapi（已有 AST 用例）
 
-**M0a-1 主路径完成。** 下一阶段见 `docs/desktop/03-ROADMAP.md` **M0a-2**（schema 校验、默认串行、结构化错误、压缩加固）。
+**M0a-1 主路径完成。** **M0a-2 语义（进行中/首批已落地）**：
+- ✅ INV-30 `validate_arguments` schema 校验
+- ✅ INV-31 工具默认串行（parallel 需全员 opt-in）
+- ✅ INV-32 结构化 `is_error`（不再靠 `ERROR` 子串）
+- ✅ 加权 token 估算 + 六段摘要 + Constraints 注入 + 当前 turn 保留（INV-33/34 基础）
+- ⏳ 模型表 `context_window` / `max_output_tokens` 列与探测、方向性截断、exclude_from_context、llm-router cache/thinking
 
 ---
 

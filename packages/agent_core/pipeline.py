@@ -2,19 +2,19 @@
 
     prepare_arguments → validate_arguments → before_tool_call → execute → after_tool_call
 
-* ``before_tool_call`` may block (returns a result, skips execute).
-* ``after_tool_call`` may rewrite / redact the result.
-* Audit is a *separate* mechanism (see ``events.py``); hooks here must not be
-  used as a fire-and-forget audit channel.
-
-M0a-1: ``validate_arguments`` default is pass-through. Real schema validation
-lands in M0a-2 (INV-30). Existing argv/schema checks may still live inside
-``execute`` until then — behavior unchanged.
+M0a-2: default ``validate_arguments`` runs schema validation when an
+``input_schema`` is available on the tool / metadata (INV-30).
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, Mapping, MutableMapping, Optional, TYPE_CHECKING
+
+from agent_core.schema_validate import (
+    SchemaValidationError,
+    schema_from_tool,
+    validate_tool_arguments,
+)
 
 if TYPE_CHECKING:
     from agent_core.events import AuditBus
@@ -37,7 +37,6 @@ class ToolCallContext:
     tool: Any = None
     user_id: Optional[int] = None
     metadata: MutableMapping[str, Any] = field(default_factory=dict)
-    # Filled by stages
     prepared_arguments: Optional[Dict[str, Any]] = None
     validated_arguments: Optional[Dict[str, Any]] = None
     result: Any = None
@@ -45,7 +44,6 @@ class ToolCallContext:
     block_reason: str = ""
 
 
-# Hook callables — all async for a uniform await surface.
 PrepareFn = Callable[[ToolCallContext], Awaitable[Dict[str, Any]]]
 ValidateFn = Callable[[ToolCallContext, Dict[str, Any]], Awaitable[Dict[str, Any]]]
 BeforeFn = Callable[[ToolCallContext, Dict[str, Any]], Awaitable[Optional[BlockedResult]]]
@@ -57,9 +55,23 @@ async def _identity_prepare(ctx: ToolCallContext) -> Dict[str, Any]:
     return dict(ctx.arguments)
 
 
-async def _identity_validate(_ctx: ToolCallContext, args: Dict[str, Any]) -> Dict[str, Any]:
-    """M0a-1 pass-through — schema validation is M0a-2 (INV-30)."""
-    return args
+async def default_validate_arguments(
+    ctx: ToolCallContext, args: Dict[str, Any]
+) -> Dict[str, Any]:
+    """INV-30: validate against tool input_schema when present.
+
+    Schema sources (first hit wins):
+      1. ``ctx.metadata['input_schema']``
+      2. ``schema_from_tool(ctx.tool)``
+    No schema → pass-through.
+    """
+    schema = ctx.metadata.get("input_schema")
+    if schema is None:
+        schema = schema_from_tool(ctx.tool)
+    try:
+        return validate_tool_arguments(args, schema)
+    except SchemaValidationError:
+        raise
 
 
 async def _identity_before(
@@ -74,10 +86,10 @@ async def _identity_after(_ctx: ToolCallContext, result: Any) -> Any:
 
 @dataclass
 class PipelineHooks:
-    """Per-call or per-backend hook set. Defaults preserve behavior (no-ops)."""
+    """Per-call or per-backend hook set."""
 
     prepare_arguments: PrepareFn = _identity_prepare
-    validate_arguments: ValidateFn = _identity_validate
+    validate_arguments: ValidateFn = default_validate_arguments
     before_tool_call: BeforeFn = _identity_before
     execute: Optional[ExecuteFn] = None
     after_tool_call: AfterFn = _identity_after
@@ -108,7 +120,28 @@ class ToolPipeline:
         args = await self.hooks.prepare_arguments(ctx)
         ctx.prepared_arguments = args
 
-        args = await self.hooks.validate_arguments(ctx, args)
+        try:
+            args = await self.hooks.validate_arguments(ctx, args)
+        except SchemaValidationError as exc:
+            payload = {
+                "status": "error",
+                "error": exc.message,
+                "is_error": True,
+            }
+            ctx.blocked = True
+            ctx.block_reason = "schema_validation"
+            ctx.result = payload
+            await emit_audit(
+                self.audit_bus,
+                layer=AuditLayer.TOOL_EXECUTION,
+                phase=AuditPhase.END,
+                name=ctx.tool_name,
+                payload={"blocked": True, "reason": "schema_validation",
+                         "error": exc.message},
+                tool_call_id=str(ctx.metadata.get("tool_call_id") or "") or None,
+                agent_run_id=str(ctx.metadata.get("agent_run_id") or "") or None,
+            )
+            return payload
         ctx.validated_arguments = args
 
         blocked = await self.hooks.before_tool_call(ctx, args)
@@ -156,14 +189,10 @@ async def run_tool_call(
     after_tool_call: Optional[AfterFn] = None,
     audit_bus: Optional["AuditBus"] = None,
 ) -> Any:
-    """Convenience entry: build context + hooks and run the pipeline.
-
-    Prefer this (or ``ToolPipeline.run``) over calling backend executors directly
-    so static checks can prove every path is gated (INV-28).
-    """
+    """Convenience entry: build context + hooks and run the pipeline."""
     hooks = PipelineHooks(
         prepare_arguments=prepare_arguments or _identity_prepare,
-        validate_arguments=validate_arguments or _identity_validate,
+        validate_arguments=validate_arguments or default_validate_arguments,
         before_tool_call=before_tool_call or _identity_before,
         execute=execute,
         after_tool_call=after_tool_call or _identity_after,
