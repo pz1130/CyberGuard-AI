@@ -64,29 +64,18 @@ Web 端 21 个 Tab 功能不减。**对已部署 CyberGuard 的客户，桌面�
 
 ## 当前状态
 
-**M1 · 壳 + Sidecar + 单工作台骨架**（进行中；mock only）
+**M1 · 壳 + Sidecar + 单工作台骨架**（进行中；**mock only**）
 
-抽取 `packages/llm_router` 与 `packages/agent_core`、建立 Operations 抽象、工具执行五步管线骨架就位、审计事件流。纯服务端重构，不写任何桌面端代码。
+**已落地**
 
-**已落地（2026-07-30）**
+- **M0a** 完成：`packages/llm_router` + `packages/agent_core`（管线、run_loop、压缩、审计、M0a-2 语义）
+- **M1 骨架**：`apps/desktop/` — Electron + JSONL sidecar + mock agent + 三栏工作台
+  - headless：`./apps/desktop/scripts/headless_demo.sh`
+  - Electron：`cd apps/desktop && npm install && npm run dev`
+  - 测试：`tests/test_desktop_sidecar.py`
+- readonly 档 **无** `ExecOperations`；全程不监听端口；开发版启动警告
 
-- M1.5 黄金路径书面化：`12-M1.5-GOLDEN-PATH.md`
-- 服务端功能面冻结写入 `CLAUDE.md`
-- `packages/llm_router` 第一刀：`resilience` + pure `utils`；`app.core.llm_resilience` 兼容 re-export；`app.services.llm_router` 业务方法仍在 app
-- 边界用例：`tests/test_llm_router_package.py`
-- `packages/agent_core`：Operations 端口、五步策略管线、`AuditBus` 骨架
-- `execute_tool` + `InternalAgentRunner._dispatch` 经 `run_tool_call`（`validate_arguments` 仍为 pass-through）
-- 边界/管线用例：`tests/test_agent_core_package.py`
-- `agent_core`：`compressor` / `loop_utils` / `compact` / `run_loop`；`InternalAgentRunner._run_loop` 与 `app.core.context_compressor` 适配层
-- 用例：`tests/test_agent_core_run_loop.py` + 既有 `test_context_compressor` / 无 DB 的 `test_internal_agent` 守卫
-- 审计事件流：`run_loop` / `ToolPipeline` 经 `emit_audit`（await）；默认 bus 无订阅者 = 产品行为不变；订阅失败向上抛（INV-29）
-
-**M0a-1 内核抽取主路径已完成。**
-
-**M0a-2 主路径完成**：schema / 串行 / is_error / 加权 token / 六段压缩 / context_window 预算 / 方向性截断 / exclude_from_context / thinking + cache（`tests/test_m0a2_*.py`、`test_model_limits.py`）。  
-**下一阶段**：M0b（ui-shared）或 **M1**（Electron 壳 + sidecar，mock）。
-
-**硬判据：基线测试集全绿，服务端对外行为零变化。** 当前本地可收集到 365 个测试用例；精确数量由 CI 的 `pytest --collect-only` 固定并输出。参数校验、默认串行、结构化错误、压缩加固全部属于 M0a-2。
+**M1 仍待**：托盘、MCP 孤儿治理实装、本地会话 JSONL 持久化、敏感目录规范完整项。
 
 ## 文档权威性
 
