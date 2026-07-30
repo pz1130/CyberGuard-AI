@@ -148,7 +148,8 @@ docs/
 - ✅ INV-31 工具默认串行（parallel 需全员 opt-in）
 - ✅ INV-32 结构化 `is_error`（不再靠 `ERROR` 子串）
 - ✅ 加权 token 估算 + 六段摘要 + Constraints 注入 + 当前 turn 保留（INV-33/34 基础）
-- ⏳ 模型表 `context_window` / `max_output_tokens` 列与探测、方向性截断、exclude_from_context、llm-router cache/thinking
+- ✅ 模型 `context_window` / `max_output_tokens`（JSON ModelInfo + 目录默认值）；压缩按 remaining_budget
+- ⏳ 方向性截断、exclude_from_context、llm-router cache/thinking
 
 ---
 

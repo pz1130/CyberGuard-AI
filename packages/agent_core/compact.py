@@ -19,11 +19,23 @@ from agent_core.tokens import estimate_text_tokens
 
 ChatFn = Callable[..., Awaitable[Any]]
 
-# Prefer weighted tokens for threshold when messages are long CJK.
-def _over_budget(messages: List[Dict[str, Any]], compact_chars: int) -> bool:
-    # compact_chars is historical char budget (~4 chars/token * tokens)
-    # Convert to token budget roughly: compact_chars // 4 as floor, but also
-    # fire if weighted tokens exceed compact_chars // 2 for CJK-heavy buffers.
+def _over_budget(
+    messages: List[Dict[str, Any]],
+    compact_chars: int,
+    *,
+    max_tokens: Optional[int] = None,
+) -> bool:
+    """True when history should be compacted.
+
+    Prefer weighted token budget (``max_tokens``). ``compact_chars=0`` means
+    "caller already decided we are over budget — always compact if splittable".
+    Legacy char path kept when only compact_chars is set.
+    """
+    if max_tokens is not None:
+        from agent_core.tokens import estimate_tokens
+        return estimate_tokens(messages) > max_tokens
+    if compact_chars <= 0:
+        return True
     if estimate_message_chars(messages) > compact_chars:
         return True
     text = messages_to_text(messages)
@@ -38,13 +50,25 @@ async def maybe_compact_messages(
     keep_recent: int = CONTEXT_KEEP_RECENT,
     chat_kwargs: Optional[Dict[str, Any]] = None,
     constraints: Optional[Mapping[str, Any]] = None,
+    max_tokens: Optional[int] = None,
+    context_window: Optional[int] = None,
+    reserve_output: int = 1024,
+    reserve_system: int = 512,
 ) -> List[Dict[str, Any]]:
     """Summarise older messages when the buffer grows too large (INV-33/34).
 
-    Current turn (from last user message) stays in ``recent`` via split_for_compact
-    + keep_recent, and orphan tool messages are dropped from the recent window.
+    Prefer ``max_tokens`` or ``context_window`` (remaining-budget) over the
+    legacy character threshold.
     """
-    if not _over_budget(messages, compact_chars):
+    token_budget = max_tokens
+    if token_budget is None and context_window is not None:
+        from agent_core.tokens import remaining_budget
+        token_budget = remaining_budget(
+            context_window,
+            reserve_output=reserve_output,
+            reserve_system=reserve_system,
+        )
+    if not _over_budget(messages, compact_chars, max_tokens=token_budget):
         return messages
 
     parts = split_for_compact(messages, keep_recent=keep_recent)

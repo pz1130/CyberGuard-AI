@@ -12,6 +12,14 @@ from agent_core.compressor import (
     select_window,
 )
 from agent_core.tokens import estimate_tokens, remaining_budget
+from agent_core.model_limits import (
+    DEFAULT_CONTEXT_WINDOW,
+    DEFAULT_MAX_OUTPUT_TOKENS,
+    enrich_model_entry,
+    enrich_models_list,
+    lookup_model_limits,
+    resolve_model_limits,
+)
 from agent_core.schema_validate import SchemaValidationError, validate_tool_arguments
 from agent_core.tool_result import ToolResult, normalize_tool_result
 from agent_core.events import (
@@ -74,6 +82,12 @@ __all__ = [
     "get_default_audit_bus",
     "estimate_tokens",
     "remaining_budget",
+    "DEFAULT_CONTEXT_WINDOW",
+    "DEFAULT_MAX_OUTPUT_TOKENS",
+    "lookup_model_limits",
+    "resolve_model_limits",
+    "enrich_model_entry",
+    "enrich_models_list",
     "select_window",
     "build_summary_user_message",
     "compress_history",

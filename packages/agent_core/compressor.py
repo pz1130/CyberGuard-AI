@@ -206,18 +206,21 @@ async def maybe_compress(
     keep_last: int = 6,
     context_window: Optional[int] = None,
     reserve_output: int = 1024,
+    reserve_system: int = 512,
     constraints: Optional[Mapping[str, Any]] = None,
     preserve_current_turn: bool = True,
 ) -> tuple[List[dict], bool, bool]:
     """Returns `(new_history, compressed, degraded)`.
 
     If ``context_window`` is set and ``max_tokens`` is not, threshold =
-    remaining_budget(context_window, reserve_output=...).
+    remaining_budget(context_window, reserve_output=..., reserve_system=...).
     """
     if max_tokens is None:
         if context_window is not None:
             max_tokens = remaining_budget(
-                context_window, reserve_output=reserve_output
+                context_window,
+                reserve_output=reserve_output,
+                reserve_system=reserve_system,
             )
         else:
             max_tokens = 8000

@@ -36,23 +36,64 @@ async def maybe_compress(
     *,
     max_tokens: Optional[int] = None,
     keep_last: Optional[int] = None,
+    context_window: Optional[int] = None,
+    reserve_output: Optional[int] = None,
+    reserve_system: Optional[int] = None,
+    constraints: Optional[Mapping[str, Any]] = None,
+    preserve_current_turn: bool = True,
 ) -> tuple[List[dict], bool, bool]:
     """Hook used by callers. Returns `(new_history, compressed, degraded)`.
 
-    Resolves defaults from app settings when not provided (server wiring).
+    Preferred (M0a-2): pass ``context_window`` (+ optional reserves) so the
+    threshold is ``remaining_budget(context_window)``. Absolute ``max_tokens``
+    remains supported as an override / fallback from settings.
     """
-    if max_tokens is None or keep_last is None:
-        cfg_max, cfg_keep = _read_settings()
-        max_tokens = cfg_max if max_tokens is None else max_tokens
-        keep_last = cfg_keep if keep_last is None else keep_last
+    from app.config import settings
+
+    cfg_max, cfg_keep = _read_settings()
+    if keep_last is None:
+        keep_last = cfg_keep
+
+    if reserve_output is None:
+        reserve_output = int(
+            getattr(settings, "CONTEXT_COMPRESS_RESERVE_OUTPUT", 1024)
+        )
+    if reserve_system is None:
+        reserve_system = int(
+            getattr(settings, "CONTEXT_COMPRESS_RESERVE_SYSTEM", 512)
+        )
+
+    # Prefer remaining-budget path when context_window is known and max_tokens
+    # was not explicitly forced by the caller.
+    if context_window is not None and max_tokens is None:
+        return await _maybe_compress_core(
+            history,
+            llm_router,
+            max_tokens=None,
+            keep_last=keep_last,
+            context_window=context_window,
+            reserve_output=reserve_output,
+            reserve_system=reserve_system,
+            constraints=constraints,
+            preserve_current_turn=preserve_current_turn,
+        )
+
+    if max_tokens is None:
+        max_tokens = cfg_max
 
     return await _maybe_compress_core(
-        history, llm_router, max_tokens=max_tokens, keep_last=keep_last
+        history,
+        llm_router,
+        max_tokens=max_tokens,
+        keep_last=keep_last,
+        constraints=constraints,
+        preserve_current_turn=preserve_current_turn,
     )
 
 
 __all__ = [
     "estimate_tokens",
+    "remaining_budget",
     "select_window",
     "build_summary_user_message",
     "compress_history",

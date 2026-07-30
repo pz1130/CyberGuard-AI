@@ -541,10 +541,37 @@ class MasterAgent:
                     expert_no_agents=bool(state.get("expert_mode_no_agents")),
                 )
                 history = state.get("conversation_history") or []
-                history, _compressed, _degraded = await maybe_compress(history, self.llm_router)
+                # M0a-2: threshold from remaining budget (context_window - reserves)
+                model_name = (
+                    state.get("model_override")
+                    or state.get("model")
+                    or None
+                )
+                provider_id = state.get("provider_id")
+                try:
+                    from app.services.model_limits import limits_for_provider_model
+                    from app.config import settings as _settings
+                    _cw, _mo = await limits_for_provider_model(provider_id, model_name)
+                    if not model_name:
+                        _cw = int(getattr(_settings, "DEFAULT_CONTEXT_WINDOW", _cw))
+                except Exception:
+                    from app.config import settings as _settings
+                    _cw = int(getattr(_settings, "DEFAULT_CONTEXT_WINDOW", 128000))
+                    _mo = int(getattr(_settings, "CONTEXT_COMPRESS_RESERVE_OUTPUT", 1024))
+                history, _compressed, _degraded = await maybe_compress(
+                    history,
+                    self.llm_router,
+                    context_window=_cw,
+                    reserve_output=_mo,
+                )
                 # Observability hook: set so callers (status surface, audit) can see
                 # whether compression ran / whether the LLM call degraded.
-                state["context_compression"] = {"compressed": _compressed, "degraded": _degraded}
+                state["context_compression"] = {
+                    "compressed": _compressed,
+                    "degraded": _degraded,
+                    "context_window": _cw,
+                    "reserve_output": _mo,
+                }
                 messages: List[Dict[str, str]] = [
                     {"role": "system", "content": system_prompt}
                 ]

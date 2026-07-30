@@ -469,12 +469,24 @@ class InternalAgentRunner:
         return messages_to_text(messages)
 
     async def _maybe_compact(self, messages: List[Dict[str, Any]], router) -> List[Dict[str, Any]]:
-        """Summarise older messages when the buffer grows too large."""
+        """Summarise older messages when the buffer grows too large.
+
+        M0a-2: prefer remaining-budget threshold from model context_window.
+        """
+        from agent_core.model_limits import resolve_model_limits
+
+        try:
+            from app.services.model_limits import limits_for_provider_model
+            cw, mo = await limits_for_provider_model(self.llm_provider_id, self.llm_model)
+        except Exception:
+            cw, mo = resolve_model_limits(self.llm_model)
+
         return await maybe_compact_messages(
             messages,
             router.chat,
-            compact_chars=CONTEXT_COMPACT_CHARS,
             keep_recent=CONTEXT_KEEP_RECENT,
+            context_window=cw,
+            reserve_output=mo or 1024,
             chat_kwargs={
                 "provider_id": self.llm_provider_id,
                 "model": self.llm_model,

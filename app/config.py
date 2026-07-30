@@ -37,8 +37,15 @@ class Settings(BaseSettings):
     MASTER_AGENT_TEMPERATURE: float = 0.7
 
     # Context Compressor (master-agent conversation-history compression)
+    # CONTEXT_COMPRESS_MAX_TOKENS is the *fallback* absolute threshold when no
+    # model context_window is available. Preferred path: remaining_budget(
+    #   context_window - reserve_output - reserve_system).
     CONTEXT_COMPRESS_MAX_TOKENS: int = 8000
     CONTEXT_COMPRESS_KEEP_LAST: int = 6
+    CONTEXT_COMPRESS_RESERVE_OUTPUT: int = 1024
+    CONTEXT_COMPRESS_RESERVE_SYSTEM: int = 512
+    # Default context window when provider model entry has none (M0a-2 catalog).
+    DEFAULT_CONTEXT_WINDOW: int = 128000
 
     # Sub-Agent Defaults
     SUB_AGENT_TIMEOUT: int = 30
