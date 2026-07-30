@@ -78,8 +78,18 @@ class ProcessRegistry:
         with self._lock:
             self._children.clear()
 
-    def start_watchdog(self, interval_sec: float = 2.0) -> None:
+    def start_watchdog(
+        self,
+        interval_sec: float | None = None,
+        *,
+        exit_on_orphan: bool = True,
+    ) -> None:
         """Layer ②: if PPID becomes 1, Electron is gone — cleanup and exit."""
+        if interval_sec is None:
+            try:
+                interval_sec = float(os.environ.get("CYBERGUARD_WATCHDOG_INTERVAL", "2"))
+            except ValueError:
+                interval_sec = 2.0
         if self._watchdog and self._watchdog.is_alive():
             return
 
@@ -96,7 +106,8 @@ class ProcessRegistry:
                     self.kill_all(sig=signal.SIGTERM)
                     time.sleep(0.2)
                     self.kill_all(sig=signal.SIGKILL)
-                    os._exit(1)
+                    if exit_on_orphan:
+                        os._exit(1)
 
         self._watchdog = threading.Thread(
             target=_loop, name="ppid-watchdog", daemon=True

@@ -1,15 +1,32 @@
-"""Mock agent host: agent_core.run_loop + mock LLM/tools (M1)."""
+"""Agent host: agent_core.run_loop + mock or live LLM (M1 / M1.5)."""
 from __future__ import annotations
 
 import asyncio
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from agent_core.run_loop import RunLoopConfig, run_loop
 
-from apps.desktop.sidecar.capabilities import SessionCapabilities, capabilities_for_tier
+from apps.desktop.sidecar.capabilities import capabilities_for_tier
+from apps.desktop.sidecar.provider import load_provider_config, live_chat
+
+
+def _load_builtin_skills() -> str:
+    skills_dir = Path(__file__).resolve().parent / "skills"
+    if not skills_dir.is_dir():
+        return ""
+    parts = []
+    for path in sorted(skills_dir.glob("*.md")):
+        try:
+            parts.append(path.read_text(encoding="utf-8").strip())
+        except OSError:
+            continue
+    if not parts:
+        return ""
+    return "\n\n---\n\n".join(parts)
 
 
 @dataclass
@@ -21,6 +38,8 @@ class ActiveRun:
 
 
 class MockAgentHost:
+    """Name kept for compatibility; supports mock + live provider modes."""
+
     def __init__(self) -> None:
         self._runs: Dict[str, ActiveRun] = {}
 
@@ -47,9 +66,10 @@ class MockAgentHost:
         task: str,
         tier: str = "readonly",
         system_prompt: Optional[str] = None,
-        agent_name: str = "desktop-mock",
+        agent_name: str = "desktop-agent",
     ) -> AsyncIterator[Dict[str, Any]]:
         caps = capabilities_for_tier(tier)
+        provider = load_provider_config()
         run_id = str(uuid.uuid4())
         active = ActiveRun(run_id=run_id)
         self._runs[run_id] = active
@@ -59,9 +79,10 @@ class MockAgentHost:
             "run_id": run_id,
             "tier": caps.tier,
             "capabilities": caps.describe(),
+            "provider": provider.public_status(),
         }
 
-        # Mock tool: only available when full tier has exec (still mock)
+        # Tools: still mock until M2 sandbox (safety gate). Live LLM may call them.
         tools: Optional[List[Dict[str, Any]]] = None
         if caps.has_local_exec():
             tools = [
@@ -69,7 +90,7 @@ class MockAgentHost:
                     "type": "function",
                     "function": {
                         "name": "mock_scan",
-                        "description": "Fake scan (M1 mock — no host I/O)",
+                        "description": "Fake scan (M1 — no host I/O until M2 sandbox)",
                         "parameters": {
                             "type": "object",
                             "properties": {"target": {"type": "string"}},
@@ -80,9 +101,28 @@ class MockAgentHost:
             ]
 
         step = {"n": 0}
+        skills = _load_builtin_skills()
+        default_prompt = (
+            "You are CyberGuard desktop security agent (self-use M1.5).\n"
+            "Be precise and actionable. Prefer read-only investigation.\n"
+            "Tools named mock_* do not touch the real host.\n"
+        )
+        if skills:
+            default_prompt += "\n## Built-in SOPs\n" + skills
+        if not provider.is_live:
+            default_prompt += (
+                "\n\n(Running in MOCK mode — no real LLM. "
+                "Set CYBERGUARD_LLM_MODE=live + API key for real responses.)"
+            )
+        prompt = system_prompt or default_prompt
 
         async def chat(*, messages, tools=None):
-            # Simulate latency so abort can interrupt mid-run
+            if active.abort_event.is_set():
+                raise RuntimeError("aborted")
+            if provider.is_live:
+                return await live_chat(provider, list(messages), tools=tools)
+
+            # ---- mock LLM ----
             await asyncio.sleep(0.05)
             if active.abort_event.is_set():
                 raise RuntimeError("aborted")
@@ -96,11 +136,11 @@ class MockAgentHost:
                     ),
                 )
                 return SimpleNamespace(content="", tool_calls=[call])
-            # Stream-ish final answer as one chunk (renderer can still show tokens)
             return (
                 f"[mock LLM] Task received. Tier={caps.tier}. "
                 f"Local exec available={caps.has_local_exec()}. "
-                f"Summary: nothing real was scanned (M1 mock)."
+                f"Summary: nothing real was scanned (M1 mock). "
+                f"Configure live provider for real analysis."
             )
 
         async def dispatch(call):
@@ -108,7 +148,7 @@ class MockAgentHost:
             if active.abort_event.is_set():
                 return {"status": "error", "error": "aborted", "is_error": True}
             name = call.function.name
-            # Even on full tier, this is mock — never touches the host
+            # M1/M1.5 safety: tools remain mock until M2 sandbox exit criteria
             return {
                 "status": "completed",
                 "stdout": f"[mock-tool {name}] args={call.function.arguments}",
@@ -116,13 +156,10 @@ class MockAgentHost:
             }
 
         cfg = RunLoopConfig(
-            max_steps=6,
-            tool_call_budget=10,
+            max_steps=8 if provider.is_live else 6,
+            tool_call_budget=15 if provider.is_live else 10,
             agent_name=agent_name,
             agent_run_id=run_id,
-        )
-        prompt = system_prompt or (
-            "You are CyberGuard desktop mock agent. M1: no real tools or providers."
         )
 
         try:

@@ -261,7 +261,7 @@ app.whenReady().then(() => {
         type: "warning",
         title: "CyberGuard Desktop — development build",
         message:
-          "M1 development version.\n\nSandbox and at-rest encryption are NOT enabled.\nDo not process real sensitive production data.\nMock LLM/tools only.\nData root: ~/Library/Application Support/CyberGuard",
+          "M1/M1.5 development version.\n\nSandbox and at-rest encryption are NOT enabled.\nDo not process real sensitive production data.\nTools are mock until M2. LLM may be live if provider.json / env is set.\nData root: ~/Library/Application Support/CyberGuard\n\nIf FileVault is off, enable it before storing sensitive data.",
         buttons: ["I understand"],
       })
       .catch(() => {});
@@ -270,6 +270,25 @@ app.whenReady().then(() => {
   startSidecar();
   createWindow();
   createTray();
+
+  // Surface FileVault warning after sidecar is up
+  setTimeout(() => {
+    rpc("ping", {})
+      .then((r) => {
+        const w = r && r.filevault && r.filevault.warning;
+        if (w && mainWindow) {
+          dialog
+            .showMessageBox(mainWindow, {
+              type: "warning",
+              title: "FileVault",
+              message: w,
+              buttons: ["OK"],
+            })
+            .catch(() => {});
+        }
+      })
+      .catch(() => {});
+  }, 1500);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

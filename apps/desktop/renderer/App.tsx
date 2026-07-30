@@ -59,6 +59,8 @@ export function App() {
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [dataRoot, setDataRoot] = useState<string>("");
+  const [providerMode, setProviderMode] = useState<string>("mock");
+  const [fvWarning, setFvWarning] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const api = window.cyberguard;
@@ -78,9 +80,13 @@ export function App() {
     }
     api
       .ping()
-      .then((r) => {
+      .then((r: Record<string, unknown>) => {
         setPingOk(true);
-        if (r?.data_root) setDataRoot(r.data_root);
+        if (typeof r?.data_root === "string") setDataRoot(r.data_root);
+        const prov = r?.provider as { mode?: string } | undefined;
+        if (prov?.mode) setProviderMode(prov.mode);
+        const fv = r?.filevault as { warning?: string | null } | undefined;
+        setFvWarning(fv?.warning || null);
       })
       .catch(() => setPingOk(false));
     refreshSessions();
@@ -164,14 +170,20 @@ export function App() {
   return (
     <div className="app">
       <div className="banner">
-        <strong>M1 development build</strong> — mock LLM/tools only. Sandbox and
-        at-rest encryption are <em>not</em> enabled. Do not process real sensitive
-        data.
+        <strong>M1/M1.5 development build</strong> — sandbox and at-rest encryption
+        are <em>not</em> enabled. Do not process real sensitive production data.
+        Tools remain mock until M2. LLM: <code>{providerMode}</code>.
       </div>
+      {fvWarning && (
+        <div className="banner" style={{ background: "#7f1d1d", color: "#fecaca" }}>
+          <strong>FileVault:</strong> {fvWarning}
+        </div>
+      )}
 
       <div className="status-bar">
         <span className={pingOk ? "ok" : "bad"}>● {statusLabel}</span>
-        <span>sandbox: none (M1)</span>
+        <span>sandbox: none</span>
+        <span>llm: {providerMode}</span>
         <span>tier: {tier}</span>
         <span>ports: none (JSONL stdio)</span>
       </div>

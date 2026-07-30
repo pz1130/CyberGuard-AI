@@ -4,12 +4,14 @@ macOS-first **single-operator agent app**: Electron shell + Python sidecar over 
 
 ## Status
 
-**M1 · 壳 + Sidecar + 单工作台骨架** (in progress)
+**M1 skeleton + M1.5 live LLM path** (self-use; not for distribution)
 
-- Mock LLM + fake Operations only — **no real host tools, no real Provider**
+- Default: mock LLM + mock tools (safe)
+- Optional: **live OpenAI-compatible LLM** via env / `provider.json` (tools still mock until M2)
+- Built-in SOP: `sidecar/skills/alert_triage.md`
 - Capability tier: `readonly` has no `ExecOperations` / `EditOperations`
-- Headless sidecar for CI / sandbox tests later
-- Dev build only — not for distribution (INV-38)
+- FileVault status surfaced on `ping` + UI banner
+- Orphan cleanup: process group + PPID watchdog + Electron SIGTERM
 
 ## Layout
 
@@ -113,8 +115,42 @@ logs/ audit/
 
 `mcp.spawn_mock` starts a long-lived mock child for drills; never use real MCP creds in M1.
 
-## Security notes (M1)
+## Live LLM (M1.5 self-use)
+
+```bash
+# env (highest priority)
+export CYBERGUARD_LLM_MODE=live
+export CYBERGUARD_LLM_BASE_URL=https://api.openai.com/v1
+export CYBERGUARD_LLM_API_KEY=sk-...
+export CYBERGUARD_LLM_MODEL=gpt-4o-mini
+
+./apps/desktop/scripts/headless_demo.sh
+```
+
+Or write `{data_root}/provider.json` (keep file permissions tight):
+
+```json
+{
+  "mode": "live",
+  "base_url": "https://api.openai.com/v1",
+  "api_key": "sk-...",
+  "model": "gpt-4o-mini"
+}
+```
+
+Default without config remains **mock**.
+
+## Orphan check
+
+```bash
+./apps/desktop/scripts/orphan_kill9_check.sh
+# unit: pytest tests/test_desktop_m15_provider.py -k watchdog
+```
+
+## Security notes (M1/M1.5)
 
 - No listening sockets
-- Real tool execution blocked until M2 sandbox exit criteria
+- Real host tool execution blocked until M2 sandbox exit criteria
 - Dev build banner: no sandbox / no at-rest encryption
+- FileVault-off is warned explicitly (does not pretend app crypto replaces it)
+- Do not distribute this build; do not process real production secrets without M2+

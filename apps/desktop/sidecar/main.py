@@ -43,6 +43,9 @@ class SidecarServer:
 
         try:
             if method == "ping":
+                from apps.desktop.sidecar.filevault import filevault_status
+                from apps.desktop.sidecar.provider import load_provider_config
+
                 self._write(
                     result_msg(
                         req_id,
@@ -51,6 +54,8 @@ class SidecarServer:
                             "role": "sidecar",
                             "m1": True,
                             "data_root": str(data_root()),
+                            "provider": load_provider_config().public_status(),
+                            "filevault": filevault_status(),
                         },
                     )
                 )
