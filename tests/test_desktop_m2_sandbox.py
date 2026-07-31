@@ -33,6 +33,14 @@ def test_policy_full_workspace_write_roots():
     assert p.network_access is False
 
 
+def test_always_readonly_paths_are_subdirs_not_whole_root():
+    from apps.desktop.sidecar.policy import always_readonly_paths
+
+    paths = always_readonly_paths("/data/cg")
+    assert any(p.endswith("sessions") for p in paths)
+    assert "/data/cg" not in paths  # whole root must not be blanket-protected
+
+
 def test_capabilities_readonly_still_no_exec(tmp_path, monkeypatch):
     monkeypatch.setenv("CYBERGUARD_DATA_DIR", str(tmp_path / "cg"))
     caps = capabilities_for_tier("readonly")
@@ -211,3 +219,42 @@ async def test_capabilities_real_read_when_seatbelt(tmp_path, monkeypatch):
         assert "agent-host-read-ok" in text
     else:
         assert caps.real_read is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    platform.system() != "Darwin" or not Path("/usr/bin/sandbox-exec").is_file(),
+    reason="Seatbelt only on macOS with sandbox-exec",
+)
+async def test_sandboxed_write_in_workspace_only(tmp_path, monkeypatch):
+    monkeypatch.setenv("CYBERGUARD_DATA_DIR", str(tmp_path / "cg"))
+    caps = capabilities_for_tier("full")
+    assert caps.real_edit is True
+    assert caps.policy.sandbox_mode == "workspace-write"
+    ws = Path(caps.policy.writable_roots[0])
+    target = ws / "notes" / "m2-write.txt"
+    await caps.operations.edit.write_text(str(target), "workspace-write-ok\n")
+    assert target.read_text(encoding="utf-8") == "workspace-write-ok\n"
+    # re-read via sandboxed read
+    text = await caps.operations.read.read_text(str(target))
+    assert "workspace-write-ok" in text
+    # outside workspace denied
+    outside = tmp_path / "outside.txt"
+    with pytest.raises(Exception) as ei:
+        await caps.operations.edit.write_text(str(outside), "nope")
+    assert "writable" in str(ei.value).lower() or "outside" in str(ei.value).lower()
+    # sessions dir protected
+    sess = Path(tmp_path / "cg" / "sessions" / "evil.jsonl")
+    sess.parent.mkdir(parents=True, exist_ok=True)
+    with pytest.raises(Exception):
+        await caps.operations.edit.write_text(str(sess), "hack")
+    await caps.operations.edit.delete(str(target))
+    assert not target.exists()
+
+
+@pytest.mark.asyncio
+async def test_readonly_tier_cannot_write(tmp_path, monkeypatch):
+    monkeypatch.setenv("CYBERGUARD_DATA_DIR", str(tmp_path / "cg"))
+    caps = capabilities_for_tier("readonly")
+    assert caps.operations.edit is None
+    assert caps.real_edit is False

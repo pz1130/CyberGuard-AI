@@ -103,6 +103,7 @@ def run_sandboxed(
     env: Optional[Mapping[str, str]] = None,
     timeout_seconds: int = 30,
     profile_dir: Optional[Path] = None,
+    input_text: Optional[str] = None,
 ) -> Mapping[str, object]:
     """Run argv under Seatbelt. Returns stdout/stderr/exit_code/sandboxed."""
     if not Path(SANDBOX_EXEC).is_file():
@@ -117,6 +118,7 @@ def run_sandboxed(
     try:
         proc = subprocess.run(
             cmd,
+            input=input_text,
             capture_output=True,
             text=True,
             cwd=cwd,

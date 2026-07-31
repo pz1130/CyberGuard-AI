@@ -56,6 +56,13 @@ def tmp_dir() -> Path:
     return p
 
 
+def workspace_dir() -> Path:
+    """Agent-writable workspace under managed data root (M2 workspace-write)."""
+    p = data_root() / "workspace"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
 def audit_dir() -> Path:
     p = data_root() / "audit"
     p.mkdir(parents=True, exist_ok=True)

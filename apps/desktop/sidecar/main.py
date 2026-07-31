@@ -151,6 +151,66 @@ class SidecarServer:
                     )
                 return
 
+            if method == "host.write_text":
+                tier = str(params.get("tier") or "full")
+                path = str(params.get("path") or "")
+                content = str(
+                    params.get("content") if params.get("content") is not None else ""
+                )
+                caps = capabilities_for_tier(tier)
+                if caps.operations.edit is None:
+                    self._write(
+                        error_msg(req_id, "forbidden", "no edit operations on this tier")
+                    )
+                    return
+                try:
+                    await caps.operations.edit.write_text(path, content)
+                    self._write(
+                        result_msg(
+                            req_id,
+                            {
+                                "ok": True,
+                                "path": path,
+                                "bytes": len(content.encode("utf-8")),
+                                "real_edit": caps.real_edit,
+                                "sandboxed": caps.real_edit,
+                            },
+                        )
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    self._write(
+                        error_msg(req_id, "host_write", f"{type(exc).__name__}: {exc}")
+                    )
+                return
+
+            if method == "host.delete":
+                tier = str(params.get("tier") or "full")
+                path = str(params.get("path") or "")
+                caps = capabilities_for_tier(tier)
+                if caps.operations.edit is None:
+                    self._write(
+                        error_msg(req_id, "forbidden", "no edit operations on this tier")
+                    )
+                    return
+                try:
+                    await caps.operations.edit.delete(path)
+                    self._write(
+                        result_msg(
+                            req_id,
+                            {
+                                "ok": True,
+                                "path": path,
+                                "real_edit": caps.real_edit,
+                                "sandboxed": caps.real_edit,
+                            },
+                        )
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    self._write(
+                        error_msg(req_id, "host_delete", f"{type(exc).__name__}: {exc}")
+                    )
+                return
+
             if method == "sessions.create":
                 title = str(params.get("title") or "Untitled")
                 tier = str(params.get("tier") or "readonly")

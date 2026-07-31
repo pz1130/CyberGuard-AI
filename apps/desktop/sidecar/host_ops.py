@@ -140,6 +140,112 @@ class DeniedReadOperations:
         )
 
 
+def _under_any_root(path: Path, roots: Sequence[str]) -> bool:
+    resolved = path.resolve(strict=False)
+    for root in roots:
+        if not root:
+            continue
+        try:
+            resolved.relative_to(Path(root).resolve(strict=False))
+            return True
+        except ValueError:
+            continue
+    return False
+
+
+def _assert_writable_target(
+    path: Path,
+    policy: DualKnobPolicy,
+    *,
+    data_root: str,
+) -> None:
+    if policy.sandbox_mode != "workspace-write":
+        raise HostOpsError(
+            f"writes require workspace-write sandbox (got {policy.sandbox_mode})"
+        )
+    if not policy.writable_roots:
+        raise HostOpsError("no writable_roots configured")
+    if not _under_any_root(path, policy.writable_roots):
+        raise HostOpsError(
+            f"path outside writable_roots: {path} "
+            f"(allowed: {list(policy.writable_roots)})"
+        )
+    for protected in always_readonly_paths(data_root):
+        if _under_any_root(path, (protected,)):
+            raise HostOpsError(f"path is protective metadata (read-only): {path}")
+
+
+class SandboxedEditOperations:
+    """EditOperations that only mutate files inside workspace-write roots."""
+
+    def __init__(
+        self,
+        policy: DualKnobPolicy,
+        *,
+        data_root: str,
+        profile_dir: Optional[Path] = None,
+    ) -> None:
+        if detect_sandbox_impl() != "seatbelt":
+            raise HostOpsError("SandboxedEditOperations requires seatbelt")
+        if policy.sandbox_mode != "workspace-write":
+            raise HostOpsError("SandboxedEditOperations requires workspace-write policy")
+        self.policy = policy
+        self.data_root = data_root
+        self.readonly_paths = always_readonly_paths(data_root)
+        self.profile_dir = profile_dir
+
+    async def write_text(self, path: str, content: str) -> None:
+        target = _resolve_path(path)
+        _assert_writable_target(target, self.policy, data_root=self.data_root)
+        # Ensure parent exists outside sandbox (mkdir under writable root only)
+        parent = target.parent
+        if not _under_any_root(parent, self.policy.writable_roots):
+            raise HostOpsError(f"parent not under writable_roots: {parent}")
+        parent.mkdir(parents=True, exist_ok=True)
+        # Write via sandboxed tee reading stdin (never write from sidecar process)
+        result = await asyncio.to_thread(
+            run_sandboxed,
+            ["/usr/bin/tee", str(target)],
+            self.policy,
+            readonly_paths=self.readonly_paths,
+            timeout_seconds=30,
+            profile_dir=self.profile_dir,
+            input_text=content if content is not None else "",
+        )
+        if int(result.get("exit_code") or 0) != 0:
+            err = (result.get("stderr") or result.get("stdout") or "write failed").strip()
+            raise HostOpsError(f"sandboxed write failed: {err[:400]}")
+
+    async def delete(self, path: str) -> None:
+        target = _resolve_path(path)
+        _assert_writable_target(target, self.policy, data_root=self.data_root)
+        if not target.exists():
+            return
+        result = await asyncio.to_thread(
+            run_sandboxed,
+            ["/bin/rm", "-f", str(target)],
+            self.policy,
+            readonly_paths=self.readonly_paths,
+            timeout_seconds=30,
+            profile_dir=self.profile_dir,
+        )
+        if int(result.get("exit_code") or 0) != 0:
+            err = (result.get("stderr") or result.get("stdout") or "delete failed").strip()
+            raise HostOpsError(f"sandboxed delete failed: {err[:400]}")
+
+
+class DeniedEditOperations:
+    async def write_text(self, path: str, content: str) -> None:
+        raise HostOpsError(
+            "host write denied: requires full tier + seatbelt workspace-write"
+        )
+
+    async def delete(self, path: str) -> None:
+        raise HostOpsError(
+            "host delete denied: requires full tier + seatbelt workspace-write"
+        )
+
+
 def build_read_operations(
     policy: DualKnobPolicy,
     *,
@@ -160,3 +266,22 @@ def build_read_operations(
             return DeniedReadOperations(), False
     # No seatbelt: do not expose unsandboxed real I/O
     return DeniedReadOperations(), False
+
+
+def build_edit_operations(
+    policy: DualKnobPolicy,
+    *,
+    data_root: str,
+) -> tuple[Any, bool]:
+    """Return (edit_ops, is_real) for workspace-write only."""
+    if policy.sandbox_mode != "workspace-write":
+        return DeniedEditOperations(), False
+    if detect_sandbox_impl() != "seatbelt":
+        return DeniedEditOperations(), False
+    try:
+        return (
+            SandboxedEditOperations(policy, data_root=data_root),
+            True,
+        )
+    except (HostOpsError, SeatbeltError):
+        return DeniedEditOperations(), False

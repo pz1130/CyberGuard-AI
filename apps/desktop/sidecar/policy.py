@@ -69,7 +69,16 @@ def policy_for_tier(
 
 
 def always_readonly_paths(data_root: str) -> tuple[str, ...]:
-    """Protective metadata — never writable even under workspace-write (INV)."""
+    """Protective metadata — never writable even under workspace-write (INV).
+
+    Agent may write under ``workspace/`` and ``tmp/`` only. Sessions, audit,
+    logs, and config stay read-only at the OS sandbox layer.
+    """
+    from pathlib import Path
+
+    root = Path(data_root)
     return (
-        data_root,  # entire managed root is sensitive for M2.1
+        str(root / "sessions"),
+        str(root / "audit"),
+        str(root / "logs"),
     )

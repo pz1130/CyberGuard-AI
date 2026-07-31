@@ -1,9 +1,8 @@
 """Capability tiers → OperationsBundle + dual-knob policy (M1/M2).
 
-readonly: ReadOperations only — ExecOperations and EditOperations are None
-           (type-level guarantee: no local exec port exists on the instance).
-full:     real sandboxed Read when Seatbelt available; Exec/Edit still mock
-           until M2 exit criteria allow real mutating tools.
+readonly: sandboxed Read only — Exec/Edit are None.
+full:     sandboxed Read + sandboxed Edit (workspace/tmp only);
+          Exec stays mock until M2 exit allows real process execution.
 """
 from __future__ import annotations
 
@@ -12,8 +11,8 @@ from typing import Any, Literal, Mapping, Optional, Sequence
 
 from agent_core.operations import EditOperations, ExecOperations, OperationsBundle, ReadOperations
 
-from apps.desktop.sidecar.host_ops import build_read_operations
-from apps.desktop.sidecar.paths import data_root, tmp_dir
+from apps.desktop.sidecar.host_ops import build_edit_operations, build_read_operations
+from apps.desktop.sidecar.paths import data_root, tmp_dir, workspace_dir
 from apps.desktop.sidecar.policy import DualKnobPolicy, policy_for_tier
 from apps.desktop.sidecar.sandbox import detect_sandbox_impl
 
@@ -59,6 +58,7 @@ class SessionCapabilities:
     operations: OperationsBundle
     policy: DualKnobPolicy
     real_read: bool = False
+    real_edit: bool = False
 
     def has_local_exec(self) -> bool:
         return self.operations.exec is not None
@@ -70,8 +70,9 @@ class SessionCapabilities:
             "has_exec": self.operations.exec is not None,
             "has_edit": self.operations.edit is not None,
             "real_read": self.real_read,
-            # True only when ALL host ports are still fake
-            "mock": not self.real_read,
+            "real_edit": self.real_edit,
+            # True when no real host I/O ports are live
+            "mock": not (self.real_read or self.real_edit),
             "sandbox_impl": detect_sandbox_impl(),
             "policy": self.policy.public_status(),
         }
@@ -80,15 +81,15 @@ class SessionCapabilities:
 def capabilities_for_tier(tier: str) -> SessionCapabilities:
     t: Tier = "readonly" if tier == "readonly" else "full"
     root = str(data_root())
+    # full tier: agent may write only under workspace/ + tmp/
     policy = policy_for_tier(
         t,
-        workspace_root=root,
+        workspace_root=str(workspace_dir()),
         managed_tmp=str(tmp_dir()),
     )
     read_ops, real_read = build_read_operations(policy, data_root=root)
 
     if t == "readonly":
-        # INV: readonly instances must not carry ExecOperations / EditOperations
         bundle = OperationsBundle(
             read=read_ops,  # type: ignore[arg-type]
             exec=None,
@@ -100,17 +101,20 @@ def capabilities_for_tier(tier: str) -> SessionCapabilities:
             operations=bundle,
             policy=policy,
             real_read=real_read,
+            real_edit=False,
         )
 
-    # full: real sandboxed read; exec/edit stay mock until M2 exit
+    edit_ops, real_edit = build_edit_operations(policy, data_root=root)
+    # Exec remains mock — no free-form process until M2 exit
     bundle = OperationsBundle(
         read=read_ops,  # type: ignore[arg-type]
         exec=MockExecOperations(),  # type: ignore[arg-type]
-        edit=MockEditOperations(),  # type: ignore[arg-type]
+        edit=edit_ops,  # type: ignore[arg-type]
     )
     return SessionCapabilities(
         tier="full",
         operations=bundle,
         policy=policy,
         real_read=real_read,
+        real_edit=real_edit,
     )

@@ -261,7 +261,7 @@ app.whenReady().then(() => {
         type: "warning",
         title: "CyberGuard Desktop — development build",
         message:
-          "M1/M1.5 development version.\n\nSandbox and at-rest encryption are NOT enabled.\nDo not process real sensitive production data.\nTools are mock until M2. LLM may be live if provider.json / env is set.\nData root: ~/Library/Application Support/CyberGuard\n\nIf FileVault is off, enable it before storing sensitive data.",
+          "M1.5/M2 development version (not for distribution).\n\nSeatbelt host-read may be enabled; at-rest encryption is NOT.\nExec/Edit host tools remain mock. Do not process real sensitive production data.\nLLM may be live if provider.json / env is set.\nData root: ~/Library/Application Support/CyberGuard\n\nIf FileVault is off, enable it before storing sensitive data.",
         buttons: ["I understand"],
       })
       .catch(() => {});

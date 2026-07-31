@@ -9,6 +9,7 @@ type Caps = {
   has_edit: boolean;
   mock?: boolean;
   real_read?: boolean;
+  real_edit?: boolean;
   sandbox_impl?: string;
   policy?: { sandbox_mode?: string };
 };
@@ -413,9 +414,10 @@ export function App() {
   return (
     <div className="app">
       <div className="banner">
-        <strong>M1/M1.5 development build</strong> — sandbox and at-rest encryption
-        are <em>not</em> enabled. Do not process real sensitive production data.
-        LLM: <code>{providerMode}</code>.
+        <strong>M1.5/M2 development build</strong> — not for distribution.
+        Seatbelt host-read may be on; <em>no</em> at-rest encryption; Exec/Edit
+        still mock. Do not process real sensitive production data. LLM:{" "}
+        <code>{providerMode}</code>.
       </div>
       {fvWarning && (
         <div className="banner" style={{ background: "#7f1d1d", color: "#fecaca" }}>
@@ -573,6 +575,8 @@ export function App() {
               <span>{String(caps?.has_read ?? "—")}</span>
               <span>real_read</span>
               <span>{String(caps?.real_read ?? "—")}</span>
+              <span>real_edit</span>
+              <span>{String(caps?.real_edit ?? "—")}</span>
               <span>has_exec</span>
               <span>{String(caps?.has_exec ?? "—")}</span>
               <span>has_edit</span>
