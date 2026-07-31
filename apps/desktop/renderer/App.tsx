@@ -259,6 +259,9 @@ export function App() {
   const [sandboxImpl, setSandboxImpl] = useState<string>("unknown");
   const [sandboxMode, setSandboxMode] = useState<string>("—");
   const [fvWarning, setFvWarning] = useState<string | null>(null);
+  const [tccSummary, setTccSummary] = useState<string>("—");
+  const [tccWarning, setTccWarning] = useState<string | null>(null);
+  const [tccGuidance, setTccGuidance] = useState<string | null>(null);
   const [mcpTools, setMcpTools] = useState<string[]>([]);
   const [lastSubmitted, setLastSubmitted] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -297,6 +300,17 @@ export function App() {
         }
         const fv = r?.filevault as { warning?: string | null } | undefined;
         setFvWarning(fv?.warning || null);
+        const tcc = r?.tcc as {
+          summary?: string;
+          warning?: string | null;
+          guidance?: string | null;
+          full_disk_access?: boolean | null;
+        } | undefined;
+        if (tcc?.summary) setTccSummary(String(tcc.summary));
+        else if (tcc?.full_disk_access === true) setTccSummary("fda_likely");
+        else if (tcc?.full_disk_access === false) setTccSummary("restricted");
+        setTccWarning(tcc?.warning || null);
+        setTccGuidance(tcc?.guidance || null);
       })
       .catch(() => setPingOk(false));
     refreshSessions();
@@ -425,6 +439,14 @@ export function App() {
           <strong>FileVault:</strong> {fvWarning}
         </div>
       )}
+      {tccWarning && (
+        <div className="banner" style={{ background: "#7c2d12", color: "#fed7aa" }}>
+          <strong>TCC:</strong> {tccWarning}
+          {tccGuidance ? (
+            <div style={{ marginTop: 4, opacity: 0.9, fontSize: 12 }}>{tccGuidance}</div>
+          ) : null}
+        </div>
+      )}
 
       <div className="status-bar">
         <span className={pingOk ? "ok" : "bad"}>● {statusLabel}</span>
@@ -439,6 +461,18 @@ export function App() {
           }
         >
           sandbox: {sandboxImpl}/{sandboxMode}
+        </span>
+        <span
+          className={
+            tccSummary === "restricted"
+              ? "bad"
+              : tccSummary === "fda_likely"
+                ? "ok"
+                : ""
+          }
+          title={tccGuidance || tccWarning || "TCC probe (heuristic)"}
+        >
+          tcc: {tccSummary}
         </span>
         <span>llm: {providerMode}</span>
         <span>tier: {tier}</span>
