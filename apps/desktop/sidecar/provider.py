@@ -89,11 +89,17 @@ def load_provider_config() -> ProviderConfig:
         or file_cfg.get("base_url")
         or "https://api.openai.com/v1"
     )
-    api_key = (
-        os.environ.get("CYBERGUARD_LLM_API_KEY")
-        or file_cfg.get("api_key")
-        or ""
-    )
+    # Prefer env, then Keychain/secrets store (M3), then provider.json (legacy)
+    api_key = os.environ.get("CYBERGUARD_LLM_API_KEY") or ""
+    if not api_key:
+        try:
+            from apps.desktop.sidecar.secrets_store import get_provider_api_key
+
+            api_key = get_provider_api_key() or ""
+        except Exception:  # noqa: BLE001
+            api_key = ""
+    if not api_key:
+        api_key = str(file_cfg.get("api_key") or "")
     model = (
         os.environ.get("CYBERGUARD_LLM_MODEL")
         or file_cfg.get("model")

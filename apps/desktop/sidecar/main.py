@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import signal
 import sys
@@ -53,6 +54,8 @@ class SidecarServer:
                 from apps.desktop.sidecar.policy import policy_for_tier
                 from apps.desktop.sidecar.provider import load_provider_config
                 from apps.desktop.sidecar.sandbox import sandbox_public_status
+                from apps.desktop.sidecar.audit_chain import verify_chain
+                from apps.desktop.sidecar.secrets_store import public_status as secrets_status
                 from apps.desktop.sidecar.tcc import tcc_status
 
                 root = data_root()
@@ -64,11 +67,14 @@ class SidecarServer:
                             "role": "sidecar",
                             "m1": True,
                             "m2": True,
+                            "m3": True,
                             "data_root": str(root),
                             "provider": load_provider_config().public_status(),
                             "filevault": filevault_status(),
                             "sandbox": sandbox_public_status(),
                             "tcc": tcc_status(),
+                            "secrets": secrets_status(),
+                            "audit": verify_chain(),
                             "policy_defaults": {
                                 "readonly": policy_for_tier(
                                     "readonly",
@@ -347,6 +353,121 @@ class SidecarServer:
                 self._write(result_msg(req_id, {"ok": ok, "server_id": server_id}))
                 return
 
+            if method == "secrets.status":
+                from apps.desktop.sidecar.secrets_store import public_status
+
+                self._write(result_msg(req_id, public_status()))
+                return
+
+            if method == "secrets.set_provider_key":
+                from apps.desktop.sidecar.secrets_store import set_provider_api_key
+
+                key = str(params.get("api_key") or "")
+                if not key:
+                    self._write(error_msg(req_id, "bad_params", "api_key required"))
+                    return
+                try:
+                    set_provider_api_key(key)
+                    # never echo key
+                    self._write(result_msg(req_id, {"ok": True, "slot": "provider/default"}))
+                except Exception as exc:  # noqa: BLE001
+                    self._write(
+                        error_msg(req_id, "secrets", f"{type(exc).__name__}: {exc}")
+                    )
+                return
+
+            if method == "secrets.delete_provider_key":
+                from apps.desktop.sidecar.secrets_store import (
+                    SERVICE_PROVIDER,
+                    delete_secret,
+                )
+
+                ok = delete_secret(SERVICE_PROVIDER, "default")
+                self._write(result_msg(req_id, {"ok": ok}))
+                return
+
+            if method == "secrets.set_mcp":
+                from apps.desktop.sidecar.secrets_store import set_mcp_secret
+
+                server_id = str(params.get("server_id") or "")
+                secret = str(params.get("secret") or "")
+                if not server_id or not secret:
+                    self._write(
+                        error_msg(req_id, "bad_params", "server_id and secret required")
+                    )
+                    return
+                try:
+                    set_mcp_secret(server_id, secret)
+                    self._write(
+                        result_msg(
+                            req_id,
+                            {"ok": True, "slot": f"mcp/{server_id}"},
+                        )
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    self._write(
+                        error_msg(req_id, "secrets", f"{type(exc).__name__}: {exc}")
+                    )
+                return
+
+            if method == "secrets.migrate_provider_json":
+                # Move api_key from provider.json into secrets store; strip file key
+                from apps.desktop.sidecar.paths import data_root as dr
+                from apps.desktop.sidecar.secrets_store import set_provider_api_key
+
+                path = dr() / "provider.json"
+                if not path.is_file():
+                    self._write(
+                        result_msg(req_id, {"ok": False, "reason": "no_provider_json"})
+                    )
+                    return
+                try:
+                    data = json.loads(path.read_text(encoding="utf-8"))
+                except Exception as exc:  # noqa: BLE001
+                    self._write(
+                        error_msg(req_id, "secrets", f"read_failed:{type(exc).__name__}")
+                    )
+                    return
+                key = str((data or {}).get("api_key") or "")
+                if not key:
+                    self._write(
+                        result_msg(req_id, {"ok": False, "reason": "no_api_key_in_file"})
+                    )
+                    return
+                set_provider_api_key(key)
+                data["api_key"] = ""
+                data["api_key_in_keychain"] = True
+                path.write_text(
+                    json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+                    encoding="utf-8",
+                )
+                try:
+                    import os as _os
+
+                    _os.chmod(path, 0o600)
+                except OSError:
+                    pass
+                self._write(
+                    result_msg(
+                        req_id,
+                        {"ok": True, "migrated": True, "provider_json_key_cleared": True},
+                    )
+                )
+                return
+
+            if method == "audit.verify":
+                from apps.desktop.sidecar.audit_chain import verify_chain
+
+                self._write(result_msg(req_id, verify_chain()))
+                return
+
+            if method == "audit.tail":
+                from apps.desktop.sidecar.audit_chain import tail
+
+                n = int(params.get("n") or 20)
+                self._write(result_msg(req_id, {"events": tail(n)}))
+                return
+
             if method == "agent.abort":
                 run_id = str(params.get("run_id") or "")
                 ok = self.agent.abort(run_id)
@@ -386,7 +507,19 @@ class SidecarServer:
                 }
                 self.sessions.append_event(session_id, user_ev)
                 self._write(event_msg(req_id, user_ev))
+                try:
+                    from apps.desktop.sidecar.audit_chain import append_event
 
+                    append_event(
+                        "user_task",
+                        {"task": task[:500], "tier": tier},
+                        approval_type="self",
+                        session_id=session_id,
+                    )
+                except Exception:  # noqa: BLE001
+                    logger.debug("audit append user_task failed", exc_info=True)
+
+                run_id_seen: Optional[str] = None
                 async for ev in self.agent.run(
                     task=task,
                     tier=tier,
@@ -396,6 +529,36 @@ class SidecarServer:
                     ev["session_id"] = session_id
                     self.sessions.append_event(session_id, ev)
                     self._write(event_msg(req_id, ev))
+                    et = str(ev.get("type") or "")
+                    if et == "run_started":
+                        run_id_seen = str(ev.get("run_id") or "") or None
+                    if et in (
+                        "run_started",
+                        "tool_call_end",
+                        "answer_ready",
+                        "error",
+                    ):
+                        try:
+                            from apps.desktop.sidecar.audit_chain import append_event
+
+                            payload: Dict[str, Any] = {"type": et}
+                            if et == "tool_call_end":
+                                payload["name"] = ev.get("name")
+                                payload["error"] = bool(ev.get("error"))
+                            if et == "run_started":
+                                payload["tier"] = ev.get("tier")
+                                prov = ev.get("provider") or {}
+                                if isinstance(prov, dict):
+                                    payload["provider_mode"] = prov.get("mode")
+                            append_event(
+                                et,
+                                payload,
+                                approval_type="self",
+                                session_id=session_id,
+                                run_id=run_id_seen or str(ev.get("run_id") or "") or None,
+                            )
+                        except Exception:  # noqa: BLE001
+                            logger.debug("audit append %s failed", et, exc_info=True)
                 self._write(
                     result_msg(
                         req_id,

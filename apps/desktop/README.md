@@ -170,6 +170,31 @@ printf '%s\n' \
   | .venv/bin/python -m apps.desktop.sidecar
 ```
 
+## Secrets & audit (M3 start)
+
+Provider API keys should live in the secrets store (macOS Keychain by default), not plaintext `provider.json`:
+
+```bash
+# migrate existing provider.json api_key → Keychain/file store and clear the file field
+printf '%s\n' '{"id":"1","method":"secrets.migrate_provider_json","params":{}}' \
+  | PYTHONPATH="packages:$(pwd)" .venv/bin/python -m apps.desktop.sidecar
+
+# or set directly
+printf '%s\n' '{"id":"1","method":"secrets.set_provider_key","params":{"api_key":"sk-..."}}' \
+  | PYTHONPATH="packages:$(pwd)" .venv/bin/python -m apps.desktop.sidecar
+```
+
+Local audit hash chain (tamper-evident, **not** WORM):
+
+```bash
+printf '%s\n' \
+  '{"id":"1","method":"audit.verify","params":{}}' \
+  '{"id":"2","method":"audit.tail","params":{"n":10}}' \
+  | PYTHONPATH="packages:$(pwd)" .venv/bin/python -m apps.desktop.sidecar
+```
+
+Override secrets backend for tests: `CYBERGUARD_SECRETS_BACKEND=file`.
+
 ## Live LLM (M1.5 self-use)
 
 ```bash
