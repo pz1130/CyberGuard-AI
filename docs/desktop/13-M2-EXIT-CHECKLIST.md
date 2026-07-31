@@ -41,7 +41,7 @@ export PYTHONPATH="packages:$(pwd)"
 | 9 | TCC 未授权时有明确提示（非静默当「文件不存在」） | **PASS（探测）** | `tcc_status` + UI 横幅/状态栏 `tcc: restricted`；FDA 为启发式，非公证 API |
 | 10 | 状态栏展示 sandbox / tcc / llm / tier | **PASS** | `App.tsx` status bar；`ping` 返回 sandbox+tcc |
 | 11 | readonly 档无 Exec/Edit 端口 | **PASS** | `test_escape_readonly_tier_no_exec_edit_ports` |
-| 12 | 开发期签名稳定，TCC 不因 rebuild 失效 | **未完成** | 见 `10-DEV-SETUP.md`；需固定 codesign identity 流程（M7 边界交叉） |
+| 12 | 开发期签名稳定，TCC 不因 rebuild 失效 | **部分完成** | `npm run codesign:identity` / `codesign:dev` / `dev:signed`；固定 CN=`CyberGuard Dev`、bundle=`com.cyberguard.desktop.dev`。需本机一次钥匙串 Trust + FDA 授权；公证仍归 M7 |
 | 13 | 签名 / 公证 | **不做（M7）** | DEC-026 |
 | 14 | danger-full-access 默认关闭 | **PASS** | profile 生成直接拒绝 |
 
