@@ -122,6 +122,47 @@ class MockAgentHost:
 
         tools: List[Dict[str, Any]] = list(mcp_tools)
 
+        # Real sandboxed host read tools (M2) when Seatbelt-backed Read is live
+        host_tools_enabled = bool(caps.real_read and caps.operations.read is not None)
+        if host_tools_enabled:
+            tools.extend(
+                [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "host_read_file",
+                            "description": (
+                                "Read a local text file via OS sandbox (read-only). "
+                                "Path must be absolute. Do not use for secrets/keys."
+                            ),
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "path": {"type": "string"},
+                                    "max_bytes": {"type": "integer"},
+                                },
+                                "required": ["path"],
+                            },
+                        },
+                    },
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "host_list_dir",
+                            "description": (
+                                "List directory entries via OS sandbox (read-only). "
+                                "Path must be absolute."
+                            ),
+                            "parameters": {
+                                "type": "object",
+                                "properties": {"path": {"type": "string"}},
+                                "required": ["path"],
+                            },
+                        },
+                    },
+                ]
+            )
+
         # Legacy mock_scan only when full tier AND no real MCP tools
         # (keeps old demos working; not used when MCP is configured)
         if caps.has_local_exec() and not mcp_tools:
@@ -130,7 +171,7 @@ class MockAgentHost:
                     "type": "function",
                     "function": {
                         "name": "mock_scan",
-                        "description": "Fake scan (M1 — no host I/O until M2 sandbox)",
+                        "description": "Fake scan (M1 — no host I/O; mutating tools still mock)",
                         "parameters": {
                             "type": "object",
                             "properties": {"target": {"type": "string"}},
@@ -144,9 +185,10 @@ class MockAgentHost:
         step = {"n": 0}
         skills = _load_builtin_skills()
         default_prompt = (
-            "You are CyberGuard desktop security agent (self-use M1.5).\n"
+            "You are CyberGuard desktop security agent (self-use M1.5/M2).\n"
             "Be precise and actionable. Prefer read-only investigation.\n"
-            "MCP tools prefixed with mcp__ are real connectors — use them for data.\n"
+            "MCP tools prefixed with mcp__ are connectors — use them for data.\n"
+            "host_read_file / host_list_dir use the OS sandbox for local files.\n"
             "Tools named mock_* do not touch the real host.\n"
         )
         if skills:
@@ -154,6 +196,10 @@ class MockAgentHost:
         if mcp_tools:
             names = ", ".join(t["function"]["name"] for t in mcp_tools)
             default_prompt += f"\n\n## Available MCP tools\n{names}\n"
+        if host_tools_enabled:
+            default_prompt += (
+                "\n\n## Host tools (sandboxed)\nhost_read_file, host_list_dir\n"
+            )
         if not provider.is_live:
             default_prompt += (
                 "\n\n(Running in MOCK mode — no real LLM. "
@@ -256,6 +302,40 @@ class MockAgentHost:
                     return {
                         "status": "error",
                         "error": f"MCP {name}: {exc}",
+                        "is_error": True,
+                    }
+
+            if name in ("host_read_file", "host_list_dir"):
+                if not host_tools_enabled or caps.operations.read is None:
+                    return {
+                        "status": "error",
+                        "error": "host tools require OS sandbox (seatbelt)",
+                        "is_error": True,
+                    }
+                try:
+                    path = str(args.get("path") or "")
+                    if name == "host_read_file":
+                        max_b = int(args.get("max_bytes") or 200_000)
+                        text = await caps.operations.read.read_text(
+                            path, max_bytes=max_b
+                        )
+                        return {
+                            "status": "completed",
+                            "stdout": text,
+                            "is_error": False,
+                            "sandboxed": True,
+                        }
+                    entries = await caps.operations.read.list_dir(path)
+                    return {
+                        "status": "completed",
+                        "stdout": "\n".join(entries),
+                        "is_error": False,
+                        "sandboxed": True,
+                    }
+                except Exception as exc:  # noqa: BLE001
+                    return {
+                        "status": "error",
+                        "error": f"{name}: {exc}",
                         "is_error": True,
                     }
 

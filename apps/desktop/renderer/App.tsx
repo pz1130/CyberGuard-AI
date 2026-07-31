@@ -8,6 +8,9 @@ type Caps = {
   has_exec: boolean;
   has_edit: boolean;
   mock?: boolean;
+  real_read?: boolean;
+  sandbox_impl?: string;
+  policy?: { sandbox_mode?: string };
 };
 
 type Ev = { type: string; [k: string]: unknown };
@@ -568,6 +571,8 @@ export function App() {
             <div className="kv">
               <span>has_read</span>
               <span>{String(caps?.has_read ?? "—")}</span>
+              <span>real_read</span>
+              <span>{String(caps?.real_read ?? "—")}</span>
               <span>has_exec</span>
               <span>{String(caps?.has_exec ?? "—")}</span>
               <span>has_edit</span>

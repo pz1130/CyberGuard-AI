@@ -1,9 +1,7 @@
-"""M2: dual-knob policy + macOS Seatbelt escape suite (first slice)."""
+"""M2: dual-knob policy + macOS Seatbelt escape suite + sandboxed read."""
 from __future__ import annotations
 
-import os
 import platform
-import shutil
 from pathlib import Path
 
 import pytest
@@ -50,8 +48,14 @@ def test_capabilities_full_declares_workspace_write(tmp_path, monkeypatch):
     monkeypatch.setenv("CYBERGUARD_DATA_DIR", str(tmp_path / "cg"))
     caps = capabilities_for_tier("full")
     assert caps.policy.sandbox_mode == "workspace-write"
-    # Host tools remain mock until real Operations wire-up
-    assert caps.describe()["mock"] is True
+    # Exec/edit still mock; read is real when seatbelt is available
+    assert caps.operations.exec is not None
+    if detect_sandbox_impl() == "seatbelt":
+        assert caps.real_read is True
+        assert caps.describe()["real_read"] is True
+        assert caps.describe()["mock"] is False
+    else:
+        assert caps.real_read is False
 
 
 def test_detect_sandbox_impl_on_macos():
@@ -159,3 +163,51 @@ def test_seatbelt_workspace_write_protects_data_root(tmp_path):
         timeout_seconds=10,
     )
     assert not victim.exists(), f"protected subpath must deny write: {result}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    platform.system() != "Darwin" or not Path("/usr/bin/sandbox-exec").is_file(),
+    reason="Seatbelt only on macOS with sandbox-exec",
+)
+async def test_sandboxed_read_operations_reads_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("CYBERGUARD_DATA_DIR", str(tmp_path / "cg"))
+    sample = tmp_path / "sample.txt"
+    sample.write_text("hello-m2-read\nsecond-line\n", encoding="utf-8")
+    caps = capabilities_for_tier("readonly")
+    assert caps.real_read is True
+    assert caps.operations.exec is None
+    text = await caps.operations.read.read_text(str(sample), max_bytes=1000)
+    assert "hello-m2-read" in text
+    names = await caps.operations.read.list_dir(str(tmp_path))
+    assert "sample.txt" in names
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    platform.system() != "Darwin" or not Path("/usr/bin/sandbox-exec").is_file(),
+    reason="Seatbelt only on macOS with sandbox-exec",
+)
+async def test_sandboxed_read_blocks_provider_json(tmp_path, monkeypatch):
+    monkeypatch.setenv("CYBERGUARD_DATA_DIR", str(tmp_path / "cg"))
+    secret = tmp_path / "cg" / "provider.json"
+    secret.parent.mkdir(parents=True, exist_ok=True)
+    secret.write_text('{"api_key":"sk-secret"}', encoding="utf-8")
+    caps = capabilities_for_tier("readonly")
+    with pytest.raises(Exception) as ei:
+        await caps.operations.read.read_text(str(secret))
+    assert "blocked" in str(ei.value).lower() or "denied" in str(ei.value).lower()
+
+
+@pytest.mark.asyncio
+async def test_capabilities_real_read_when_seatbelt(tmp_path, monkeypatch):
+    monkeypatch.setenv("CYBERGUARD_DATA_DIR", str(tmp_path / "cg"))
+    sample = tmp_path / "note.txt"
+    sample.write_text("agent-host-read-ok", encoding="utf-8")
+    caps = capabilities_for_tier("readonly")
+    if detect_sandbox_impl() == "seatbelt":
+        assert caps.real_read is True
+        text = await caps.operations.read.read_text(str(sample))
+        assert "agent-host-read-ok" in text
+    else:
+        assert caps.real_read is False

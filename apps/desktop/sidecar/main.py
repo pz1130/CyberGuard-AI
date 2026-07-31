@@ -90,6 +90,67 @@ class SidecarServer:
                 self._write(result_msg(req_id, caps.describe()))
                 return
 
+            if method == "host.read_text":
+                tier = str(params.get("tier") or "readonly")
+                path = str(params.get("path") or "")
+                max_bytes = int(params.get("max_bytes") or 200_000)
+                caps = capabilities_for_tier(tier)
+                if caps.operations.read is None:
+                    self._write(
+                        error_msg(req_id, "forbidden", "no read operations")
+                    )
+                    return
+                try:
+                    text = await caps.operations.read.read_text(
+                        path, max_bytes=max_bytes
+                    )
+                    self._write(
+                        result_msg(
+                            req_id,
+                            {
+                                "ok": True,
+                                "path": path,
+                                "text": text,
+                                "real_read": caps.real_read,
+                                "sandboxed": caps.real_read,
+                            },
+                        )
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    self._write(
+                        error_msg(req_id, "host_read", f"{type(exc).__name__}: {exc}")
+                    )
+                return
+
+            if method == "host.list_dir":
+                tier = str(params.get("tier") or "readonly")
+                path = str(params.get("path") or "")
+                caps = capabilities_for_tier(tier)
+                if caps.operations.read is None:
+                    self._write(
+                        error_msg(req_id, "forbidden", "no read operations")
+                    )
+                    return
+                try:
+                    entries = await caps.operations.read.list_dir(path)
+                    self._write(
+                        result_msg(
+                            req_id,
+                            {
+                                "ok": True,
+                                "path": path,
+                                "entries": list(entries),
+                                "real_read": caps.real_read,
+                                "sandboxed": caps.real_read,
+                            },
+                        )
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    self._write(
+                        error_msg(req_id, "host_list", f"{type(exc).__name__}: {exc}")
+                    )
+                return
+
             if method == "sessions.create":
                 title = str(params.get("title") or "Untitled")
                 tier = str(params.get("tier") or "readonly")
