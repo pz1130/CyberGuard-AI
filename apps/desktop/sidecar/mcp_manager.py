@@ -54,17 +54,27 @@ class McpManager:
         return out
 
     def configured_servers(self) -> List[dict]:
-        return [
-            {
-                "id": s.id,
-                "command": s.command,
-                "args": s.args,
-                "readonly": s.readonly,
-                "enabled": s.enabled,
-                "description": s.description,
-            }
-            for s in load_mcp_servers()
-        ]
+        from apps.desktop.sidecar.secrets_store import has_secret, mcp_service
+
+        out = []
+        for s in load_mcp_servers():
+            try:
+                has = has_secret(mcp_service(s.id), "default")
+            except Exception:  # noqa: BLE001
+                has = False
+            out.append(
+                {
+                    "id": s.id,
+                    "command": s.command,
+                    "args": s.args,
+                    "readonly": s.readonly,
+                    "enabled": s.enabled,
+                    "description": s.description,
+                    "secret_env": s.secret_env,
+                    "has_secret": has,
+                }
+            )
+        return out
 
     def spawn_mock(self, server_id: str, *, hold_seconds: float = 3600) -> dict:
         if server_id in self._children and self._children[server_id].process.poll() is None:

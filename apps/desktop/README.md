@@ -143,6 +143,26 @@ export CYBERGUARD_MCP_COMMAND="$(pwd)/.venv/bin/python"
 export CYBERGUARD_MCP_ARGS="$(pwd)/tests/fixtures/echo_mcp_server.py"
 ```
 
+Optional per-server secret (M3 Keychain slot → child env only for that server):
+
+```json
+{
+  "id": "siem",
+  "command": "...",
+  "args": [],
+  "secret_env": "SIEM_API_TOKEN"
+}
+```
+
+```bash
+# store secret for server id "siem" only
+printf '%s\n' '{"id":"1","method":"secrets.set_mcp","params":{"server_id":"siem","secret":"..."}}' \
+  | PYTHONPATH="packages:$(pwd)" .venv/bin/python -m apps.desktop.sidecar
+```
+
+On spawn, sidecar injects the slot into `secret_env` (default `CYBERGUARD_MCP_SECRET`).  
+Other servers cannot read this slot. Never put live secrets in `mcp_servers.json` `env`.
+
 Tools appear as `mcp__{server_id}__{tool_name}` in the agent loop.  
 `readonly: true` servers are available on **readonly** and **full** tiers; non-readonly only on **full**.
 

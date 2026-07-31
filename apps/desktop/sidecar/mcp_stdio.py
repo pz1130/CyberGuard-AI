@@ -34,6 +34,9 @@ class McpServerConfig:
     readonly: bool = True
     enabled: bool = True
     description: str = ""
+    # Env var name that receives this server's Keychain slot secret (M3).
+    # Default CYBERGUARD_MCP_SECRET; never log the value.
+    secret_env: str = "CYBERGUARD_MCP_SECRET"
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "McpServerConfig":
@@ -46,6 +49,11 @@ class McpServerConfig:
             readonly=bool(data.get("readonly", True)),
             enabled=bool(data.get("enabled", True)),
             description=str(data.get("description") or ""),
+            secret_env=str(
+                data.get("secret_env")
+                or data.get("secretEnv")
+                or "CYBERGUARD_MCP_SECRET"
+            ),
         )
 
 
@@ -118,9 +126,25 @@ class McpStdioClient:
             raise RuntimeError(f"MCP server {cfg.id}: empty command")
 
         env = dict(os.environ)
+        # Static env from config first (must not contain live secrets)
         env.update(cfg.env)
-        # Soften PATH for predictability; still allow user command as given
-        # (desktop self-use may use npx/uvx relative names — do not force absolute)
+        # M3: inject this server's Keychain/file slot only — never other servers' slots
+        secret_injected = False
+        try:
+            from apps.desktop.sidecar.secrets_store import get_mcp_secret
+
+            secret = get_mcp_secret(cfg.id)
+            if secret:
+                env_key = (cfg.secret_env or "CYBERGUARD_MCP_SECRET").strip()
+                if env_key:
+                    env[env_key] = secret
+                    secret_injected = True
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "mcp secret load failed server_id=%s err=%s",
+                cfg.id,
+                type(exc).__name__,
+            )
 
         proc = await asyncio.create_subprocess_exec(
             cfg.command,
@@ -134,7 +158,29 @@ class McpStdioClient:
         REGISTRY.register(proc.pid, f"mcp:{cfg.id}")
         live = _LiveServer(config=cfg, proc=proc)
         self._live[cfg.id] = live
-        logger.info("spawned mcp server_id=%s pid=%s cmd=%s", cfg.id, proc.pid, cfg.command)
+        logger.info(
+            "spawned mcp server_id=%s pid=%s cmd=%s secret_injected=%s",
+            cfg.id,
+            proc.pid,
+            cfg.command,
+            secret_injected,
+        )
+        if secret_injected:
+            try:
+                from apps.desktop.sidecar.audit_chain import append_event
+
+                append_event(
+                    "mcp_spawn",
+                    {
+                        "server_id": cfg.id,
+                        "secret_injected": True,
+                        "secret_env": cfg.secret_env,
+                        # never include secret value
+                    },
+                    approval_type="self",
+                )
+            except Exception:  # noqa: BLE001
+                pass
 
         async with live.lock:
             await self._initialize(live)

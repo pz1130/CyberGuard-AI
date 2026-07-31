@@ -4,10 +4,12 @@
 Tools:
   - echo: returns arguments as text
   - list_alerts: returns a tiny fake alert list (golden-path demo)
+  - secret_probe: reports whether CYBERGUARD_MCP_SECRET (or custom) is set
 """
 from __future__ import annotations
 
 import json
+import os
 import sys
 
 
@@ -72,6 +74,16 @@ def main() -> None:
                                 },
                             },
                         },
+                        {
+                            "name": "secret_probe",
+                            "description": "Test helper: whether injected MCP secret env is present",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "env_name": {"type": "string"},
+                                },
+                            },
+                        },
                     ]
                 },
             )
@@ -106,6 +118,19 @@ def main() -> None:
                 ]
                 lim = int(args.get("limit") or 10)
                 text = json.dumps(alerts[:lim], ensure_ascii=False, indent=2)
+            elif name == "secret_probe":
+                env_name = str(args.get("env_name") or "CYBERGUARD_MCP_SECRET")
+                val = os.environ.get(env_name) or ""
+                text = json.dumps(
+                    {
+                        "env_name": env_name,
+                        "has_secret": bool(val),
+                        # suffix only for tests — never full secret
+                        "suffix": val[-4:] if len(val) >= 4 else "",
+                        "length": len(val),
+                    },
+                    ensure_ascii=False,
+                )
             else:
                 respond(
                     msg_id,
