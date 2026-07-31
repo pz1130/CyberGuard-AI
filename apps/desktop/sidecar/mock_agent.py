@@ -125,6 +125,7 @@ class MockAgentHost:
         # Real sandboxed host tools when Seatbelt-backed ports are live
         host_read_enabled = bool(caps.real_read and caps.operations.read is not None)
         host_edit_enabled = bool(caps.real_edit and caps.operations.edit is not None)
+        host_exec_enabled = bool(caps.real_exec and caps.operations.exec is not None)
         if host_read_enabled:
             tools.extend(
                 [
@@ -203,8 +204,36 @@ class MockAgentHost:
                     },
                 ]
             )
+        if host_exec_enabled:
+            tools.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "host_run",
+                        "description": (
+                            "Run an allowlisted absolute binary under OS sandbox. "
+                            "argv is a JSON array of strings (no shell). "
+                            "Examples: [\"/bin/ls\",\"-la\", path], "
+                            "[\"/usr/bin/uname\",\"-a\"]. "
+                            "cwd defaults to managed workspace."
+                        ),
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "argv": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                },
+                                "timeout_seconds": {"type": "integer"},
+                                "cwd": {"type": "string"},
+                            },
+                            "required": ["argv"],
+                        },
+                    },
+                }
+            )
 
-        # Legacy mock_scan for full tier demos (never real process execution)
+        # Legacy mock_scan for full-tier demos (never a real process)
         if caps.has_local_exec() and not mcp_tools:
             tools.append(
                 {
@@ -241,6 +270,8 @@ class MockAgentHost:
             host_names.extend(["host_read_file", "host_list_dir"])
         if host_edit_enabled:
             host_names.extend(["host_write_file", "host_delete_file"])
+        if host_exec_enabled:
+            host_names.append("host_run")
         if host_names:
             default_prompt += (
                 "\n\n## Host tools (sandboxed)\n" + ", ".join(host_names) + "\n"
@@ -413,6 +444,49 @@ class MockAgentHost:
                     return {
                         "status": "error",
                         "error": f"{name}: {exc}",
+                        "is_error": True,
+                    }
+
+            if name == "host_run":
+                if not host_exec_enabled or caps.operations.exec is None:
+                    return {
+                        "status": "error",
+                        "error": "host_run requires full tier + seatbelt allowlisted exec",
+                        "is_error": True,
+                    }
+                try:
+                    raw_argv = args.get("argv")
+                    if not isinstance(raw_argv, list):
+                        return {
+                            "status": "error",
+                            "error": "argv must be a JSON array of strings",
+                            "is_error": True,
+                        }
+                    timeout = int(args.get("timeout_seconds") or 30)
+                    cwd = args.get("cwd")
+                    cwd_s = str(cwd) if cwd else None
+                    result = await caps.operations.exec.run(
+                        [str(x) for x in raw_argv],
+                        timeout_seconds=timeout,
+                        cwd=cwd_s,
+                    )
+                    code = int(result.get("exit_code") or 0)
+                    out = str(result.get("stdout") or "")
+                    err = str(result.get("stderr") or "")
+                    blob = out
+                    if err:
+                        blob = (out + ("\n" if out else "") + f"[stderr]\n{err}").strip()
+                    return {
+                        "status": "completed" if code == 0 else "error",
+                        "stdout": blob,
+                        "exit_code": code,
+                        "is_error": code != 0,
+                        "sandboxed": True,
+                    }
+                except Exception as exc:  # noqa: BLE001
+                    return {
+                        "status": "error",
+                        "error": f"host_run: {exc}",
                         "is_error": True,
                     }
 

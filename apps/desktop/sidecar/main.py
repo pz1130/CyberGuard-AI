@@ -211,6 +211,45 @@ class SidecarServer:
                     )
                 return
 
+            if method == "host.run":
+                tier = str(params.get("tier") or "full")
+                argv = params.get("argv")
+                timeout = int(params.get("timeout_seconds") or 30)
+                cwd = params.get("cwd")
+                caps = capabilities_for_tier(tier)
+                if caps.operations.exec is None:
+                    self._write(
+                        error_msg(req_id, "forbidden", "no exec operations on this tier")
+                    )
+                    return
+                if not isinstance(argv, list):
+                    self._write(
+                        error_msg(req_id, "bad_params", "argv must be an array of strings")
+                    )
+                    return
+                try:
+                    result = await caps.operations.exec.run(
+                        [str(x) for x in argv],
+                        timeout_seconds=timeout,
+                        cwd=str(cwd) if cwd else None,
+                    )
+                    self._write(
+                        result_msg(
+                            req_id,
+                            {
+                                "ok": True,
+                                "result": result,
+                                "real_exec": caps.real_exec,
+                                "sandboxed": bool(result.get("sandboxed")),
+                            },
+                        )
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    self._write(
+                        error_msg(req_id, "host_run", f"{type(exc).__name__}: {exc}")
+                    )
+                return
+
             if method == "sessions.create":
                 title = str(params.get("title") or "Untitled")
                 tier = str(params.get("tier") or "readonly")

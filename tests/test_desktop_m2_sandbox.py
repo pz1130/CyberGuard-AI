@@ -258,3 +258,33 @@ async def test_readonly_tier_cannot_write(tmp_path, monkeypatch):
     caps = capabilities_for_tier("readonly")
     assert caps.operations.edit is None
     assert caps.real_edit is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    platform.system() != "Darwin" or not Path("/usr/bin/sandbox-exec").is_file(),
+    reason="Seatbelt only on macOS with sandbox-exec",
+)
+async def test_sandboxed_exec_allowlist(tmp_path, monkeypatch):
+    monkeypatch.setenv("CYBERGUARD_DATA_DIR", str(tmp_path / "cg"))
+    caps = capabilities_for_tier("full")
+    assert caps.real_exec is True
+    r = await caps.operations.exec.run(["/usr/bin/uname", "-s"])
+    assert r.get("sandboxed") is True
+    assert r.get("mock") is False
+    assert int(r.get("exit_code", 1)) == 0
+    assert "Darwin" in str(r.get("stdout") or "")
+    # shell / non-allowlisted binary denied
+    with pytest.raises(Exception) as ei:
+        await caps.operations.exec.run(["/bin/sh", "-c", "echo pwned"])
+    assert "allowlist" in str(ei.value).lower() or "binary" in str(ei.value).lower()
+    with pytest.raises(Exception):
+        await caps.operations.exec.run(["echo", "no-absolute"])
+
+
+@pytest.mark.asyncio
+async def test_readonly_has_no_exec_port(tmp_path, monkeypatch):
+    monkeypatch.setenv("CYBERGUARD_DATA_DIR", str(tmp_path / "cg"))
+    caps = capabilities_for_tier("readonly")
+    assert caps.operations.exec is None
+    assert caps.real_exec is False

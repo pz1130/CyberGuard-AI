@@ -246,6 +246,166 @@ class DeniedEditOperations:
         )
 
 
+# INV-35: structured argv only — absolute binary allowlist, no free-form shell.
+ALLOWED_EXEC_BINARIES = frozenset(
+    {
+        "/bin/ls",
+        "/bin/cat",
+        "/bin/echo",
+        "/bin/pwd",
+        "/bin/mkdir",
+        "/bin/rm",
+        "/bin/cp",
+        "/bin/mv",
+        "/usr/bin/head",
+        "/usr/bin/tail",
+        "/usr/bin/wc",
+        "/usr/bin/file",
+        "/usr/bin/stat",
+        "/usr/bin/grep",
+        "/usr/bin/find",
+        "/usr/bin/sort",
+        "/usr/bin/uniq",
+        "/usr/bin/diff",
+        "/usr/bin/tee",
+        "/usr/bin/uname",
+        "/usr/bin/which",
+        "/usr/bin/md5",
+        "/sbin/md5",
+        "/usr/bin/shasum",
+        "/usr/bin/basename",
+        "/usr/bin/dirname",
+    }
+)
+
+_MAX_ARGV = 32
+_MAX_ARG_LEN = 4096
+_MAX_TIMEOUT = 60
+
+
+def _validate_exec_argv(argv: Sequence[str]) -> list[str]:
+    if not argv:
+        raise HostOpsError("argv required")
+    if len(argv) > _MAX_ARGV:
+        raise HostOpsError(f"too many argv entries (max {_MAX_ARGV})")
+    out: list[str] = []
+    for i, a in enumerate(argv):
+        if not isinstance(a, str):
+            raise HostOpsError("argv entries must be strings")
+        if len(a) > _MAX_ARG_LEN:
+            raise HostOpsError(f"argv[{i}] too long")
+        if "\x00" in a:
+            raise HostOpsError("argv must not contain NUL")
+        out.append(a)
+    binary = out[0]
+    if not binary.startswith("/"):
+        raise HostOpsError("argv[0] must be an absolute path")
+    # Resolve symlinks for allowlist check
+    try:
+        resolved = str(Path(binary).resolve(strict=True))
+    except OSError as exc:
+        raise HostOpsError(f"binary not found: {binary}") from exc
+    if binary not in ALLOWED_EXEC_BINARIES and resolved not in ALLOWED_EXEC_BINARIES:
+        raise HostOpsError(
+            f"binary not on allowlist: {binary} (resolved {resolved})"
+        )
+    # Prefer the path that exists on disk for exec
+    out[0] = resolved if Path(resolved).is_file() else binary
+    # Never allow shell -c style via sh/bash (not on list). Extra: block python -c.
+    return out
+
+
+class SandboxedExecOperations:
+    """ExecOperations: allowlisted argv only, always under Seatbelt."""
+
+    def __init__(
+        self,
+        policy: DualKnobPolicy,
+        *,
+        data_root: str,
+        profile_dir: Optional[Path] = None,
+    ) -> None:
+        if detect_sandbox_impl() != "seatbelt":
+            raise HostOpsError("SandboxedExecOperations requires seatbelt")
+        self.policy = policy
+        self.data_root = data_root
+        self.readonly_paths = always_readonly_paths(data_root)
+        self.profile_dir = profile_dir
+        # Default cwd: first writable root (workspace) when available
+        roots = list(policy.writable_roots)
+        self.default_cwd = roots[0] if roots else None
+
+    async def run(
+        self,
+        argv: Sequence[str],
+        *,
+        timeout_seconds: int = 60,
+        cwd: Optional[str] = None,
+        env: Optional[Mapping[str, str]] = None,
+    ) -> Mapping[str, Any]:
+        clean = _validate_exec_argv(argv)
+        timeout = max(1, min(int(timeout_seconds or 30), _MAX_TIMEOUT))
+        work_cwd = cwd or self.default_cwd
+        if work_cwd:
+            cwd_path = Path(work_cwd).expanduser()
+            if not cwd_path.is_absolute():
+                raise HostOpsError("cwd must be absolute")
+            if self.policy.writable_roots and not _under_any_root(
+                cwd_path, self.policy.writable_roots
+            ):
+                raise HostOpsError(
+                    f"cwd outside writable_roots: {cwd_path}"
+                )
+            cwd_path.mkdir(parents=True, exist_ok=True)
+            work_cwd = str(cwd_path.resolve())
+        # Minimal env — do not inherit secrets from parent
+        safe_env = {
+            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+            "HOME": os.environ.get("HOME", "/var/empty"),
+            "LANG": os.environ.get("LANG", "en_US.UTF-8"),
+            "TMPDIR": self.default_cwd or "/tmp",
+        }
+        if env:
+            # Only allow a few non-secret overrides
+            for k in ("LANG", "LC_ALL", "TZ"):
+                if k in env and isinstance(env[k], str):
+                    safe_env[k] = env[k]
+
+        result = await asyncio.to_thread(
+            run_sandboxed,
+            clean,
+            self.policy,
+            readonly_paths=self.readonly_paths,
+            cwd=work_cwd,
+            env=safe_env,
+            timeout_seconds=timeout,
+            profile_dir=self.profile_dir,
+        )
+        return {
+            "stdout": str(result.get("stdout") or ""),
+            "stderr": str(result.get("stderr") or ""),
+            "exit_code": int(result.get("exit_code") or 0),
+            "sandboxed": True,
+            "argv": clean,
+            "cwd": work_cwd,
+            "mock": False,
+        }
+
+
+class DeniedExecOperations:
+    async def run(
+        self,
+        argv: Sequence[str],
+        *,
+        timeout_seconds: int = 60,
+        cwd: Optional[str] = None,
+        env: Optional[Mapping[str, str]] = None,
+    ) -> Mapping[str, Any]:
+        raise HostOpsError(
+            "host exec denied: requires full tier + seatbelt + allowlisted argv"
+        )
+
+
 def build_read_operations(
     policy: DualKnobPolicy,
     *,
@@ -285,3 +445,23 @@ def build_edit_operations(
         )
     except (HostOpsError, SeatbeltError):
         return DeniedEditOperations(), False
+
+
+def build_exec_operations(
+    policy: DualKnobPolicy,
+    *,
+    data_root: str,
+) -> tuple[Any, bool]:
+    """Return (exec_ops, is_real) for full tier with seatbelt."""
+    if detect_sandbox_impl() != "seatbelt":
+        return DeniedExecOperations(), False
+    # Exec is available on full (workspace-write) so cwd can default to workspace
+    if policy.sandbox_mode not in ("workspace-write", "read-only"):
+        return DeniedExecOperations(), False
+    try:
+        return (
+            SandboxedExecOperations(policy, data_root=data_root),
+            True,
+        )
+    except (HostOpsError, SeatbeltError):
+        return DeniedExecOperations(), False
