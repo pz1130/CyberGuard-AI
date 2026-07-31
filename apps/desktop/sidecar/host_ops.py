@@ -170,6 +170,9 @@ def _assert_writable_target(
             f"path outside writable_roots: {path} "
             f"(allowed: {list(policy.writable_roots)})"
         )
+    # INV: .git stays read-only even inside a writable root
+    if ".git" in path.parts:
+        raise HostOpsError("path under .git is protected (read-only)")
     for protected in always_readonly_paths(data_root):
         if _under_any_root(path, (protected,)):
             raise HostOpsError(f"path is protective metadata (read-only): {path}")
