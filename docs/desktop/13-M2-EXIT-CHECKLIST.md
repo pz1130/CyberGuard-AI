@@ -61,12 +61,12 @@ export PYTHONPATH="packages:$(pwd)"
 
 ## 仍不算 M2「全部出口通过」的原因
 
-1. **开发签名 / TCC 稳定性**未工程化（判据 12）—— ad-hoc 构建仍会丢隐私授权。  
+1. **开发签名 / TCC 稳定性**已有脚本（判据 12 部分完成）—— 须本机执行 `npm run codesign:identity && npm run codesign:dev` 并完成一次 FDA 授权；CI 无钥匙串时不强制。  
 2. **网络逃逸**主要靠 profile `deny network*` + 不把 curl 放进白名单；未做完整「白名单内二进制意外出网」对抗用例。  
 3. **原始证据目录**保护策略未产品化命名（目前是 sessions/audit/logs + `.git` + 凭据文件名）。  
 4. 产品仍标记 **development / 禁止分发**（正确）。
 
-**建议出口签字条件**：上表 1–11、14 持续绿 + 判据 12 有最小 codesign 脚本（即使未公证）后，可将本文件状态改为「出口通过（内部分发前）」。
+**建议出口签字条件**：上表 1–11、14 持续绿 + 判据 12 在本机 `codesign:verify` 通过并完成一次 FDA 授权后，可将本文件状态改为「出口通过（内部分发前）」。
 
 ---
 
@@ -75,3 +75,4 @@ export PYTHONPATH="packages:$(pwd)"
 | 日期 | 说明 |
 |------|------|
 | 2026-07-31 | 初稿；对齐已实现 Seatbelt / host_* / TCC 探测与逃逸套件 |
+| 2026-07-31 | 判据 12：增加开发期固定 codesign 脚本与 `dev:signed` |

@@ -14,26 +14,42 @@
 
 而 TCC 拒绝是**静默的**：文件读取直接返回"不存在"，不是"权限不足"。这就是为什么会往代码里查半天。
 
-**解决**：开发期也用一个**固定的本地自签名证书**，保持签名标识一致。
+**解决**：开发期也用一个**固定的本地自签名证书** + **固定 bundle id**（`com.cyberguard.desktop.dev`），保持签名标识一致。
 
 ```bash
-# 一次性：创建自签名代码签名证书
-# 钥匙串访问 → 证书助理 → 创建证书
-#   名称: CyberGuard Dev
-#   身份类型: 自签名根证书
-#   证书类型: 代码签名
+cd apps/desktop
+npm install
 
-# 每次构建后签名（保持标识一致，TCC 授权就能留住）
-codesign --force --deep --sign "CyberGuard Dev" /path/to/CyberGuard.app
+# 1) 一次性：创建/导入「CyberGuard Dev」代码签名身份（无需 Apple 付费账号）
+npm run codesign:identity
+
+# 2) 每次 npm install 或 Electron 被覆盖后：签名本地 Electron.app
+npm run codesign:dev
+# 或开发时一步到位
+npm run dev:signed
+
+# 3) 校验
+npm run codesign:verify
 ```
+
+脚本位置：
+
+| 脚本 | 作用 |
+|------|------|
+| `scripts/ensure-dev-codesign-identity.sh` | 生成并导入自签名 codesign 证书（CN=`CyberGuard Dev`） |
+| `scripts/codesign-electron-dev.sh` | 改 `CFBundleIdentifier` 并签名 `node_modules/electron/dist/Electron.app` |
+| `scripts/verify-dev-codesign.sh` | 检查 identity + Identifier + `codesign --verify` |
+| `entitlements/dev.plist` | 开发用 entitlements（允许 spawn Python/MCP；**勿用于客户分发**） |
+
+首次签名后：到 **系统设置 → 隐私与安全性 → 完全磁盘访问**，勾选该 Electron/CyberGuard 路径（脚本结束会打印路径）。之后 rebuild 只要**同一 identity + 同一 bundle id**，TCC 通常会保留。
 
 不需要 Apple 开发者账号，成本几乎为零。**这一步省不得**——否则整个开发期会反复丢授权。
 
-**排查口诀**：文件读不到、路径确认没错、又刚重新构建过 → 先查 TCC，别查代码。
+**排查口诀**：文件读不到、路径确认没错、又刚重新构建过 → 先查 TCC / 是否重签，别查代码。
 
 ```bash
-# 查看当前 TCC 授权状态
-tccutil reset SystemPolicyAllFiles com.cyberguard.desktop   # 重置后重新授权
+# 重置后重新授权（bundle id 以实际 codesign -dv 为准）
+tccutil reset SystemPolicyAllFiles com.cyberguard.desktop.dev
 ```
 
 ---
