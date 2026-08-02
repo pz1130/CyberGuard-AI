@@ -179,19 +179,19 @@ M0b ────────────┘                                     
 
 ## M3 · 可分发版完整
 
-**状态：起步（2026-07-31）** — 已落地：Keychain/file secrets slot（provider + MCP）、本地审计哈希链（`approval_type: self`）、RPC 迁移 `provider.json` 密钥。其余见下。
+**状态：推进中（2026-08-02）** — 已落地：Keychain/file secrets slot、审计哈希链、本地经验库、敌对来源标记、**本地数据保护**（两级 Fernet 密钥 + 会话正文加密 + crypto-shred 删除 + 备份排除标记 + 90 天正文保留 purge）。其余见下。
 
 **做完这个就有一个能卖的产品。** 不依赖服务端。前置是 M2（沙箱）与 M1.5（产品方向已验证）。
 
 **范围**
-1. **本地经验库** —— `VectorIndex` 端口的单机实现（真正的本地向量库，不是 gateway 薄壳）。反转自原设计，见 INV-11 / DEC-022。
+1. **本地经验库** —— `VectorIndex` 端口的单机实现（真正的本地向量库，不是 gateway 薄壳）。反转自原设计，见 INV-11 / DEC-022。*已落地：`apps/desktop/sidecar/episodic.py` + `episodic.recall/record/stats`；agent 运行自动 recall/record；**无上传路径**。*
 2. **本地审批与自批准标注** —— 本地确认流程，审计中标注 `approval_type: self`，界面显示"自批准"（INV-06 / INV-38）。*审计字段已默认 self；审批 UI 仍待 M4。*
 3. **审计哈希链** —— 本地 append-only + 哈希链（tamper-evident），可选外发 SIEM。**不得宣称等同 WORM。** *链已落地：`audit/chain.jsonl` + `audit.verify`。*
 4. **带凭据 MCP** —— Keychain 独立 slot，每个 server 只能访问自己的 slot（修正 DEC-018）。**单兵的全部外部数据都靠它**聚合 SIEM / 云平台 / 漏扫 / 工单。*slot API + stdio spawn 注入 `secret_env` 已落地。*
-5. **内置安全 SOP 技能集** —— 开箱可用。用户装上去面对空技能池等于产品未完成，这不是可选项。
-6. **能力档位** —— 新建会话时可选"只读咨询 / 完整作业"，**默认完整作业**（DEC-027）。不是强制隔离。
-7. **敌对来源标记与降权** —— 工具输出 / MCP 返回 / 扫描结果默认不可信，不得改变已批准约束、不得触发能力变更、作为结论依据时须标注可溯源（INV-39）。**这是取代强制模式隔离的实质防护。**
-8. **本地数据保护** —— FileVault 检测告警、两级密钥与会话正文加密、crypto-shredding 删除、备份排除、审计与正文保留期分离。见 `../superpowers/specs/2026-07-29-local-data-protection-design.md`。
+5. **内置安全 SOP 技能集** —— 开箱可用。用户装上去面对空技能池等于产品未完成，这不是可选项。*已落地 5 条 builtin：`alert_triage` / `cve_impact` / `incident_investigation` / `evidence_handling` / `compliance_gap`；progressive disclosure（catalog 仅 name+description，正文经 `load_skill`）。*
+6. **能力档位** —— 新建会话时可选"只读咨询 / 完整作业"，**默认完整作业**（DEC-027）。不是强制隔离。*档位骨架 + readonly 无 Exec/Edit 已有。*
+7. **敌对来源标记与降权** —— 工具输出 / MCP 返回 / 扫描结果默认不可信，不得改变已批准约束、不得触发能力变更、作为结论依据时须标注可溯源（INV-39）。**这是取代强制模式隔离的实质防护。** *主路径 + 专项用例：hostile 前缀、经验剥除 free-text、`auth_bounds_check` 运行结束断言档位/Exec/Edit/sandbox 未变；`tests/test_desktop_m3_skills_inv39.py`。*
+8. **本地数据保护** —— FileVault 检测告警、两级密钥与会话正文加密、crypto-shredding 删除、备份排除、审计与正文保留期分离。见 `../superpowers/specs/2026-07-29-local-data-protection-design.md`。*主路径已落地：`data_crypto.py`（index + per-session Fernet 密钥）/ 加密 JSONL / `sessions.delete` crypto-shred / `sessions.purge_expired`（默认 90 天）/ `backup_exclude`（`.cg-nobackup` + macOS xattr）/ FileVault 告警。加密导出与卸载流程仍归 M7。*
 
 **出口判据**
 - **全部核心用例在无网络、无服务端配置的环境下跑通**（CI 独立 job，INV-37）
@@ -208,24 +208,43 @@ M0b ────────────┘                                     
 
 ## M4 · Plan Mode + 审批
 
+**状态：主路径已落地（2026-08-02）** — 桌面 standalone Plan Mode + 自批准 UI；超时=拒绝；connected 下 segregation 本机无批准按钮。
+
 **范围**：`_run_loop` 前置 plan 阶段（新增 `plan_ready` 事件）、Plan 审阅面板、审批弹窗与提权申请、`ApprovalService` 增加 `action_type = "execution_plan"`。
 
+**已落地**
+- `apps/desktop/sidecar/plan_mode.py`：`execution_plan` / `privilege_escalation`、超时拒绝（INV-05）、`approval_type: self` 标注（INV-06/38）
+- `mock_agent`：高危/full/不可逆工具前 `plan_ready` → 等待 `plan.approve`/`reject` → `plan_approved` 后才进 `run_loop`
+- RPC：`plan.approve` / `plan.reject` / `plan.list` / `plan.get`；改写后的计划入审计链
+- UI：Plan 面板「自批准并执行 / 拒绝」；connected+segregation 隐藏批准按钮
+- 测试：`tests/test_desktop_m4_plan_mode.py`
+
 **出口判据**
-- 高危任务执行前必经审批，**改写后的计划**入审计链
-- 审批超时行为为**拒绝**（专项用例）
-- 涉及职责分离的审批在节点界面上**不出现批准按钮**
-- 沙箱拒绝可发起提权申请，批准后重试并在 `policy_events` 留痕
+- 高危任务执行前必经审批，**改写后的计划**入审计链 ✅
+- 审批超时行为为**拒绝**（专项用例） ✅
+- 涉及职责分离的审批在节点界面上**不出现批准按钮** ✅（runtime=connected）
+- 沙箱拒绝可发起提权申请，批准后重试并在 `policy_events` 留痕 ✅（`privilege.py`：side-channel `privilege_required` → 批准 → 单次 elevated retry；`audit/policy_events.jsonl`）
 
 ---
 
 ## M5 · Trust Gate + 工具隔离 + 断网恢复 + 证据浏览器
 
+**状态：主路径已落地（2026-08-02）** — Trust Gate + 证据目录/哈希 + Provider 断网暂停/恢复；Gondolin micro-VM 工具隔离层仍属后续加深（Seatbelt host 工具已在 M2）。
+
 **范围**：project trust gate、Gondolin 形态的工具隔离层、断网暂停/恢复、证据浏览器。
 
+**已落地**
+- `trust_gate.py`：`trust.json`，项目本地默认 deny（INV-14）；builtin/approved 全局放行；`trust.set/evaluate`
+- `load_context_file` / `load_project_skill_file` 过 Trust Gate；注入样本目录未信任时不进模型
+- `evidence.py`：注册文件 → sha256 + `mount: read-only`；`evidence.verify` 完整性校验
+- `run_pause.py`：Provider 网络错误 → checkpoint + `run_paused`（UI「已暂停」）；`agent.resume` 从 messages 恢复
+- 测试：`tests/test_desktop_m5_trust_evidence_pause.py`
+
 **出口判据**
-- 不可信目录中的本地上下文文件 / 技能**不被加载**（专项用例，含 prompt 注入样本）
-- **断连 30 分钟后恢复，任务从暂停点继续**——standalone 下断的是 LLM Provider 或 MCP 端点，不是服务端；状态栏显示"已暂停"而非静默失败
-- 证据以只读挂载，界面显示 sha256 与只读状态
+- 不可信目录中的本地上下文文件 / 技能**不被加载**（专项用例，含 prompt 注入样本） ✅
+- **断连后恢复，任务从暂停点继续**——checkpoint messages + resume；状态栏「已暂停」 ✅（30 分钟窗口由 checkpoint 文件保留；无 TTL 强制清理）
+- 证据以只读挂载，界面显示 sha256 与只读状态 ✅（RPC + status evidence count；完整拖拽 UI 可再抛光）
+- Gondolin micro-VM 隔离 ⚠️ 仍用 M2 Seatbelt；完整 micro-VM 未做
 
 ---
 
@@ -250,20 +269,22 @@ M0b ────────────┘                                     
 
 ## M7 · 交付工程
 
+**状态：工程主路径已落地（2026-08-02）** — 加密导出 / 卸载 / 更新验签 / EDR·公证文档；**真实 Developer ID 公证与 EDR 实机验证仍待证书与客户环境**。
+
 **不是功能，是发布前置条件。** 混进 M2 会被当成次要的。
 
 **范围**
-1. **签名与公证流水线** —— Developer ID + notarization（DEC-026）。含证书有效期与吊销的运维流程。
-2. **自动更新通道** —— 更新包独立签名强制验签、更新源证书固定、防降级、更新动作进审计（INV-42）。**这是安全要害**：更新源被劫持等于向所有客户终端投递任意代码，目标恰好是安全团队的机器。
-3. **卸载与残留清理 + 加密导出** —— Keychain 条目（删数据密钥即完成 crypto-shred）、TCC 授权（无法程序化撤销，须提示用户手动移除）、Application Support 目录、临时目录；用户自选位置的 artifacts 不擅自删除但需列清单。**取证材料索引留在卸载后的机器上是合规问题。** 另需提供加密导出（敏感目录已排除系统备份，长期留存靠显式导出）。
-4. **EDR / MDM 白名单指引** —— 进程路径、签名标识、预期行为说明。客户是安全团队，终端一定装了 EDR，而本应用的行为画像（spawn Python、spawn MCP、调 `sandbox-exec`、跑扫描器）与恶意软件高度重合。**不准备这个，第一批客户装完就被自己的 EDR 拦掉，而且会先怀疑你的产品。**
-5. **公证上传的对外说明** —— 公证会把二进制上传给 Apple；政府/军工/金融客户可能有疑问，主动写清楚，别等被问。
+1. **签名与公证流水线** —— Developer ID + notarization（DEC-026）。含证书有效期与吊销的运维流程。*文档：`15-NOTARIZATION-AND-UNINSTALL.md`；流水线待证书。*
+2. **自动更新通道** —— 更新包独立签名强制验签、更新源证书固定、防降级、更新动作进审计（INV-42）。*已落地：`update_verify.py` Ed25519 + sha256 + 防降级；RPC `update.verify`；篡改/降级/错误密钥用例。*
+3. **卸载与残留清理 + 加密导出** —— *已落地：`uninstall.py` inventory/execute；`export_bundle.py`（age 优先 / CGX1 回退）；RPC `export.encrypted` / `uninstall.*`。*
+4. **EDR / MDM 白名单指引** —— *已落地文档：`14-EDR-MDM.md`；实机勾选清单待客户 EDR。*
+5. **公证上传的对外说明** —— *见 `15-NOTARIZATION-AND-UNINSTALL.md` §A。*
 
 **出口判据**
-- 篡改更新包 / 降级安装 / 中间人，三类用例全部被拒
-- 干净机器上双击安装成功，无需用户关闭 Gatekeeper
-- 卸载后残留清单与文档一致
-- EDR 指引在至少一款主流 EDR 上验证通过
+- 篡改更新包 / 降级安装 / 中间人，三类用例全部被拒 ✅（单测）
+- 干净机器上双击安装成功，无需用户关闭 Gatekeeper ⚠️ 需公证证书
+- 卸载后残留清单与文档一致 ✅（inventory + 文档 §B）
+- EDR 指引在至少一款主流 EDR 上验证通过 ⚠️ 文档已备，实机待做
 
 ---
 

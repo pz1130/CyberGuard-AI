@@ -69,6 +69,17 @@ def audit_dir() -> Path:
     return p
 
 
+def episodic_dir() -> Path:
+    """Local episodic experience store (M3 VectorIndex standalone)."""
+    p = data_root() / "episodic"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def episodic_db() -> Path:
+    return episodic_dir() / "index.sqlite3"
+
+
 def session_jsonl_path(session_id: str) -> Path:
     safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in session_id)
     return sessions_dir() / f"{safe}.jsonl"

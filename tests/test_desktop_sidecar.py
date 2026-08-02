@@ -90,11 +90,17 @@ async def test_mock_agent_readonly_no_local_exec(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_mock_agent_full_may_tool_call():
+async def test_mock_agent_full_may_tool_call(monkeypatch, tmp_path):
+    monkeypatch.setenv("CYBERGUARD_DATA_DIR", str(tmp_path / "cg"))
+    monkeypatch.setenv("CYBERGUARD_PLAN_AUTO_APPROVE", "1")
+    from apps.desktop.sidecar.plan_mode import reset_plan_store_for_tests
+
+    reset_plan_store_for_tests()
     host = MockAgentHost()
     types = []
     async for ev in host.run(task="scan", tier="full"):
         types.append(ev["type"])
+    assert "plan_ready" in types or "plan_approved" in types
     assert "tool_call_start" in types
     assert "answer_ready" in types
 

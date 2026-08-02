@@ -261,7 +261,7 @@ app.whenReady().then(() => {
         type: "warning",
         title: "CyberGuard Desktop — development build",
         message:
-          "M1.5/M2 development version (not for distribution).\n\nSeatbelt host-read may be enabled; at-rest encryption is NOT.\nExec/Edit host tools remain mock. Do not process real sensitive production data.\nLLM may be live if provider.json / env is set.\nData root: ~/Library/Application Support/CyberGuard\n\nIf FileVault is off, enable it before storing sensitive data.",
+          "M3/M4 development version (not for distribution).\n\nSeatbelt + session encryption may be on; Plan Mode requires self-approval for high-risk runs.\nNot notarized. Do not process real sensitive production data without FileVault.\nData root: ~/Library/Application Support/CyberGuard",
         buttons: ["I understand"],
       })
       .catch(() => {});
@@ -344,3 +344,13 @@ ipcMain.handle("sidecar:sessions:create", async (_e, { title, tier }) =>
 ipcMain.handle("sidecar:sessions:events", async (_e, sessionId) =>
   rpc("sessions.events", { session_id: sessionId })
 );
+ipcMain.handle("sidecar:plan:approve", async (_e, { planId, revisedPlan }) =>
+  rpc("plan.approve", {
+    plan_id: planId,
+    revised_plan: revisedPlan || undefined,
+  })
+);
+ipcMain.handle("sidecar:plan:reject", async (_e, { planId, reason }) =>
+  rpc("plan.reject", { plan_id: planId, reason: reason || "rejected_by_user" })
+);
+ipcMain.handle("sidecar:plan:list", async () => rpc("plan.list", {}));

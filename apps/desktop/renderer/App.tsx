@@ -25,6 +25,21 @@ type SessionRow = {
   event_count: number;
 };
 
+type PendingPlan = {
+  plan_id: string;
+  plan?: {
+    summary?: string;
+    steps?: string[];
+    risk_level?: string;
+    blast_radius?: Record<string, unknown>;
+  };
+  approval_type?: string;
+  ui_label?: string;
+  local_approve_allowed?: boolean;
+  timeout_seconds?: number;
+  revisedDraft?: string;
+};
+
 declare global {
   interface Window {
     cyberguard?: {
@@ -45,6 +60,15 @@ declare global {
       sessionEvents: (
         sessionId: string
       ) => Promise<{ events: Ev[] }>;
+      planApprove?: (
+        planId: string,
+        revisedPlan?: string
+      ) => Promise<{ ok: boolean; plan?: unknown }>;
+      planReject?: (
+        planId: string,
+        reason?: string
+      ) => Promise<{ ok: boolean }>;
+      planList?: () => Promise<{ plans: unknown[] }>;
       onEvent: (handler: (ev: Ev) => void) => () => void;
     };
   }
@@ -219,6 +243,122 @@ function EventCard({ ev }: { ev: Ev }) {
     );
   }
 
+  if (t === "plan_ready") {
+    const plan = (ev.plan || {}) as {
+      summary?: string;
+      steps?: string[];
+      risk_level?: string;
+    };
+    return (
+      <div className="ev type-plan_ready">
+        <div className="ev-label">
+          执行计划待审 · {String(ev.ui_label || "自批准")}
+          {ev.local_approve_allowed === false ? " · 本机不可批（职责分离）" : ""}
+        </div>
+        <div className="ev-meta">
+          risk={String(plan.risk_level || "?")} · plan_id={String(ev.plan_id || "")}
+          {ev.timeout_seconds != null
+            ? ` · timeout ${String(ev.timeout_seconds)}s → 拒绝`
+            : ""}
+        </div>
+        {plan.summary ? (
+          <pre className="ev-pre plan-summary">{String(plan.summary)}</pre>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (t === "plan_approved") {
+    return (
+      <div className="ev type-plan_approved">
+        <div className="ev-label">
+          计划已批准 · {String(ev.ui_label || "自批准")}
+          {ev.revised ? "（已改写）" : ""}
+        </div>
+        {ev.plan_summary ? (
+          <pre className="ev-pre">{String(ev.plan_summary)}</pre>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (t === "plan_rejected") {
+    return (
+      <div className="ev type-error">
+        <div className="ev-label">计划未批准 — 未执行</div>
+        <div className="ev-meta">
+          {String(ev.status || "")}: {String(ev.reason || "")}
+        </div>
+      </div>
+    );
+  }
+
+  if (t === "privilege_required") {
+    return (
+      <div className="ev type-plan_ready">
+        <div className="ev-label">
+          提权申请 · {String(ev.ui_label || "自批准")}
+        </div>
+        <div className="ev-meta">
+          tool={String(ev.tool || "")} · {String(ev.denied_detail || "")}
+        </div>
+        {ev.plan && typeof ev.plan === "object" && (ev.plan as { summary?: string }).summary ? (
+          <pre className="ev-pre plan-summary">
+            {String((ev.plan as { summary?: string }).summary)}
+          </pre>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (t === "privilege_decided") {
+    const ok = String(ev.status || "") === "approved";
+    return (
+      <div className={`ev ${ok ? "type-plan_approved" : "type-error"}`}>
+        <div className="ev-label">
+          提权{ok ? "已批准 — 重试中" : "未批准"}
+        </div>
+        <div className="ev-meta">
+          {String(ev.status || "")}
+          {ev.reason ? `: ${String(ev.reason)}` : ""}
+        </div>
+      </div>
+    );
+  }
+
+  if (t === "policy_event") {
+    return (
+      <div className="ev type-plan_approved">
+        <div className="ev-label">policy_event</div>
+        <div className="ev-meta">
+          {String(ev.policy_event_type || "")} · tool={String(ev.tool || "")}{" "}
+          · success={String(ev.success)}
+        </div>
+      </div>
+    );
+  }
+
+  if (t === "run_paused") {
+    return (
+      <div className="ev type-error">
+        <div className="ev-label">已暂停</div>
+        <div className="ev-meta">
+          {String(ev.reason || "")} · messages={String(ev.message_count ?? "")}
+          · 可 agent.resume 继续
+        </div>
+      </div>
+    );
+  }
+
+  if (t === "run_resumed") {
+    return (
+      <div className="ev type-plan_approved">
+        <div className="ev-label">已恢复</div>
+        <div className="ev-meta">messages={String(ev.message_count ?? "")}</div>
+      </div>
+    );
+  }
+
   // fallback: compact one-liner + collapsible raw
   return (
     <div className={`ev type-${t}`}>
@@ -264,6 +404,11 @@ export function App() {
   const [tccGuidance, setTccGuidance] = useState<string | null>(null);
   const [mcpTools, setMcpTools] = useState<string[]>([]);
   const [lastSubmitted, setLastSubmitted] = useState<string | null>(null);
+  const [pendingPlan, setPendingPlan] = useState<PendingPlan | null>(null);
+  const [planEdit, setPlanEdit] = useState("");
+  const [runStatus, setRunStatus] = useState<string>("idle");
+  const [pausedRunId, setPausedRunId] = useState<string | null>(null);
+  const [evidenceHint, setEvidenceHint] = useState<string>("—");
   const bottomRef = useRef<HTMLDivElement>(null);
   const taskRef = useRef(task);
   taskRef.current = task;
@@ -311,6 +456,14 @@ export function App() {
         else if (tcc?.full_disk_access === false) setTccSummary("restricted");
         setTccWarning(tcc?.warning || null);
         setTccGuidance(tcc?.guidance || null);
+        const ec = r?.evidence_count;
+        if (typeof ec === "number") setEvidenceHint(`evidence: ${ec}`);
+        const paused = r?.paused_runs;
+        if (Array.isArray(paused) && paused.length) {
+          setRunStatus("已暂停");
+          const first = paused[0] as { run_id?: string };
+          if (first?.run_id) setPausedRunId(String(first.run_id));
+        }
       })
       .catch(() => setPingOk(false));
     refreshSessions();
@@ -338,13 +491,58 @@ export function App() {
       setEvents((prev) => [...prev, ev]);
       if (ev.type === "run_started" && typeof ev.run_id === "string") {
         setRunId(ev.run_id);
+        setRunStatus("running");
+        setPausedRunId(null);
         const tools = ev.mcp_tools;
         if (Array.isArray(tools)) {
           setMcpTools(tools.map(String));
         }
       }
+      if (ev.type === "run_paused") {
+        setRunStatus(String(ev.ui_status || "已暂停"));
+        if (typeof ev.run_id === "string") setPausedRunId(ev.run_id);
+      }
+      if (ev.type === "run_resumed") {
+        setRunStatus(String(ev.ui_status || "已恢复"));
+        setPausedRunId(null);
+      }
+      if (ev.type === "answer_ready") {
+        setRunStatus("idle");
+      }
       if (ev.type === "start" && typeof ev.agent_run_id === "string") {
         setRunId(String(ev.agent_run_id));
+      }
+      if (
+        (ev.type === "plan_ready" || ev.type === "privilege_required") &&
+        typeof ev.plan_id === "string"
+      ) {
+        const plan = (ev.plan || {}) as PendingPlan["plan"];
+        const label =
+          ev.type === "privilege_required"
+            ? String(ev.ui_label || "自批准") + " · 提权"
+            : String(ev.ui_label || "自批准");
+        setPendingPlan({
+          plan_id: String(ev.plan_id),
+          plan,
+          approval_type: String(ev.approval_type || "self"),
+          ui_label: label,
+          local_approve_allowed: ev.local_approve_allowed !== false,
+          timeout_seconds:
+            typeof ev.timeout_seconds === "number"
+              ? ev.timeout_seconds
+              : undefined,
+        });
+        setPlanEdit(String(plan?.summary || ""));
+      }
+      if (
+        ev.type === "plan_approved" ||
+        ev.type === "plan_rejected" ||
+        ev.type === "privilege_decided" ||
+        ev.type === "policy_event"
+      ) {
+        if (ev.type !== "policy_event") {
+          setPendingPlan(null);
+        }
       }
     });
   }, [api]);
@@ -412,6 +610,7 @@ export function App() {
   const onAbort = useCallback(async () => {
     if (!api || !runId) return;
     await api.abort(runId);
+    setPendingPlan(null);
   }, [api, runId]);
 
   const onSteer = useCallback(async () => {
@@ -419,6 +618,35 @@ export function App() {
     await api.steer(runId, steerText.trim());
     setSteerText("");
   }, [api, runId, steerText]);
+
+  const onPlanApprove = useCallback(async () => {
+    if (!api?.planApprove || !pendingPlan) return;
+    if (!pendingPlan.local_approve_allowed) return;
+    const revised =
+      planEdit.trim() && planEdit.trim() !== (pendingPlan.plan?.summary || "")
+        ? planEdit.trim()
+        : undefined;
+    try {
+      await api.planApprove(pendingPlan.plan_id, revised);
+    } catch (e) {
+      setEvents((prev) => [
+        ...prev,
+        { type: "error", error: `plan approve failed: ${e}` },
+      ]);
+    }
+  }, [api, pendingPlan, planEdit]);
+
+  const onPlanReject = useCallback(async () => {
+    if (!api?.planReject || !pendingPlan) return;
+    try {
+      await api.planReject(pendingPlan.plan_id, "rejected_by_user");
+    } catch (e) {
+      setEvents((prev) => [
+        ...prev,
+        { type: "error", error: `plan reject failed: ${e}` },
+      ]);
+    }
+  }, [api, pendingPlan]);
 
   const statusLabel = useMemo(() => {
     if (!api) return "no preload (open via Electron)";
@@ -429,11 +657,48 @@ export function App() {
   return (
     <div className="app">
       <div className="banner">
-        <strong>M1.5/M2 development build</strong> — not for distribution.
-        Seatbelt host tools may be on (read/write/allowlisted exec);{" "}
-        <em>no</em> at-rest encryption. Do not process real sensitive production
-        data. LLM: <code>{providerMode}</code>.
+        <strong>M3/M4 development build</strong> — not for distribution.
+        Plan Mode uses <em>自批准</em> (approval_type=self) on this node — not
+        segregation-of-duties. Timeout = reject. LLM: <code>{providerMode}</code>.
       </div>
+      {pendingPlan && (
+        <div className="plan-panel">
+          <div className="plan-panel-header">
+            <strong>Plan Mode · {pendingPlan.ui_label || "自批准"}</strong>
+            <span className="ev-meta">
+              {pendingPlan.local_approve_allowed
+                ? `超时 ${pendingPlan.timeout_seconds ?? 300}s → 拒绝`
+                : "本机无批准按钮（职责分离 — 须服务端审批）"}
+            </span>
+          </div>
+          <div className="ev-meta">
+            risk={String(pendingPlan.plan?.risk_level || "?")} ·{" "}
+            {pendingPlan.plan_id}
+          </div>
+          <textarea
+            className="plan-edit"
+            value={planEdit}
+            onChange={(e) => setPlanEdit(e.target.value)}
+            rows={8}
+            disabled={!pendingPlan.local_approve_allowed}
+            aria-label="execution plan"
+          />
+          <div className="plan-actions">
+            {pendingPlan.local_approve_allowed ? (
+              <>
+                <button type="button" className="btn-approve" onClick={onPlanApprove}>
+                  自批准并执行
+                </button>
+                <button type="button" className="btn-reject" onClick={onPlanReject}>
+                  拒绝
+                </button>
+              </>
+            ) : (
+              <span className="ev-meta">等待服务端审批…</span>
+            )}
+          </div>
+        </div>
+      )}
       {fvWarning && (
         <div className="banner" style={{ background: "#7f1d1d", color: "#fecaca" }}>
           <strong>FileVault:</strong> {fvWarning}
@@ -476,6 +741,15 @@ export function App() {
         </span>
         <span>llm: {providerMode}</span>
         <span>tier: {tier}</span>
+        <span
+          className={
+            runStatus === "已暂停" || runStatus === "paused" ? "bad" : ""
+          }
+          title={pausedRunId ? `paused run ${pausedRunId}` : undefined}
+        >
+          run: {runStatus}
+        </span>
+        <span title="Evidence browser items (read-only + sha256)">{evidenceHint}</span>
         <span>ports: none (JSONL stdio)</span>
       </div>
 

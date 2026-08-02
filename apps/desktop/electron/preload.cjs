@@ -13,6 +13,11 @@ contextBridge.exposeInMainWorld("cyberguard", {
     ipcRenderer.invoke("sidecar:sessions:create", { title, tier }),
   sessionEvents: (sessionId) =>
     ipcRenderer.invoke("sidecar:sessions:events", sessionId),
+  planApprove: (planId, revisedPlan) =>
+    ipcRenderer.invoke("sidecar:plan:approve", { planId, revisedPlan }),
+  planReject: (planId, reason) =>
+    ipcRenderer.invoke("sidecar:plan:reject", { planId, reason }),
+  planList: () => ipcRenderer.invoke("sidecar:plan:list"),
   onEvent: (handler) => {
     const listener = (_event, payload) => handler(payload);
     ipcRenderer.on("sidecar:event", listener);

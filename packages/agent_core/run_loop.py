@@ -205,6 +205,9 @@ async def run_loop(
                     )
                     break
                 except Exception as e:
+                    # Desktop pause / cooperative cancel: do not retry-swallowed
+                    if getattr(e, "checkpoint", None) is not None:
+                        raise
                     last_err = e
                     if attempt < config.llm_retry_max:
                         yield {

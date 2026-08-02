@@ -91,7 +91,20 @@ Error:
 | `agent.abort` | `run_id` | sets abort flag |
 | `agent.steer` | `run_id`, `message` | inject user text mid-run |
 | `session.capabilities` | `tier` | inspect Operations ports (exec is null in readonly) |
-| `sessions.create` / `list` / `events` | … | local JSONL + SQLite index |
+| `sessions.create` / `list` / `events` | … | encrypted JSONL + SQLite index (M3) |
+| `sessions.delete` | `session_id`, `crypto_shred?` | default crypto-shred (drop key) |
+| `sessions.purge_expired` | `retention_days?` | default 90d body retention |
+| `data_protection.status` | `reapply_exclusions?` | crypto + backup + FileVault |
+| `episodic.recall` / `record` / `stats` | `task`, … | M3 local experience (offline embed; no upload) |
+| `skills.list` / `skills.load` | `name?` | builtin SOP catalog + progressive body load |
+| `plan.approve` / `reject` / `list` / `get` | `plan_id`, `revised_plan?` | M4 Plan Mode + privilege (timeout=reject; self-approval) |
+| `policy_events.tail` | `n?` | sandbox deny / privilege retry trail |
+| `trust.set` / `evaluate` / `status` | `path`, `level?` | M5 Trust Gate (default deny project-local) |
+| `evidence.register` / `list` / `verify` | `path` / `evidence_id` | read-only catalog + sha256 |
+| `runs.paused` / `agent.resume` | `run_id` | provider disconnect pause/resume |
+| `export.encrypted` | `dest_path`, `passphrase` | M7 encrypted backup export |
+| `uninstall.inventory` / `execute` | `confirm`, `dry_run` | M7 cleanup (crypto-shred keys) |
+| `update.verify` | `manifest`, `current_version` | INV-42 anti-tamper / anti-downgrade |
 | `mcp.spawn_mock` / `stop` / `list` | … | lifecycle drill (orphan governance) |
 
 ## Local data (managed root)
@@ -101,11 +114,16 @@ Default: `~/Library/Application Support/CyberGuard` (macOS) or `~/.cyberguard`.
 Override: `CYBERGUARD_DATA_DIR=/path`.
 
 ```
-sessions/*.jsonl   # append-only event log per investigation
-sessions/index.sqlite3
-tmp/               # managed temp — not system /tmp
-logs/ audit/
+sessions/*.jsonl   # Fernet-encrypted append-only event log (M3)
+sessions/index.sqlite3  # titles encrypted with index key
+episodic/index.sqlite3  # local experience store (no auto-upload)
+tmp/ workspace/ audit/  # backup-excluded (.cg-nobackup + xattr on macOS)
+logs/
 ```
+
+Session body keys live in the secrets store (`cyberguard.data.session` /
+`<session_id>`). **Deleting a session drops its key (crypto-shred)** — residual
+ciphertext without the key is unreadable. Does not replace FileVault (INV-38).
 
 ## Orphan governance (MCP)
 

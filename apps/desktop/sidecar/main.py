@@ -55,8 +55,14 @@ class SidecarServer:
                 from apps.desktop.sidecar.provider import load_provider_config
                 from apps.desktop.sidecar.sandbox import sandbox_public_status
                 from apps.desktop.sidecar.audit_chain import verify_chain
+                from apps.desktop.sidecar.backup_exclude import public_status as backup_status
+                from apps.desktop.sidecar.data_crypto import public_status as crypto_status
+                from apps.desktop.sidecar.episodic import get_store
+                from apps.desktop.sidecar.evidence import get_evidence_store
+                from apps.desktop.sidecar.run_pause import list_paused
                 from apps.desktop.sidecar.secrets_store import public_status as secrets_status
                 from apps.desktop.sidecar.tcc import tcc_status
+                from apps.desktop.sidecar.trust_gate import get_trust_gate
 
                 root = data_root()
                 self._write(
@@ -68,6 +74,9 @@ class SidecarServer:
                             "m1": True,
                             "m2": True,
                             "m3": True,
+                            "m4": True,
+                            "m5": True,
+                            "m7": True,
                             "data_root": str(root),
                             "provider": load_provider_config().public_status(),
                             "filevault": filevault_status(),
@@ -75,6 +84,15 @@ class SidecarServer:
                             "tcc": tcc_status(),
                             "secrets": secrets_status(),
                             "audit": verify_chain(),
+                            "episodic": get_store().stats(),
+                            "trust": get_trust_gate().public_status(),
+                            "evidence_count": len(get_evidence_store().list(limit=500)),
+                            "paused_runs": list_paused(limit=10),
+                            "data_protection": {
+                                **crypto_status(),
+                                "backup": backup_status(),
+                                "filevault": filevault_status(),
+                            },
                             "policy_defaults": {
                                 "readonly": policy_for_tier(
                                     "readonly",
@@ -291,8 +309,171 @@ class SidecarServer:
 
             if method == "sessions.events":
                 sid = str(params.get("session_id") or "")
-                events = list(self.sessions.iter_events(sid))
+                try:
+                    events = list(self.sessions.iter_events(sid))
+                except Exception as exc:  # noqa: BLE001
+                    from apps.desktop.sidecar.sessions import SessionShreddedError
+
+                    if isinstance(exc, SessionShreddedError):
+                        self._write(
+                            error_msg(
+                                req_id,
+                                "shredded",
+                                f"session body unrecoverable: {exc}",
+                            )
+                        )
+                        return
+                    raise
                 self._write(result_msg(req_id, {"session_id": sid, "events": events}))
+                return
+
+            if method == "sessions.delete":
+                sid = str(params.get("session_id") or "")
+                if not sid:
+                    self._write(error_msg(req_id, "bad_params", "session_id required"))
+                    return
+                crypto_shred = params.get("crypto_shred")
+                if crypto_shred is None:
+                    crypto_shred = True
+                result = self.sessions.delete(sid, crypto_shred=bool(crypto_shred))
+                try:
+                    from apps.desktop.sidecar.audit_chain import append_event
+
+                    append_event(
+                        "session_delete",
+                        {
+                            "session_id": sid,
+                            "crypto_shred": bool(crypto_shred),
+                            "body_unrecoverable": result.get("body_unrecoverable"),
+                        },
+                        approval_type="self",
+                        session_id=sid,
+                    )
+                except Exception:  # noqa: BLE001
+                    logger.debug("audit session_delete failed", exc_info=True)
+                self._write(result_msg(req_id, result))
+                return
+
+            if method == "sessions.purge_expired":
+                days = params.get("retention_days")
+                result = self.sessions.purge_expired(
+                    retention_days=int(days) if days is not None else None
+                )
+                self._write(result_msg(req_id, result))
+                return
+
+            if method == "data_protection.status":
+                from apps.desktop.sidecar.backup_exclude import (
+                    apply_exclusions,
+                    public_status as backup_status,
+                )
+                from apps.desktop.sidecar.data_crypto import public_status as crypto_status
+                from apps.desktop.sidecar.filevault import filevault_status
+
+                reapply = bool(params.get("reapply_exclusions"))
+                applied = apply_exclusions() if reapply else None
+                self._write(
+                    result_msg(
+                        req_id,
+                        {
+                            "crypto": crypto_status(),
+                            "backup": backup_status(),
+                            "filevault": filevault_status(),
+                            "applied": applied,
+                        },
+                    )
+                )
+                return
+
+            if method == "skills.list":
+                from apps.desktop.sidecar.skill_loader import list_skills
+
+                rows = [
+                    {
+                        "name": s.name,
+                        "description": s.description,
+                        "version": s.version,
+                        "source": s.source,
+                        "mode": s.mode,
+                        "requires_tools": s.requires_tools,
+                        "sha256": s.sha256[:16],
+                    }
+                    for s in list_skills(include_body=False)
+                ]
+                self._write(result_msg(req_id, {"skills": rows}))
+                return
+
+            if method == "skills.load":
+                from apps.desktop.sidecar.skill_loader import load_skill_for_tool
+
+                name = str(params.get("name") or "")
+                result = load_skill_for_tool(name)
+                self._write(result_msg(req_id, result))
+                return
+
+            if method == "plan.list":
+                from apps.desktop.sidecar.plan_mode import get_plan_store
+
+                self._write(
+                    result_msg(req_id, {"plans": get_plan_store().list()})
+                )
+                return
+
+            if method == "plan.get":
+                from apps.desktop.sidecar.plan_mode import get_plan_store
+
+                pid = str(params.get("plan_id") or "")
+                req = get_plan_store().get(pid)
+                if not req:
+                    self._write(error_msg(req_id, "not_found", "unknown plan_id"))
+                    return
+                self._write(result_msg(req_id, req.public_dict()))
+                return
+
+            if method == "plan.approve":
+                from apps.desktop.sidecar.plan_mode import get_plan_store
+
+                pid = str(params.get("plan_id") or "")
+                revised = params.get("revised_plan")
+                revised_s = str(revised) if revised is not None else None
+                out = get_plan_store().decide(
+                    pid, approve=True, revised_plan=revised_s
+                )
+                if not out.get("ok"):
+                    self._write(
+                        error_msg(
+                            req_id,
+                            str(out.get("error") or "plan"),
+                            str(out.get("message") or out.get("error") or "failed"),
+                        )
+                    )
+                    return
+                self._write(result_msg(req_id, out))
+                return
+
+            if method == "plan.reject":
+                from apps.desktop.sidecar.plan_mode import get_plan_store
+
+                pid = str(params.get("plan_id") or "")
+                reason = str(params.get("reason") or "rejected_by_user")
+                out = get_plan_store().decide(pid, approve=False, reason=reason)
+                if not out.get("ok"):
+                    self._write(
+                        error_msg(
+                            req_id,
+                            str(out.get("error") or "plan"),
+                            str(out.get("error") or "failed"),
+                        )
+                    )
+                    return
+                self._write(result_msg(req_id, out))
+                return
+
+            if method == "policy_events.tail":
+                from apps.desktop.sidecar.policy_events import tail_policy_events
+
+                n = int(params.get("n") or 50)
+                self._write(result_msg(req_id, {"events": tail_policy_events(n)}))
                 return
 
             if method == "mcp.list":
@@ -468,6 +649,235 @@ class SidecarServer:
                 self._write(result_msg(req_id, {"events": tail(n)}))
                 return
 
+            if method == "episodic.stats":
+                from apps.desktop.sidecar.episodic import get_store
+
+                self._write(result_msg(req_id, get_store().stats()))
+                return
+
+            if method == "episodic.recall":
+                from apps.desktop.sidecar.episodic import get_store
+
+                task = str(params.get("task") or "")
+                top_k = int(params.get("top_k") or 3)
+                success_only = params.get("success_only")
+                if success_only is None:
+                    success_only = True
+                eps = get_store().recall(
+                    task=task,
+                    top_k=top_k,
+                    success_only=bool(success_only),
+                )
+                self._write(
+                    result_msg(
+                        req_id,
+                        {
+                            "episodes": [
+                                e.public_dict(strip_hostile_outcome=True) for e in eps
+                            ],
+                            "upload_enabled": False,
+                        },
+                    )
+                )
+                return
+
+            if method == "episodic.record":
+                from apps.desktop.sidecar.episodic import get_store
+
+                task = str(params.get("task") or "")
+                if not task:
+                    self._write(error_msg(req_id, "bad_params", "task required"))
+                    return
+                eid = get_store().record(
+                    task=task,
+                    approach=str(params.get("approach") or ""),
+                    outcome=str(params.get("outcome") or ""),
+                    success=bool(params.get("success", True)),
+                    tool_count=int(params.get("tool_count") or 0),
+                    source_trust=str(params.get("source_trust") or "trusted"),
+                    agent_scope=str(params.get("agent_scope") or "desktop"),
+                    duration_ms=params.get("duration_ms"),
+                )
+                self._write(
+                    result_msg(
+                        req_id,
+                        {"ok": eid is not None, "id": eid, "upload_enabled": False},
+                    )
+                )
+                return
+
+            if method == "trust.status":
+                from apps.desktop.sidecar.trust_gate import get_trust_gate
+
+                gate = get_trust_gate()
+                self._write(
+                    result_msg(
+                        req_id,
+                        {**gate.public_status(), "decisions_list": gate.list_decisions()},
+                    )
+                )
+                return
+
+            if method == "trust.evaluate":
+                from apps.desktop.sidecar.trust_gate import get_trust_gate
+
+                path = str(params.get("path") or "")
+                if not path:
+                    self._write(error_msg(req_id, "bad_params", "path required"))
+                    return
+                d = get_trust_gate().evaluate(path, purpose=str(params.get("purpose") or "load"))
+                self._write(
+                    result_msg(
+                        req_id,
+                        {
+                            "path": d.path,
+                            "level": d.level,
+                            "decision": d.decision,
+                            "reason": d.reason,
+                            "source": d.source,
+                        },
+                    )
+                )
+                return
+
+            if method == "trust.set":
+                from apps.desktop.sidecar.trust_gate import get_trust_gate
+
+                path = str(params.get("path") or "")
+                level = str(params.get("level") or "")
+                if not path or level not in ("trusted", "untrusted", "ask"):
+                    self._write(
+                        error_msg(
+                            req_id,
+                            "bad_params",
+                            "path and level=trusted|untrusted|ask required",
+                        )
+                    )
+                    return
+                try:
+                    out = get_trust_gate().set_trust(
+                        path, level, note=str(params.get("note") or "")  # type: ignore[arg-type]
+                    )
+                    self._write(result_msg(req_id, {"ok": True, **out}))
+                except Exception as exc:  # noqa: BLE001
+                    self._write(
+                        error_msg(req_id, "trust", f"{type(exc).__name__}: {exc}")
+                    )
+                return
+
+            if method == "evidence.list":
+                from apps.desktop.sidecar.evidence import get_evidence_store
+
+                self._write(
+                    result_msg(
+                        req_id,
+                        {"evidence": get_evidence_store().list(int(params.get("limit") or 100))},
+                    )
+                )
+                return
+
+            if method == "evidence.register":
+                from apps.desktop.sidecar.evidence import get_evidence_store
+
+                path = str(params.get("path") or "")
+                if not path:
+                    self._write(error_msg(req_id, "bad_params", "path required"))
+                    return
+                try:
+                    item = get_evidence_store().register(
+                        path, note=str(params.get("note") or "")
+                    )
+                    self._write(result_msg(req_id, {"ok": True, "item": item}))
+                except Exception as exc:  # noqa: BLE001
+                    self._write(
+                        error_msg(req_id, "evidence", f"{type(exc).__name__}: {exc}")
+                    )
+                return
+
+            if method == "evidence.verify":
+                from apps.desktop.sidecar.evidence import get_evidence_store
+
+                eid = str(params.get("evidence_id") or "")
+                self._write(result_msg(req_id, get_evidence_store().verify(eid)))
+                return
+
+            if method == "runs.paused":
+                from apps.desktop.sidecar.run_pause import list_paused
+
+                self._write(result_msg(req_id, {"paused": list_paused()}))
+                return
+
+            if method == "export.encrypted":
+                from apps.desktop.sidecar.export_bundle import export_encrypted
+
+                dest = str(params.get("dest_path") or "")
+                if not dest:
+                    self._write(error_msg(req_id, "bad_params", "dest_path required"))
+                    return
+                passphrase = params.get("passphrase")
+                recipient = params.get("age_recipient")
+                include = params.get("include")
+                try:
+                    out = export_encrypted(
+                        dest,
+                        passphrase=str(passphrase) if passphrase else None,
+                        age_recipient=str(recipient) if recipient else None,
+                        include=include if isinstance(include, list) else None,
+                    )
+                    self._write(result_msg(req_id, out))
+                except Exception as exc:  # noqa: BLE001
+                    self._write(
+                        error_msg(req_id, "export", f"{type(exc).__name__}: {exc}")
+                    )
+                return
+
+            if method == "uninstall.inventory":
+                from apps.desktop.sidecar.uninstall import inventory
+
+                self._write(result_msg(req_id, inventory()))
+                return
+
+            if method == "uninstall.execute":
+                from apps.desktop.sidecar.uninstall import execute
+
+                confirm = bool(params.get("confirm"))
+                dry_run = params.get("dry_run")
+                if dry_run is None:
+                    dry_run = True
+                out = execute(confirm=confirm, dry_run=bool(dry_run))
+                self._write(result_msg(req_id, out))
+                return
+
+            if method == "update.verify":
+                from apps.desktop.sidecar.update_verify import (
+                    UpdateVerifyError,
+                    verify_update,
+                )
+
+                manifest = params.get("manifest")
+                if not isinstance(manifest, dict):
+                    self._write(error_msg(req_id, "bad_params", "manifest object required"))
+                    return
+                current = str(params.get("current_version") or "0.1.0-m1")
+                artifact_b64 = params.get("artifact_b64")
+                artifact = None
+                if artifact_b64:
+                    import base64
+
+                    artifact = base64.b64decode(str(artifact_b64))
+                try:
+                    out = verify_update(
+                        manifest, current_version=current, artifact_bytes=artifact
+                    )
+                    self._write(result_msg(req_id, out))
+                except UpdateVerifyError as exc:
+                    self._write(error_msg(req_id, "update_rejected", str(exc)))
+                except Exception as exc:  # noqa: BLE001
+                    self._write(
+                        error_msg(req_id, "update", f"{type(exc).__name__}: {exc}")
+                    )
+                return
+
             if method == "agent.abort":
                 run_id = str(params.get("run_id") or "")
                 ok = self.agent.abort(run_id)
@@ -479,6 +889,29 @@ class SidecarServer:
                 message = str(params.get("message") or "")
                 ok = self.agent.steer(run_id, message)
                 self._write(result_msg(req_id, {"ok": ok, "run_id": run_id}))
+                return
+
+            if method == "agent.resume":
+                run_id = str(params.get("run_id") or "")
+                if not run_id:
+                    self._write(error_msg(req_id, "bad_params", "run_id required"))
+                    return
+                session_id = params.get("session_id")
+                if not session_id:
+                    meta = self.sessions.create(title=f"resume {run_id[:8]}", tier="readonly")
+                    session_id = meta.session_id
+                else:
+                    session_id = str(session_id)
+                async for ev in self.agent.resume(run_id):
+                    ev = dict(ev)
+                    ev["session_id"] = session_id
+                    self.sessions.append_event(session_id, ev)
+                    self._write(event_msg(req_id, ev))
+                self._write(
+                    result_msg(
+                        req_id, {"ok": True, "done": True, "session_id": session_id}
+                    )
+                )
                 return
 
             if method == "agent.run":
@@ -537,6 +970,9 @@ class SidecarServer:
                         "tool_call_end",
                         "answer_ready",
                         "error",
+                        "plan_ready",
+                        "plan_approved",
+                        "plan_rejected",
                     ):
                         try:
                             from apps.desktop.sidecar.audit_chain import append_event
@@ -547,13 +983,21 @@ class SidecarServer:
                                 payload["error"] = bool(ev.get("error"))
                             if et == "run_started":
                                 payload["tier"] = ev.get("tier")
+                                payload["plan_required"] = ev.get("plan_required")
                                 prov = ev.get("provider") or {}
                                 if isinstance(prov, dict):
                                     payload["provider_mode"] = prov.get("mode")
+                            if et in ("plan_ready", "plan_approved", "plan_rejected"):
+                                payload["plan_id"] = ev.get("plan_id")
+                                payload["status"] = ev.get("status")
+                                payload["approval_type"] = ev.get("approval_type") or "self"
+                                if et == "plan_approved" and ev.get("plan_summary"):
+                                    payload["plan_summary"] = str(ev.get("plan_summary"))[:1500]
+                            at = str(ev.get("approval_type") or "self")
                             append_event(
                                 et,
                                 payload,
-                                approval_type="self",
+                                approval_type=at if at in ("self", "segregation", "none") else "self",
                                 session_id=session_id,
                                 run_id=run_id_seen or str(ev.get("run_id") or "") or None,
                             )
@@ -616,6 +1060,21 @@ def _install_signals() -> None:
 
 def main() -> None:
     logs_dir()
+    # M3: mark sensitive dirs for backup exclusion (idempotent)
+    try:
+        from apps.desktop.sidecar.backup_exclude import apply_exclusions
+
+        apply_exclusions()
+    except Exception:  # noqa: BLE001
+        pass
+    # Ensure index encryption key exists when encryption is on
+    try:
+        from apps.desktop.sidecar.data_crypto import ensure_index_key, encryption_enabled
+
+        if encryption_enabled():
+            ensure_index_key()
+    except Exception:  # noqa: BLE001
+        pass
     logging.basicConfig(
         level=logging.INFO,
         stream=sys.stderr,

@@ -17,6 +17,8 @@
 | `11-OPEN-QUESTIONS.md` | **故意没定的事**（含阻塞的里程碑） | 觉得某处没写清楚时先查这里 |
 | `12-M1.5-GOLDEN-PATH.md` | **自用验证的唯一验收场景**（告警分诊闭环） | M0a 定边界时读；进 M1.5 前必读 |
 | `13-M2-EXIT-CHECKLIST.md` | **M2 沙箱出口判据对照与逃逸套件** | 做/验收 M2 时；出口签字前 |
+| `14-EDR-MDM.md` | **EDR/MDM 白名单与行为画像** | 交付 / 客户安全评审前 |
+| `15-NOTARIZATION-AND-UNINSTALL.md` | **公证说明 + 卸载/导出** | 发布与卸载前 |
 
 配套：
 - 仓库根 `CLAUDE.md` —— 工作约定与常犯错误清单
@@ -65,18 +67,18 @@ Web 端 21 个 Tab 功能不减。**对已部署 CyberGuard 的客户，桌面�
 
 ## 当前状态
 
-**M1 · 壳 + Sidecar + 单工作台骨架**（进行中；**mock only**）
+**M3 · 可分发版完整**（推进中；**禁止分发**直至 M7 公证）
 
 **已落地**
 
-- **M0a** 完成：`packages/llm_router` + `packages/agent_core`（管线、run_loop、压缩、审计、M0a-2 语义）
-- **M1 骨架**：`apps/desktop/` — Electron + JSONL sidecar + mock agent + 三栏工作台
-  - headless：`./apps/desktop/scripts/headless_demo.sh`
-  - Electron：`cd apps/desktop && npm install && npm run dev`
-  - 测试：`tests/test_desktop_sidecar.py`
-- readonly 档 **无** `ExecOperations`；全程不监听端口；开发版启动警告
+- **M0a** 完成：`packages/llm_router` + `packages/agent_core`
+- **M1–M1.5**：Electron + JSONL sidecar + live LLM 路径 + MCP stdio
+- **M2**：Seatbelt 双旋钮、host_* 沙箱工具、TCC 探测、逃逸套件（见 `13-M2-EXIT-CHECKLIST.md`）
+- **M3 已落地片段**：Keychain secrets、审计哈希链、本地经验库、敌对来源标记、会话加密/crypto-shred/备份排除、**5 条内置 SOP + progressive disclosure**、INV-39 对抗用例
+- headless：`./apps/desktop/scripts/headless_demo.sh` · Electron：`cd apps/desktop && npm run dev`
 
-**M1 仍待**：托盘、MCP 孤儿治理实装、本地会话 JSONL 持久化、敏感目录规范完整项。
+**当前**：M0a–M5 功能主路径 + **M7 交付工程代码/文档**（导出/卸载/更新验签/EDR·公证说明）已落地。  
+**仍待外部条件**：Developer ID 公证实装、EDR 实机勾选、M6 connected（按需）。
 
 ## 文档权威性
 

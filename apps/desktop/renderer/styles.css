@@ -39,6 +39,73 @@ body,
   border-bottom: 1px solid #78350f;
 }
 
+.plan-panel {
+  background: #1e1b4b;
+  border-bottom: 1px solid #4338ca;
+  padding: 10px 14px;
+  color: #e0e7ff;
+}
+
+.plan-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.plan-edit {
+  width: 100%;
+  margin-top: 8px;
+  background: #0f172a;
+  color: var(--text);
+  border: 1px solid #4338ca;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  resize: vertical;
+}
+
+.plan-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.btn-approve {
+  background: #166534;
+  color: #dcfce7;
+  border: 1px solid #22c55e;
+  border-radius: 8px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-reject {
+  background: #7f1d1d;
+  color: #fecaca;
+  border: 1px solid #f87171;
+  border-radius: 8px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.ev.type-plan_ready {
+  border-color: #6366f1;
+  background: #1e1b4b;
+}
+
+.ev.type-plan_approved {
+  border-color: #22c55e;
+  background: #052e16;
+}
+
+.plan-summary {
+  max-height: 280px;
+}
+
 .status-bar {
   display: flex;
   gap: 16px;
