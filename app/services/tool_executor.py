@@ -20,6 +20,9 @@ from agent_core.schema_validate import SchemaValidationError, validate_tool_argu
 TOOL_RUNNER_URL = os.environ.get("TOOL_RUNNER_URL", "http://tool-runner:9000")
 RUNNER_TOKEN = os.environ.get("RUNNER_TOKEN", "")
 OUTPUT_MAX_CHARS = 8000  # mirror internal_agent.TOOL_RESULT_MAX_CHARS
+# Shell / scanner outputs often put signal at the end (errors, findings).
+# mode "head" drops the start and keeps the tail (see agent_core.truncate).
+OUTPUT_TRUNCATE_MODE = "head"
 
 
 class ToolArgError(ValueError):
@@ -61,10 +64,15 @@ def build_argv(command_template: str, input_schema: Optional[Dict[str, Any]],
     return argv
 
 
-def _truncate(text: str) -> str:
-    if text and len(text) > OUTPUT_MAX_CHARS:
-        return text[:OUTPUT_MAX_CHARS] + f"\n…[truncated {len(text) - OUTPUT_MAX_CHARS} chars]"
-    return text or ""
+def _truncate(text: str, *, mode: str = OUTPUT_TRUNCATE_MODE) -> str:
+    """Directional truncate for tool-runner stdout/stderr (roadmap #10)."""
+    from agent_core.truncate import truncate_tool_result
+
+    return truncate_tool_result(
+        text or "",
+        max_chars=OUTPUT_MAX_CHARS,
+        mode="head" if mode == "head" else "tail",
+    )
 
 
 async def _create_approval(tool, args: Dict[str, Any], user_id: int) -> None:

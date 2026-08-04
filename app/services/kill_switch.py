@@ -42,10 +42,28 @@ async def _refresh_redis() -> None:
 
 
 async def is_halted(agent_id: int | None = None) -> bool:
-    scopes = await _cache.get_json(_KEY)
-    if scopes is None:
-        scopes = await _engaged_scopes_from_db()
-        await _cache.set_json(_KEY, scopes, expire=86400)
+    """Return True if dispatch must stop.
+
+    INV-25: on cache/DB failure, **fail closed** (treat as halted) so a broken
+    control plane cannot open the kill switch.
+    """
+    import logging
+
+    log = logging.getLogger(__name__)
+    try:
+        scopes = await _cache.get_json(_KEY)
+        if scopes is None:
+            scopes = await _engaged_scopes_from_db()
+            try:
+                await _cache.set_json(_KEY, scopes, expire=86400)
+            except Exception as e:  # noqa: BLE001
+                log.warning("kill_switch redis refresh failed: %s", e)
+    except Exception as e:  # noqa: BLE001
+        log.error("kill_switch is_halted failed closed: %s", e)
+        return True
+    if not isinstance(scopes, list):
+        log.error("kill_switch scopes corrupt (%r); fail closed", type(scopes))
+        return True
     if "global" in scopes:
         return True
     return agent_id is not None and f"agent:{agent_id}" in scopes

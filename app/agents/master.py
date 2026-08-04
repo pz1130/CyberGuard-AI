@@ -387,8 +387,11 @@ class MasterAgent:
                     if backend not in remote_agents:
                         remote_agents[backend] = agent_dict
                     remote_agents_by_name[agent_obj.agent_name] = agent_dict
-        except Exception:
-            pass  # No DB agents — will use local executor for all tasks
+        except Exception as e:
+            # Functional degradation (route to local executor) is OK, but must be visible
+            logger.warning(
+                "sub-agent registry load failed; falling back to local executor: %s", e
+            )
 
         from app.services.privilege_inherit import (
             check_dispatch,

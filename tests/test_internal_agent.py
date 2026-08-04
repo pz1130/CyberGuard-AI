@@ -72,34 +72,46 @@ async def test_save_then_load_memory_round_trip(parent_conv_and_internal_agent):
 
 
 @pytest.mark.asyncio
-async def test_build_system_prompt_concatenates_skills(monkeypatch):
+async def test_build_system_prompt_catalog_not_full_body(monkeypatch):
+    """Progressive disclosure: catalog name+desc only; full body not in prompt."""
     from app.services.internal_agent import InternalAgentRunner
     cfg = {"id": 1, "agent_name": "x", "system_prompt": "BASE",
            "associated_skills": [101, 102], "metadata_json": {},
            "permission_level": "medium"}
 
-    async def fake_loader(ids):
-        return {101: "skill A body", 102: "skill B body"}
+    async def fake_catalog(ids):
+        return [
+            {"id": 101, "name": "skill_a", "description": "desc A", "version": "1"},
+            {"id": 102, "name": "skill_b", "description": "desc B", "version": "1"},
+        ]
 
     runner = InternalAgentRunner(cfg)
-    monkeypatch.setattr(runner, "_load_skill_bodies", fake_loader)
+    monkeypatch.setattr(runner, "_load_skill_catalog", fake_catalog)
     prompt = await runner._build_system_prompt()
-    assert "BASE" in prompt and "skill A body" in prompt and "skill B body" in prompt
+    assert "BASE" in prompt
+    assert "skill_a" in prompt and "desc A" in prompt
+    assert "load_skill" in prompt
+    assert "skill A body" not in prompt
 
 
 @pytest.mark.asyncio
-async def test_build_tools_includes_kb_when_kb_set(monkeypatch):
+async def test_build_tools_includes_kb_and_load_skill(monkeypatch):
     from app.services.internal_agent import InternalAgentRunner
     cfg = {"id": 1, "agent_name": "x", "system_prompt": "",
-           "associated_skills": [], "metadata_json": {"mcp_tool_ids": []},
+           "associated_skills": [9], "metadata_json": {"mcp_tool_ids": []},
            "knowledge_base_id": 7, "permission_level": "medium"}
     runner = InternalAgentRunner(cfg)
 
     async def fake_mcp(*_a, **_kw): return []
+
+    async def fake_pool(*_a, **_kw): return []
+
     monkeypatch.setattr(runner, "_load_mcp_tools", fake_mcp)
+    monkeypatch.setattr(runner, "_load_pool_tools", fake_pool)
     tools = await runner._build_tools()
     names = [t["function"]["name"] for t in tools]
     assert "kb_search" in names
+    assert "load_skill" in names
 
 
 @pytest.mark.asyncio
@@ -119,7 +131,7 @@ async def test_build_system_prompt_injects_episodes_when_enabled(monkeypatch):
            "associated_skills": [], "metadata_json": {"enable_episodic": True},
            "permission_level": "medium"}
     runner = InternalAgentRunner(cfg)
-    monkeypatch.setattr(runner, "_load_skill_bodies", AsyncMock(return_value={}))
+    monkeypatch.setattr(runner, "_load_skill_catalog", AsyncMock(return_value=[]))
 
     prompt = await runner._build_system_prompt("scan host 1.2.3.4")
     assert "过往成功经验" in prompt and "web_search→vuln_search" in prompt

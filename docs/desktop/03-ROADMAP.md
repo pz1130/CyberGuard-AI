@@ -310,17 +310,14 @@ Windows / Linux 平台支持。这是**已知并主动接受的推迟**，不是
 以下是重构中发现的**服务端遗留问题**，不属于桌面端范围，但会在 M0a 顺带触及。单独立项，不要夹带进桌面端提交：
 
 1. ~~`conversations.messages_json` 无锁 RMW 丢消息~~ → **已修（2026-08）**：`conversation_messages.append_messages_locked*` 使用 `SELECT … FOR UPDATE`；API append、internal agent memory、Celery 落库共用。用例：`tests/test_conversation_messages.py`
-2. 两套独立的上下文压缩实现（`context_compressor.py` 8000 est-token vs `internal_agent._maybe_compact` 24000 字符），阈值、提示词、语言均不同
-3. Skills 全文注入 system prompt，未做按需加载
+2. ~~两套独立压缩~~ → **主路径已统一到 `agent_core`（M0a-2）**；`context_compressor` 为兼容 re-export。
+3. ~~Skills 全文注入 system prompt~~ → **已修（2026-08）**：internal agent 仅 catalog（name+desc）+ `load_skill` 工具取全文。用例：`tests/test_skill_progressive.py`。
 4. ~~`agent_episodes` 只记成功、只增不减~~ → **已修（2026-08）**：失败路径 `success=False` 落库；每 agent 保留最新 `EPISODE_MAX_PER_AGENT=200` 条 prune；recall 仍只取成功。用例：`tests/test_episodic_memory.py`
 5. ~~`master.py` 关键词驱动控制流~~ → **已修（INV-13，2026-08）**：group chat 仅 `intent==group_chat` 或 UI 预置；HITL 仅 `needs_approval` / `requires_approval` / `risk_level` 结构化字段；对抗用例见 `tests/test_inv13_control_flow.py`
 6. ~~**跨 agent 派发缺少权限继承校验（提权路径）**~~ → **已修（INV-21，2026-08）**：`app/services/privilege_inherit.py` + `master._sub_agent_executor_node` 在 execute 前比较 source/target 的 `permission_level` 与 `autonomy_tier`。LLM 派发默认 medium/L2 封顶；`user_explicit` / `user_expert` 为可信上下文。用例：`tests/test_privilege_inherit.py`。
 7. ~~`_sub_agent_executor_node` fan-out 无闸~~ → **已修（INV-23，2026-08）**：`fanout_gate.py` + config（`SUB_AGENT_MAX_CONCURRENT/PLAN_SIZE/PER_AGENT/DEPTH`、`SUB_AGENT_REQUIRE_TARGET`）；semaphore 并发；拒绝无目标与超深度。用例：`tests/test_fanout_gate.py`。
-8. 安全边界与功能路径共用同一套 best-effort 异常处理模式。功能性降级（经验召回、搜索、OCR 失败）静默 no-op 是好设计，但该模式不可蔓延到沙箱初始化、策略加载、审计写入等安全路径。见 INV-25。
+8. ~~安全路径 best-effort 静默~~ → **部分已修（INV-25，2026-08）**：`log_audit` flush **await** 且失败 re-raise；kill switch **fail-closed**；master 注册表加载失败打 warning。
 
-9. **token 估算对中文严重低估（会导致线上报错，优先级高）** —— `context_compressor.estimate_tokens` 用 `total_chars // 4`，注释写着 "Conservative for CJK content"。**这个判断是反的**：`4 chars ≈ 1 token` 是英文经验值，中文一个汉字通常 1–1.5 token，`chars//4` 把 4 个汉字算成 1 token，**低估约 4–6 倍**。
-   本系统是中英双语、大量中文提示词与对话，实际 token 数远超估算，**该触发压缩时不触发**，直接撞上下文上限报错。
-   修法：按字符类别加权（CJK ~1.5、ASCII ~0.25）先止血，后续接真实 tokenizer。
+9. ~~**token 估算中文低估**~~ → **已修（M0a-2）**：`agent_core.tokens` CJK 加权。
 
-10. **工具输出截断只有一个方向** —— `_truncate_tool_result` 保留前 8000 字符、丢弃其余。**安全场景的价值常在尾部**：nmap 的发现在 banner 之后、日志的关键事件在末尾、命令的错误信息在最后。这是在系统性丢弃关键证据。
-    修法参照 pi：`truncate_head` / `truncate_tail` 两个方向按工具选择，双重约束（行数 **或** 字节数，先到先算）。与"全文落库 + 分页读"不冲突，两者都要。
+10. ~~**工具输出单向截断**~~ → **已修（2026-08）**：`agent_core.truncate` head/tail；tool-runner 默认 `mode=head` 保尾部。用例：`tests/test_tool_truncate_direction.py`。

@@ -222,25 +222,26 @@ class InternalAgentRunner:
 
     # -------- System prompt assembly --------
 
-    async def _load_skill_bodies(self, skill_ids: List[int]) -> Dict[int, str]:
+    async def _load_skill_catalog(self, skill_ids: List[int]) -> List[Dict[str, Any]]:
+        """Metadata only (name + description) — progressive disclosure."""
         if not skill_ids:
-            return {}
-        from app.models.skill import Skill
-        async with AsyncSessionLocal() as s:
-            result = await s.execute(select(Skill).where(Skill.id.in_(skill_ids),
-                                                          Skill.is_active.is_(True)))
-            rows = result.scalars().all()
-        return {r.id: (r.md_content or "") for r in rows}
+            return []
+        from app.services.skill_loader import SkillLoader
+        return await SkillLoader.load_skill_catalog(skill_ids)
+
+    async def _load_skill_bodies(self, skill_ids: List[int]) -> Dict[int, str]:
+        """Deprecated full-body load — tests may still patch this; prefer catalog."""
+        catalog = await self._load_skill_catalog(skill_ids)
+        # Bodies intentionally omitted from catalog path
+        return {int(s["id"]): "" for s in catalog if s.get("id") is not None}
 
     async def _build_system_prompt(self, task: Optional[str] = None) -> str:
         parts = [self.system_prompt] if self.system_prompt else []
-        bodies = await self._load_skill_bodies(self.associated_skills)
-        if bodies:
-            parts.append("\n\n## Skills available to you\n")
-            for sid in self.associated_skills:
-                body = bodies.get(sid)
-                if body:
-                    parts.append(f"\n### Skill #{sid}\n{body}\n")
+        # Progressive disclosure: name+description only; body via load_skill tool
+        catalog = await self._load_skill_catalog(self.associated_skills)
+        if catalog:
+            from app.services.skill_loader import SkillLoader
+            parts.append("\n\n" + SkillLoader.format_catalog_prompt(catalog))
 
         if self.enable_episodic and task:
             try:
@@ -369,6 +370,29 @@ class InternalAgentRunner:
                         },
                     },
                 })
+
+        # Progressive skill load (body not in system prompt)
+        if self.associated_skills:
+            tools.append({
+                "type": "function",
+                "function": {
+                    "name": "load_skill",
+                    "description": (
+                        "Load the full text of an associated skill/SOP by name or id. "
+                        "Use after consulting the skill catalog in the system prompt."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Skill name or numeric id",
+                            },
+                        },
+                        "required": ["name"],
+                    },
+                },
+            })
         return tools
 
     # -------- Tool dispatch --------
@@ -396,6 +420,24 @@ class InternalAgentRunner:
                     return json.dumps(result, ensure_ascii=False, default=str)
                 except Exception as e:
                     return f"ERROR: MCP tool {name!r} failed: {e}"
+
+            # 1b. Progressive skill body load
+            if name == "load_skill":
+                from app.services.skill_loader import SkillLoader
+                key = bound_args.get("name") or bound_args.get("id") or ""
+                skill = await SkillLoader.load_skill_body(
+                    key, allowed_ids=self.associated_skills or None
+                )
+                if not skill:
+                    return json.dumps(
+                        {
+                            "status": "error",
+                            "is_error": True,
+                            "error": f"unknown or unauthorized skill: {key!r}",
+                        },
+                        ensure_ascii=False,
+                    )
+                return SkillLoader.wrap_skill_body(skill)
 
             # 2. KB synthetic tool
             if name == "kb_search" and self.knowledge_base_id:

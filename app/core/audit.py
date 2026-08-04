@@ -51,24 +51,36 @@ async def log_audit(
         "request_id": request_id or _generate_request_id(),
     }
 
-    # Store in Redis for real-time access
-    redis = await get_redis()
-    if redis:
-        await redis.lpush("audit:log", json.dumps(entry))
+    # Store in Redis for real-time access (best-effort stream; DB is durable path)
+    try:
+        redis = await get_redis()
+        if redis:
+            await redis.lpush("audit:log", json.dumps(entry))
+    except Exception as e:  # noqa: BLE001
+        # INV-25: do not pretend Redis is the only audit path; log loudly
+        import logging
+        logging.getLogger(__name__).error(
+            "audit redis push failed (continuing to DB buffer): %s", e
+        )
 
     # Buffer for DB writes (thread-safe swap)
     async with _buffer_lock:
         _audit_buffer.append(entry)
         should_flush = len(_audit_buffer) >= _buffer_size
 
+    # INV-29: await flush — fire-and-forget create_task can lose audit on crash
     if should_flush:
-        asyncio.create_task(_flush_audit_buffer())
+        await _flush_audit_buffer()
 
     return entry
 
 
 async def _flush_audit_buffer():
-    """Flush buffered audit logs to database."""
+    """Flush buffered audit logs to database.
+
+    INV-25 / INV-29: flush failures re-queue entries and re-raise so callers
+    cannot silently continue without durable audit.
+    """
     # Atomically swap out the buffer under lock
     async with _buffer_lock:
         if not _audit_buffer:
@@ -79,18 +91,24 @@ async def _flush_audit_buffer():
     # Import here to avoid circular import
     from app.core.database import get_db_context
 
-    async with get_db_context() as session:
-        for entry in logs_to_write:
-            log = AuditLog(
-                user_id=entry["user_id"],
-                agent_id=entry["agent_id"],
-                action=entry["action"],
-                input_hash=entry["input_hash"],
-                output_hash=entry["output_hash"],
-                request_id=entry.get("request_id"),
-            )
-            session.add(log)
-        await session.commit()
+    try:
+        async with get_db_context() as session:
+            for entry in logs_to_write:
+                log = AuditLog(
+                    user_id=entry["user_id"],
+                    agent_id=entry["agent_id"],
+                    action=entry["action"],
+                    input_hash=entry["input_hash"],
+                    output_hash=entry["output_hash"],
+                    request_id=entry.get("request_id"),
+                )
+                session.add(log)
+            await session.commit()
+    except Exception:
+        # Put entries back so a later flush can retry
+        async with _buffer_lock:
+            _audit_buffer[0:0] = logs_to_write
+        raise
 
 
 def _generate_request_id() -> str:
