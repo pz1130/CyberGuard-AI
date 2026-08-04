@@ -232,31 +232,19 @@ async def append_message(
         require_permission(Permission.TASK_EXECUTE)
     ),
 ):
-    """Append a message to a conversation."""
-    result = await db.execute(
-        select(Conversation).where(
-            Conversation.id == conv_id,
-            Conversation.user_id == current_user.user_id,
-        )
+    """Append a message to a conversation (row-locked; multi-worker safe)."""
+    from app.services.conversation_messages import append_messages_locked
+
+    conv, count = await append_messages_locked(
+        db,
+        conv_id,
+        [{"role": body.role, "content": body.content}],
+        user_id=current_user.user_id,
     )
-    conv = result.scalar_one_or_none()
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    try:
-        messages = json.loads(conv.messages_json or "[]")
-    except json.JSONDecodeError:
-        messages = []
-
-    messages.append({
-        "role": body.role,
-        "content": body.content,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
-
-    conv.messages_json = json.dumps(messages, ensure_ascii=False)
-    conv.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(conv)
 
-    return {"status": "ok", "message_count": len(messages)}
+    return {"status": "ok", "message_count": count}

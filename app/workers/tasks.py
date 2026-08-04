@@ -218,57 +218,40 @@ def _query_knowledge_base_sync(kb_id: int, query: str, top_k: int = 5) -> str:
 
 
 def _save_to_conversation_async(conversation_id: int, user_input: str, result: dict):
-    """Save user message and result to conversation (fire-and-forget)."""
+    """Save user message and result to conversation (fire-and-forget, row-locked)."""
     import json
     import re
-    from datetime import datetime, timezone
     try:
         from app.core.database import get_sync_session
-        from app.models.conversation import Conversation
-        from sqlalchemy import select
+        from app.services.conversation_messages import append_messages_locked_sync
+
+        final_summary = result.get("final_summary", "")
+        if isinstance(final_summary, dict):
+            final_summary = json.dumps(final_summary)
+        # Last-mile safety net: strip internal chain-of-thought blocks
+        if final_summary:
+            final_summary = re.sub(
+                r"<think[^>]*>[\s\S]*?</think>\s*", "", final_summary, flags=re.IGNORECASE
+            ).strip()
+            final_summary = re.sub(
+                r"<reasoning>[\s\S]*?</reasoning>\s*", "", final_summary, flags=re.IGNORECASE
+            ).strip()
 
         SessionLocal = get_sync_session()
         with SessionLocal() as session:
-            conv_result = session.execute(
-                select(Conversation).where(Conversation.id == conversation_id)
+            conv, _ = append_messages_locked_sync(
+                session,
+                conversation_id,
+                [
+                    {"role": "user", "content": user_input},
+                    {
+                        "role": "assistant",
+                        "content": final_summary or str(result),
+                    },
+                ],
             )
-            conv = conv_result.scalar_one_or_none()
             if not conv:
                 return
-
-            messages = json.loads(conv.messages_json or "[]")
-
-            # Add user message
-            messages.append({
-                "role": "user",
-                "content": user_input,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            })
-
-            # Add assistant response
-            final_summary = result.get("final_summary", "")
-            if isinstance(final_summary, dict):
-                final_summary = json.dumps(final_summary)
-            # Last-mile safety net: strip any internal chain-of-thought blocks
-            # (<think>/<reasoning>) that may have leaked from a sub-agent executor
-            # or any other path that did not run llm_router's strip pass. This
-            # guarantees the user never sees model reasoning, regardless of
-            # provider preserve_think setting or which executor produced the text.
-            if final_summary:
-                final_summary = re.sub(
-                    r"<think[^>]*>[\s\S]*?</think>\s*", "", final_summary, flags=re.IGNORECASE
-                ).strip()
-                final_summary = re.sub(
-                    r"<reasoning>[\s\S]*?</reasoning>\s*", "", final_summary, flags=re.IGNORECASE
-                ).strip()
-            messages.append({
-                "role": "assistant",
-                "content": final_summary or str(result),
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            })
-
-            conv.messages_json = json.dumps(messages, ensure_ascii=False)
-            conv.updated_at = datetime.now(timezone.utc)
             session.commit()
     except Exception as e:
         logger.warning(f"Failed to save to conversation {conversation_id}: {e}")

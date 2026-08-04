@@ -198,11 +198,26 @@ class InternalAgentRunner:
     ) -> None:
         if parent_conversation_id is None or not messages:
             return
+        from app.services.conversation_messages import (
+            parse_messages,
+            serialize_messages,
+            stamp_message,
+        )
+
         async with AsyncSessionLocal() as s:
+            # Lock slice row after ensure-exists to avoid concurrent RMW loss
             row = await self._get_or_create_slice_row(s, parent_conversation_id, user_id)
-            existing = json.loads(row.messages_json or "[]")
-            existing.extend(messages)
-            row.messages_json = json.dumps(existing, ensure_ascii=False)
+            await s.flush()
+            result = await s.execute(
+                select(Conversation)
+                .where(Conversation.id == row.id)
+                .with_for_update()
+            )
+            locked = result.scalar_one()
+            existing = parse_messages(locked.messages_json)
+            for m in messages:
+                existing.append(stamp_message(dict(m)))
+            locked.messages_json = serialize_messages(existing)
             await s.commit()
 
     # -------- System prompt assembly --------

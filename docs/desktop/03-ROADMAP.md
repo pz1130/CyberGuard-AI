@@ -309,7 +309,7 @@ Windows / Linux 平台支持。这是**已知并主动接受的推迟**，不是
 
 以下是重构中发现的**服务端遗留问题**，不属于桌面端范围，但会在 M0a 顺带触及。单独立项，不要夹带进桌面端提交：
 
-1. `conversations.messages_json` 是整块 TEXT 的 read-modify-write，多 worker 下**无锁并发丢消息**（README 默认 `API_WORKERS=4`）
+1. ~~`conversations.messages_json` 无锁 RMW 丢消息~~ → **已修（2026-08）**：`conversation_messages.append_messages_locked*` 使用 `SELECT … FOR UPDATE`；API append、internal agent memory、Celery 落库共用。用例：`tests/test_conversation_messages.py`
 2. 两套独立的上下文压缩实现（`context_compressor.py` 8000 est-token vs `internal_agent._maybe_compact` 24000 字符），阈值、提示词、语言均不同
 3. Skills 全文注入 system prompt，未做按需加载
 4. `agent_episodes` 只增不减，且 `_maybe_record_episode` 硬编码 `success=True`，失败经验一条不存
