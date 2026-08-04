@@ -32,7 +32,7 @@ export PYTHONPATH="packages:$(pwd)"
 |---|------|------|------|
 | 1 | 越出 `writable_roots` 写入被拦 | **PASS** | `test_escape_write_outside_writable_roots`, `test_escape_host_ops_blocks_outside_and_git`, `test_sandboxed_write_in_workspace_only` |
 | 2 | 只读模式下写文件被拦 | **PASS** | `test_escape_read_only_blocks_any_write`, `test_seatbelt_read_only_blocks_write_outside` |
-| 3 | 可写模式下 sessions/audit/logs 仍不可写 | **PASS** | `test_sandboxed_write_in_workspace_only`（sessions）, `always_readonly_paths` |
+| 3 | 可写模式下 sessions/audit/logs/**evidence**/secrets/config 仍不可写 | **PASS** | `test_sandboxed_write_in_workspace_only`；`always_readonly_paths` 含 evidence/secrets/config；`test_escape_evidence_dir_not_writable_even_under_workspace` |
 | 4 | `.git` 在可写根内仍不可写 | **PASS** | `test_escape_host_ops_blocks_outside_and_git` |
 | 5 | 受限模式无网络（profile 层） | **PASS** | `test_profile_*_denies_network`；host_run 不允许 curl/nc |
 | 6 | 自由 shell / 非白名单二进制被拒 | **PASS** | `test_escape_exec_disallows_shell_and_network_tools`, allowlist |
@@ -62,8 +62,8 @@ export PYTHONPATH="packages:$(pwd)"
 ## 仍不算 M2「全部出口通过」的原因
 
 1. **开发签名 / TCC 稳定性**已有脚本（判据 12 部分完成）—— 须本机执行 `npm run codesign:identity && npm run codesign:dev` 并完成一次 FDA 授权；CI 无钥匙串时不强制。  
-2. **网络逃逸**主要靠 profile `deny network*` + 不把 curl 放进白名单；未做完整「白名单内二进制意外出网」对抗用例。  
-3. **原始证据目录**保护策略未产品化命名（目前是 sessions/audit/logs + `.git` + 凭据文件名）。  
+2. ~~**网络逃逸**~~ → **已加深（2026-08-04）**：`test_escape_network_denied_even_via_shell_probe` 在 Seatbelt 层用 python socket / curl 探针断言 `deny network*`；host_run 仍禁止 curl/nc。  
+3. ~~**原始证据目录**~~ → **已产品化命名**：`always_readonly_paths` = sessions / audit / logs / **evidence** / secrets / config；专项用例覆盖「整棵 data_root 误标可写时 evidence 仍拒写」。  
 4. 产品仍标记 **development / 禁止分发**（正确）。
 
 **建议出口签字条件**：上表 1–11、14 持续绿 + 判据 12 在本机 `codesign:verify` 通过并完成一次 FDA 授权后，可将本文件状态改为「出口通过（内部分发前）」。
@@ -76,3 +76,4 @@ export PYTHONPATH="packages:$(pwd)"
 |------|------|
 | 2026-07-31 | 初稿；对齐已实现 Seatbelt / host_* / TCC 探测与逃逸套件 |
 | 2026-07-31 | 判据 12：增加开发期固定 codesign 脚本与 `dev:signed` |
+| 2026-08-04 | evidence/secrets/config 纳入 always_readonly；网络 Seatbelt 探针用例 |

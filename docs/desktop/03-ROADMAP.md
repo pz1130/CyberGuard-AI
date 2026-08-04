@@ -160,7 +160,7 @@ M0b ────────────┘                                     
 
 ## M2 · 双旋钮策略 + macOS 沙箱 + 状态栏
 
-**状态：主路径已落地（2026-07-31）** — Seatbelt 只读/写/白名单 Exec、TCC 探测、状态栏；出口对照见 `13-M2-EXIT-CHECKLIST.md`。**判据 12（开发签名稳定）仍未完成**，故 M2 正式出口签字保留。
+**状态：主路径已落地（2026-07-31；深化 2026-08-04）** — Seatbelt 只读/写/白名单 Exec、TCC 探测、状态栏；`always_readonly` 含 evidence/secrets/config；网络 deny 探针用例。出口对照见 `13-M2-EXIT-CHECKLIST.md`。**判据 12（开发签名稳定）仍需本机钥匙串一次 Trust + FDA**，故 M2 正式出口签字保留。
 
 **范围**：`sandbox_mode` × `approval_policy` 两维模型、Seatbelt 实现、TCC 授权引导、状态栏。M2 是**真实本机工具执行**的安全准入门槛。
 

@@ -32,10 +32,13 @@ class TestMcpHost(unittest.IsolatedAsyncioTestCase):
             args=[_FIXTURE],
             env={},
             method="tools/call",
-            params={"name": "x", "arguments": {"a": 1}},
+            params={"name": "echo", "arguments": {"a": 1}},
             timeout=10,
         )
-        self.assertEqual(result, {"echo": {"name": "x", "arguments": {"a": 1}}})
+        # Fixture returns MCP-shaped tools/call result (content + isError)
+        self.assertFalse(result.get("isError"))
+        text = result["content"][0]["text"].replace(" ", "")
+        self.assertIn('"a":1', text)
 
     async def test_rpc_autostarts_then_reuses(self):
         # First rpc auto-starts the server; it then stays live for the second.

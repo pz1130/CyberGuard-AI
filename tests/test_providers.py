@@ -75,9 +75,14 @@ async def test_seed_presets_leaves_models_unverified():
     local services not running), so claiming they're verified would
     lie to the user.
     """
+    from sqlalchemy import delete
+
     async with AsyncSessionLocal() as db:
-        await _seed_presets(db)
+        # Isolate from polluted local DB rows (older seed stamped verified=True).
         preset_names = {p.name for p in _PRESET_PROVIDERS}
+        await db.execute(delete(Provider).where(Provider.name.in_(preset_names)))
+        await db.commit()
+        await _seed_presets(db)
         result = await db.execute(select(Provider).where(Provider.name.in_(preset_names)))
         providers = result.scalars().all()
         assert len(providers) == len(preset_names)

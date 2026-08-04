@@ -68,7 +68,11 @@ async def test_save_then_load_memory_round_trip(parent_conv_and_internal_agent):
     await runner._append_memory(parent_conversation_id=ids["parent_id"],
                                  user_id=ids["user_id"], messages=new_msgs)
     loaded = await runner._load_memory(parent_conversation_id=ids["parent_id"])
-    assert loaded == new_msgs
+    # append stamps created_at (conversation_messages); compare role/content only
+    assert [(m["role"], m["content"]) for m in loaded] == [
+        (m["role"], m["content"]) for m in new_msgs
+    ]
+    assert all(m.get("created_at") for m in loaded)
 
 
 @pytest.mark.asyncio
@@ -599,7 +603,7 @@ async def test_no_auto_continue_without_tools(monkeypatch):
 @pytest.mark.asyncio
 async def test_maybe_compact_summarizes_when_oversized(monkeypatch):
     from app.services.internal_agent import (
-        InternalAgentRunner, CONTEXT_COMPACT_CHARS, CONTEXT_KEEP_RECENT,
+        InternalAgentRunner, CONTEXT_KEEP_RECENT,
     )
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
@@ -609,13 +613,26 @@ async def test_maybe_compact_summarizes_when_oversized(monkeypatch):
            "permission_level": "medium"}
     runner = InternalAgentRunner(cfg)
 
+    # M0a-2: compaction thresholds use remaining token budget from model limits.
+    # Force a tiny window so the oversized buffer actually triggers summarize.
+    async def _tiny_limits(_pid, _model):
+        return 2_000, 256
+
+    monkeypatch.setattr(
+        "app.services.model_limits.limits_for_provider_model",
+        _tiny_limits,
+    )
+    monkeypatch.setattr(
+        "agent_core.model_limits.resolve_model_limits",
+        lambda *a, **k: (2_000, 256),
+    )
+
     # Build an oversized buffer: system + many big user/assistant turns.
     big = "y" * 2000
     messages = [{"role": "system", "content": "SYS"}]
     for i in range(20):
         messages.append({"role": "user", "content": big})
         messages.append({"role": "assistant", "content": big})
-    assert runner._estimate_chars(messages) > CONTEXT_COMPACT_CHARS
 
     chat = AsyncMock(return_value="## Summary\ncondensed history")
     out = await runner._maybe_compact(messages, SimpleNamespace(chat=chat))

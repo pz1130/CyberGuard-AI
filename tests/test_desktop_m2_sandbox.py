@@ -38,6 +38,10 @@ def test_always_readonly_paths_are_subdirs_not_whole_root():
 
     paths = always_readonly_paths("/data/cg")
     assert any(p.endswith("sessions") for p in paths)
+    assert any(p.endswith("evidence") for p in paths)
+    assert any(p.endswith("secrets") for p in paths)
+    assert any(p.endswith("config") for p in paths)
+    assert any(p.endswith("audit") for p in paths)
     assert "/data/cg" not in paths  # whole root must not be blanket-protected
 
 

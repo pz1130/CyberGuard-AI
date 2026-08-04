@@ -72,7 +72,8 @@ def always_readonly_paths(data_root: str) -> tuple[str, ...]:
     """Protective metadata — never writable even under workspace-write (INV).
 
     Agent may write under ``workspace/`` and ``tmp/`` only. Sessions, audit,
-    logs, and config stay read-only at the OS sandbox layer.
+    logs, raw evidence catalog, secrets, and config stay read-only at the
+    host-ops and OS sandbox layers (INV-02 / M2 exit: evidence dirs).
     """
     from pathlib import Path
 
@@ -81,4 +82,9 @@ def always_readonly_paths(data_root: str) -> tuple[str, ...]:
         str(root / "sessions"),
         str(root / "audit"),
         str(root / "logs"),
+        # Raw evidence catalog + blobs (sha256 index lives here) — never agent-writable
+        str(root / "evidence"),
+        # Secrets slots (file backend) and provider config surface
+        str(root / "secrets"),
+        str(root / "config"),
     )

@@ -67,17 +67,25 @@ Web 端 21 个 Tab 功能不减。**对已部署 CyberGuard 的客户，桌面�
 
 ## 当前状态
 
-**M3 · 可分发版完整**（推进中；**禁止分发**直至 M7 公证）
+**M0a–M5 功能主路径 + M7 交付工程主路径已落地**（分支 `security-enhance`；**禁止分发**直至 Developer ID 真公证）
 
 **已落地**
 
 - **M0a** 完成：`packages/llm_router` + `packages/agent_core`
 - **M1–M1.5**：Electron + JSONL sidecar + live LLM 路径 + MCP stdio
-- **M2**：Seatbelt 双旋钮、host_* 沙箱工具、TCC 探测、逃逸套件（见 `13-M2-EXIT-CHECKLIST.md`）
-- **M3 已落地片段**：Keychain secrets、审计哈希链、本地经验库、敌对来源标记、会话加密/crypto-shred/备份排除、**5 条内置 SOP + progressive disclosure**、INV-39 对抗用例
+- **M2**：Seatbelt 双旋钮、host_* 沙箱工具、TCC 探测、逃逸套件（evidence/secrets 只读 + 网络探针；见 `13-M2-EXIT-CHECKLIST.md`）
+- **M3–M5**：Keychain secrets、审计哈希链、本地经验库、敌对来源、会话加密/crypto-shred、SOP progressive disclosure、Plan Mode、Trust Gate、证据/断网恢复
+- **M7 工程**：加密导出 / 卸载 / 更新验签 / EDR·公证文档 + `electron-builder` 骨架 + 应用内导出/卸载 UI
+- **服务端遗留 #1–#10**：会话锁、progressive skills、INV-13/21/23/25、episodes prune、截断方向等（见 `CHANGELOG.md`）
 - headless：`./apps/desktop/scripts/headless_demo.sh` · Electron：`cd apps/desktop && npm run dev`
 
-**当前**：M0a–M5 功能主路径 + **M7 交付工程**已落地（导出/卸载/更新验签/EDR·公证文档 + `electron-builder` 骨架 + 应用内导出/卸载 UI）。  
+**仍外部 / 按需**
+
+- Developer ID **真实**公证与 Gatekeeper 双击安装
+- 客户环境 EDR 白名单实机勾选
+- M6 connected（有企业客户再启）
+- M0b `ui-shared` 抽取（未排期）
+- M2 判据 12：本机 `codesign:dev` + 一次 FDA 授权  
 **仍待外部条件**：Developer ID 真实公证与 Gatekeeper 双击装、EDR 实机勾选、M6 connected（按需）。  
 **无证书可跑**：`cd apps/desktop && npm run pack:check`。
 

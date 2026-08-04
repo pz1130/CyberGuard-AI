@@ -8,6 +8,7 @@ All notable changes to CyberGuard are documented here.
 
 - **M0a–M5 product paths**: Seatbelt host tools, Plan Mode self-approval, Trust Gate, evidence catalog, pause/resume, local episodic memory, session encryption / crypto-shred, progressive SOP skills, MCP stdio + Keychain slots.
 - **M7 delivery engineering**: encrypted export, uninstall inventory/execute, Ed25519 update verify, EDR/notarization docs, `electron-builder` skeleton, in-app Export/Uninstall UI, `npm run pack:check` (unsigned dry-run).
+- **M2 deepen**: `always_readonly_paths` includes `evidence` / `secrets` / `config`; Seatbelt network-deny probe (`python` socket / `curl`); evidence write refused even if data_root is mis-listed as writable.
 
 ### Server security & invariants
 
