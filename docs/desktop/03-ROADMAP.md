@@ -316,7 +316,7 @@ Windows / Linux 平台支持。这是**已知并主动接受的推迟**，不是
 5. ~~`master.py` 关键词驱动控制流~~ → **已修（INV-13，2026-08）**：group chat 仅 `intent==group_chat` 或 UI 预置；HITL 仅 `needs_approval` / `requires_approval` / `risk_level` 结构化字段；对抗用例见 `tests/test_inv13_control_flow.py`
 6. ~~**跨 agent 派发缺少权限继承校验（提权路径）**~~ → **已修（INV-21，2026-08）**：`app/services/privilege_inherit.py` + `master._sub_agent_executor_node` 在 execute 前比较 source/target 的 `permission_level` 与 `autonomy_tier`。LLM 派发默认 medium/L2 封顶；`user_explicit` / `user_expert` 为可信上下文。用例：`tests/test_privilege_inherit.py`。
 7. ~~`_sub_agent_executor_node` fan-out 无闸~~ → **已修（INV-23，2026-08）**：`fanout_gate.py` + config（`SUB_AGENT_MAX_CONCURRENT/PLAN_SIZE/PER_AGENT/DEPTH`、`SUB_AGENT_REQUIRE_TARGET`）；semaphore 并发；拒绝无目标与超深度。用例：`tests/test_fanout_gate.py`。
-8. ~~安全路径 best-effort 静默~~ → **部分已修（INV-25，2026-08）**：`log_audit` flush **await** 且失败 re-raise；kill switch **fail-closed**；master 注册表加载失败打 warning。
+8. ~~安全路径 best-effort 静默~~ → **已加深（INV-25，2026-08）**：audit await/fail；kill switch fail-closed + 文件轮询 error 日志；agent/MCP **凭据解密失败打 error 并可见**；local_executor skill **仅 catalog**；MCP start/stop 失败 warning。
 
 9. ~~**token 估算中文低估**~~ → **已修（M0a-2）**：`agent_core.tokens` CJK 加权。
 

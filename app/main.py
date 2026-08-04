@@ -119,8 +119,12 @@ async def lifespan(app: FastAPI):
                     if not await _ks.is_halted():
                         await _ks.engage("global", by="file-trigger",
                                          reason=settings.KILL_SWITCH_FILE)
-            except Exception:
-                pass
+                        logger.warning(
+                            "kill switch engaged from file trigger: %s",
+                            settings.KILL_SWITCH_FILE,
+                        )
+            except Exception as e:  # noqa: BLE001 — INV-25: never silent
+                logger.error("kill switch file poller error: %s", e)
             await _aio.sleep(1)
 
     _ks_task = _aio.create_task(_killswitch_file_poller())

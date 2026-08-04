@@ -1,6 +1,7 @@
 """Sub-Agent HTTP executor wrapper."""
 import httpx
 import json
+import logging
 import re
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
@@ -11,6 +12,8 @@ from app.core.security import decrypt_data
 from app.core.rbac import Permission
 from app.services.internal_agent import InternalAgentRunner
 
+logger = logging.getLogger(__name__)
+
 
 def _resolve_api_key(config: Dict[str, Any]) -> str:
     """Extract the API key for an agent, trying multiple storage locations.
@@ -19,7 +22,11 @@ def _resolve_api_key(config: Dict[str, Any]) -> str:
       1. env_vars_encrypted JSON field with key "OPENCLAW_API_KEY"
       2. metadata_json.api_key_encrypted  (AES-256 encrypted)
       3. metadata_json.api_key            (plain, legacy / dev)
+
+    Decrypt failures are logged (INV-25) — never silently treated as "no key"
+    when ciphertext was present (that would look like a missing credential).
     """
+    agent_label = config.get("agent_name") or config.get("id") or "?"
     # 1. env_vars_encrypted
     env_enc = config.get("env_vars_encrypted")
     if env_enc:
@@ -28,8 +35,12 @@ def _resolve_api_key(config: Dict[str, Any]) -> str:
             key = env_vars.get("OPENCLAW_API_KEY", "")
             if key:
                 return key
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            logger.error(
+                "agent %s: failed to decrypt env_vars_encrypted for API key: %s",
+                agent_label,
+                e,
+            )
 
     # 2. metadata_json.api_key_encrypted
     meta = config.get("metadata_json") or {}
@@ -37,8 +48,12 @@ def _resolve_api_key(config: Dict[str, Any]) -> str:
     if enc:
         try:
             return decrypt_data(enc)
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            logger.error(
+                "agent %s: failed to decrypt metadata api_key_encrypted: %s",
+                agent_label,
+                e,
+            )
 
     # 3. metadata_json.api_key (plain)
     return meta.get("api_key", "")
@@ -66,8 +81,14 @@ class SubAgentWrapper:
         if self.env_vars_encrypted:
             try:
                 self.env_vars = json.loads(decrypt_data(self.env_vars_encrypted))
-            except Exception:
-                pass
+            except Exception as e:  # noqa: BLE001
+                logger.error(
+                    "agent %s: env_vars_encrypted decrypt failed — "
+                    "remote calls may lack credentials: %s",
+                    self.agent_name,
+                    e,
+                )
+                self.env_vars = {}
 
         self.timeout = settings.SUB_AGENT_TIMEOUT
         self.max_retries = settings.SUB_AGENT_MAX_RETRIES

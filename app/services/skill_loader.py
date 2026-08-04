@@ -139,17 +139,46 @@ class SkillLoader:
             return await _run(session)
 
     @staticmethod
+    async def load_catalog_for_agent_type(
+        agent_type: str, session: Optional[AsyncSession] = None
+    ) -> List[Dict[str, Any]]:
+        """Active skills in a category as catalog rows (no full md_content)."""
+        from app.models.skill import Skill
+
+        async def _run(s: AsyncSession) -> List[Dict[str, Any]]:
+            result = await s.execute(
+                select(Skill).where(
+                    Skill.category == agent_type,
+                    Skill.is_active.is_(True),
+                )
+            )
+            return [
+                {
+                    "id": r.id,
+                    "name": r.name,
+                    "description": r.description,
+                    "version": r.version,
+                    "category": r.category,
+                }
+                for r in result.scalars().all()
+            ]
+
+        if session is not None:
+            return await _run(session)
+        async with get_db_context() as session:
+            return await _run(session)
+
+    @staticmethod
     async def load_skills_for_agent_type(
         agent_type: str, session: Optional[AsyncSession] = None
     ) -> str:
         """
-        Load all active skills matching agent_type and concatenate their md_content.
+        Legacy: full-body concatenation for a category.
 
-        Prefer progressive catalog + load_skill for tool-capable agents.
-        Kept for local_executor (no tool loop) fallback prompts.
+        Prefer ``load_catalog_for_agent_type`` + progressive load for tool agents.
+        local_executor uses catalog-only path and does **not** call this for
+        system prompts anymore.
         """
-        from app.models.skill import Skill
-
         if session is not None:
             return await SkillLoader._load_from_session(session, agent_type)
 
