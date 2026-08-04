@@ -53,49 +53,77 @@ const emptyMcp = (): McpServerPublic & { secret?: string } => ({
   secret: "",
 });
 
-const HUB_TILES: {
-  id: Exclude<SettingsSection, "hub">;
-  title: string;
-  desc: string;
-  badge?: string;
+const HUB_GROUPS: {
+  label: string;
+  items: {
+    id: Exclude<SettingsSection, "hub">;
+    title: string;
+    desc: string;
+    badge: string;
+    /** Optional glyph inside the leading mark */
+    mark: string;
+  }[];
 }[] = [
   {
-    id: "llm",
-    title: "语言模型",
-    desc: "云厂商 / 本地 Ollama · LM Studio · vLLM",
-    badge: "LLM",
+    label: "核心",
+    items: [
+      {
+        id: "llm",
+        title: "语言模型",
+        desc: "云厂商 / 本地 Ollama · LM Studio · vLLM",
+        badge: "LLM",
+        mark: "AI",
+      },
+      {
+        id: "mcp",
+        title: "数据源 MCP",
+        desc: "告警 JSON/CSV、stdio 连接器",
+        badge: "MCP",
+        mark: "MC",
+      },
+    ],
   },
   {
-    id: "mcp",
-    title: "数据源 MCP",
-    desc: "告警 JSON/CSV、stdio 连接器",
-    badge: "MCP",
+    label: "工作流",
+    items: [
+      {
+        id: "skills",
+        title: "技能 SOP",
+        desc: "内置分诊 / CVE / 取证 等 catalog",
+        badge: "Skills",
+        mark: "SK",
+      },
+    ],
   },
   {
-    id: "skills",
-    title: "技能 SOP",
-    desc: "内置分诊 / CVE / 取证 等 catalog",
-    badge: "Skills",
-  },
-  {
-    id: "appearance",
-    title: "外观",
-    desc: "主题与字号",
-    badge: "UI",
-  },
-  {
-    id: "data",
-    title: "数据与安全",
-    desc: "加密导出 · 卸载",
-    badge: "Data",
-  },
-  {
-    id: "about",
-    title: "关于",
-    desc: "版本与开发版声明",
-    badge: "Info",
+    label: "偏好",
+    items: [
+      {
+        id: "appearance",
+        title: "外观",
+        desc: "主题与字号",
+        badge: "UI",
+        mark: "Aa",
+      },
+      {
+        id: "data",
+        title: "数据与安全",
+        desc: "加密导出 · 卸载",
+        badge: "Data",
+        mark: "DB",
+      },
+      {
+        id: "about",
+        title: "关于",
+        desc: "版本与开发版声明",
+        badge: "Info",
+        mark: "i",
+      },
+    ],
   },
 ];
+
+const HUB_ITEMS = HUB_GROUPS.flatMap((g) => g.items);
 
 export function SettingsView({
   theme,
@@ -460,14 +488,31 @@ export function SettingsView({
     }
   };
 
+  const hubStatus = (id: Exclude<SettingsSection, "hub">): string | null => {
+    if (id === "llm") return providerMode || "—";
+    if (id === "mcp") {
+      const n = servers.length;
+      return n ? `${n} 台` : "未配置";
+    }
+    if (id === "skills") {
+      const n = skills.length;
+      return n ? `${n}` : null;
+    }
+    if (id === "appearance") {
+      return `${theme} · ${fontSize}`;
+    }
+    return null;
+  };
+
   const header =
     section === "hub" ? (
-      <>
+      <div className="settings-hub-header">
         <h1>设置</h1>
         <p className="lede">
-          选择一项进行配置。当前 LLM：<strong>{providerMode}</strong>
+          选择一项进入配置。当前 LLM：
+          <strong className="settings-hub-mode">{providerMode}</strong>
         </p>
-      </>
+      </div>
     ) : (
       <div className="settings-detail-head">
         <button
@@ -478,7 +523,7 @@ export function SettingsView({
           ← 全部设置
         </button>
         <h1>
-          {HUB_TILES.find((t) => t.id === section)?.title || "设置"}
+          {HUB_ITEMS.find((t) => t.id === section)?.title || "设置"}
         </h1>
       </div>
     );
@@ -489,17 +534,51 @@ export function SettingsView({
 
       {section === "hub" && (
         <div className="settings-hub">
-          {HUB_TILES.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className="settings-tile"
-              onClick={() => setSection(t.id)}
-            >
-              <span className="settings-tile-badge">{t.badge}</span>
-              <span className="settings-tile-title">{t.title}</span>
-              <span className="settings-tile-desc">{t.desc}</span>
-            </button>
+          {HUB_GROUPS.map((group) => (
+            <section key={group.label} className="settings-hub-group">
+              <h2 className="settings-hub-group-label">{group.label}</h2>
+              <div className="settings-hub-list" role="list">
+                {group.items.map((t) => {
+                  const status = hubStatus(t.id);
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className="settings-row"
+                      role="listitem"
+                      onClick={() => setSection(t.id)}
+                    >
+                      <span className="settings-row-mark" aria-hidden>
+                        {t.mark}
+                      </span>
+                      <span className="settings-row-body">
+                        <span className="settings-row-title-line">
+                          <span className="settings-row-title">{t.title}</span>
+                          <span className="settings-row-badge">{t.badge}</span>
+                        </span>
+                        <span className="settings-row-desc">{t.desc}</span>
+                      </span>
+                      {status ? (
+                        <span
+                          className={`settings-row-status${
+                            t.id === "llm" && providerMode === "live"
+                              ? " is-live"
+                              : t.id === "llm" && providerMode === "mock"
+                                ? " is-mock"
+                                : ""
+                          }`}
+                        >
+                          {status}
+                        </span>
+                      ) : null}
+                      <span className="settings-row-chevron" aria-hidden>
+                        ›
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
           ))}
         </div>
       )}
