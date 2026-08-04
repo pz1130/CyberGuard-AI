@@ -18,11 +18,19 @@ macOS-first **single-operator agent app**: Electron shell + Python sidecar over 
 ```
 apps/desktop/
   electron/          Main process + preload (contextIsolation)
-  renderer/          React + Vite single workbench
+  renderer/          React + Vite UI
+    App.tsx          Shell (chrome / banner / status / view switch)
+    hooks/           useTheme, useDesktopRuntime
+    components/      EventCard, PlanPanel, SessionList, StatusBar, …
+    views/           WorkbenchView · EvidenceView · SettingsView
+    styles/          tokens (dark default) + base + motion + views
   sidecar/           Python JSONL RPC host
   package.json
   README.md
 ```
+
+**Theme:** default `dark`; chrome toggle cycles dark → light → system (`localStorage` key `cg.theme`).  
+**P0 UI:** three-column Workbench + placeholders for Evidence/Settings (full Settings GUI = P1).
 
 ## Prerequisites
 

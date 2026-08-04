@@ -239,21 +239,21 @@ git commit -m "feat(desktop-ui): app shell navigation and status bar (P0)"
 - Consumes: all existing run/session/plan handlers (pass as props or hooks)
 - Produces: three-column layout per spec §3.2
 
-- [ ] **Step 1: Move EventCard + PlanPanel + session list logic out of App.tsx without changing event handling**
+- [x] **Step 1: Move EventCard + PlanPanel + session list logic out of App.tsx without changing event handling**
 
-- [ ] **Step 2: Layout CSS for `.workbench { display:grid; grid-template-columns: 240px 1fr 280px; }`**
+- [x] **Step 2: Layout CSS for `.workbench { display:grid; grid-template-columns: 240px 1fr 280px; }`**
 
 Glass panels: `background: var(--surface); backdrop-filter: blur(12px); border: 1px solid var(--border); border-radius: var(--radius-lg);`
 
-- [ ] **Step 3: Wire Run/Abort/Steer/tier exactly as before**
+- [x] **Step 3: Wire Run/Abort/Steer/tier exactly as before**
 
 Regression: same RPC methods, same event types.
 
-- [ ] **Step 4: EmptyState component**
+- [x] **Step 4: EmptyState component**
 
 Three CTAs: open Settings LLM, open Settings MCP, sample task text fill.
 
-- [ ] **Step 5: Manual golden path smoke + desktop tests**
+- [x] **Step 5: Manual golden path smoke + desktop tests**
 
 ```bash
 cd cyberguard
@@ -264,7 +264,7 @@ cd apps/desktop && npm run typecheck
 
 Expected: pytest pass; UI can run a task with existing provider.json.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Commit** (await user)
 
 ```bash
 git commit -m "feat(desktop-ui): migrate workbench to three-column view (P0)"
@@ -276,18 +276,18 @@ git commit -m "feat(desktop-ui): migrate workbench to three-column view (P0)"
 
 **Files:** docs optional note in `apps/desktop/README.md` on theme + structure
 
-- [ ] **Step 1: Delete dead CSS from old `styles.css` if fully superseded**
+- [x] **Step 1: Delete dead CSS from old `styles.css` if fully superseded** (tokens + theme-aware surfaces; legacy component styles kept)
 
-- [ ] **Step 2: Checklist**
+- [x] **Step 2: Checklist**
 
-- [ ] Dark default  
-- [ ] Theme toggle works  
-- [ ] Workbench three columns  
-- [ ] Plan approve/reject still works  
-- [ ] Status bar shows sandbox/tcc/llm  
-- [ ] Development banner visible  
+- [x] Dark default  
+- [x] Theme toggle works  
+- [x] Workbench three columns  
+- [x] Plan approve/reject still works (PlanPanel + runtime handlers unchanged)  
+- [x] Status bar shows sandbox/tcc/llm  
+- [x] Development banner visible  
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Commit** (await user)
 
 ```bash
 git commit -m "docs(desktop-ui): P0 complete — shell and workbench visual migration"
