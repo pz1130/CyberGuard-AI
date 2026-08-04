@@ -147,6 +147,7 @@ class MasterAgent:
                 "agent_id": aid,
                 "task": user_input,
                 "requires_approval": False,
+                "dispatch_source": "user_explicit",  # INV-21: user chose the agent
             }]
             await log_audit(
                 user_id=user_id,
@@ -201,6 +202,7 @@ class MasterAgent:
                         "agent_name": a["agent_name"],
                         "task": user_input,
                         "requires_approval": False,
+                        "dispatch_source": "user_expert",  # INV-21: user chose fan-out
                     }
                     for a in active
                 ]
@@ -237,7 +239,14 @@ class MasterAgent:
                     model_override=state.get("model_override"),
                 )
                 state["intent"] = parsed.get("intent")
-                state["task_plan"] = parsed.get("task_plan", [])
+                raw_plan = parsed.get("task_plan", []) or []
+                # INV-21: mark LLM-chosen targets so run_task applies the medium/L2 cap
+                state["task_plan"] = [
+                    {**t, "dispatch_source": t.get("dispatch_source") or "llm"}
+                    if isinstance(t, dict)
+                    else t
+                    for t in raw_plan
+                ]
             except Exception as e:
                 state["error_message"] = f"Intent parsing failed: {e}"
                 return state
@@ -293,6 +302,7 @@ class MasterAgent:
 
         remote_agents: Dict[str, Dict] = {}
         remote_agents_by_name: Dict[str, Dict] = {}
+        agents_by_id: Dict[int, Dict] = {}
         try:
             async with get_db_context() as session:
                 result = await session.execute(select(AgentConfig).where(AgentConfig.is_active.is_(True)))
@@ -303,12 +313,22 @@ class MasterAgent:
                         "agent_name": agent_obj.agent_name,
                         "backend_type": backend,
                         "endpoint_url": agent_obj.endpoint_url,
+                        "permission_level": getattr(agent_obj, "permission_level", "medium") or "medium",
+                        "autonomy_tier": getattr(agent_obj, "autonomy_tier", "L2") or "L2",
                     }
+                    agents_by_id[int(agent_obj.id)] = agent_dict
                     if backend not in remote_agents:
                         remote_agents[backend] = agent_dict
                     remote_agents_by_name[agent_obj.agent_name] = agent_dict
         except Exception:
             pass  # No DB agents — will use local executor for all tasks
+
+        from app.services.privilege_inherit import (
+            check_dispatch,
+            context_for_dispatch_source,
+            snapshot_from_mapping,
+            unbound_target_snapshot,
+        )
 
         # Build execution coroutines
         async def run_task(task: Dict[str, Any]) -> tuple[str, Dict[str, Any]]:
@@ -316,6 +336,7 @@ class MasterAgent:
             task_desc = task.get("task", "")
             agent_id = task.get("agent_id")  # explicit ID override
             agent_name = task.get("agent_name")  # explicit name override
+            dispatch_source = task.get("dispatch_source") or "llm"
 
             # Kill switch — do not dispatch new work while halted (NDB Std §Kill Switch).
             from app.services.kill_switch import is_halted
@@ -328,13 +349,73 @@ class MasterAgent:
                 return str(agent_id or agent_type), {"status": "halted",
                                                      "error": "kill switch engaged — dispatch refused"}
 
+            # Resolve target agent config (for privilege + routing)
+            target_cfg: Optional[Dict[str, Any]] = None
+            if agent_id is not None:
+                try:
+                    aid_int = int(agent_id)
+                    target_cfg = agents_by_id.get(aid_int)
+                    # Not in the active map (or DB load failed earlier) — load by id
+                    # so we still know target privilege before execute (INV-21).
+                    if target_cfg is None:
+                        loaded = await self.executor._load_config_dict(aid_int)
+                        if loaded:
+                            target_cfg = loaded
+                            agents_by_id[aid_int] = loaded
+                except (TypeError, ValueError):
+                    target_cfg = None
+            if target_cfg is None and agent_name and agent_name in remote_agents_by_name:
+                target_cfg = remote_agents_by_name[agent_name]
+            if target_cfg is None and agent_type in remote_agents:
+                target_cfg = remote_agents[agent_type]
+
+            # INV-21 · privilege inheritance (before any execute)
+            source_priv = context_for_dispatch_source(dispatch_source)
+            target_priv = (
+                snapshot_from_mapping(target_cfg)
+                if target_cfg is not None
+                else unbound_target_snapshot()
+            )
+            allowed, deny_reason = check_dispatch(source_priv, target_priv)
+            if not allowed:
+                from app.core.audit import record_action
+                await record_action(
+                    user_id=user_id,
+                    agent_id=agent_id or (target_cfg or {}).get("id"),
+                    agent_name=agent_name or (target_cfg or {}).get("agent_name") or agent_type,
+                    action="dispatch:denied_privilege",
+                    action_category="annotate",
+                    input_data={
+                        "task": task_desc[:500],
+                        "agent_type": agent_type,
+                        "dispatch_source": dispatch_source,
+                        "source_permission": source_priv.permission_level,
+                        "source_autonomy": source_priv.autonomy_tier,
+                        "target_permission": target_priv.permission_level,
+                        "target_autonomy": target_priv.autonomy_tier,
+                    },
+                    output_data={"dispatched": False, "reason": deny_reason, "inv": "INV-21"},
+                )
+                key = str(agent_id or agent_name or agent_type)
+                return key, {
+                    "status": "denied",
+                    "output": None,
+                    "error": f"INV-21 privilege inheritance refused: {deny_reason}",
+                    "agent_id": agent_id or (target_cfg or {}).get("id"),
+                }
+
             # Audit the dispatch decision (NDB Std §Audit Trail).
             from app.core.audit import record_action
             await record_action(
                 user_id=user_id, agent_id=agent_id, agent_name=agent_name or agent_type,
                 action="dispatch", action_category="annotate",
-                input_data={"task": task_desc[:500], "agent_type": agent_type},
-                output_data={"dispatched": True})
+                input_data={
+                    "task": task_desc[:500],
+                    "agent_type": agent_type,
+                    "dispatch_source": dispatch_source,
+                },
+                output_data={"dispatched": True, "privilege_check": "ok"},
+            )
 
             # Try remote if registered AND has endpoint URL
             if agent_id:
@@ -392,9 +473,15 @@ class MasterAgent:
 
         results: Dict[str, Any] = {}
         for i, r in enumerate(results_list):
-            agent_type = task_plan[i].get("agent_type", "general")
+            task_i = task_plan[i]
+            agent_type = task_i.get("agent_type", "general")
             if isinstance(r, Exception):
-                results[agent_type] = {
+                key = str(
+                    task_i.get("agent_id")
+                    or task_i.get("agent_name")
+                    or agent_type
+                )
+                results[key] = {
                     "status": "failed",
                     "output": None,
                     "error": str(r),
@@ -407,9 +494,9 @@ class MasterAgent:
             # Log audit per task
             await log_audit(
                 user_id=user_id,
-                agent_id=str(results[key].get("agent_id", "")),
+                agent_id=str(results[key].get("agent_id", "") or key),
                 action="sub_agent_execute",
-                input_data={"task": task_plan[i].get("task")},
+                input_data={"task": task_i.get("task")},
                 output_data=results[key],
                 request_id=request_id,
             )

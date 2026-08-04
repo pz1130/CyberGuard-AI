@@ -314,7 +314,7 @@ Windows / Linux 平台支持。这是**已知并主动接受的推迟**，不是
 3. Skills 全文注入 system prompt，未做按需加载
 4. `agent_episodes` 只增不减，且 `_maybe_record_episode` 硬编码 `success=True`，失败经验一条不存
 5. `master.py` 两处**用户可控输入直接驱动控制流**且绕过 guardrail：`_parse_intent_node` 关键词触发 group chat、`_validation_node` 关键词判定高风险
-6. **跨 agent 派发缺少权限继承校验（提权路径，优先级最高）**——`_parse_intent_node` 由 LLM 的 `parse_intent` 输出直接携带 `agent_id`，`run_task` 拿它就 `executor.execute()`，中间没有"请求方权限 ≥ 目标 agent 权限"的比较。而各 `AgentConfig` 的 `permission_level` / `autonomy_tier` / `governed` 是不同的，一段被注入的内容若能把意图解析引导到高权限 agent 上即完成提权。同类问题参见 OpenClaw 的沙箱逃逸公告 GHSA-p7gr-f84w-hqg5。修复方向见 INV-21。
+6. ~~**跨 agent 派发缺少权限继承校验（提权路径）**~~ → **已修（INV-21，2026-08）**：`app/services/privilege_inherit.py` + `master._sub_agent_executor_node` 在 execute 前比较 source/target 的 `permission_level` 与 `autonomy_tier`。LLM 派发默认 medium/L2 封顶；`user_explicit` / `user_expert` 为可信上下文。用例：`tests/test_privilege_inherit.py`。
 7. `_sub_agent_executor_node` 的 `asyncio.gather` fan-out **无并发上限、无嵌套深度限制、允许不指定目标的派发**。见 INV-23。
 8. 安全边界与功能路径共用同一套 best-effort 异常处理模式。功能性降级（经验召回、搜索、OCR 失败）静默 no-op 是好设计，但该模式不可蔓延到沙箱初始化、策略加载、审计写入等安全路径。见 INV-25。
 
