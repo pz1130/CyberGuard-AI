@@ -13,6 +13,10 @@ contextBridge.exposeInMainWorld("cyberguard", {
     ipcRenderer.invoke("sidecar:sessions:create", { title, tier }),
   sessionEvents: (sessionId) =>
     ipcRenderer.invoke("sidecar:sessions:events", sessionId),
+  deleteSession: (sessionId) =>
+    ipcRenderer.invoke("sidecar:sessions:delete", { sessionId }),
+  skillsList: () => ipcRenderer.invoke("sidecar:skills:list"),
+  resume: (runId) => ipcRenderer.invoke("sidecar:resume", { runId }),
   planApprove: (planId, revisedPlan) =>
     ipcRenderer.invoke("sidecar:plan:approve", { planId, revisedPlan }),
   planReject: (planId, reason) =>

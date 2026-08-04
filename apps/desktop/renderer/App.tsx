@@ -137,20 +137,39 @@ export function App() {
         evidenceHint={rt.evidenceHint}
       />
 
+      {rt.providerMode === "mock" && (
+        <div className="banner banner-warn">
+          <strong>LLM is mock</strong> — live key missing or not loaded. Open{" "}
+          <button
+            type="button"
+            className="linkish"
+            onClick={() => openSettings("llm")}
+          >
+            Settings → LLM
+          </button>
+          , paste API key, Save, then Test. (Keys stay in secrets store, never
+          re-shown.)
+        </div>
+      )}
+
       {activeView === "workbench" && (
         <WorkbenchView
           sessions={rt.sessions}
           sessionId={rt.sessionId}
           onSelectSession={(id) => void rt.onSelectSession(id)}
           onNewInvestigation={rt.onNewInvestigation}
+          onDeleteSession={(id) => void rt.onDeleteSession(id)}
           events={rt.events}
           lastSubmitted={rt.lastSubmitted}
           task={rt.task}
           onTaskChange={rt.setTask}
           onRun={() => void rt.onRun()}
           onAbort={() => void rt.onAbort()}
+          onResume={() => void rt.onResume()}
           running={rt.running}
           runId={rt.runId}
+          pausedRunId={rt.pausedRunId}
+          runStatus={rt.runStatus}
           tier={rt.tier}
           onTierChange={rt.setTier}
           steerText={rt.steerText}
@@ -160,6 +179,7 @@ export function App() {
           dataRoot={rt.dataRoot}
           mcpTools={rt.mcpTools}
           hasApi={Boolean(rt.api)}
+          providerMode={rt.providerMode}
           onOpenSettingsLlm={() => openSettings("llm")}
           onOpenSettingsMcp={() => openSettings("mcp")}
           showDataPanel={rt.showDataPanel}
@@ -197,7 +217,10 @@ export function App() {
           onSetTheme={setTheme}
           onSetFontSize={setFontSize}
           focusSection={settingsSection}
-          onProviderSaved={(mode) => rt.setProviderMode(mode)}
+          onProviderSaved={(mode) => {
+            rt.setProviderMode(mode);
+            void rt.refreshProviderStatus();
+          }}
           showDataPanel={rt.showDataPanel}
           onToggleDataPanel={() => rt.setShowDataPanel((v) => !v)}
           exportPass={rt.exportPass}

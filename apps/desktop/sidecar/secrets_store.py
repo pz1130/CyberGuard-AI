@@ -41,6 +41,13 @@ def _backend() -> str:
     b = (os.environ.get("CYBERGUARD_SECRETS_BACKEND") or "auto").strip().lower()
     if b in ("file", "keychain"):
         return b
+    # auto: if secrets.json already has data (e.g. headless migrate / tests),
+    # keep using file so Electron does not look at empty Keychain and drop keys.
+    try:
+        if _file_path().is_file() and _file_load():
+            return "file"
+    except Exception:  # noqa: BLE001
+        pass
     return "keychain" if platform.system() == "Darwin" else "file"
 
 

@@ -56,8 +56,13 @@ export function useDesktopRuntime() {
       .then((r: Record<string, unknown>) => {
         setPingOk(true);
         if (typeof r?.data_root === "string") setDataRoot(r.data_root);
-        const prov = r?.provider as { mode?: string } | undefined;
+        const prov = r?.provider as { mode?: string; has_api_key?: boolean } | undefined;
         if (prov?.mode) setProviderMode(prov.mode);
+        // Reconcile with provider.get (effective live/mock after secrets load)
+        void api.providerGet?.().then((p) => {
+          const eff = p?.effective?.mode || p?.mode;
+          if (eff) setProviderMode(String(eff));
+        });
         const sb = r?.sandbox as
           | { sandbox_impl?: string; warning?: string | null }
           | undefined;
@@ -231,17 +236,67 @@ export function useDesktopRuntime() {
     setTask("");
   }, []);
 
+  const onDeleteSession = useCallback(
+    async (sid: string) => {
+      if (!api?.deleteSession) return;
+      try {
+        await api.deleteSession(sid);
+        if (sessionId === sid) {
+          setSessionId(null);
+          setEvents([]);
+          setLastSubmitted(null);
+        }
+        refreshSessions();
+      } catch (e) {
+        setEvents((prev) => [
+          ...prev,
+          { type: "error", error: `delete session failed: ${e}` },
+        ]);
+      }
+    },
+    [api, sessionId, refreshSessions]
+  );
+
   const onAbort = useCallback(async () => {
     if (!api || !runId) return;
     await api.abort(runId);
     setPendingPlan(null);
   }, [api, runId]);
 
+  const onResume = useCallback(async () => {
+    const rid = pausedRunId || runId;
+    if (!api?.resume || !rid) return;
+    setRunning(true);
+    try {
+      await api.resume(rid);
+      setRunStatus("running");
+      setPausedRunId(null);
+    } catch (e) {
+      setEvents((prev) => [
+        ...prev,
+        { type: "error", error: `resume failed: ${e}` },
+      ]);
+    } finally {
+      setRunning(false);
+    }
+  }, [api, pausedRunId, runId]);
+
   const onSteer = useCallback(async () => {
     if (!api || !runId || !steerText.trim()) return;
     await api.steer(runId, steerText.trim());
     setSteerText("");
   }, [api, runId, steerText]);
+
+  const refreshProviderStatus = useCallback(async () => {
+    if (!api?.providerGet) return;
+    try {
+      const p = await api.providerGet();
+      const eff = p.effective?.mode || p.mode;
+      setProviderMode(String(eff || p.mode || "mock"));
+    } catch {
+      /* ignore */
+    }
+  }, [api]);
 
   const onPlanApprove = useCallback(async () => {
     if (!api?.planApprove || !pendingPlan) return;
@@ -426,7 +481,9 @@ export function useDesktopRuntime() {
     onRun,
     onSelectSession,
     onNewInvestigation,
+    onDeleteSession,
     onAbort,
+    onResume,
     onSteer,
     onPlanApprove,
     onPlanReject,
@@ -434,5 +491,7 @@ export function useDesktopRuntime() {
     onUninstallInventory,
     onUninstallDryRun,
     onUninstallExecute,
+    refreshProviderStatus,
+    refreshSessions,
   };
 }

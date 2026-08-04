@@ -10,14 +10,18 @@ type Props = {
   sessionId: string | null;
   onSelectSession: (id: string) => void;
   onNewInvestigation: () => void;
+  onDeleteSession?: (id: string) => void;
   events: Ev[];
   lastSubmitted: string | null;
   task: string;
   onTaskChange: (v: string) => void;
   onRun: () => void;
   onAbort: () => void;
+  onResume?: () => void;
   running: boolean;
   runId: string | null;
+  pausedRunId: string | null;
+  runStatus: string;
   tier: Tier;
   onTierChange: (t: Tier) => void;
   steerText: string;
@@ -27,6 +31,7 @@ type Props = {
   dataRoot: string;
   mcpTools: string[];
   hasApi: boolean;
+  providerMode: string;
   onOpenSettingsLlm: () => void;
   onOpenSettingsMcp: () => void;
   // data panel
@@ -59,11 +64,28 @@ export function WorkbenchView(props: Props) {
         sessionId={props.sessionId}
         onSelect={props.onSelectSession}
         onNew={props.onNewInvestigation}
+        onDelete={props.onDeleteSession}
       />
 
       <div className="col">
         <h2>Execution</h2>
         <div className="col-body">
+          {(props.runStatus === "已暂停" || props.runStatus === "paused") && (
+            <div className="submitted-banner pause-banner">
+              运行已暂停
+              {props.pausedRunId ? ` · ${props.pausedRunId.slice(0, 8)}…` : ""}
+              {props.onResume ? (
+                <button
+                  type="button"
+                  className="primary"
+                  style={{ marginLeft: 10 }}
+                  onClick={() => void props.onResume?.()}
+                >
+                  Resume
+                </button>
+              ) : null}
+            </div>
+          )}
           {props.lastSubmitted && (
             <div className="submitted-banner">
               本次提交：<strong>{props.lastSubmitted}</strong>
@@ -103,7 +125,7 @@ export function WorkbenchView(props: Props) {
               disabled={props.running}
             >
               <option value="readonly">readonly（无本机 Exec）</option>
-              <option value="full">full（本机工具仍 mock）</option>
+              <option value="full">full</option>
             </select>
             <button
               className="primary"
@@ -121,6 +143,19 @@ export function WorkbenchView(props: Props) {
             >
               Abort
             </button>
+            {props.onResume &&
+            (props.pausedRunId ||
+              props.runStatus === "已暂停" ||
+              props.runStatus === "paused") ? (
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => void props.onResume?.()}
+                disabled={props.running}
+              >
+                Resume
+              </button>
+            ) : null}
           </div>
           <div className="hint">
             Run 始终使用<strong>上方输入框当前文字</strong>
@@ -151,33 +186,56 @@ export function WorkbenchView(props: Props) {
       <div className="col">
         <h2>Context</h2>
         <div className="col-body">
-          <div className="kv">
-            <span>has_read</span>
-            <span>{String(props.caps?.has_read ?? "—")}</span>
-            <span>real_read</span>
-            <span>{String(props.caps?.real_read ?? "—")}</span>
-            <span>real_edit</span>
-            <span>{String(props.caps?.real_edit ?? "—")}</span>
-            <span>real_exec</span>
-            <span>{String(props.caps?.real_exec ?? "—")}</span>
-            <span>has_exec</span>
-            <span>{String(props.caps?.has_exec ?? "—")}</span>
-            <span>has_edit</span>
-            <span>{String(props.caps?.has_edit ?? "—")}</span>
-            <span>run_id</span>
-            <span className="mono-sm">{props.runId ?? "—"}</span>
-            <span>session_id</span>
-            <span className="mono-sm">{props.sessionId ?? "—"}</span>
-            <span>data_root</span>
-            <span className="mono-xs">{props.dataRoot || "—"}</span>
+          <div className="context-section">
+            <div className="context-h">Auth / capabilities</div>
+            <div className="kv">
+              <span>llm</span>
+              <span>
+                <span
+                  className={`pill ${props.providerMode === "live" ? "ok" : "warn"}`}
+                >
+                  {props.providerMode}
+                </span>
+              </span>
+              <span>tier</span>
+              <span>{props.tier}</span>
+              <span>read</span>
+              <span>
+                {props.caps?.has_read ? "yes" : "no"}
+                {props.caps?.real_read ? " · real" : " · mock"}
+              </span>
+              <span>exec / edit</span>
+              <span>
+                {props.caps?.has_exec ? "exec" : "no-exec"} ·{" "}
+                {props.caps?.has_edit ? "edit" : "no-edit"}
+              </span>
+              <span>sandbox</span>
+              <span className="mono-sm">
+                {props.caps?.sandbox_impl || "—"}/
+                {props.caps?.policy?.sandbox_mode || "—"}
+              </span>
+            </div>
           </div>
-          <p className="muted-copy mt-16">
-            Readonly 档不暴露本机 Exec。MCP 来自{" "}
-            <code>mcp_servers.json</code>。
-          </p>
+
+          <div className="context-section mt-12">
+            <div className="context-h">Run</div>
+            <div className="kv">
+              <span>status</span>
+              <span>{props.runStatus}</span>
+              <span>run_id</span>
+              <span className="mono-sm">{props.runId ?? "—"}</span>
+              <span>session</span>
+              <span className="mono-sm">
+                {props.sessionId
+                  ? `${props.sessionId.slice(0, 12)}…`
+                  : "—"}
+              </span>
+            </div>
+          </div>
+
           {props.mcpTools.length > 0 && (
-            <div className="mcp-tools-block">
-              <div className="muted-copy mb-6">MCP tools（上次运行）</div>
+            <div className="context-section mt-12">
+              <div className="context-h">MCP tools（本轮）</div>
               <ul className="mcp-tools-list">
                 {props.mcpTools.map((n) => (
                   <li key={n} className="mono-sm">
@@ -187,6 +245,11 @@ export function WorkbenchView(props: Props) {
               </ul>
             </div>
           )}
+
+          <p className="muted-copy mt-12">
+            data_root:{" "}
+            <code className="mono-xs">{props.dataRoot || "—"}</code>
+          </p>
 
           <DataPanel
             open={props.showDataPanel}

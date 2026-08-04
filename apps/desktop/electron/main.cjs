@@ -357,6 +357,13 @@ ipcMain.handle("sidecar:sessions:create", async (_e, { title, tier }) =>
 ipcMain.handle("sidecar:sessions:events", async (_e, sessionId) =>
   rpc("sessions.events", { session_id: sessionId })
 );
+ipcMain.handle("sidecar:sessions:delete", async (_e, { sessionId } = {}) =>
+  rpc("sessions.delete", { session_id: sessionId, crypto_shred: true })
+);
+ipcMain.handle("sidecar:skills:list", async () => rpc("skills.list", {}));
+ipcMain.handle("sidecar:resume", async (_e, { runId } = {}) =>
+  rpc("agent.resume", { run_id: runId })
+);
 ipcMain.handle("sidecar:plan:approve", async (_e, { planId, revisedPlan }) =>
   rpc("plan.approve", {
     plan_id: planId,

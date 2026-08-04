@@ -43,6 +43,21 @@ def test_provider_secret_roundtrip(secrets_env):
     assert get_provider_api_key() is None
 
 
+def test_auto_backend_prefers_existing_secrets_file(tmp_path, monkeypatch):
+    """Electron auto-backend must not ignore secrets.json written by headless migrate."""
+    monkeypatch.setenv("CYBERGUARD_DATA_DIR", str(tmp_path / "cg"))
+    monkeypatch.delenv("CYBERGUARD_SECRETS_BACKEND", raising=False)
+    from apps.desktop.sidecar import secrets_store as ss
+
+    # force re-read with auto
+    monkeypatch.setenv("CYBERGUARD_SECRETS_BACKEND", "file")
+    set_provider_api_key("sk-from-file")
+    monkeypatch.delenv("CYBERGUARD_SECRETS_BACKEND", raising=False)
+    # auto should stick to file because secrets.json is non-empty
+    assert ss._backend() == "file"
+    assert get_provider_api_key() == "sk-from-file"
+
+
 def test_mcp_slots_are_isolated(secrets_env):
     set_mcp_secret("siem-a", "token-a")
     set_mcp_secret("siem-b", "token-b")

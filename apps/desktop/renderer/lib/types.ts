@@ -111,6 +111,18 @@ declare global {
         tier: Tier
       ) => Promise<{ session_id: string; title: string }>;
       sessionEvents: (sessionId: string) => Promise<{ events: Ev[] }>;
+      deleteSession?: (
+        sessionId: string
+      ) => Promise<{ ok?: boolean; deleted?: boolean }>;
+      skillsList?: () => Promise<{
+        skills: Array<{
+          name: string;
+          description: string;
+          version?: string;
+          source?: string;
+        }>;
+      }>;
+      resume?: (runId: string) => Promise<{ ok?: boolean }>;
       planApprove?: (
         planId: string,
         revisedPlan?: string

@@ -365,7 +365,8 @@ html[data-font="large"] {
 
 /* workbench/col layout in styles/views.css */
 
-.session-list button {
+.session-list button,
+.session-list .session-main {
   display: block;
   width: 100%;
   text-align: left;
@@ -378,10 +379,92 @@ html[data-font="large"] {
   cursor: pointer;
 }
 
-.session-list button.active {
+.session-list button.active,
+.session-row.active .session-main {
   border-color: var(--accent);
   background: var(--accent-muted);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.session-row {
+  display: flex;
+  gap: 4px;
+  align-items: stretch;
+  margin-bottom: 8px;
+}
+
+.session-row .session-main {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.session-del {
+  width: 32px !important;
+  min-width: 32px;
+  padding: 0 !important;
+  margin-bottom: 0 !important;
+  color: var(--danger) !important;
+  border-color: var(--border) !important;
+  background: transparent !important;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.session-del:hover {
+  border-color: var(--danger) !important;
+  background: color-mix(in srgb, var(--danger) 12%, transparent) !important;
+}
+
+.context-section {
+  margin-bottom: 4px;
+}
+
+.context-h {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  font-weight: 650;
+  margin-bottom: 8px;
+}
+
+.pause-banner {
+  border-color: color-mix(in srgb, var(--warn) 50%, transparent);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.linkish {
+  background: none;
+  border: none;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+.skill-catalog {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skill-catalog li {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--bg-elevated);
+}
+
+.skill-catalog strong {
+  margin-right: 8px;
 }
 
 .timeline {

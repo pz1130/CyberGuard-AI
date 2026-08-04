@@ -90,6 +90,9 @@ export function SettingsView({
   const [mcpMsg, setMcpMsg] = useState<string | null>(null);
   const [mcpBusy, setMcpBusy] = useState(false);
   const [discoverMsg, setDiscoverMsg] = useState<string | null>(null);
+  const [skills, setSkills] = useState<
+    Array<{ name: string; description: string; version?: string; source?: string }>
+  >([]);
 
   const loadProvider = useCallback(async () => {
     if (!api?.providerGet) return;
@@ -116,10 +119,21 @@ export function SettingsView({
     }
   }, [api]);
 
+  const loadSkills = useCallback(async () => {
+    if (!api?.skillsList) return;
+    try {
+      const r = await api.skillsList();
+      setSkills(r.skills || []);
+    } catch {
+      setSkills([]);
+    }
+  }, [api]);
+
   useEffect(() => {
     void loadProvider();
     void loadMcp();
-  }, [loadProvider, loadMcp]);
+    void loadSkills();
+  }, [loadProvider, loadMcp, loadSkills]);
 
   useEffect(() => {
     if (!focusSection) return;
@@ -153,12 +167,13 @@ export function SettingsView({
       const r = await api.providerSet(payload);
       setHasKey(Boolean(r.has_api_key));
       setApiKey("");
+      const eff = r.effective?.mode || r.mode || mode;
       setLlmMsg(
         r.ok === false
           ? "save failed"
-          : `Saved · mode=${r.mode} · key ${r.has_api_key ? "configured" : "missing"}`
+          : `Saved · mode=${r.mode} · effective=${eff} · key ${r.has_api_key ? "configured" : "missing"}`
       );
-      onProviderSaved?.(r.mode || mode);
+      onProviderSaved?.(String(eff));
     } catch (e) {
       setLlmMsg(String(e));
     } finally {
@@ -573,6 +588,33 @@ export function SettingsView({
             </div>
             {mcpMsg && <pre className="data-msg">{mcpMsg}</pre>}
           </div>
+        </div>
+
+        <div className="settings-card" id="settings-skills">
+          <h3>Skills</h3>
+          <p className="data-hint">
+            Builtin catalog only（name + description）。正文经 agent 工具{" "}
+            <code className="mono">load_skill</code> 按需加载（progressive
+            disclosure）。
+          </p>
+          {skills.length === 0 ? (
+            <p className="muted-copy">No skills listed (sidecar offline?).</p>
+          ) : (
+            <ul className="skill-catalog">
+              {skills.map((s) => (
+                <li key={s.name}>
+                  <strong>{s.name}</strong>
+                  {s.version ? (
+                    <span className="pill">v{s.version}</span>
+                  ) : null}
+                  {s.source ? (
+                    <span className="pill accent">{s.source}</span>
+                  ) : null}
+                  <div className="muted-copy">{s.description}</div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <div className="settings-card" id="settings-appearance">
