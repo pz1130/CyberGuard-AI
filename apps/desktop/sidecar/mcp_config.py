@@ -282,6 +282,45 @@ def install_demo_echo_mcp() -> Dict[str, Any]:
     )
 
 
+def file_alerts_server_paths(alerts_file: Optional[str] = None) -> Dict[str, str]:
+    """Resolve python + file_alerts MCP + sample (or custom) alerts file."""
+    import sys
+
+    here = Path(__file__).resolve()
+    desktop_root = here.parents[1]
+    script = desktop_root / "fixtures" / "file_alerts_mcp_server.py"
+    if not script.is_file():
+        raise FileNotFoundError(f"missing {script}")
+    sample = desktop_root / "fixtures" / "sample_alerts.json"
+    path = Path(alerts_file).expanduser() if alerts_file else sample
+    if not path.is_file() and alerts_file:
+        raise FileNotFoundError(f"alerts file not found: {path}")
+    if not path.is_file():
+        path = sample
+    return {
+        "command": sys.executable,
+        "script": str(script),
+        "alerts": str(path.resolve()),
+        "id": "file-alerts",
+    }
+
+
+def install_file_alerts_mcp(alerts_file: Optional[str] = None) -> Dict[str, Any]:
+    """Upsert readonly file-backed alerts MCP (JSON/CSV) — primary self-use path."""
+    paths = file_alerts_server_paths(alerts_file)
+    return upsert_mcp_server(
+        {
+            "id": paths["id"],
+            "command": paths["command"],
+            "args": [paths["script"], paths["alerts"]],
+            "readonly": True,
+            "enabled": True,
+            "description": f"File-backed alerts (JSON/CSV): {paths['alerts']}",
+            "timeout_seconds": 30,
+        }
+    )
+
+
 def load_mcp_servers() -> List[McpServerConfig]:
     servers: List[McpServerConfig] = []
 

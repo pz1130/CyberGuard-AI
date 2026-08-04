@@ -17,7 +17,7 @@ export function EmptyState({
       <h3>开始一次调查</h3>
       <ol>
         <li>配置 LLM（Settings → Provider）</li>
-        <li>可选：添加 MCP 数据源</li>
+        <li>Settings → MCP：Install file alerts MCP（或选你的 JSON/CSV）</li>
         <li>在下方输入任务，或填入示例后点 Run</li>
       </ol>
       <div className="empty-actions">

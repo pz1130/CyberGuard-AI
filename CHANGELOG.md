@@ -11,6 +11,9 @@ All notable changes to CyberGuard are documented here.
 - **P2 Evidence page**: list / register (file picker) / verify integrity with sha256 expand.
 - **P3 polish**: ⌘1/2/N/, hotkeys, font-size prefs, documentation status.
 - **Demo MCP one-click**: Settings → Install demo alerts MCP (`echo` + `list_alerts`) for M1.5 golden path without hand-editing JSON.
+- **File-backed alerts MCP**: Settings → Install file alerts MCP (sample JSON or pick CSV/JSON export); tools `list_alerts` / `get_alert` / `search_alerts`.
+- **Session titles**: dual-backend secret get + recover title from first `user_task` when index decrypt fails.
+- **Streaming UI**: live token deltas + Evidence timeline links.
 
 ### Desktop (macOS standalone)
 

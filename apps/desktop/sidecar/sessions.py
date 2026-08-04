@@ -122,10 +122,23 @@ class SessionStore:
         out: List[SessionMeta] = []
         for r in rows:
             enc = bool(r["encrypted"]) if "encrypted" in r.keys() else False
+            sid = r["session_id"]
+            title = decrypt_title(r["title"])
+            if not title or title in ("[encrypted title]",) or title.startswith("enc1:"):
+                recovered = self._recover_title(sid)
+                if recovered:
+                    title = recovered
+                    # Best-effort re-encrypt title with current index key
+                    try:
+                        self._rewrite_title(sid, recovered)
+                    except Exception:  # noqa: BLE001
+                        pass
+                else:
+                    title = f"Session {str(sid)[:8]}"
             out.append(
                 SessionMeta(
-                    r["session_id"],
-                    decrypt_title(r["title"]),
+                    sid,
+                    title,
                     r["created_at"],
                     r["updated_at"],
                     r["tier"],
@@ -134,6 +147,31 @@ class SessionStore:
                 )
             )
         return out
+
+    def _rewrite_title(self, session_id: str, plain_title: str) -> None:
+        stored = encrypt_title(plain_title)
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE sessions SET title = ? WHERE session_id = ?",
+                (stored, session_id),
+            )
+            conn.commit()
+
+    def _recover_title(self, session_id: str) -> str:
+        """Best-effort title from first user_task when index decrypt fails."""
+        try:
+            for ev in self.iter_events(session_id):
+                if not isinstance(ev, dict):
+                    continue
+                if ev.get("type") == "user_task" and ev.get("task"):
+                    t = str(ev.get("task")).strip().replace("\n", " ")
+                    return (t[:64] + "…") if len(t) > 64 else t
+                if ev.get("type") == "run_started" and ev.get("task"):
+                    t = str(ev.get("task")).strip().replace("\n", " ")
+                    return (t[:64] + "…") if len(t) > 64 else t
+        except Exception:  # noqa: BLE001
+            return ""
+        return ""
 
     def _is_encrypted_file(self, path: Path) -> bool:
         if not path.is_file() or path.stat().st_size == 0:

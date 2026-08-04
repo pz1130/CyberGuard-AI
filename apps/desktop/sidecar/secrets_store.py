@@ -161,11 +161,23 @@ def get_secret(service: str, account: str = "default") -> Optional[str]:
         raise SecretsError("service and account required")
     backend = _backend()
     if backend == "keychain":
-        return _keychain_get(service, account)
+        val = _keychain_get(service, account)
+        if val:
+            return val
+        # Fallback: file store may hold keys after headless migrate
+        data = _file_load()
+        slot = data.get(service) or {}
+        fv = slot.get(account)
+        return str(fv) if fv else None
     data = _file_load()
     slot = data.get(service) or {}
     val = slot.get(account)
-    return str(val) if val else None
+    if val:
+        return str(val)
+    # Fallback: Keychain may hold older index/session keys (title decrypt recovery)
+    if platform.system() == "Darwin":
+        return _keychain_get(service, account)
+    return None
 
 
 def set_secret(service: str, account: str, secret: str) -> None:

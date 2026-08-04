@@ -397,6 +397,11 @@ ipcMain.handle("sidecar:mcp-config:delete", async (_e, { id } = {}) =>
 ipcMain.handle("sidecar:mcp-config:install-demo", async () =>
   rpc("mcp.config.install_demo", {})
 );
+ipcMain.handle(
+  "sidecar:mcp-config:install-file-alerts",
+  async (_e, { path } = {}) =>
+    rpc("mcp.config.install_file_alerts", { path: path || undefined })
+);
 ipcMain.handle("sidecar:mcp:discover", async (_e, { tier } = {}) =>
   rpc("mcp.discover", { tier: tier || "readonly" })
 );

@@ -161,6 +161,10 @@ declare global {
         ok?: boolean;
         server?: McpServerPublic;
       }>;
+      mcpConfigInstallFileAlerts?: (path?: string) => Promise<{
+        ok?: boolean;
+        server?: McpServerPublic;
+      }>;
       mcpDiscover?: (
         tier?: string
       ) => Promise<{ tools?: Array<{ name: string }>; servers?: string[] }>;

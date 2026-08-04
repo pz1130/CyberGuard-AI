@@ -566,6 +566,21 @@ class SidecarServer:
                     )
                 return
 
+            if method == "mcp.config.install_file_alerts":
+                from apps.desktop.sidecar.mcp_config import install_file_alerts_mcp
+
+                try:
+                    path = params.get("path") or params.get("alerts_path") or None
+                    out = install_file_alerts_mcp(
+                        str(path) if path else None
+                    )
+                    self._write(result_msg(req_id, out))
+                except Exception as exc:  # noqa: BLE001
+                    self._write(
+                        error_msg(req_id, "mcp.config", f"{type(exc).__name__}: {exc}")
+                    )
+                return
+
             if method == "mcp.list":
                 self._write(
                     result_msg(

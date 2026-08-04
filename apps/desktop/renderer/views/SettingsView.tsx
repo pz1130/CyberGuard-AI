@@ -319,6 +319,41 @@ export function SettingsView({
     }
   };
 
+  const onInstallFileAlerts = async (pickPath: boolean) => {
+    if (!api?.mcpConfigInstallFileAlerts) {
+      setMcpMsg("install file-alerts API unavailable (open via Electron)");
+      return;
+    }
+    setMcpBusy(true);
+    setMcpMsg(null);
+    try {
+      let path: string | undefined;
+      if (pickPath && api.pickFile) {
+        const picked = await api.pickFile({
+          title: "Select alerts JSON or CSV",
+          properties: ["openFile"],
+        });
+        if (!picked?.path || picked.canceled) {
+          setMcpMsg("canceled");
+          return;
+        }
+        path = picked.path;
+      }
+      const r = await api.mcpConfigInstallFileAlerts(path);
+      setMcpMsg(
+        r.ok === false
+          ? "install file-alerts failed"
+          : `Installed file-alerts MCP · ${r.server?.description || "sample JSON"}. Discover tools.`
+      );
+      await loadMcp();
+      if (r.server) onSelectServer(r.server);
+    } catch (e) {
+      setMcpMsg(String(e));
+    } finally {
+      setMcpBusy(false);
+    }
+  };
+
   const onThemeSelect = async (next: ThemeMode) => {
     onSetTheme(next);
     try {
@@ -461,11 +496,29 @@ export function SettingsView({
             <button
               type="button"
               className="primary"
+              onClick={() => void onInstallFileAlerts(false)}
+              disabled={mcpBusy}
+              title="Readonly JSON/CSV alerts MCP with built-in sample"
+            >
+              Install file alerts MCP
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => void onInstallFileAlerts(true)}
+              disabled={mcpBusy}
+              title="Pick your own alerts JSON or CSV export"
+            >
+              Install from file…
+            </button>
+            <button
+              type="button"
+              className="secondary"
               onClick={() => void onInstallDemo()}
               disabled={mcpBusy}
-              title="Install golden-path demo MCP (list_alerts sample)"
+              title="Tiny echo MCP (legacy demo)"
             >
-              Install demo alerts MCP
+              Install echo demo
             </button>
             <button
               type="button"
