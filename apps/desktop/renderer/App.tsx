@@ -1,107 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
-type Tier = "readonly" | "full";
-
-type Caps = {
-  tier: string;
-  has_read: boolean;
-  has_exec: boolean;
-  has_edit: boolean;
-  mock?: boolean;
-  real_read?: boolean;
-  real_edit?: boolean;
-  real_exec?: boolean;
-  sandbox_impl?: string;
-  policy?: { sandbox_mode?: string };
-};
-
-type Ev = { type: string; [k: string]: unknown };
-
-type SessionRow = {
-  session_id: string;
-  title: string;
-  tier: string;
-  updated_at: number;
-  event_count: number;
-};
-
-type PendingPlan = {
-  plan_id: string;
-  plan?: {
-    summary?: string;
-    steps?: string[];
-    risk_level?: string;
-    blast_radius?: Record<string, unknown>;
-  };
-  approval_type?: string;
-  ui_label?: string;
-  local_approve_allowed?: boolean;
-  timeout_seconds?: number;
-  revisedDraft?: string;
-};
-
-declare global {
-  interface Window {
-    cyberguard?: {
-      ping: () => Promise<{ ok: boolean; data_root?: string }>;
-      capabilities: (tier: Tier) => Promise<Caps>;
-      run: (
-        task: string,
-        tier: Tier,
-        sessionId?: string
-      ) => Promise<{ result: unknown; events: Ev[] }>;
-      abort: (runId: string) => Promise<{ ok: boolean }>;
-      steer: (runId: string, message: string) => Promise<{ ok: boolean }>;
-      listSessions: () => Promise<{ sessions: SessionRow[] }>;
-      createSession: (
-        title: string,
-        tier: Tier
-      ) => Promise<{ session_id: string; title: string }>;
-      sessionEvents: (
-        sessionId: string
-      ) => Promise<{ events: Ev[] }>;
-      planApprove?: (
-        planId: string,
-        revisedPlan?: string
-      ) => Promise<{ ok: boolean; plan?: unknown }>;
-      planReject?: (
-        planId: string,
-        reason?: string
-      ) => Promise<{ ok: boolean }>;
-      planList?: () => Promise<{ plans: unknown[] }>;
-      exportEncrypted?: (
-        passphrase: string
-      ) => Promise<{
-        ok?: boolean;
-        canceled?: boolean;
-        method?: string;
-        dest?: string;
-        path?: string;
-        sha256?: string;
-        plaintext_sha256?: string;
-        error?: string;
-      }>;
-      uninstallInventory?: () => Promise<{
-        data_root?: string;
-        will_delete?: Array<{ name: string; approx_bytes?: number }>;
-        will_not_delete?: { evidence_outside_data_root?: string[] };
-        manual_steps?: Array<{ item: string; action: string }>;
-      }>;
-      uninstallExecute?: (opts: {
-        confirm: boolean;
-        dryRun: boolean;
-      }) => Promise<{
-        ok?: boolean;
-        canceled?: boolean;
-        executed?: boolean;
-        deleted?: string[];
-        dry_run?: boolean;
-      }>;
-      onEvent: (handler: (ev: Ev) => void) => () => void;
-      onOpenDataPanel?: (handler: () => void) => () => void;
-    };
-  }
-}
+import { useTheme } from "./hooks/useTheme";
+import type {
+  ActiveView,
+  Caps,
+  Ev,
+  PendingPlan,
+  SessionRow,
+  Tier,
+} from "./lib/types";
+import "./lib/types";
 
 /** Minimal markdown → React nodes (headings, bold, lists, paragraphs). */
 function SimpleMarkdown({ text }: { text: string }) {
@@ -413,6 +320,8 @@ function extractAssistantText(ev: Ev): string {
 }
 
 export function App() {
+  const { theme, cycleTheme, resolved } = useTheme();
+  const [activeView, setActiveView] = useState<ActiveView>("workbench");
   const [pingOk, setPingOk] = useState<boolean | null>(null);
   const [tier, setTier] = useState<Tier>("readonly");
   const [caps, setCaps] = useState<Caps | null>(null);
@@ -799,12 +708,54 @@ export function App() {
 
   return (
     <div className="app">
+      <header className="chrome">
+        <div className="chrome-left">
+          <div className="chrome-brand">
+            <span className="chrome-mark" aria-hidden />
+            CyberGuard
+          </div>
+          <nav className="chrome-nav" aria-label="Primary">
+            <button
+              type="button"
+              className={`nav-tab${activeView === "workbench" ? " active" : ""}`}
+              onClick={() => setActiveView("workbench")}
+            >
+              Workbench
+            </button>
+            <button
+              type="button"
+              className={`nav-tab${activeView === "evidence" ? " active" : ""}`}
+              onClick={() => setActiveView("evidence")}
+            >
+              Evidence
+            </button>
+            <button
+              type="button"
+              className={`nav-tab${activeView === "settings" ? " active" : ""}`}
+              onClick={() => setActiveView("settings")}
+            >
+              Settings
+            </button>
+          </nav>
+        </div>
+        <div className="chrome-right">
+          <button
+            type="button"
+            className="chrome-icon-btn"
+            onClick={cycleTheme}
+            title={`Theme: ${theme} (${resolved})`}
+          >
+            {resolved === "dark" ? "Dark" : "Light"}
+            {theme === "system" ? " · Auto" : ""}
+          </button>
+        </div>
+      </header>
       <div className="banner">
         <strong>Development build (not notarized)</strong> — not for distribution.
         Plan Mode uses <em>自批准</em> (approval_type=self) — not segregation-of-duties.
         Timeout = reject. LLM: <code>{providerMode}</code>. Local hash chain ≠ WORM.
       </div>
-      {pendingPlan && (
+      {pendingPlan && activeView === "workbench" && (
         <div className="plan-panel">
           <div className="plan-panel-header">
             <strong>Plan Mode · {pendingPlan.ui_label || "自批准"}</strong>
@@ -896,7 +847,8 @@ export function App() {
         <span>ports: none (JSONL stdio)</span>
       </div>
 
-      <div className="workbench">
+      {activeView === "workbench" && (
+      <div className="workbench view-enter">
         <div className="col">
           <h2>Sessions</h2>
           <div className="col-body session-list">
@@ -1146,6 +1098,97 @@ export function App() {
           </div>
         </div>
       </div>
+      )}
+
+      {activeView === "evidence" && (
+        <div className="view-pane view-enter">
+          <h1>Evidence</h1>
+          <p className="lede">
+            只读证据库（sha256 + mount: read-only）。完整 GUI 注册/校验在 P2；
+            当前可在工作台任务中通过 sidecar 注册，计数见状态栏。
+          </p>
+          <div className="settings-card">
+            <h3>Catalog</h3>
+            <p>
+              Status: <span className="pill accent">{evidenceHint}</span>
+            </p>
+            <p style={{ marginTop: 10 }}>
+              Use RPC <code className="mono">evidence.register</code> /{" "}
+              <code className="mono">evidence.verify</code> via agent tools, or
+              wait for the P2 file picker UI.
+            </p>
+            <div className="empty-actions" style={{ marginTop: 12 }}>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => setActiveView("workbench")}
+              >
+                Back to Workbench
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeView === "settings" && (
+        <div className="view-pane view-enter">
+          <h1>Settings</h1>
+          <p className="lede">
+            完整 LLM / MCP GUI 在 P1。下方为当前状态与数据安全（导出/卸载）。
+          </p>
+          <div className="settings-grid">
+            <div className="settings-card">
+              <h3>LLM Provider</h3>
+              <p>
+                Mode: <strong>{providerMode}</strong> · data_root:{" "}
+                <code className="mono" style={{ fontSize: 11 }}>
+                  {dataRoot || "—"}
+                </code>
+              </p>
+              <p style={{ marginTop: 8 }}>
+                配置文件：
+                <code className="mono">provider.json</code> / Keychain。P1
+                将提供表单与连通测试。
+              </p>
+            </div>
+            <div className="settings-card">
+              <h3>Appearance</h3>
+              <p>
+                Theme: <strong>{theme}</strong> (resolved{" "}
+                <strong>{resolved}</strong>)
+              </p>
+              <div className="empty-actions" style={{ marginTop: 10 }}>
+                <button type="button" className="secondary" onClick={cycleTheme}>
+                  Cycle theme (dark → light → system)
+                </button>
+              </div>
+            </div>
+            <div className="settings-card">
+              <h3>Data &amp; Security</h3>
+              <p>加密导出与卸载（M7）。</p>
+              <div className="empty-actions" style={{ marginTop: 10 }}>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    setActiveView("workbench");
+                    setShowDataPanel(true);
+                  }}
+                >
+                  Open Export / Uninstall panel
+                </button>
+              </div>
+            </div>
+            <div className="settings-card">
+              <h3>About</h3>
+              <p>
+                CyberGuard Desktop · development build · not notarized · not for
+                distribution. Local hash chain ≠ WORM. 自批准 ≠ 职责分离审批.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="footer">
         CyberGuard Desktop · M7 engineering · not notarized · not for distribution
