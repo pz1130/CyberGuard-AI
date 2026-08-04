@@ -151,6 +151,31 @@ export default function Skills() {
         }
       />
 
+      {/* Progressive disclosure (server internal agent + desktop SOP) */}
+      <div
+        style={{
+          marginBottom: 18,
+          padding: '12px 14px',
+          border: '1px solid var(--border-bright)',
+          background: 'var(--bg-surface)',
+          fontSize: 12,
+          color: 'var(--text-muted)',
+          lineHeight: 1.65,
+          letterSpacing: '0.02em',
+        }}
+      >
+        <div style={{ color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.1em', marginBottom: 6, fontSize: 11 }}>
+          PROGRESSIVE DISCLOSURE · LOAD_SKILL
+        </div>
+        <div>
+          Internal agents put only <strong style={{ color: 'var(--text-primary)' }}>name + description</strong> in the
+          system prompt (catalog). Full Markdown body is fetched on demand via the{' '}
+          <code style={{ color: 'var(--cyan)' }}>load_skill</code> tool — never dumped into context up front.
+          Write a clear <strong style={{ color: 'var(--text-primary)' }}>DESCRIPTION</strong>: that is what the model
+          sees when deciding which SOP to load. Skill text is a procedure, not an authorization override.
+        </div>
+      </div>
+
       {/* Install from URL Modal */}
       {showInstallUrl && (
         <Modal width={500} title="INSTALL FROM URL" onClose={() => { setShowInstallUrl(false); setInstallError('') }}>
@@ -254,16 +279,20 @@ export default function Skills() {
               </select>
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>DESCRIPTION</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>
+                DESCRIPTION <span style={{ color: 'var(--amber)' }}>(catalog · always in prompt)</span>
+              </label>
               <input value={form.description || ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                placeholder="Skill capability description..."
+                placeholder="One-line: when the agent should load this SOP (visible in catalog)"
                 className="form-input" />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>MARKDOWN CONTENT</label>
+              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>
+                MARKDOWN CONTENT <span style={{ color: 'var(--text-dim)' }}>(body · via load_skill only)</span>
+              </label>
               <textarea value={mdContent} onChange={e => setMdContent(e.target.value)}
                 rows={10}
-                placeholder={"# Skill Name\n\nDescribe what this skill does..."}
+                placeholder={"# Skill Name\n\nFull procedure steps… (not injected into system prompt)"}
                 className="form-textarea" style={{ minHeight: 120 }} />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
@@ -337,14 +366,31 @@ export default function Skills() {
                   </div>
                 </div>
 
-                <div className="item-card-desc" style={{ marginBottom: 2 }}>{s.description || '—'}</div>
+                <div className="item-card-desc" style={{ marginBottom: 2 }}>{s.description || '— no description (catalog empty)'}</div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span
+                    title="Full body loaded via load_skill tool, not system prompt"
+                    style={{
+                      fontSize: 10,
+                      letterSpacing: '0.08em',
+                      color: 'var(--cyan)',
+                      border: '1px solid var(--border)',
+                      padding: '2px 6px',
+                    }}
+                  >
+                    CATALOG → LOAD_SKILL
+                  </span>
                   {s.tags && s.tags.length > 0 && (
                     <span style={{ fontSize: 11, color: '#60a5fa' }}>{s.tags.join(', ')}</span>
                   )}
                   {s.version && (
                     <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>v{s.version}</span>
+                  )}
+                  {s.md_content && (
+                    <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+                      body ~{Math.max(1, Math.round((s.md_content.length || 0) / 100) / 10)}k chars
+                    </span>
                   )}
                 </div>
 
