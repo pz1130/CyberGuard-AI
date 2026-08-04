@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { DataPanel } from "../components/DataPanel";
 import { EmptyState } from "../components/EmptyState";
 import { EventCard } from "../components/EventCard";
+import { Markdown } from "../components/Markdown";
 import { SessionList } from "../components/SessionList";
 import type { Caps, Ev, SessionRow, Tier } from "../lib/types";
 
@@ -12,7 +13,10 @@ type Props = {
   onNewInvestigation: () => void;
   onDeleteSession?: (id: string) => void;
   events: Ev[];
+  streamText: string;
+  streaming: boolean;
   lastSubmitted: string | null;
+  onViewEvidence?: (evidenceId?: string) => void;
   task: string;
   onTaskChange: (v: string) => void;
   onRun: () => void;
@@ -100,8 +104,29 @@ export function WorkbenchView(props: Props) {
               />
             )}
             {props.events.map((ev, i) => (
-              <EventCard key={i} ev={ev} />
+              <EventCard
+                key={i}
+                ev={ev}
+                onViewEvidence={props.onViewEvidence}
+              />
             ))}
+            {(props.streaming || props.streamText) && (
+              <div className="ev type-stream report">
+                <div className="ev-label">
+                  {props.streaming ? "流式输出…" : "流式草稿"}
+                  {props.streaming ? (
+                    <span className="stream-cursor" aria-hidden>
+                      ▍
+                    </span>
+                  ) : null}
+                </div>
+                {props.streamText ? (
+                  <Markdown text={props.streamText} />
+                ) : (
+                  <div className="ev-meta">waiting for tokens…</div>
+                )}
+              </div>
+            )}
             <div ref={bottomRef} />
           </div>
         </div>

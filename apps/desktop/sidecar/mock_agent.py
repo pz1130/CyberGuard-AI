@@ -479,6 +479,29 @@ class MockAgentHost:
 
         # Snapshot for pause/resume
         messages_snapshot: List[Dict[str, Any]] = []
+        # Token stream sink — set once side_q exists (filled later)
+        _token_emit: Dict[str, Any] = {"fn": None}
+
+        async def _emit_token_delta(delta: str) -> None:
+            fn = _token_emit.get("fn")
+            if not fn or not delta:
+                return
+            try:
+                await fn(delta)
+            except Exception:  # noqa: BLE001
+                pass
+
+        async def _stream_text_chunks(text: str, *, chunk: int = 16) -> str:
+            """Mock / fallback: emit answer as token deltas for UI streaming."""
+            if not text:
+                return text
+            for i in range(0, len(text), chunk):
+                if active.abort_event.is_set():
+                    break
+                piece = text[i : i + chunk]
+                await _emit_token_delta(piece)
+                await asyncio.sleep(0.012)
+            return text
 
         async def chat(*, messages, tools=None):
             if active.abort_event.is_set():
@@ -491,7 +514,12 @@ class MockAgentHost:
                 pass
             if provider.is_live:
                 try:
-                    return await live_chat(provider, list(messages), tools=tools)
+                    return await live_chat(
+                        provider,
+                        list(messages),
+                        tools=tools,
+                        on_delta=_emit_token_delta,
+                    )
                 except Exception as exc:  # noqa: BLE001
                     if is_networkish_error(exc):
                         cp = save_checkpoint(
@@ -581,7 +609,7 @@ class MockAgentHost:
                         tool_bits.append(str(m.get("content") or "")[:2000])
                 blob = "\n".join(tool_bits)
                 if "A-1001" in blob or "severity" in blob.lower():
-                    return (
+                    report = (
                         "## 告警分诊报告（mock LLM 演示）\n\n"
                         "### Top 发现\n"
                         "1. **A-1001 high** — Suspicious PowerShell from workstation (ws-042, count=12)\n"
@@ -596,15 +624,17 @@ class MockAgentHost:
                         "### 不确定性\n"
                         "_当前为 MOCK LLM；接 live Provider 后由模型基于完整工具输出生成报告。_\n"
                     )
+                    return await _stream_text_chunks(report)
             mcp_note = (
                 f" MCP tools: {len(mcp_tools)}."
                 if mcp_tools
                 else " No MCP servers configured."
             )
-            return (
+            text = (
                 f"[mock LLM] Task received. Tier={caps.tier}.{mcp_note} "
                 f"Configure live provider for real analysis."
             )
+            return await _stream_text_chunks(text)
 
         def _hostile_stdout(name: str, text: str) -> str:
             return mark_tool_result_for_model(
@@ -868,6 +898,19 @@ class MockAgentHost:
                 finally:
                     await side_q.put({"src": "done"})
 
+            async def _token_to_queue(delta: str) -> None:
+                await side_q.put(
+                    {
+                        "src": "loop",
+                        "ev": {
+                            "type": "token",
+                            "delta": delta,
+                            "run_id": run_id,
+                        },
+                    }
+                )
+
+            _token_emit["fn"] = _token_to_queue
             loop_task = asyncio.create_task(_produce_loop())
             saw_pause = False
             try:
@@ -889,6 +932,12 @@ class MockAgentHost:
                             or ev.get("content")
                             or ""
                         )
+                        # Mark stream complete for UI
+                        yield {
+                            "type": "token_done",
+                            "run_id": run_id,
+                            "length": len(final_answer),
+                        }
                         tcl = ev.get("tool_call_log") or []
                         if isinstance(tcl, list) and tcl:
                             distilled = distill_approach(tcl)

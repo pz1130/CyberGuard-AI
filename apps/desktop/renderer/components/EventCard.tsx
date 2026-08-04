@@ -1,6 +1,11 @@
 import type { Ev } from "../lib/types";
 import { Markdown } from "./Markdown";
 
+type Props = {
+  ev: Ev;
+  onViewEvidence?: (evidenceId?: string) => void;
+};
+
 function extractAssistantText(ev: Ev): string {
   const messages = ev.messages;
   if (!Array.isArray(messages)) return "";
@@ -13,7 +18,7 @@ function extractAssistantText(ev: Ev): string {
   return "";
 }
 
-export function EventCard({ ev }: { ev: Ev }) {
+export function EventCard({ ev, onViewEvidence }: Props) {
   const t = String(ev.type || "event");
 
   if (t === "user_task") {
@@ -71,15 +76,35 @@ export function EventCard({ ev }: { ev: Ev }) {
   if (t === "tool_call_end") {
     const err = Boolean(ev.error);
     const hostile = String(ev.source_trust || "") === "hostile";
+    const name = String(ev.name || "");
+    const preview = String(ev.result_preview || "");
+    // Link to evidence if tool mentions evidence id / sha256
+    const eidMatch = preview.match(
+      /["']?evidence_id["']?\s*[:=]\s*["']?([0-9a-f-]{8,})/i
+    );
+    const shaMatch = preview.match(/\b([a-f0-9]{64})\b/i);
+    const evidencey =
+      /evidence/i.test(name) || Boolean(eidMatch) || Boolean(shaMatch);
     return (
       <div className={`ev type-tool_call_end${err ? " type-error" : ""}`}>
         <div className="ev-label">
           {err ? "工具失败" : "工具结果"}
           {hostile ? " · source_trust=hostile" : ""}
         </div>
-        <code>{String(ev.name || "")}</code>
-        {ev.result_preview ? (
-          <pre className="ev-pre">{String(ev.result_preview)}</pre>
+        <code>{name}</code>
+        {preview ? <pre className="ev-pre">{preview}</pre> : null}
+        {evidencey && onViewEvidence ? (
+          <div className="empty-actions mt-10">
+            <button
+              type="button"
+              className="secondary"
+              onClick={() =>
+                onViewEvidence(eidMatch ? eidMatch[1] : undefined)
+              }
+            >
+              View in Evidence
+            </button>
+          </div>
         ) : null}
       </div>
     );
@@ -98,10 +123,49 @@ export function EventCard({ ev }: { ev: Ev }) {
         ) : (
           <div className="ev-meta">（无 candidate_text）</div>
         )}
+        {onViewEvidence ? (
+          <div className="empty-actions mt-10">
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => onViewEvidence()}
+            >
+              Open Evidence library
+            </button>
+          </div>
+        ) : null}
         <details className="raw-details">
           <summary>原始事件 JSON</summary>
           <pre className="ev-pre">{JSON.stringify(ev, null, 2)}</pre>
         </details>
+      </div>
+    );
+  }
+
+  if (t === "evidence_register" || t === "evidence_registered") {
+    const eid = String(ev.evidence_id || ev.id || "");
+    const name = String(ev.name || ev.file_name || "evidence");
+    const sha = String(ev.sha256 || "");
+    return (
+      <div className="ev type-evidence">
+        <div className="ev-label">证据已注册 · read-only</div>
+        <div className="ev-task">{name}</div>
+        {sha ? (
+          <div className="ev-meta mono-sm">
+            sha256 {sha.slice(0, 12)}…{sha.slice(-8)}
+          </div>
+        ) : null}
+        {onViewEvidence ? (
+          <div className="empty-actions mt-10">
+            <button
+              type="button"
+              className="primary"
+              onClick={() => onViewEvidence(eid || undefined)}
+            >
+              View in Evidence
+            </button>
+          </div>
+        ) : null}
       </div>
     );
   }

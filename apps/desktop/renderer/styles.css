@@ -467,6 +467,36 @@ html[data-font="large"] {
   margin-right: 8px;
 }
 
+.ev.type-stream {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-elevated));
+}
+
+.stream-cursor {
+  display: inline-block;
+  margin-left: 6px;
+  color: var(--accent);
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.ev.type-evidence {
+  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+}
+
+.evidence-row-hi td {
+  background: var(--accent-muted);
+}
+
+.evidence-table tr.evidence-row-hi {
+  outline: 1px solid var(--accent);
+}
+
 .timeline {
   display: flex;
   flex-direction: column;

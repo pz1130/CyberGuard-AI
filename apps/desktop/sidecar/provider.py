@@ -260,8 +260,15 @@ async def live_chat(
     cfg: ProviderConfig,
     messages: List[Dict[str, Any]],
     tools: Optional[List[Dict[str, Any]]] = None,
+    *,
+    on_delta: Optional[Any] = None,
 ) -> Any:
-    """One chat completion via OpenAI-compatible API (AsyncOpenAI)."""
+    """One chat completion via OpenAI-compatible API (AsyncOpenAI).
+
+    When ``tools`` is None/empty and ``on_delta`` is provided, uses streaming
+    and invokes ``await on_delta(chunk: str)`` for each content delta so the UI
+    can show tokens as they arrive.
+    """
     from openai import AsyncOpenAI
     from llm_router.resilience import acall_with_retry
     from llm_router.utils import strip_think_blocks
@@ -283,9 +290,67 @@ async def live_chat(
         "messages": clean_msgs,
         "temperature": cfg.temperature,
     }
-    if tools:
+    use_tools = bool(tools)
+    if use_tools:
         kwargs["tools"] = tools
         kwargs["tool_choice"] = "auto"
+
+    # Streaming path — emit content deltas for UI; assemble tool_calls if any.
+    if on_delta is not None:
+        stream = await client.chat.completions.create(**kwargs, stream=True)
+        parts: List[str] = []
+        # index -> accumulated tool call pieces
+        tc_acc: Dict[int, Dict[str, Any]] = {}
+        async for chunk in stream:
+            try:
+                choice = chunk.choices[0] if chunk.choices else None
+                delta = getattr(choice, "delta", None) if choice else None
+            except Exception:  # noqa: BLE001
+                delta = None
+            if delta is None:
+                continue
+            piece = getattr(delta, "content", None)
+            if piece:
+                parts.append(piece)
+                try:
+                    maybe = on_delta(piece)
+                    if hasattr(maybe, "__await__"):
+                        await maybe
+                except Exception:  # noqa: BLE001
+                    pass
+            tcs = getattr(delta, "tool_calls", None) or []
+            for tc in tcs:
+                try:
+                    idx = int(getattr(tc, "index", 0) or 0)
+                except Exception:  # noqa: BLE001
+                    idx = 0
+                slot = tc_acc.setdefault(
+                    idx, {"id": "", "name": "", "arguments": ""}
+                )
+                if getattr(tc, "id", None):
+                    slot["id"] = str(tc.id)
+                fn = getattr(tc, "function", None)
+                if fn is not None:
+                    if getattr(fn, "name", None):
+                        slot["name"] = str(fn.name)
+                    if getattr(fn, "arguments", None):
+                        slot["arguments"] = slot["arguments"] + str(fn.arguments)
+        content = strip_think_blocks("".join(parts))
+        if tc_acc:
+            built = []
+            for i in sorted(tc_acc.keys()):
+                slot = tc_acc[i]
+                built.append(
+                    SimpleNamespace(
+                        id=slot["id"] or f"call_{i}",
+                        function=SimpleNamespace(
+                            name=slot["name"],
+                            arguments=slot["arguments"] or "{}",
+                        ),
+                    )
+                )
+            return SimpleNamespace(content=content, tool_calls=built)
+        return content
 
     response = await acall_with_retry(
         lambda: client.chat.completions.create(**kwargs),

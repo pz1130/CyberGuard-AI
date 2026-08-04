@@ -7,6 +7,8 @@ export function useDesktopRuntime() {
   const [caps, setCaps] = useState<Caps | null>(null);
   const [task, setTask] = useState("");
   const [events, setEvents] = useState<Ev[]>([]);
+  const [streamText, setStreamText] = useState("");
+  const [streaming, setStreaming] = useState(false);
   const [running, setRunning] = useState(false);
   const [runId, setRunId] = useState<string | null>(null);
   const [steerText, setSteerText] = useState("");
@@ -116,19 +118,39 @@ export function useDesktopRuntime() {
   useEffect(() => {
     if (!api) return;
     return api.onEvent((ev) => {
+      // token stream: coalesce into buffer; do not spam timeline cards
+      if (ev.type === "token" && typeof ev.delta === "string") {
+        setStreaming(true);
+        setStreamText((prev) => prev + String(ev.delta));
+        return;
+      }
+      if (ev.type === "token_done") {
+        setStreaming(false);
+        // keep streamText until answer_ready card replaces it
+        return;
+      }
+
       setEvents((prev) => [...prev, ev]);
       if (ev.type === "run_started" && typeof ev.run_id === "string") {
         setRunId(ev.run_id);
         setRunStatus("running");
         setPausedRunId(null);
+        setStreamText("");
+        setStreaming(false);
         const tools = ev.mcp_tools;
         if (Array.isArray(tools)) {
           setMcpTools(tools.map(String));
         }
       }
+      // New tool round: clear intermediate model chatter so final stream is clean
+      if (ev.type === "tool_call_start") {
+        setStreamText("");
+        setStreaming(false);
+      }
       if (ev.type === "run_paused") {
         setRunStatus(String(ev.ui_status || "已暂停"));
         if (typeof ev.run_id === "string") setPausedRunId(ev.run_id);
+        setStreaming(false);
       }
       if (ev.type === "run_resumed") {
         setRunStatus(String(ev.ui_status || "已恢复"));
@@ -136,6 +158,12 @@ export function useDesktopRuntime() {
       }
       if (ev.type === "answer_ready") {
         setRunStatus("idle");
+        setStreaming(false);
+        // Prefer full answer on card; clear live buffer
+        setStreamText("");
+      }
+      if (ev.type === "error") {
+        setStreaming(false);
       }
       if (ev.type === "start" && typeof ev.agent_run_id === "string") {
         setRunId(String(ev.agent_run_id));
@@ -187,6 +215,8 @@ export function useDesktopRuntime() {
 
     setRunning(true);
     setEvents([]);
+    setStreamText("");
+    setStreaming(false);
     setRunId(null);
     setLastSubmitted(text);
     setSessionId(null);
@@ -445,6 +475,8 @@ export function useDesktopRuntime() {
     task,
     setTask,
     events,
+    streamText,
+    streaming,
     running,
     runId,
     steerText,

@@ -17,7 +17,15 @@ export function App() {
   const [settingsSection, setSettingsSection] = useState<
     SettingsSection | undefined
   >(undefined);
+  const [highlightEvidenceId, setHighlightEvidenceId] = useState<
+    string | undefined
+  >(undefined);
   const rt = useDesktopRuntime();
+
+  const openEvidence = useCallback((evidenceId?: string) => {
+    setHighlightEvidenceId(evidenceId);
+    setActiveView("evidence");
+  }, []);
 
   const openSettings = useCallback((section?: SettingsSection) => {
     setSettingsSection(section);
@@ -160,6 +168,8 @@ export function App() {
           onNewInvestigation={rt.onNewInvestigation}
           onDeleteSession={(id) => void rt.onDeleteSession(id)}
           events={rt.events}
+          streamText={rt.streamText}
+          streaming={rt.streaming}
           lastSubmitted={rt.lastSubmitted}
           task={rt.task}
           onTaskChange={rt.setTask}
@@ -182,6 +192,7 @@ export function App() {
           providerMode={rt.providerMode}
           onOpenSettingsLlm={() => openSettings("llm")}
           onOpenSettingsMcp={() => openSettings("mcp")}
+          onViewEvidence={openEvidence}
           showDataPanel={rt.showDataPanel}
           onToggleDataPanel={() => rt.setShowDataPanel((v) => !v)}
           exportPass={rt.exportPass}
@@ -201,6 +212,7 @@ export function App() {
       {activeView === "evidence" && (
         <EvidenceView
           evidenceHint={rt.evidenceHint}
+          highlightId={highlightEvidenceId}
           onBackToWorkbench={() => setActiveView("workbench")}
           onCountChange={(n) => rt.setEvidenceHint(`evidence: ${n}`)}
         />

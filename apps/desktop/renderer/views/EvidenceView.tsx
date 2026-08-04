@@ -3,6 +3,7 @@ import type { EvidenceItem, EvidenceVerifyResult } from "../lib/types";
 
 type Props = {
   evidenceHint: string;
+  highlightId?: string;
   onBackToWorkbench: () => void;
   onCountChange?: (count: number) => void;
 };
@@ -30,6 +31,7 @@ function shortHash(h: string): string {
 
 export function EvidenceView({
   evidenceHint,
+  highlightId,
   onBackToWorkbench,
   onCountChange,
 }: Props) {
@@ -65,6 +67,17 @@ export function EvidenceView({
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!highlightId) return;
+    // expand + scroll to linked evidence from Workbench
+    setExpanded((prev) => ({ ...prev, [highlightId]: true }));
+    requestAnimationFrame(() => {
+      document
+        .getElementById(`evidence-row-${highlightId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }, [highlightId, items]);
 
   const onRegister = async () => {
     if (!api?.pickFile || !api?.evidenceRegister) {
@@ -201,8 +214,13 @@ export function EvidenceView({
               {items.map((it) => {
                 const open = expanded[it.evidence_id];
                 const v = verifyById[it.evidence_id];
+                const hi = highlightId === it.evidence_id;
                 return (
-                  <tr key={it.evidence_id}>
+                  <tr
+                    key={it.evidence_id}
+                    id={`evidence-row-${it.evidence_id}`}
+                    className={hi ? "evidence-row-hi" : undefined}
+                  >
                     <td>
                       <div className="evidence-name">{it.name}</div>
                       {it.note ? (
