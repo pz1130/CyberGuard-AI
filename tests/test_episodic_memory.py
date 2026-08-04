@@ -65,11 +65,37 @@ async def test_record_inserts_and_reuses_supplied_embedding():
                      tool_count=2, embedding=_vec())
 
     router.embed.assert_not_called()                 # reused supplied embedding
-    db.execute.assert_awaited_once()
-    _, params = db.execute.call_args.args
+    # INSERT + prune DELETE
+    assert db.execute.await_count == 2
+    _, params = db.execute.call_args_list[0].args
     assert params["agent_id"] == 7 and params["tool_count"] == 2
+    assert params["success"] is True
     assert len(params["outcome"]) == 1000            # truncated to OUTCOME_MAX_CHARS
+    prune_sql = str(db.execute.call_args_list[1].args[0])
+    assert "DELETE FROM agent_episodes" in prune_sql
     db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_record_failure_episode():
+    db = MagicMock()
+    db.execute = AsyncMock()
+    db.commit = AsyncMock()
+    svc = EpisodicMemoryService(router=_fake_router())
+
+    await svc.record(
+        db,
+        agent_id=3,
+        task="bad task",
+        approach="tool_a",
+        outcome="FAILED: boom",
+        success=False,
+        tool_count=1,
+        embedding=_vec(),
+    )
+    _, params = db.execute.call_args_list[0].args
+    assert params["success"] is False
+    assert params["outcome"].startswith("FAILED")
 
 
 @pytest.mark.asyncio

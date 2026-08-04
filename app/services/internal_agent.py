@@ -587,23 +587,36 @@ class InternalAgentRunner:
                 # start / tool_call_* events are not surfaced in batch mode
 
         if final_event is None or final_event["type"] == "error":
+            err = (
+                final_event["error"]
+                if final_event
+                else "no result produced"
+            )
+            tool_log = (
+                final_event.get("tool_call_log", []) if final_event else []
+            )
+            # Record failed episodes too (success=False) so we retain negative signal
+            await self._maybe_record_episode(
+                task, f"FAILED: {err}", tool_log, success=False
+            )
             if final_event and final_event.get("status") == "failed":
                 return {
                     "status": "failed",
                     "output": None,
-                    "error": final_event["error"],
+                    "error": err,
                     "agent_id": self.agent_id,
                     "agent_name": self.agent_name,
                     "execution_time": round(time.monotonic() - start, 2),
+                    "tool_calls": tool_log,
                 }
             return {
                 "status": "error",
                 "output": None,
-                "error": final_event["error"] if final_event else "no result produced",
+                "error": err,
                 "agent_id": self.agent_id,
                 "agent_name": self.agent_name,
                 "execution_time": round(time.monotonic() - start, 2),
-                "tool_calls": final_event.get("tool_call_log", []) if final_event else [],
+                "tool_calls": tool_log,
             }
 
         # answer_ready: batch mode uses the candidate text directly (no re-stream)
@@ -611,7 +624,9 @@ class InternalAgentRunner:
         new_messages = final_event["new_messages"]
         new_messages.append({"role": "assistant", "content": final_text})
         await self._append_memory(conversation_id, user_id, new_messages)
-        await self._maybe_record_episode(task, final_text, final_event["tool_call_log"])
+        await self._maybe_record_episode(
+            task, final_text, final_event["tool_call_log"], success=True
+        )
 
         return {
             "status": "completed",
@@ -622,17 +637,29 @@ class InternalAgentRunner:
             "tool_calls": final_event["tool_call_log"],
         }
 
-    async def _maybe_record_episode(self, task: str, output: str,
-                                    tool_call_log: List[Dict[str, Any]]) -> None:
-        """Record a successful run as an episode (best-effort, opt-in)."""
+    async def _maybe_record_episode(
+        self,
+        task: str,
+        output: str,
+        tool_call_log: List[Dict[str, Any]],
+        *,
+        success: bool = True,
+    ) -> None:
+        """Record a run as an episode (best-effort, opt-in). success=False for failures."""
         if not self.enable_episodic:
             return
         try:
             from app.services.episodic_memory import distill_approach
             await episodic_memory.record(
-                self.agent_id, task, distill_approach(tool_call_log), output,
-                success=True, tool_count=len(tool_call_log),
-                embedding=self._episode_embedding, provider_id=self.llm_provider_id)
+                self.agent_id,
+                task,
+                distill_approach(tool_call_log),
+                output,
+                success=success,
+                tool_count=len(tool_call_log),
+                embedding=self._episode_embedding if success else None,
+                provider_id=self.llm_provider_id,
+            )
         except Exception as e:               # noqa: BLE001 - never break the run
             logger.debug("episodic record failed: %s", e)
 
@@ -662,6 +689,12 @@ class InternalAgentRunner:
                 if t in ("start", "tool_call_start", "tool_call_end", "reflection"):
                     yield ev
                 elif t == "error":
+                    await self._maybe_record_episode(
+                        task,
+                        f"FAILED: {ev.get('error')}",
+                        ev.get("tool_call_log") or [],
+                        success=False,
+                    )
                     yield {"type": "error", "content": ev["error"]}
                     return
                 elif t == "answer_ready":
@@ -679,13 +712,21 @@ class InternalAgentRunner:
                             parts.append(delta)
                             yield {"type": "text", "content": delta}
                     except Exception as e:
+                        await self._maybe_record_episode(
+                            task,
+                            f"FAILED: stream error: {e}",
+                            ev.get("tool_call_log") or [],
+                            success=False,
+                        )
                         yield {"type": "error", "content": f"stream error: {e}"}
                         return
 
                     final_text = "".join(parts)
                     new_messages.append({"role": "assistant", "content": final_text})
                     await self._append_memory(conversation_id, user_id, new_messages)
-                    await self._maybe_record_episode(task, final_text, ev["tool_call_log"])
+                    await self._maybe_record_episode(
+                        task, final_text, ev["tool_call_log"], success=True
+                    )
                     yield {"type": "done", "output": final_text,
                            "execution_time": round(time.monotonic() - start, 2),
                            "tool_calls": ev["tool_call_log"]}
