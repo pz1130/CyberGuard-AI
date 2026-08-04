@@ -18,56 +18,123 @@ function extractAssistantText(ev: Ev): string {
   return "";
 }
 
+function prettyToolName(raw: string): { title: string; sub?: string } {
+  const name = raw || "tool";
+  // mcp__server__tool → tool · server
+  const m = name.match(/^mcp__([^_]+)__(.+)$/);
+  if (m) return { title: m[2], sub: m[1] };
+  if (name === "load_skill") return { title: "load_skill", sub: "builtin" };
+  return { title: name };
+}
+
+function formatArgs(raw: unknown): string {
+  if (raw == null || raw === "") return "";
+  const s = String(raw);
+  try {
+    const parsed = JSON.parse(s);
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    return s;
+  }
+}
+
+function truncate(s: string, n: number): string {
+  const t = s.replace(/\s+/g, " ").trim();
+  return t.length > n ? `${t.slice(0, n)}…` : t;
+}
+
+/** System noise → compact chips, not full cards */
+const COMPACT_TYPES = new Set([
+  "start",
+  "episodic_recall",
+  "episodic_recorded",
+  "auth_bounds_check",
+  "token_done",
+  "policy_event",
+]);
+
 export function EventCard({ ev, onViewEvidence }: Props) {
   const t = String(ev.type || "event");
+
+  if (COMPACT_TYPES.has(t)) {
+    let label = t.replace(/_/g, " ");
+    if (t === "start") label = `agent · ${String(ev.agent_name || "desktop")}`;
+    if (t === "episodic_recall")
+      label = `回忆 ${String(ev.count ?? "…")} 条经验`;
+    if (t === "episodic_recorded") label = "已写入经验库";
+    if (t === "auth_bounds_check") label = "授权边界校验";
+    if (t === "token_done") label = "流式完成";
+    if (t === "policy_event")
+      label = `策略 · ${String(ev.policy_event_type || "event")}`;
+    return (
+      <div className="ev-chip" title={JSON.stringify(ev).slice(0, 200)}>
+        <span className="ev-chip-dot" />
+        {label}
+      </div>
+    );
+  }
 
   if (t === "user_task") {
     return (
       <div className="ev type-user_task">
-        <div className="ev-label">你提交的任务</div>
+        <div className="ev-head">
+          <span className="ev-badge">任务</span>
+          {ev.tier ? (
+            <span className="ev-badge muted">{String(ev.tier)}</span>
+          ) : null}
+        </div>
         <div className="ev-task">{String(ev.task || "")}</div>
-        {ev.tier ? (
-          <div className="ev-meta">档位: {String(ev.tier)}</div>
-        ) : null}
       </div>
     );
   }
 
   if (t === "run_started") {
-    const prov = (ev.provider || {}) as {
-      mode?: string;
-      model?: string;
-    };
+    const prov = (ev.provider || {}) as { mode?: string; model?: string };
     const tools = Array.isArray(ev.mcp_tools)
-      ? (ev.mcp_tools as string[]).join(", ")
-      : "—";
+      ? (ev.mcp_tools as string[]).map((n) => prettyToolName(n).title)
+      : [];
     return (
       <div className="ev type-run_started">
-        <div className="ev-label">开始运行</div>
-        <div className="ev-meta">
-          LLM: {prov.mode || "?"}
-          {prov.model ? ` · ${prov.model}` : ""} · MCP: {tools}
+        <div className="ev-head">
+          <span className="ev-badge info">开始</span>
+          <span className="ev-badge muted">
+            {prov.mode || "?"}
+            {prov.model ? ` · ${prov.model}` : ""}
+          </span>
         </div>
-      </div>
-    );
-  }
-
-  if (t === "start") {
-    return (
-      <div className="ev type-start muted-ev">
-        <span className="ev-label">agent 循环</span>
-        <span className="ev-meta"> {String(ev.agent_name || "desktop-agent")}</span>
+        {tools.length > 0 ? (
+          <div className="ev-tool-row">
+            {tools.slice(0, 6).map((name) => (
+              <span key={name} className="ev-tool-pill">
+                {name}
+              </span>
+            ))}
+            {tools.length > 6 ? (
+              <span className="ev-tool-pill muted">+{tools.length - 6}</span>
+            ) : null}
+          </div>
+        ) : (
+          <div className="ev-meta">无 MCP 工具</div>
+        )}
       </div>
     );
   }
 
   if (t === "tool_call_start") {
+    const { title, sub } = prettyToolName(String(ev.name || ""));
+    const args = formatArgs(ev.arguments);
     return (
       <div className="ev type-tool_call_start">
-        <div className="ev-label">调用工具</div>
-        <code>{String(ev.name || "")}</code>
-        {ev.arguments ? (
-          <pre className="ev-pre">{String(ev.arguments)}</pre>
+        <div className="ev-head">
+          <span className="ev-badge tool">工具</span>
+          <code className="ev-tool-name">{title}</code>
+          {sub ? <span className="ev-badge muted">{sub}</span> : null}
+        </div>
+        {args ? (
+          <details className="ev-args">
+            <summary>参数</summary>
+            <pre className="ev-pre">{args}</pre>
+          </details>
         ) : null}
       </div>
     );
@@ -77,8 +144,8 @@ export function EventCard({ ev, onViewEvidence }: Props) {
     const err = Boolean(ev.error);
     const hostile = String(ev.source_trust || "") === "hostile";
     const name = String(ev.name || "");
+    const { title, sub } = prettyToolName(name);
     const preview = String(ev.result_preview || "");
-    // Link to evidence if tool mentions evidence id / sha256
     const eidMatch = preview.match(
       /["']?evidence_id["']?\s*[:=]\s*["']?([0-9a-f-]{8,})/i
     );
@@ -87,14 +154,21 @@ export function EventCard({ ev, onViewEvidence }: Props) {
       /evidence/i.test(name) || Boolean(eidMatch) || Boolean(shaMatch);
     return (
       <div className={`ev type-tool_call_end${err ? " type-error" : ""}`}>
-        <div className="ev-label">
-          {err ? "工具失败" : "工具结果"}
-          {hostile ? " · source_trust=hostile" : ""}
+        <div className="ev-head">
+          <span className={`ev-badge ${err ? "err" : "ok"}`}>
+            {err ? "失败" : "结果"}
+          </span>
+          <code className="ev-tool-name">{title}</code>
+          {sub ? <span className="ev-badge muted">{sub}</span> : null}
+          {hostile ? <span className="ev-badge warn">hostile</span> : null}
         </div>
-        <code>{name}</code>
-        {preview ? <pre className="ev-pre">{preview}</pre> : null}
+        {preview ? (
+          <pre className="ev-pre ev-pre-result">{truncate(preview, 800)}</pre>
+        ) : (
+          <div className="ev-meta">（无预览）</div>
+        )}
         {evidencey && onViewEvidence ? (
-          <div className="empty-actions mt-10">
+          <div className="ev-actions">
             <button
               type="button"
               className="secondary"
@@ -102,7 +176,7 @@ export function EventCard({ ev, onViewEvidence }: Props) {
                 onViewEvidence(eidMatch ? eidMatch[1] : undefined)
               }
             >
-              View in Evidence
+              在证据库查看
             </button>
           </div>
         ) : null}
@@ -117,27 +191,31 @@ export function EventCard({ ev, onViewEvidence }: Props) {
       "";
     return (
       <div className="ev type-answer_ready report">
-        <div className="ev-label">报告</div>
+        <div className="ev-head">
+          <span className="ev-badge ok">报告</span>
+        </div>
         {report ? (
-          <Markdown text={report} />
+          <div className="ev-report">
+            <Markdown text={report} />
+          </div>
         ) : (
-          <div className="ev-meta">（无 candidate_text）</div>
+          <div className="ev-meta">（无正文）</div>
         )}
-        {onViewEvidence ? (
-          <div className="empty-actions mt-10">
+        <div className="ev-actions">
+          {onViewEvidence ? (
             <button
               type="button"
               className="secondary"
               onClick={() => onViewEvidence()}
             >
-              Open Evidence library
+              证据库
             </button>
-          </div>
-        ) : null}
-        <details className="raw-details">
-          <summary>原始事件 JSON</summary>
-          <pre className="ev-pre">{JSON.stringify(ev, null, 2)}</pre>
-        </details>
+          ) : null}
+          <details className="raw-details">
+            <summary>原始 JSON</summary>
+            <pre className="ev-pre">{JSON.stringify(ev, null, 2)}</pre>
+          </details>
+        </div>
       </div>
     );
   }
@@ -148,7 +226,10 @@ export function EventCard({ ev, onViewEvidence }: Props) {
     const sha = String(ev.sha256 || "");
     return (
       <div className="ev type-evidence">
-        <div className="ev-label">证据已注册 · read-only</div>
+        <div className="ev-head">
+          <span className="ev-badge ok">证据</span>
+          <span className="ev-badge muted">read-only</span>
+        </div>
         <div className="ev-task">{name}</div>
         {sha ? (
           <div className="ev-meta mono-sm">
@@ -156,13 +237,13 @@ export function EventCard({ ev, onViewEvidence }: Props) {
           </div>
         ) : null}
         {onViewEvidence ? (
-          <div className="empty-actions mt-10">
+          <div className="ev-actions">
             <button
               type="button"
               className="primary"
               onClick={() => onViewEvidence(eid || undefined)}
             >
-              View in Evidence
+              打开证据
             </button>
           </div>
         ) : null}
@@ -173,7 +254,9 @@ export function EventCard({ ev, onViewEvidence }: Props) {
   if (t === "error") {
     return (
       <div className="ev type-error">
-        <div className="ev-label">错误</div>
+        <div className="ev-head">
+          <span className="ev-badge err">错误</span>
+        </div>
         <pre className="ev-pre">
           {String(ev.error || ev.message || JSON.stringify(ev))}
         </pre>
@@ -189,14 +272,19 @@ export function EventCard({ ev, onViewEvidence }: Props) {
     };
     return (
       <div className="ev type-plan_ready">
-        <div className="ev-label">
-          执行计划待审 · {String(ev.ui_label || "自批准")}
-          {ev.local_approve_allowed === false ? " · 本机不可批（职责分离）" : ""}
+        <div className="ev-head">
+          <span className="ev-badge plan">计划待审</span>
+          <span className="ev-badge muted">
+            {String(ev.ui_label || "自批准")}
+          </span>
+          {ev.local_approve_allowed === false ? (
+            <span className="ev-badge warn">本机不可批</span>
+          ) : null}
         </div>
         <div className="ev-meta">
-          risk={String(plan.risk_level || "?")} · plan_id={String(ev.plan_id || "")}
+          risk {String(plan.risk_level || "?")}
           {ev.timeout_seconds != null
-            ? ` · timeout ${String(ev.timeout_seconds)}s → 拒绝`
+            ? ` · ${String(ev.timeout_seconds)}s 超时=拒绝`
             : ""}
         </div>
         {plan.summary ? (
@@ -209,9 +297,9 @@ export function EventCard({ ev, onViewEvidence }: Props) {
   if (t === "plan_approved") {
     return (
       <div className="ev type-plan_approved">
-        <div className="ev-label">
-          计划已批准 · {String(ev.ui_label || "自批准")}
-          {ev.revised ? "（已改写）" : ""}
+        <div className="ev-head">
+          <span className="ev-badge ok">计划已批</span>
+          {ev.revised ? <span className="ev-badge muted">已改写</span> : null}
         </div>
         {ev.plan_summary ? (
           <pre className="ev-pre">{String(ev.plan_summary)}</pre>
@@ -223,7 +311,9 @@ export function EventCard({ ev, onViewEvidence }: Props) {
   if (t === "plan_rejected") {
     return (
       <div className="ev type-error">
-        <div className="ev-label">计划未批准 — 未执行</div>
+        <div className="ev-head">
+          <span className="ev-badge err">计划未批</span>
+        </div>
         <div className="ev-meta">
           {String(ev.status || "")}: {String(ev.reason || "")}
         </div>
@@ -234,19 +324,15 @@ export function EventCard({ ev, onViewEvidence }: Props) {
   if (t === "privilege_required") {
     return (
       <div className="ev type-plan_ready">
-        <div className="ev-label">
-          提权申请 · {String(ev.ui_label || "自批准")}
+        <div className="ev-head">
+          <span className="ev-badge plan">提权</span>
+          <span className="ev-badge muted">
+            {String(ev.ui_label || "自批准")}
+          </span>
         </div>
         <div className="ev-meta">
-          tool={String(ev.tool || "")} · {String(ev.denied_detail || "")}
+          {String(ev.tool || "")} · {String(ev.denied_detail || "")}
         </div>
-        {ev.plan &&
-        typeof ev.plan === "object" &&
-        (ev.plan as { summary?: string }).summary ? (
-          <pre className="ev-pre plan-summary">
-            {String((ev.plan as { summary?: string }).summary)}
-          </pre>
-        ) : null}
       </div>
     );
   }
@@ -255,8 +341,10 @@ export function EventCard({ ev, onViewEvidence }: Props) {
     const ok = String(ev.status || "") === "approved";
     return (
       <div className={`ev ${ok ? "type-plan_approved" : "type-error"}`}>
-        <div className="ev-label">
-          提权{ok ? "已批准 — 重试中" : "未批准"}
+        <div className="ev-head">
+          <span className={`ev-badge ${ok ? "ok" : "err"}`}>
+            提权{ok ? "已批" : "拒绝"}
+          </span>
         </div>
         <div className="ev-meta">
           {String(ev.status || "")}
@@ -266,25 +354,14 @@ export function EventCard({ ev, onViewEvidence }: Props) {
     );
   }
 
-  if (t === "policy_event") {
-    return (
-      <div className="ev type-plan_approved">
-        <div className="ev-label">policy_event</div>
-        <div className="ev-meta">
-          {String(ev.policy_event_type || "")} · tool={String(ev.tool || "")} ·
-          success={String(ev.success)}
-        </div>
-      </div>
-    );
-  }
-
   if (t === "run_paused") {
     return (
       <div className="ev type-error">
-        <div className="ev-label">已暂停</div>
+        <div className="ev-head">
+          <span className="ev-badge warn">已暂停</span>
+        </div>
         <div className="ev-meta">
-          {String(ev.reason || "")} · messages={String(ev.message_count ?? "")}
-          · 可 agent.resume 继续
+          {String(ev.reason || "")} · 可用 Resume 继续
         </div>
       </div>
     );
@@ -293,16 +370,19 @@ export function EventCard({ ev, onViewEvidence }: Props) {
   if (t === "run_resumed") {
     return (
       <div className="ev type-plan_approved">
-        <div className="ev-label">已恢复</div>
-        <div className="ev-meta">messages={String(ev.message_count ?? "")}</div>
+        <div className="ev-head">
+          <span className="ev-badge ok">已恢复</span>
+        </div>
       </div>
     );
   }
 
+  // fallback compact
   return (
-    <div className={`ev type-${t}`}>
-      <div className="ev-label">{t}</div>
-      <details className="raw-details">
+    <div className="ev-chip">
+      <span className="ev-chip-dot" />
+      {t.replace(/_/g, " ")}
+      <details className="raw-details inline">
         <summary>详情</summary>
         <pre className="ev-pre">{JSON.stringify(ev, null, 2)}</pre>
       </details>
