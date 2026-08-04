@@ -233,9 +233,16 @@ function createTray() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    title: "CyberGuard Desktop (dev)",
+    width: 1280,
+    height: 860,
+    minWidth: 960,
+    minHeight: 640,
+    title: "CyberGuard Desktop",
+    backgroundColor: "#0a0c10",
+    // macOS: fused traffic lights + custom chrome (finished-app feel)
+    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
+    trafficLightPosition:
+      process.platform === "darwin" ? { x: 16, y: 16 } : undefined,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -246,7 +253,8 @@ function createWindow() {
 
   if (isDev) {
     mainWindow.loadURL("http://127.0.0.1:5173");
-    mainWindow.webContents.openDevTools({ mode: "detach" });
+    // DevTools optional — default closed so UI reads as product, not scaffold
+    // mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
     mainWindow.loadFile(path.join(__dirname, "../dist-renderer/index.html"));
   }

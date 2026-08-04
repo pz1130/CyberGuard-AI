@@ -11,6 +11,14 @@ import "./styles/views.css";
 if (!document.documentElement.dataset.theme) {
   document.documentElement.dataset.theme = "dark";
 }
+// Traffic-light inset only on macOS
+const mac =
+  typeof navigator !== "undefined" &&
+  /Mac|Macintosh/.test(navigator.platform || navigator.userAgent || "");
+document.documentElement.style.setProperty(
+  "--chrome-pad-left",
+  mac ? "78px" : "16px"
+);
 
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

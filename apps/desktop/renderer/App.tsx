@@ -60,7 +60,10 @@ export function App() {
         <div className="chrome-left">
           <div className="chrome-brand">
             <span className="chrome-mark" aria-hidden />
-            CyberGuard
+            <div className="chrome-brand-meta">
+              <span className="chrome-brand-name">CyberGuard</span>
+              <span className="chrome-brand-sub">Desktop · ops</span>
+            </div>
           </div>
           <nav className="chrome-nav" aria-label="Primary">
             <button
@@ -87,13 +90,16 @@ export function App() {
           </nav>
         </div>
         <div className="chrome-right">
+          <span className="pill warn" title="Development build — not for distribution">
+            DEV
+          </span>
           <button
             type="button"
             className="chrome-icon-btn"
             onClick={cycleTheme}
             title={`Theme: ${theme} (${resolved})`}
           >
-            {resolved === "dark" ? "Dark" : "Light"}
+            {resolved === "dark" ? "◐ Dark" : "☀ Light"}
             {theme === "system" ? " · Auto" : ""}
           </button>
         </div>
@@ -250,8 +256,8 @@ export function App() {
       )}
 
       <div className="footer">
-        CyberGuard Desktop · P0–P3 UI · not notarized · not for distribution ·
-        ⌘1 Workbench · ⌘2 Evidence · ⌘, Settings · ⌘N New
+        CyberGuard Desktop · not notarized · not for distribution · ⌘1 Workbench
+        · ⌘2 Evidence · ⌘, Settings · ⌘N New · ⌘Enter Run
       </div>
     </div>
   );
