@@ -3,16 +3,24 @@ import { PlanPanel } from "./components/PlanPanel";
 import { StatusBar } from "./components/StatusBar";
 import { useDesktopRuntime } from "./hooks/useDesktopRuntime";
 import { useTheme } from "./hooks/useTheme";
-import type { ActiveView } from "./lib/types";
+import type { ActiveView, SettingsSection } from "./lib/types";
 import "./lib/types";
 import { EvidenceView } from "./views/EvidenceView";
 import { SettingsView } from "./views/SettingsView";
 import { WorkbenchView } from "./views/WorkbenchView";
 
 export function App() {
-  const { theme, cycleTheme, resolved } = useTheme();
+  const { theme, setTheme, cycleTheme, resolved } = useTheme();
   const [activeView, setActiveView] = useState<ActiveView>("workbench");
+  const [settingsSection, setSettingsSection] = useState<
+    SettingsSection | undefined
+  >(undefined);
   const rt = useDesktopRuntime();
+
+  const openSettings = (section?: SettingsSection) => {
+    setSettingsSection(section);
+    setActiveView("settings");
+  };
 
   return (
     <div className="app">
@@ -40,7 +48,7 @@ export function App() {
             <button
               type="button"
               className={`nav-tab${activeView === "settings" ? " active" : ""}`}
-              onClick={() => setActiveView("settings")}
+              onClick={() => openSettings()}
             >
               Settings
             </button>
@@ -128,8 +136,8 @@ export function App() {
           dataRoot={rt.dataRoot}
           mcpTools={rt.mcpTools}
           hasApi={Boolean(rt.api)}
-          onOpenSettingsLlm={() => setActiveView("settings")}
-          onOpenSettingsMcp={() => setActiveView("settings")}
+          onOpenSettingsLlm={() => openSettings("llm")}
+          onOpenSettingsMcp={() => openSettings("mcp")}
           showDataPanel={rt.showDataPanel}
           onToggleDataPanel={() => rt.setShowDataPanel((v) => !v)}
           exportPass={rt.exportPass}
@@ -160,10 +168,22 @@ export function App() {
           providerMode={rt.providerMode}
           dataRoot={rt.dataRoot}
           onCycleTheme={cycleTheme}
-          onOpenDataPanel={() => {
-            setActiveView("workbench");
-            rt.setShowDataPanel(true);
-          }}
+          onSetTheme={setTheme}
+          focusSection={settingsSection}
+          onProviderSaved={(mode) => rt.setProviderMode(mode)}
+          showDataPanel={rt.showDataPanel}
+          onToggleDataPanel={() => rt.setShowDataPanel((v) => !v)}
+          exportPass={rt.exportPass}
+          onExportPass={rt.setExportPass}
+          exportBusy={rt.exportBusy}
+          exportMsg={rt.exportMsg}
+          onExport={() => void rt.onExport()}
+          exportAvailable={Boolean(rt.api?.exportEncrypted)}
+          uninstallBusy={rt.uninstallBusy}
+          uninstallPreview={rt.uninstallPreview}
+          onUninstallInventory={() => void rt.onUninstallInventory()}
+          onUninstallDryRun={() => void rt.onUninstallDryRun()}
+          onUninstallExecute={() => void rt.onUninstallExecute()}
         />
       )}
 

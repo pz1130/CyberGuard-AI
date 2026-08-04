@@ -37,3 +37,29 @@ export async function sessionEvents(sessionId: string): Promise<Ev[]> {
 export function onEvent(handler: (ev: Ev) => void): () => void {
   return getApi()?.onEvent(handler) || (() => undefined);
 }
+
+export async function providerGet() {
+  return getApi()?.providerGet?.();
+}
+
+export async function providerSet(params: {
+  mode?: string;
+  base_url?: string;
+  model?: string;
+  temperature?: number;
+  api_key?: string;
+}) {
+  return getApi()?.providerSet?.(params);
+}
+
+export async function prefsGet() {
+  return getApi()?.prefsGet?.();
+}
+
+export async function prefsSet(params: { theme?: string; font_size?: string }) {
+  return getApi()?.prefsSet?.(params);
+}
+
+export async function mcpConfigList() {
+  return getApi()?.mcpConfigList?.();
+}

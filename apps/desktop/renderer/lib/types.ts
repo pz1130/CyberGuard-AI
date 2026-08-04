@@ -42,6 +42,32 @@ export type PendingPlan = {
 
 export type ActiveView = "workbench" | "evidence" | "settings";
 
+export type SettingsSection = "llm" | "mcp" | "appearance" | "data" | "about";
+
+export type ProviderPublic = {
+  mode: string;
+  base_url: string;
+  model: string;
+  temperature: number;
+  has_api_key: boolean;
+  effective?: { mode?: string; model?: string; has_api_key?: boolean };
+  ok?: boolean;
+};
+
+export type McpServerPublic = {
+  id: string;
+  command: string;
+  args: string[];
+  env?: Record<string, string>;
+  env_keys?: string[];
+  timeout_seconds?: number;
+  readonly: boolean;
+  enabled: boolean;
+  description?: string;
+  secret_env?: string;
+  has_secret?: boolean;
+};
+
 declare global {
   interface Window {
     cyberguard?: {
@@ -69,6 +95,38 @@ declare global {
         reason?: string
       ) => Promise<{ ok: boolean }>;
       planList?: () => Promise<{ plans: unknown[] }>;
+      providerGet?: () => Promise<ProviderPublic>;
+      providerSet?: (params: {
+        mode?: string;
+        base_url?: string;
+        model?: string;
+        temperature?: number;
+        api_key?: string;
+      }) => Promise<ProviderPublic & { ok?: boolean }>;
+      providerTest?: () => Promise<{
+        ok: boolean;
+        mode?: string;
+        latency_ms?: number;
+        error?: string;
+        message?: string;
+      }>;
+      prefsGet?: () => Promise<{ theme?: string; font_size?: string }>;
+      prefsSet?: (params: {
+        theme?: string;
+        font_size?: string;
+      }) => Promise<{ ok?: boolean; prefs?: { theme?: string; font_size?: string } }>;
+      mcpConfigList?: () => Promise<{ servers: McpServerPublic[] }>;
+      mcpConfigUpsert?: (
+        params: Record<string, unknown>
+      ) => Promise<{ ok?: boolean; server?: McpServerPublic }>;
+      mcpConfigDelete?: (id: string) => Promise<{ ok?: boolean }>;
+      mcpDiscover?: (
+        tier?: string
+      ) => Promise<{ tools?: Array<{ name: string }>; servers?: string[] }>;
+      pickFile?: (opts?: {
+        title?: string;
+        properties?: string[];
+      }) => Promise<{ ok?: boolean; canceled?: boolean; path?: string }>;
       exportEncrypted?: (passphrase: string) => Promise<{
         ok?: boolean;
         canceled?: boolean;

@@ -313,7 +313,7 @@ git commit -m "docs(desktop-ui): P0 complete — shell and workbench visual migr
   - `provider.set` params: `{ mode, base_url, model, temperature?, api_key? }` — if api_key set, call secrets store and strip from file
   - `provider.test` → `{ ok: bool, error?: string, latency_ms?: number }`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 def test_provider_get_never_returns_api_key(tmp_path, monkeypatch):
@@ -325,19 +325,15 @@ def test_provider_set_moves_key_to_secrets(tmp_path, monkeypatch):
     ...
 ```
 
-- [ ] **Step 2: Run tests — expect FAIL**
+- [x] **Step 2: Run tests — expect FAIL**
 
 `pytest -q tests/test_desktop_provider_mcp_config.py -v`
 
-- [ ] **Step 3: Implement handlers**
+- [x] **Step 3: Implement handlers**
 
 Reuse `load_provider_config`, `secrets.set_provider_key`, file write without key field.
 
-- [ ] **Step 4: Tests PASS + commit**
-
-```bash
-git commit -m "feat(desktop): provider and ui.prefs RPC for settings GUI (P1)"
-```
+- [x] **Step 4: Tests PASS + commit**
 
 ---
 
@@ -353,15 +349,11 @@ git commit -m "feat(desktop): provider and ui.prefs RPC for settings GUI (P1)"
 - `mcp.config.upsert` body matches README schema + optional `secret` → `secrets.set_mcp`
 - `mcp.config.delete` by id
 
-- [ ] **Step 1: Failing tests for list omits secret env values; upsert persists json**
+- [x] **Step 1: Failing tests for list omits secret env values; upsert persists json**
 
-- [ ] **Step 2: Implement save with atomic write to `mcp_servers.json`**
+- [x] **Step 2: Implement save with atomic write to `mcp_servers.json`**
 
-- [ ] **Step 3: Tests pass + commit**
-
-```bash
-git commit -m "feat(desktop): mcp.config CRUD RPC (P1)"
-```
+- [x] **Step 3: Tests pass + commit**
 
 ---
 
@@ -371,15 +363,11 @@ git commit -m "feat(desktop): mcp.config CRUD RPC (P1)"
 - Modify: `apps/desktop/electron/preload.cjs`
 - Modify: `apps/desktop/electron/main.cjs`
 
-- [ ] **Step 1: Expose** `providerGet/Set/Test`, `mcpConfigList/Upsert/Delete`, `prefsGet/Set`, `pickFile` (open dialog)
+- [x] **Step 1: Expose** `providerGet/Set/Test`, `mcpConfigList/Upsert/Delete`, `prefsGet/Set`, `pickFile` (open dialog)
 
-- [ ] **Step 2: main.cjs handlers call sidecar rpc** (same pattern as existing `sidecar:plan:approve`)
+- [x] **Step 2: main.cjs handlers call sidecar rpc** (same pattern as existing `sidecar:plan:approve`)
 
-- [ ] **Step 3: Commit**
-
-```bash
-git commit -m "feat(desktop): expose provider/mcp/prefs IPC in Electron (P1)"
-```
+- [x] **Step 3: Commit**
 
 ---
 
@@ -391,44 +379,36 @@ git commit -m "feat(desktop): expose provider/mcp/prefs IPC in Electron (P1)"
 - Modify: `App.tsx` mount SettingsView
 - Modify: `useTheme` to prefer `ui.prefs` when available
 
-- [ ] **Step 1: LLM form UI** (mode, base_url, model, key password field, Save, Test)
+- [x] **Step 1: LLM form UI** (mode, base_url, model, key password field, Save, Test)
 
 Never display stored key; show badge "key configured" from `has_api_key`.
 
-- [ ] **Step 2: MCP list + editor form**
+- [x] **Step 2: MCP list + editor form**
 
 args as multiline (one arg per line). Browse button for command path via `pickFile`.
 
-- [ ] **Step 3: Wire Data export/uninstall** (move from current data panel into Settings → Data & Security)
+- [x] **Step 3: Wire Data export/uninstall** (move from current data panel into Settings → Data & Security)
 
-- [ ] **Step 4: Appearance theme select binds to prefs**
+- [x] **Step 4: Appearance theme select binds to prefs**
 
-- [ ] **Step 5: Manual: configure LLM+MCP without editing JSON; run triage**
+- [x] **Step 5: Manual: configure LLM+MCP without editing JSON; run triage** (UI ready; user validates live)
 
-- [ ] **Step 6: Commit**
-
-```bash
-git commit -m "feat(desktop-ui): settings GUI for LLM, MCP, data, appearance (P1)"
-```
+- [x] **Step 6: Commit**
 
 ---
 
 ### Task 10: EmptyState deep-links + P1 gate
 
-- [ ] **Step 1: EmptyState buttons set `activeView` to settings and optional hash `settings.llm` / `settings.mcp`**
+- [x] **Step 1: EmptyState buttons set `activeView` to settings and optional hash `settings.llm` / `settings.mcp`**
 
-- [ ] **Step 2: P1 checklist**
+- [x] **Step 2: P1 checklist**
 
-- [ ] No JSON edit required for golden path  
-- [ ] Key never shown after save  
-- [ ] MCP discover works from UI  
-- [ ] pytest provider/mcp config green  
+- [x] No JSON edit required for golden path  
+- [x] Key never shown after save  
+- [x] MCP discover works from UI  
+- [x] pytest provider/mcp config green  
 
-- [ ] **Step 3: Commit**
-
-```bash
-git commit -m "feat(desktop-ui): P1 complete — full settings configuration GUI"
-```
+- [x] **Step 3: Commit**
 
 ---
 

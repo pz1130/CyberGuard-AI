@@ -124,6 +124,138 @@ def load_provider_config() -> ProviderConfig:
     return cfg
 
 
+def get_provider_public() -> Dict[str, Any]:
+    """Settings-safe provider view — never includes api_key."""
+    file_cfg = _load_file_config()
+    mode = str(file_cfg.get("mode") or "mock").strip().lower()
+    if mode not in ("mock", "live"):
+        mode = "mock"
+    base_url = str(
+        file_cfg.get("base_url") or "https://api.openai.com/v1"
+    ).rstrip("/")
+    model = str(file_cfg.get("model") or "gpt-4o-mini")
+    try:
+        temperature = float(file_cfg.get("temperature", 0.3))
+    except (TypeError, ValueError):
+        temperature = 0.3
+
+    has_key = False
+    try:
+        from apps.desktop.sidecar.secrets_store import get_provider_api_key
+
+        has_key = bool(get_provider_api_key())
+    except Exception:  # noqa: BLE001
+        has_key = False
+    if not has_key:
+        has_key = bool(file_cfg.get("api_key"))
+
+    # Effective runtime (env may override)
+    effective = load_provider_config().public_status()
+    return {
+        "mode": mode,
+        "base_url": base_url,
+        "model": model,
+        "temperature": temperature,
+        "has_api_key": has_key,
+        "effective": effective,
+    }
+
+
+def set_provider_config(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Persist public fields; move api_key to secrets store when provided."""
+    file_cfg = _load_file_config()
+    mode = str(params.get("mode") if params.get("mode") is not None else file_cfg.get("mode") or "mock")
+    mode = mode.strip().lower()
+    if mode not in ("mock", "live"):
+        mode = "mock"
+
+    base_url = str(
+        params.get("base_url")
+        if params.get("base_url") is not None
+        else file_cfg.get("base_url")
+        or "https://api.openai.com/v1"
+    ).rstrip("/")
+    model = str(
+        params.get("model")
+        if params.get("model") is not None
+        else file_cfg.get("model")
+        or "gpt-4o-mini"
+    )
+    temp_in = params.get("temperature")
+    if temp_in is None:
+        temp_in = file_cfg.get("temperature", 0.3)
+    try:
+        temperature = float(temp_in)
+    except (TypeError, ValueError):
+        temperature = 0.3
+
+    api_key = params.get("api_key")
+    if api_key is not None and str(api_key).strip():
+        from apps.desktop.sidecar.secrets_store import set_provider_api_key
+
+        set_provider_api_key(str(api_key).strip())
+
+    out: Dict[str, Any] = {
+        "mode": mode,
+        "base_url": base_url,
+        "model": model,
+        "temperature": temperature,
+        # never persist key in file
+        "api_key_in_keychain": True,
+    }
+    path = data_root() / "provider.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(out, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+
+    return get_provider_public() | {"ok": True}
+
+
+async def test_provider_connection() -> Dict[str, Any]:
+    """Cheap connectivity check for Settings → Test."""
+    import time
+
+    cfg = load_provider_config()
+    t0 = time.perf_counter()
+    if not cfg.is_live:
+        return {
+            "ok": True,
+            "mode": "mock",
+            "latency_ms": int((time.perf_counter() - t0) * 1000),
+            "message": "mock mode — no network call",
+        }
+    try:
+        from openai import AsyncOpenAI
+
+        client = AsyncOpenAI(api_key=cfg.api_key, base_url=cfg.base_url)
+        # Minimal completion — 1 token style prompt
+        await client.chat.completions.create(
+            model=cfg.model,
+            messages=[{"role": "user", "content": "ping"}],
+            max_tokens=1,
+            temperature=0,
+        )
+        return {
+            "ok": True,
+            "mode": "live",
+            "model": cfg.model,
+            "latency_ms": int((time.perf_counter() - t0) * 1000),
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "ok": False,
+            "mode": "live",
+            "latency_ms": int((time.perf_counter() - t0) * 1000),
+            "error": f"{type(exc).__name__}: {exc}"[:400],
+        }
+
+
 async def live_chat(
     cfg: ProviderConfig,
     messages: List[Dict[str, Any]],

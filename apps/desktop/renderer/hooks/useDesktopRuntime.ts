@@ -398,6 +398,7 @@ export function useDesktopRuntime() {
     sessionId,
     dataRoot,
     providerMode,
+    setProviderMode,
     sandboxImpl,
     sandboxMode,
     fvWarning,

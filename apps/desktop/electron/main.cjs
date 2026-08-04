@@ -368,6 +368,41 @@ ipcMain.handle("sidecar:plan:reject", async (_e, { planId, reason }) =>
 );
 ipcMain.handle("sidecar:plan:list", async () => rpc("plan.list", {}));
 
+// P1 — provider / prefs / mcp config
+ipcMain.handle("sidecar:provider:get", async () => rpc("provider.get", {}));
+ipcMain.handle("sidecar:provider:set", async (_e, params) =>
+  rpc("provider.set", params || {})
+);
+ipcMain.handle("sidecar:provider:test", async () => rpc("provider.test", {}));
+ipcMain.handle("sidecar:prefs:get", async () => rpc("ui.prefs.get", {}));
+ipcMain.handle("sidecar:prefs:set", async (_e, params) =>
+  rpc("ui.prefs.set", params || {})
+);
+ipcMain.handle("sidecar:mcp-config:list", async () =>
+  rpc("mcp.config.list", {})
+);
+ipcMain.handle("sidecar:mcp-config:upsert", async (_e, params) =>
+  rpc("mcp.config.upsert", params || {})
+);
+ipcMain.handle("sidecar:mcp-config:delete", async (_e, { id } = {}) =>
+  rpc("mcp.config.delete", { id })
+);
+ipcMain.handle("sidecar:mcp:discover", async (_e, { tier } = {}) =>
+  rpc("mcp.discover", { tier: tier || "readonly" })
+);
+ipcMain.handle("dialog:pick-file", async (event, opts = {}) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const { canceled, filePaths } = await dialog.showOpenDialog(win || undefined, {
+    title: opts.title || "Select file",
+    properties: opts.properties || ["openFile"],
+    filters: opts.filters || [{ name: "All", extensions: ["*"] }],
+  });
+  if (canceled || !filePaths || !filePaths.length) {
+    return { ok: false, canceled: true };
+  }
+  return { ok: true, path: filePaths[0], paths: filePaths };
+});
+
 // M7 — encrypted export (save dialog on host, encrypt via sidecar)
 ipcMain.handle("sidecar:export:encrypted", async (event, { passphrase }) => {
   if (!passphrase || String(passphrase).length < 8) {
