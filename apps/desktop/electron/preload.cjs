@@ -39,6 +39,8 @@ contextBridge.exposeInMainWorld("cyberguard", {
     ipcRenderer.invoke("sidecar:mcp-config:install-file-alerts", { path }),
   mcpDiscover: (tier) => ipcRenderer.invoke("sidecar:mcp:discover", { tier }),
   pickFile: (opts) => ipcRenderer.invoke("dialog:pick-file", opts || {}),
+  showItemInFolder: (path) =>
+    ipcRenderer.invoke("shell:show-item-in-folder", { path }),
   // P2 evidence
   evidenceList: (limit) =>
     ipcRenderer.invoke("sidecar:evidence:list", { limit }),

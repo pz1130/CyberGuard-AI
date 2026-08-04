@@ -1,0 +1,9 @@
+id,severity,title,host,user,source,count,first_seen,last_seen,tags,summary
+ALT-2026-8841,critical,Possible ransomware staging — mass file rename,fs-finance-03,svc_backup,edr,1,2026-08-04T08:12:01Z,2026-08-04T08:12:41Z,ransomware|file_ops,EDR observed rapid extension change across share Finance$ within 40s.
+ALT-2026-8830,high,Suspicious PowerShell download cradle,ws-042,j.chen,siem,12,2026-08-04T07:55:10Z,2026-08-04T08:10:22Z,lolbin|powershell|initial_access,Encoded IEX + WebClient pattern; parent is WinWord.exe.
+ALT-2026-8812,high,Successful login after brute force window,jump-01,admin,auth,1,2026-08-04T06:40:00Z,2026-08-04T06:41:12Z,bruteforce|credential_access,84 failed SSH then one success from 203.0.113.44.
+ALT-2026-8799,medium,Failed SSH bursts,jump-01,root,auth,84,2026-08-04T06:20:00Z,2026-08-04T06:39:50Z,bruteforce|noise,External scan pattern; no success in this window.
+ALT-2026-8755,medium,New admin group membership,dc-01,helpdesk_bot,iam,1,2026-08-03T22:11:00Z,2026-08-03T22:11:00Z,privilege_escalation|ad,Account j.chen added to Domain Admins outside change window.
+ALT-2026-8701,low,AV signature update lag,ws-017,,edr,1,2026-08-03T18:00:00Z,2026-08-04T08:00:00Z,hygiene,Definitions older than 72h.
+ALT-2026-8688,medium,Unusual OAuth app consent,saas-m365,p.nguyen,cloud,1,2026-08-04T05:02:11Z,2026-08-04T05:02:11Z,cloud|oauth,App requests Mail.ReadWrite + offline_access; publisher unverified.
+ALT-2026-8610,low,Port scan noise from partner VPN,fw-edge-02,,nids,220,2026-08-04T01:00:00Z,2026-08-04T07:00:00Z,recon|noise,Known partner range; ticket open for allowlist review.

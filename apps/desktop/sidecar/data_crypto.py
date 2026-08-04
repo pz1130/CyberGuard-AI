@@ -138,7 +138,9 @@ def decrypt_title(stored: str) -> str:
     try:
         return decrypt_text(key, stored[5:])
     except Exception:  # noqa: BLE001
-        logger.warning("title decrypt failed")
+        # Expected for legacy titles after key backend migration; SessionStore
+        # recovers from first user_task. Avoid spamming WARNING logs.
+        logger.debug("title decrypt failed (will try session recovery)")
         return "[encrypted title]"
 
 

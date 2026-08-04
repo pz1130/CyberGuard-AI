@@ -152,25 +152,62 @@ ciphertext without the key is unreadable. Does not replace FileVault (INV-38).
 
 ## Real MCP (stdio, M1.5)
 
+### Preferred: file-backed alerts (UI)
+
+In the app: **Settings → MCP → Install file alerts MCP** (built-in sample) or
+**Install from file…** (your JSON list / CSV export).
+
+Tools: `list_alerts`, `get_alert`, `search_alerts` (all readonly).
+
+**JSON** — array of objects (or `{ "alerts": [ ... ] }`):
+
+```json
+[
+  {
+    "id": "ALT-1",
+    "severity": "high",
+    "title": "…",
+    "host": "ws-01",
+    "user": "alice",
+    "source": "siem",
+    "count": 3,
+    "summary": "…",
+    "tags": ["powershell"]
+  }
+]
+```
+
+**CSV** — header row; `tags` pipe-separated. See `apps/desktop/fixtures/sample_alerts.csv`.
+
+Fixtures:
+
+- `apps/desktop/fixtures/file_alerts_mcp_server.py`
+- `apps/desktop/fixtures/sample_alerts.json` / `sample_alerts.csv`
+
+### Manual `mcp_servers.json`
+
 Config file: `{data_root}/mcp_servers.json`
 
 ```json
 {
   "servers": [
     {
-      "id": "alerts",
-      "command": "python3",
-      "args": ["/absolute/path/to/your_mcp_server.py"],
+      "id": "file-alerts",
+      "command": "/path/to/.venv/bin/python",
+      "args": [
+        "/path/to/apps/desktop/fixtures/file_alerts_mcp_server.py",
+        "/path/to/your_alerts.json"
+      ],
       "readonly": true,
       "enabled": true,
       "timeout_seconds": 30,
-      "description": "Read-only alert source"
+      "description": "File-backed alerts"
     }
   ]
 }
 ```
 
-Or env (single server):
+Or env (single server, legacy echo demo):
 
 ```bash
 export CYBERGUARD_MCP_ID=echo

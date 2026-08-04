@@ -172,6 +172,9 @@ declare global {
         title?: string;
         properties?: string[];
       }) => Promise<{ ok?: boolean; canceled?: boolean; path?: string }>;
+      showItemInFolder?: (
+        path: string
+      ) => Promise<{ ok?: boolean; error?: string; path?: string }>;
       evidenceList?: (limit?: number) => Promise<{ evidence: EvidenceItem[] }>;
       evidenceRegister?: (
         path: string,

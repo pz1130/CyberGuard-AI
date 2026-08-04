@@ -127,6 +127,22 @@ export function EvidenceView({
     }
   };
 
+  const onReveal = async (filePath: string) => {
+    if (!api?.showItemInFolder) {
+      setMsg("Reveal requires Electron shell");
+      return;
+    }
+    setBusy(true);
+    try {
+      const r = await api.showItemInFolder(filePath);
+      if (!r?.ok) setMsg(String(r?.error || "reveal failed"));
+    } catch (e) {
+      setMsg(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const toggleExpand = (id: string) => {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
   };
@@ -278,6 +294,15 @@ export function EvidenceView({
                           disabled={busy}
                         >
                           Verify
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => void onReveal(it.path)}
+                          disabled={busy || !it.path}
+                          title="Show in Finder (read-only reveal)"
+                        >
+                          Reveal
                         </button>
                         <button
                           type="button"

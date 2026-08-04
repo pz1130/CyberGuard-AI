@@ -547,7 +547,16 @@ class MockAgentHost:
                 preferred = None
                 task_l = (messages[-1].get("content") or "").lower() if messages else ""
                 if any(k in task_l for k in ("告警", "alert", "分诊", "triage")):
+                    # Prefer file-backed alerts MCP over legacy echo demo
                     preferred = next(
+                        (
+                            n
+                            for n in names
+                            if "list_alerts" in n and "file-alerts" in n
+                        ),
+                        None,
+                    )
+                    preferred = preferred or next(
                         (n for n in names if "list_alerts" in n), None
                     )
                 # Prefer load_skill when task names an SOP or asks for procedure

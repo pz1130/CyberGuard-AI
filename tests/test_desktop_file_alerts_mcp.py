@@ -61,3 +61,30 @@ async def test_file_alerts_tools_call_sample(data_env: Path, tmp_path):
     assert "result" in msg, msg
     blob = json.dumps(msg["result"])
     assert "ALT-2026" in blob or "severity" in blob
+
+
+@pytest.mark.asyncio
+async def test_file_alerts_from_csv(data_env: Path, tmp_path):
+    csv_path = (
+        Path(__file__).resolve().parents[1]
+        / "apps"
+        / "desktop"
+        / "fixtures"
+        / "sample_alerts.csv"
+    )
+    assert csv_path.is_file()
+    msg = await _rpc("mcp.config.install_file_alerts", {"path": str(csv_path)})
+    assert msg["result"]["ok"] is True
+    disc = await _rpc("mcp.discover", {"tier": "readonly"})
+    names = [t["name"] for t in disc["result"].get("tools") or []]
+    search_name = next(n for n in names if n.endswith("search_alerts"))
+    msg = await _rpc(
+        "mcp.call",
+        {
+            "name": search_name,
+            "arguments": {"query": "powershell", "limit": 5},
+            "tier": "readonly",
+        },
+    )
+    blob = json.dumps(msg["result"])
+    assert "powershell" in blob.lower() or "PowerShell" in blob

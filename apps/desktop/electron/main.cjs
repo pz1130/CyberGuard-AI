@@ -13,6 +13,7 @@ const {
   Tray,
   Menu,
   nativeImage,
+  shell,
 } = require("electron");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
@@ -416,6 +417,22 @@ ipcMain.handle("dialog:pick-file", async (event, opts = {}) => {
     return { ok: false, canceled: true };
   }
   return { ok: true, path: filePaths[0], paths: filePaths };
+});
+
+// Reveal path in Finder (evidence browser); never open for write
+ipcMain.handle("shell:show-item-in-folder", async (_e, { path: target } = {}) => {
+  if (!target || typeof target !== "string") {
+    return { ok: false, error: "path required" };
+  }
+  try {
+    if (!fs.existsSync(target)) {
+      return { ok: false, error: "not_found" };
+    }
+    shell.showItemInFolder(target);
+    return { ok: true, path: target };
+  } catch (err) {
+    return { ok: false, error: String(err && err.message ? err.message : err) };
+  }
 });
 
 // P2 — evidence library
