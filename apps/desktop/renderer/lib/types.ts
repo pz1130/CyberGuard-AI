@@ -145,6 +145,10 @@ declare global {
         params: Record<string, unknown>
       ) => Promise<{ ok?: boolean; server?: McpServerPublic }>;
       mcpConfigDelete?: (id: string) => Promise<{ ok?: boolean }>;
+      mcpConfigInstallDemo?: () => Promise<{
+        ok?: boolean;
+        server?: McpServerPublic;
+      }>;
       mcpDiscover?: (
         tier?: string
       ) => Promise<{ tools?: Array<{ name: string }>; servers?: string[] }>;

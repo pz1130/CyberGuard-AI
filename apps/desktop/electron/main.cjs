@@ -387,6 +387,9 @@ ipcMain.handle("sidecar:mcp-config:upsert", async (_e, params) =>
 ipcMain.handle("sidecar:mcp-config:delete", async (_e, { id } = {}) =>
   rpc("mcp.config.delete", { id })
 );
+ipcMain.handle("sidecar:mcp-config:install-demo", async () =>
+  rpc("mcp.config.install_demo", {})
+);
 ipcMain.handle("sidecar:mcp:discover", async (_e, { tier } = {}) =>
   rpc("mcp.discover", { tier: tier || "readonly" })
 );

@@ -161,6 +161,23 @@ async def test_mcp_config_list_omits_secrets(data_env: Path):
 
 
 @pytest.mark.asyncio
+async def test_mcp_config_install_demo(data_env: Path):
+    res = _result(await _rpc("mcp.config.install_demo"))
+    assert res["ok"] is True
+    assert res["server"]["id"] == "echo"
+    assert res["server"]["readonly"] is True
+    path = data_env / "mcp_servers.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["servers"][0]["id"] == "echo"
+    args = data["servers"][0]["args"]
+    assert any("echo_mcp_server.py" in str(a) for a in args)
+    # discover should surface list_alerts
+    disc = _result(await _rpc("mcp.discover", {"tier": "readonly"}))
+    names = [t["name"] for t in disc.get("tools") or []]
+    assert any("list_alerts" in n for n in names), names
+
+
+@pytest.mark.asyncio
 async def test_mcp_config_upsert_and_delete(data_env: Path):
     res = _result(
         await _rpc(

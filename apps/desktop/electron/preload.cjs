@@ -29,6 +29,8 @@ contextBridge.exposeInMainWorld("cyberguard", {
     ipcRenderer.invoke("sidecar:mcp-config:upsert", params || {}),
   mcpConfigDelete: (id) =>
     ipcRenderer.invoke("sidecar:mcp-config:delete", { id }),
+  mcpConfigInstallDemo: () =>
+    ipcRenderer.invoke("sidecar:mcp-config:install-demo"),
   mcpDiscover: (tier) => ipcRenderer.invoke("sidecar:mcp:discover", { tier }),
   pickFile: (opts) => ipcRenderer.invoke("dialog:pick-file", opts || {}),
   // P2 evidence

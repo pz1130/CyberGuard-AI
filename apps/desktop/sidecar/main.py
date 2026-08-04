@@ -554,6 +554,18 @@ class SidecarServer:
                     )
                 return
 
+            if method == "mcp.config.install_demo":
+                from apps.desktop.sidecar.mcp_config import install_demo_echo_mcp
+
+                try:
+                    out = install_demo_echo_mcp()
+                    self._write(result_msg(req_id, out))
+                except Exception as exc:  # noqa: BLE001
+                    self._write(
+                        error_msg(req_id, "mcp.config", f"{type(exc).__name__}: {exc}")
+                    )
+                return
+
             if method == "mcp.list":
                 self._write(
                     result_msg(

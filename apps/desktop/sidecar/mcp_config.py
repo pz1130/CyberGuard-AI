@@ -237,6 +237,51 @@ def delete_mcp_server(server_id: str) -> Dict[str, Any]:
     }
 
 
+def demo_echo_server_paths() -> Dict[str, str]:
+    """Resolve python + echo MCP script for one-click golden-path demo."""
+    import sys
+
+    # mcp_config.py → sidecar → desktop → apps → repo root
+    here = Path(__file__).resolve()
+    desktop_root = here.parents[1]
+    repo_root = here.parents[3]
+    candidates = [
+        desktop_root / "fixtures" / "echo_mcp_server.py",
+        repo_root / "tests" / "fixtures" / "echo_mcp_server.py",
+        repo_root / "apps" / "desktop" / "fixtures" / "echo_mcp_server.py",
+    ]
+    script: Optional[Path] = None
+    for c in candidates:
+        if c.is_file():
+            script = c
+            break
+    if script is None:
+        raise FileNotFoundError(
+            "echo_mcp_server.py not found under apps/desktop/fixtures or tests/fixtures"
+        )
+    return {
+        "command": sys.executable,
+        "script": str(script),
+        "id": "echo",
+    }
+
+
+def install_demo_echo_mcp() -> Dict[str, Any]:
+    """Upsert the golden-path demo alert MCP (list_alerts) — no secrets."""
+    paths = demo_echo_server_paths()
+    return upsert_mcp_server(
+        {
+            "id": paths["id"],
+            "command": paths["command"],
+            "args": [paths["script"]],
+            "readonly": True,
+            "enabled": True,
+            "description": "Demo alerts (list_alerts) for M1.5 golden path",
+            "timeout_seconds": 30,
+        }
+    )
+
+
 def load_mcp_servers() -> List[McpServerConfig]:
     servers: List[McpServerConfig] = []
 

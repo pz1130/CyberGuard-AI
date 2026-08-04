@@ -2,7 +2,15 @@
 
 All notable changes to CyberGuard are documented here.
 
-## [Unreleased] — `security-enhance`
+## [Unreleased] — `feature/desktop-app-frontend` (+ prior `security-enhance`)
+
+### Desktop UI (P0–P3)
+
+- **P0 shell**: design tokens, dual theme (dark default), chrome nav, Workbench three-column split (`App` shell + `useDesktopRuntime` + components/views).
+- **P1 Settings GUI**: LLM provider get/set/test (API keys → secrets store, never re-shown); MCP config list/upsert/delete; `ui.prefs` theme; EmptyState deep-links.
+- **P2 Evidence page**: list / register (file picker) / verify integrity with sha256 expand.
+- **P3 polish**: ⌘1/2/N/, hotkeys, font-size prefs, documentation status.
+- **Demo MCP one-click**: Settings → Install demo alerts MCP (`echo` + `list_alerts`) for M1.5 golden path without hand-editing JSON.
 
 ### Desktop (macOS standalone)
 

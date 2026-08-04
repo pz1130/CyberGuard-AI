@@ -281,6 +281,29 @@ export function SettingsView({
     }
   };
 
+  const onInstallDemo = async () => {
+    if (!api?.mcpConfigInstallDemo) {
+      setMcpMsg("install demo API unavailable (open via Electron)");
+      return;
+    }
+    setMcpBusy(true);
+    setMcpMsg(null);
+    try {
+      const r = await api.mcpConfigInstallDemo();
+      setMcpMsg(
+        r.ok === false
+          ? "install demo failed"
+          : "Installed demo MCP id=echo (list_alerts). Click Discover tools."
+      );
+      await loadMcp();
+      if (r.server) onSelectServer(r.server);
+    } catch (e) {
+      setMcpMsg(String(e));
+    } finally {
+      setMcpBusy(false);
+    }
+  };
+
   const onThemeSelect = async (next: ThemeMode) => {
     onSetTheme(next);
     try {
@@ -419,6 +442,15 @@ export function SettingsView({
           <div className="empty-actions mt-10">
             <button type="button" className="secondary" onClick={onNewServer}>
               + New
+            </button>
+            <button
+              type="button"
+              className="primary"
+              onClick={() => void onInstallDemo()}
+              disabled={mcpBusy}
+              title="Install golden-path demo MCP (list_alerts sample)"
+            >
+              Install demo alerts MCP
             </button>
             <button
               type="button"
