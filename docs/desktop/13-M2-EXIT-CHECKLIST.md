@@ -41,7 +41,7 @@ export PYTHONPATH="packages:$(pwd)"
 | 9 | TCC 未授权时有明确提示（非静默当「文件不存在」） | **PASS（探测）** | `tcc_status` + UI 横幅/状态栏 `tcc: restricted`；FDA 为启发式，非公证 API |
 | 10 | 状态栏展示 sandbox / tcc / llm / tier | **PASS** | `App.tsx` status bar；`ping` 返回 sandbox+tcc |
 | 11 | readonly 档无 Exec/Edit 端口 | **PASS** | `test_escape_readonly_tier_no_exec_edit_ports` |
-| 12 | 开发期签名稳定，TCC 不因 rebuild 失效 | **部分完成** | `npm run codesign:identity` / `codesign:dev` / `dev:signed`；固定 CN=`CyberGuard Dev`、bundle=`com.cyberguard.desktop.dev`。需本机一次钥匙串 Trust + FDA 授权；公证仍归 M7 |
+| 12 | 开发期签名稳定，TCC 不因 rebuild 失效 | **PASS（本机 2026-08-04）** | Identity `CyberGuard Dev` 已在 valid 列表；`Electron.app` → `com.cyberguard.desktop.dev` + `codesign --verify` OK；`npm run dev:signed` 可起；TCC 探针 `fda_likely`/FDA true。公证仍归 M7；`npm install` 后需重跑 `codesign:dev` |
 | 13 | 签名 / 公证 | **不做（M7）** | DEC-026 |
 | 14 | danger-full-access 默认关闭 | **PASS** | profile 生成直接拒绝 |
 
@@ -61,12 +61,12 @@ export PYTHONPATH="packages:$(pwd)"
 
 ## 仍不算 M2「全部出口通过」的原因
 
-1. **开发签名 / TCC 稳定性**已有脚本（判据 12 部分完成）—— 须本机执行 `npm run codesign:identity && npm run codesign:dev` 并完成一次 FDA 授权；CI 无钥匙串时不强制。  
-2. ~~**网络逃逸**~~ → **已加深（2026-08-04）**：`test_escape_network_denied_even_via_shell_probe` 在 Seatbelt 层用 python socket / curl 探针断言 `deny network*`；host_run 仍禁止 curl/nc。  
-3. ~~**原始证据目录**~~ → **已产品化命名**：`always_readonly_paths` = sessions / audit / logs / **evidence** / secrets / config；专项用例覆盖「整棵 data_root 误标可写时 evidence 仍拒写」。  
+1. ~~**开发签名 / TCC**~~ → **本机已过（2026-08-04）**：valid identity + signed Electron + FDA 探针 true；CI 无钥匙串时仍不强制。  
+2. ~~**网络逃逸**~~ → **已加深（2026-08-04）**：Seatbelt 网络 deny 探针用例；host_run 仍禁止 curl/nc。  
+3. ~~**原始证据目录**~~ → **已产品化命名**：`always_readonly_paths` 含 evidence/secrets/config。  
 4. 产品仍标记 **development / 禁止分发**（正确）。
 
-**建议出口签字条件**：上表 1–11、14 持续绿 + 判据 12 在本机 `codesign:verify` 通过并完成一次 FDA 授权后，可将本文件状态改为「出口通过（内部分发前）」。
+**出口签字（内部分发前）**：上表 1–12、14 在本机已绿；**仍禁止对外分发**直至 M7 真公证。
 
 ---
 
