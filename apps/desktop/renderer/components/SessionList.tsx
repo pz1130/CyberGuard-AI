@@ -37,9 +37,9 @@ export function SessionList({
   return (
     <div className="col col-sessions">
       <div className="col-head">
-        <h2>Sessions</h2>
+        <h2>会话</h2>
         <button type="button" className="col-head-action" onClick={onNew}>
-          + New
+          + 新建
         </button>
       </div>
       <div className="col-body session-list">
@@ -56,9 +56,9 @@ export function SessionList({
             >
               <span className="session-title">{displayTitle(s)}</span>
               <span className="session-meta">
-                <span>{s.event_count} ev</span>
+                <span>{s.event_count} 事件</span>
                 <span className="session-dot">·</span>
-                <span>{s.tier}</span>
+                <span>{s.tier === "readonly" ? "只读" : s.tier}</span>
                 {s.updated_at ? (
                   <>
                     <span className="session-dot">·</span>
@@ -71,12 +71,12 @@ export function SessionList({
               <button
                 type="button"
                 className="session-del"
-                title="Delete (crypto-shred)"
+                title="删除会话（crypto-shred）"
                 onClick={(e) => {
                   e.stopPropagation();
                   if (
                     window.confirm(
-                      "Delete this session? Body will be crypto-shredded."
+                      "删除此会话？正文将 crypto-shred，不可恢复。"
                     )
                   ) {
                     onDelete(s.session_id);
@@ -89,9 +89,12 @@ export function SessionList({
           </div>
         ))}
         {sessions.length === 0 && (
-          <p className="muted-copy session-empty">
-            No sessions yet. Type a task and Run.
-          </p>
+          <div className="session-empty-card">
+            <p className="session-empty-title">还没有会话</p>
+            <p className="muted-copy session-empty">
+              在中间填任务并 Run，会自动创建一条调查会话。
+            </p>
+          </div>
         )}
       </div>
     </div>

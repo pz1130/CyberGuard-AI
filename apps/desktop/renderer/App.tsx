@@ -78,21 +78,21 @@ export function App() {
               className={`nav-tab${activeView === "workbench" ? " active" : ""}`}
               onClick={() => setActiveView("workbench")}
             >
-              Workbench
+              调查
             </button>
             <button
               type="button"
               className={`nav-tab${activeView === "evidence" ? " active" : ""}`}
               onClick={() => setActiveView("evidence")}
             >
-              Evidence
+              证据
             </button>
             <button
               type="button"
               className={`nav-tab${activeView === "settings" ? " active" : ""}`}
               onClick={() => openSettings()}
             >
-              Settings
+              设置
             </button>
           </nav>
         </div>
@@ -160,7 +160,7 @@ export function App() {
               className="alert-chip warn alert-chip-btn"
               onClick={() => openSettings("llm")}
             >
-              LLM 为 mock · 点此配置 key
+              LLM 为 mock · 演示请切 live / 配本地模型
             </button>
           )}
         </div>

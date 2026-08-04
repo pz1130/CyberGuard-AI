@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { DataPanel } from "../components/DataPanel";
-import { EmptyState } from "../components/EmptyState";
+import { EmptyState, SAMPLE_TASKS } from "../components/EmptyState";
 import { EventCard } from "../components/EventCard";
 import { Markdown } from "../components/Markdown";
 import { SessionList } from "../components/SessionList";
@@ -77,22 +77,32 @@ export function WorkbenchView(props: Props) {
 
       <div className="col col-main">
         <div className="col-head">
-          <h2>Investigation</h2>
-          {props.running && <span className="pill ok">Running</span>}
-          {paused && <span className="pill warn">Paused</span>}
+          <h2>调查</h2>
+          <div className="col-head-pills">
+            {props.running && <span className="pill ok">运行中</span>}
+            {paused && <span className="pill warn">已暂停</span>}
+            {!props.running && !paused && props.events.length > 0 && (
+              <span className="pill">空闲</span>
+            )}
+          </div>
         </div>
 
         <div className="col-body timeline-wrap">
           {paused && (
             <div className="inline-alert warn">
-              <span>已暂停{props.pausedRunId ? ` · ${props.pausedRunId.slice(0, 8)}` : ""}</span>
+              <span>
+                已暂停
+                {props.pausedRunId
+                  ? ` · ${props.pausedRunId.slice(0, 8)}`
+                  : ""}
+              </span>
               {props.onResume ? (
                 <button
                   type="button"
                   className="primary"
                   onClick={() => void props.onResume?.()}
                 >
-                  Resume
+                  继续
                 </button>
               ) : null}
             </div>
@@ -104,6 +114,8 @@ export function WorkbenchView(props: Props) {
                 onOpenSettingsLlm={props.onOpenSettingsLlm}
                 onOpenSettingsMcp={props.onOpenSettingsMcp}
                 onFillSample={(text) => props.onTaskChange(text)}
+                providerMode={props.providerMode}
+                mcpToolCount={props.mcpTools.length}
               />
             )}
             {props.events.map((ev, i) => (
@@ -126,7 +138,7 @@ export function WorkbenchView(props: Props) {
                 {props.streamText ? (
                   <Markdown text={props.streamText} />
                 ) : (
-                  <div className="ev-meta">waiting…</div>
+                  <div className="ev-meta">等待首包…</div>
                 )}
               </div>
             )}
@@ -135,6 +147,21 @@ export function WorkbenchView(props: Props) {
         </div>
 
         <div className="composer">
+          {!props.task.trim() && props.events.length > 0 && (
+            <div className="sample-chips sample-chips-composer">
+              {SAMPLE_TASKS.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  className="sample-chip"
+                  disabled={props.running}
+                  onClick={() => props.onTaskChange(s.text)}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
           <textarea
             value={props.task}
             onChange={(e) => props.onTaskChange(e.target.value)}
@@ -164,7 +191,7 @@ export function WorkbenchView(props: Props) {
               onClick={() => void props.onRun()}
               disabled={!props.hasApi || props.running || !props.task.trim()}
             >
-              {props.running ? "运行中…" : "Run"}
+              {props.running ? "运行中…" : "运行"}
             </button>
             <button
               className="secondary"
@@ -172,7 +199,7 @@ export function WorkbenchView(props: Props) {
               onClick={() => void props.onAbort()}
               disabled={!props.running || !props.runId}
             >
-              Abort
+              中止
             </button>
             <button
               type="button"
@@ -180,9 +207,9 @@ export function WorkbenchView(props: Props) {
               onClick={() => setShowSteer((v) => !v)}
               disabled={!props.running || !props.runId}
             >
-              Steer
+              中途补充
             </button>
-            <span className="composer-hint">⌘↵</span>
+            <span className="composer-hint">⌘↵ 运行</span>
           </div>
           {showSteer && (
             <div className="row steer-row">
@@ -210,31 +237,46 @@ export function WorkbenchView(props: Props) {
 
       <div className="col col-context">
         <div className="col-head">
-          <h2>This run</h2>
+          <h2>本轮</h2>
         </div>
         <div className="col-body">
-          <div className="context-summary">
-            <div className="context-row">
+          <div className="ready-card">
+            <div className="ready-card-title">演示就绪</div>
+            <button
+              type="button"
+              className={`ready-row${
+                props.providerMode === "live" ? " ok" : " warn"
+              }`}
+              onClick={props.onOpenSettingsLlm}
+            >
               <span>LLM</span>
-              <span
-                className={`pill ${props.providerMode === "live" ? "ok" : "warn"}`}
-              >
-                {props.providerMode}
+              <span className="ready-val">
+                {props.providerMode === "live" ? "live ✓" : "mock · 配置"}
               </span>
-            </div>
-            <div className="context-row">
+            </button>
+            <button
+              type="button"
+              className={`ready-row${
+                props.mcpTools.length > 0 ? " ok" : ""
+              }`}
+              onClick={props.onOpenSettingsMcp}
+            >
+              <span>MCP</span>
+              <span className="ready-val">
+                {props.mcpTools.length > 0
+                  ? `${props.mcpTools.length} tools ✓`
+                  : "未发现 · 可选"}
+              </span>
+            </button>
+            <div className="ready-row static">
               <span>档位</span>
-              <span>{props.tier === "readonly" ? "只读" : "完整"}</span>
-            </div>
-            <div className="context-row">
-              <span>沙箱</span>
-              <span className="mono-sm">
-                {props.caps?.sandbox_impl || "—"}
+              <span className="ready-val">
+                {props.tier === "readonly" ? "只读" : "完整"}
               </span>
             </div>
-            <div className="context-row">
+            <div className="ready-row static">
               <span>状态</span>
-              <span>{props.runStatus}</span>
+              <span className="ready-val">{props.runStatus || "空闲"}</span>
             </div>
           </div>
 
@@ -252,19 +294,28 @@ export function WorkbenchView(props: Props) {
           )}
 
           <div className="context-actions mt-12">
+            {props.onViewEvidence ? (
+              <button
+                type="button"
+                className="secondary context-full-btn"
+                onClick={() => props.onViewEvidence?.()}
+              >
+                查看证据
+              </button>
+            ) : null}
             <button
               type="button"
               className="secondary context-full-btn"
               onClick={props.onOpenSettingsMcp}
             >
-              配置数据源
+              数据源
             </button>
             <button
               type="button"
               className="secondary context-full-btn"
               onClick={props.onOpenSettingsLlm}
             >
-              配置 LLM
+              语言模型
             </button>
           </div>
 

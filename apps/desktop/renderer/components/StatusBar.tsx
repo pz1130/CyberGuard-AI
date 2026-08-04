@@ -49,17 +49,17 @@ export function StatusBar({
     <div className="status-bar" role="status">
       <span className={pingOk ? "ok" : "bad"} title={statusLabel}>
         <span aria-hidden className="status-dot" />
-        {pingOk ? "Online" : "Offline"}
+        {pingOk ? "在线" : "离线"}
       </span>
       <span
         className={sbBad ? "bad" : sbOk ? "ok" : ""}
         title={
           sbBad
-            ? "No OS sandbox — host tools stay disabled"
+            ? "无 OS 沙箱 — 主机工具保持禁用"
             : `sandbox ${sandboxImpl}/${sandboxMode}`
         }
       >
-        {sbOk ? "Sandbox" : sbBad ? "No sandbox" : sandboxImpl}
+        {sbOk ? "沙箱" : sbBad ? "无沙箱" : sandboxImpl}
       </span>
       <span
         className={llmOk ? "ok" : "bad"}
@@ -75,10 +75,11 @@ export function StatusBar({
             : `run ${runStatus} · tier ${tier}`
         }
       >
-        {runPaused ? "Paused" : runBusy ? "Running" : "Idle"}
+        {runPaused ? "已暂停" : runBusy ? "运行中" : "空闲"}
       </span>
       <span className="status-more" title={moreTitle}>
-        {evidenceHint.replace(/^evidence:\s*/i, "Ev ")} · {tier}
+        {evidenceHint.replace(/^evidence:\s*/i, "证据 ")} ·{" "}
+        {tier === "readonly" ? "只读" : tier}
       </span>
     </div>
   );

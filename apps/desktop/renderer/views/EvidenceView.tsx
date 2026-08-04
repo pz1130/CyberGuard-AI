@@ -151,10 +151,10 @@ export function EvidenceView({
     <div className="view-pane view-enter">
       <div className="view-pane-header">
         <div>
-          <h1>Evidence</h1>
+          <h1>证据</h1>
           <p className="lede">
-            只读证据库：注册时计算 sha256，校验时重算对比。路径可在 data_root
-            外；正文不进模型上下文。状态栏：{" "}
+            只读证据库：注册时算 sha256，校验时重算对比。正文不进模型上下文。
+            {" · "}
             <span className="pill accent">{evidenceHint}</span>
           </p>
         </div>
@@ -164,7 +164,7 @@ export function EvidenceView({
             className="secondary"
             onClick={onBackToWorkbench}
           >
-            Workbench
+            返回调查
           </button>
           <button
             type="button"
@@ -172,23 +172,23 @@ export function EvidenceView({
             onClick={() => void refresh()}
             disabled={busy}
           >
-            Refresh
+            刷新
           </button>
         </div>
       </div>
 
       <div className="settings-card evidence-register">
-        <h3>Register file</h3>
+        <h3>登记文件</h3>
         <p className="data-hint">
-          选择本机文件 → sidecar 只读哈希并写入 catalog（mount: read-only）。
+          选择本机文件 → 只读哈希写入 catalog（mount: read-only）。
         </p>
         <label className="field-label">
-          Note (optional)
+          备注（可选）
           <input
             className="data-input"
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="case / ticket / context"
+            placeholder="工单 / 案件 / 上下文"
             disabled={busy}
           />
         </label>
@@ -199,7 +199,7 @@ export function EvidenceView({
             onClick={() => void onRegister()}
             disabled={busy || !api?.evidenceRegister}
           >
-            {busy ? "…" : "Register via file picker…"}
+            {busy ? "…" : "选择文件并登记…"}
           </button>
         </div>
         {msg && <pre className="data-msg">{msg}</pre>}
@@ -207,23 +207,29 @@ export function EvidenceView({
 
       <div className="settings-card mt-12">
         <h3>
-          Catalog{" "}
-          <span className="pill">{items.length} item{items.length === 1 ? "" : "s"}</span>
+          目录{" "}
+          <span className="pill">
+            {items.length} 项
+          </span>
         </h3>
         {items.length === 0 ? (
-          <p className="muted-copy mt-10">
-            No evidence registered yet. Use the button above or agent tools.
-          </p>
+          <div className="evidence-empty">
+            <p className="evidence-empty-title">暂无证据</p>
+            <p className="muted-copy">
+              演示时可登记一份告警导出或 PDF；调查过程中 agent
+              工具也可能写入条目。
+            </p>
+          </div>
         ) : (
           <table className="evidence-table">
             <thead>
               <tr>
-                <th>Name</th>
+                <th>名称</th>
                 <th>sha256</th>
-                <th>Size</th>
-                <th>Mount</th>
-                <th>Registered</th>
-                <th>Actions</th>
+                <th>大小</th>
+                <th>挂载</th>
+                <th>登记时间</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -258,8 +264,8 @@ export function EvidenceView({
                           className={`verify-result ${v.ok ? "ok" : "bad"}`}
                         >
                           {v.ok
-                            ? "✓ integrity OK"
-                            : `✗ ${v.error || "hash mismatch"}`}
+                            ? "✓ 完整性 OK"
+                            : `✗ ${v.error || "哈希不匹配"}`}
                           {!v.ok && v.current_sha256 ? (
                             <div className="mono-xs">
                               now {shortHash(v.current_sha256)}
@@ -293,16 +299,16 @@ export function EvidenceView({
                           onClick={() => void onVerify(it.evidence_id)}
                           disabled={busy}
                         >
-                          Verify
+                          校验
                         </button>
                         <button
                           type="button"
                           className="secondary"
                           onClick={() => void onReveal(it.path)}
                           disabled={busy || !it.path}
-                          title="Show in Finder (read-only reveal)"
+                          title="在 Finder 中显示"
                         >
-                          Reveal
+                          显示
                         </button>
                         <button
                           type="button"
