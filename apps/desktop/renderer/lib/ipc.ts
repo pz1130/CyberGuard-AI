@@ -48,6 +48,7 @@ export async function providerSet(params: {
   model?: string;
   temperature?: number;
   api_key?: string;
+  preset_id?: string;
 }) {
   return getApi()?.providerSet?.(params);
 }
