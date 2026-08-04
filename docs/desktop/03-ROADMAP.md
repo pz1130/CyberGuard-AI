@@ -269,22 +269,23 @@ M0b ────────────┘                                     
 
 ## M7 · 交付工程
 
-**状态：工程主路径已落地（2026-08-02）** — 加密导出 / 卸载 / 更新验签 / EDR·公证文档；**真实 Developer ID 公证与 EDR 实机验证仍待证书与客户环境**。
+**状态：工程主路径已落地（2026-08-03）** — 加密导出 / 卸载 / 更新验签 / EDR·公证文档 / **electron-builder 骨架 + 应用内导出·卸载 UI**；**真实 Developer ID 公证与 EDR 实机验证仍待证书与客户环境**。
 
 **不是功能，是发布前置条件。** 混进 M2 会被当成次要的。
 
 **范围**
-1. **签名与公证流水线** —— Developer ID + notarization（DEC-026）。含证书有效期与吊销的运维流程。*文档：`15-NOTARIZATION-AND-UNINSTALL.md`；流水线待证书。*
+1. **签名与公证流水线** —— Developer ID + notarization（DEC-026）。*文档：`15-NOTARIZATION-AND-UNINSTALL.md`；骨架：`electron-builder.yml` + `scripts/notarize.cjs`（无证书 dry-run）+ `npm run pack:check`；真签待证书。*
 2. **自动更新通道** —— 更新包独立签名强制验签、更新源证书固定、防降级、更新动作进审计（INV-42）。*已落地：`update_verify.py` Ed25519 + sha256 + 防降级；RPC `update.verify`；篡改/降级/错误密钥用例。*
-3. **卸载与残留清理 + 加密导出** —— *已落地：`uninstall.py` inventory/execute；`export_bundle.py`（age 优先 / CGX1 回退）；RPC `export.encrypted` / `uninstall.*`。*
+3. **卸载与残留清理 + 加密导出** —— *已落地：`uninstall.py` / `export_bundle.py`；RPC；**UI**：Context → Data 面板 + 托盘菜单；Export 走系统另存为。*
 4. **EDR / MDM 白名单指引** —— *已落地文档：`14-EDR-MDM.md`；实机勾选清单待客户 EDR。*
 5. **公证上传的对外说明** —— *见 `15-NOTARIZATION-AND-UNINSTALL.md` §A。*
 
 **出口判据**
 - 篡改更新包 / 降级安装 / 中间人，三类用例全部被拒 ✅（单测）
 - 干净机器上双击安装成功，无需用户关闭 Gatekeeper ⚠️ 需公证证书
-- 卸载后残留清单与文档一致 ✅（inventory + 文档 §B）
+- 卸载后残留清单与文档一致 ✅（inventory + 文档 §B + UI）
 - EDR 指引在至少一款主流 EDR 上验证通过 ⚠️ 文档已备，实机待做
+- 无证书环境下 `pack:check` 通过且不误报已公证 ✅
 
 ---
 

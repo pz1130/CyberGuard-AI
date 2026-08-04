@@ -1,8 +1,8 @@
 {
   "name": "cyberguard-desktop",
-  "version": "0.1.0-m1",
+  "version": "0.1.0-m7",
   "private": true,
-  "description": "CyberGuard desktop M1 skeleton — Electron + JSONL sidecar",
+  "description": "CyberGuard desktop — Electron + JSONL sidecar (macOS standalone)",
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
@@ -13,6 +13,9 @@
     "codesign:dev": "bash scripts/codesign-electron-dev.sh",
     "codesign:verify": "bash scripts/verify-dev-codesign.sh",
     "build:renderer": "vite build --config vite.config.ts",
+    "pack:check": "bash scripts/pack-check.sh",
+    "dist:dir": "npm run build:renderer && electron-builder --dir --config electron-builder.yml",
+    "dist:mac": "npm run build:renderer && electron-builder --mac --config electron-builder.yml",
     "start": "electron .",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
@@ -26,6 +29,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.0",
     "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
     "typescript": "^5.7.2",
     "vite": "^6.0.3",
     "wait-on": "^8.0.1"

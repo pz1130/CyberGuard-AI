@@ -77,8 +77,9 @@ Web 端 21 个 Tab 功能不减。**对已部署 CyberGuard 的客户，桌面�
 - **M3 已落地片段**：Keychain secrets、审计哈希链、本地经验库、敌对来源标记、会话加密/crypto-shred/备份排除、**5 条内置 SOP + progressive disclosure**、INV-39 对抗用例
 - headless：`./apps/desktop/scripts/headless_demo.sh` · Electron：`cd apps/desktop && npm run dev`
 
-**当前**：M0a–M5 功能主路径 + **M7 交付工程代码/文档**（导出/卸载/更新验签/EDR·公证说明）已落地。  
-**仍待外部条件**：Developer ID 公证实装、EDR 实机勾选、M6 connected（按需）。
+**当前**：M0a–M5 功能主路径 + **M7 交付工程**已落地（导出/卸载/更新验签/EDR·公证文档 + `electron-builder` 骨架 + 应用内导出/卸载 UI）。  
+**仍待外部条件**：Developer ID 真实公证与 Gatekeeper 双击装、EDR 实机勾选、M6 connected（按需）。  
+**无证书可跑**：`cd apps/desktop && npm run pack:check`。
 
 ## 文档权威性
 

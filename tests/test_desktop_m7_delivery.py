@@ -1,8 +1,10 @@
-"""M7: encrypted export, uninstall, update verify (INV-42)."""
+"""M7: encrypted export, uninstall, update verify (INV-42), pack skeleton."""
 from __future__ import annotations
 
 import base64
 import json
+import os
+import subprocess
 from io import StringIO
 from pathlib import Path
 
@@ -192,3 +194,35 @@ async def test_rpc_export_uninstall_update(m7_env, tmp_path, monkeypatch):
 
     msg = await rpc("ping", {})
     assert msg["result"].get("m7") is True
+
+
+def test_pack_check_skeleton_passes():
+    """electron-builder skeleton + notarize dry-run without certs (M7)."""
+    desktop = Path(__file__).resolve().parents[1] / "apps" / "desktop"
+    script = desktop / "scripts" / "pack-check.sh"
+    assert script.is_file()
+    assert (desktop / "electron-builder.yml").is_file()
+    assert (desktop / "scripts" / "notarize.cjs").is_file()
+    assert (desktop / "entitlements" / "release.plist").is_file()
+    yml = (desktop / "electron-builder.yml").read_text(encoding="utf-8")
+    assert "appId: com.cyberguard.desktop" in yml
+    assert "afterSign: scripts/notarize.cjs" in yml
+    hook = (desktop / "scripts" / "notarize.cjs").read_text(encoding="utf-8")
+    assert "DRY-RUN" in hook and "INV-38" in hook
+    # Preload exposes export / uninstall UI bridge
+    preload = (desktop / "electron" / "preload.cjs").read_text(encoding="utf-8")
+    assert "exportEncrypted" in preload
+    assert "uninstallInventory" in preload
+    main = (desktop / "electron" / "main.cjs").read_text(encoding="utf-8")
+    assert "sidecar:export:encrypted" in main
+    assert "sidecar:uninstall:execute" in main
+    proc = subprocess.run(
+        ["bash", str(script)],
+        cwd=str(desktop),
+        capture_output=True,
+        text=True,
+        env={**os.environ, "CYBERGUARD_NOTARIZE_DRY_RUN": "1"},
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stdout + "\n" + proc.stderr
+    assert "pack:check PASSED" in proc.stdout

@@ -117,42 +117,22 @@ docs/
 
 ## 当前阶段
 
-见 `docs/desktop/03-ROADMAP.md`。**M0a 完成。现处于 M1 · 壳 + Sidecar 骨架。**
+见 `docs/desktop/03-ROADMAP.md` 与 `docs/desktop/00-README.md`。
 
-> 路线图关键节点：M1（壳+骨架，mock）→ **M1.5 自用验证版（禁止分发，验证产品方向）** → M2（沙箱）→ M3（可分发完整）。**M1.5 的产出不是代码是判断**——方向不对时掉头，成本远低于做完 M3 之后。
+**桌面节点代码主路径（2026-08）**：M0a → M1 → M1.5 → M2 → M3 → M4 → M5 → **M7 工程** 已落地。  
+**仍待外部条件**：Developer ID 真实公证、EDR 实机勾选。**M6 connected 按需，不占排期。**  
+**M0b `ui-shared` 抽取**未做（成本高；不为 21 Tab 复刻）。
 
-**M1.5 唯一验收场景**（现在就按此定边界）：见 `docs/desktop/12-M1.5-GOLDEN-PATH.md` —— 告警分诊 → 只读调查 → Markdown 报告。不为 21 Tab 复刻做抽取。
+快速命令：
 
-范围：抽 `packages/llm_router` 与 `packages/agent_core`、建立 Operations 抽象、工具执行五步管线骨架就位（`validate_arguments` 先做 pass-through）、审计事件流。
+```bash
+# 桌面套件
+export PYTHONPATH="packages:$(pwd)"
+.venv/bin/python -m pytest -q tests/test_desktop_*.py
+cd apps/desktop && npm run pack:check   # 无证书
+```
 
-**硬判据：基线测试集原样全绿，服务端对外行为零变化。** 当前本地可收集 365 个用例，精确数量以 CI 的 `pytest --collect-only` 为准。本阶段任何行为改变都是错误——参数校验、默认串行、结构化错误、压缩加固全部属于 M0a-2，不要提前做。测试挂了就是搬运出错，不是设计问题。
-
-**M0a 期间不要写任何桌面端代码。** 内核没抽干净就开壳，会把 Electron 的假设倒灌进服务端。
-
-### 服务端功能面冻结（M0a–M1.5）
-
-- **默认不接** Web 端新 Tab / 新运营能力（GRC 扩展、新 SSO、新群聊玩法等）。
-- 允许：阻塞 M0a 抽取的 bugfix、安全边界修复、基线测试维护、为包边界服务的薄适配层。
-- 新想法进 `docs/desktop/11-OPEN-QUESTIONS.md`，不进主干。
-
-### M0a-1 抽取顺序（一次一个，每步全绿）
-
-1. ~~`packages/llm_router`：resilience + pure utils~~ ✅（业务方法仍在 `app/`；chat/stream/embed 纯路径可再迁）
-2. ~~Operations 抽象 + 工具五步管线骨架（`validate_arguments` pass-through）~~ ✅
-3. ~~`packages/agent_core`：run loop / compressor / compact / loop_utils~~ ✅
-4. ~~审计事件流骨架（emit await，默认无订阅）~~ ✅
-5. 包内 lint：`llm_router` 无 agent 概念；`agent_core` 无 `app.*` / sqlalchemy / redis / celery / fastapi（已有 AST 用例）
-
-**M0a-1 主路径完成。** **M0a-2 语义（进行中/首批已落地）**：
-- ✅ INV-30 `validate_arguments` schema 校验
-- ✅ INV-31 工具默认串行（parallel 需全员 opt-in）
-- ✅ INV-32 结构化 `is_error`（不再靠 `ERROR` 子串）
-- ✅ 加权 token 估算 + 六段摘要 + Constraints 注入 + 当前 turn 保留（INV-33/34 基础）
-- ✅ 模型 `context_window` / `max_output_tokens`（JSON ModelInfo + 目录默认值）；压缩按 remaining_budget
-- ✅ 方向性截断（head/tail + 行/字双重约束）
-- ✅ `exclude_from_context`（UI/审计可留、模型不可见）
-- ✅ llm-router thinking 档位 + prompt cache 标记
-- **M0a-2 主路径完成** → 下一阶段见路线图 M0b / M1
+黄金路径仍见 `docs/desktop/12-M1.5-GOLDEN-PATH.md`。服务端默认冻结新功能面；安全边界与基线测试维护除外。
 
 ---
 

@@ -106,6 +106,76 @@ body,
   max-height: 280px;
 }
 
+.data-panel {
+  margin-top: 18px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.data-panel-toggle {
+  width: 100%;
+  text-align: left;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.data-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.data-section {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: #0c1220;
+}
+
+.data-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.data-hint {
+  color: var(--muted);
+  font-size: 11px;
+  margin: 0 0 8px;
+  line-height: 1.4;
+}
+
+.data-input {
+  width: 100%;
+  margin-bottom: 8px;
+  background: #0b1220;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.data-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.data-msg {
+  margin: 8px 0 0;
+  padding: 8px;
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: #020617;
+  border-radius: 6px;
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--muted);
+}
+
 .status-bar {
   display: flex;
   gap: 16px;

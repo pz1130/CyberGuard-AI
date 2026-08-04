@@ -182,7 +182,7 @@ function createTray() {
   // 1x1 empty icon fallback — Electron needs a nativeImage
   const icon = nativeImage.createEmpty();
   tray = new Tray(icon);
-  tray.setToolTip("CyberGuard Desktop (M1 dev)");
+  tray.setToolTip("CyberGuard Desktop (dev)");
   const menu = Menu.buildFromTemplate([
     {
       label: "Show",
@@ -196,6 +196,19 @@ function createTray() {
     {
       label: "Hide",
       click: () => mainWindow && mainWindow.hide(),
+    },
+    { type: "separator" },
+    {
+      label: "Export encrypted backup…",
+      click: () => {
+        if (mainWindow) mainWindow.webContents.send("ui:open-export");
+      },
+    },
+    {
+      label: "Uninstall data…",
+      click: () => {
+        if (mainWindow) mainWindow.webContents.send("ui:open-uninstall");
+      },
     },
     { type: "separator" },
     {
@@ -221,7 +234,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    title: "CyberGuard Desktop (M1 dev)",
+    title: "CyberGuard Desktop (dev)",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -240,7 +253,7 @@ function createWindow() {
   mainWindow.webContents.on("did-finish-load", () => {
     mainWindow.webContents
       .executeJavaScript(
-        'console.info("%cCyberGuard Desktop M1 — mock only; no sandbox; do not use real sensitive data.", "color:#f59e0b")'
+        'console.info("%cCyberGuard Desktop (dev) — not notarized; do not distribute or process real production secrets without FileVault.", "color:#f59e0b")'
       )
       .catch(() => {});
   });
@@ -354,3 +367,58 @@ ipcMain.handle("sidecar:plan:reject", async (_e, { planId, reason }) =>
   rpc("plan.reject", { plan_id: planId, reason: reason || "rejected_by_user" })
 );
 ipcMain.handle("sidecar:plan:list", async () => rpc("plan.list", {}));
+
+// M7 — encrypted export (save dialog on host, encrypt via sidecar)
+ipcMain.handle("sidecar:export:encrypted", async (event, { passphrase }) => {
+  if (!passphrase || String(passphrase).length < 8) {
+    throw new Error("passphrase must be at least 8 characters");
+  }
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const { canceled, filePath } = await dialog.showSaveDialog(win || undefined, {
+    title: "Export encrypted CyberGuard backup",
+    defaultPath: `cyberguard-export-${new Date().toISOString().slice(0, 10)}.cgx`,
+    filters: [
+      { name: "CyberGuard encrypted export", extensions: ["cgx", "age"] },
+      { name: "All files", extensions: ["*"] },
+    ],
+  });
+  if (canceled || !filePath) {
+    return { ok: false, canceled: true };
+  }
+  return rpc("export.encrypted", {
+    dest_path: filePath,
+    passphrase: String(passphrase),
+  });
+});
+
+// M7 — uninstall inventory / execute
+ipcMain.handle("sidecar:uninstall:inventory", async () =>
+  rpc("uninstall.inventory", {})
+);
+
+ipcMain.handle(
+  "sidecar:uninstall:execute",
+  async (event, { confirm, dryRun } = {}) => {
+    const wantExecute = confirm === true && dryRun === false;
+    if (wantExecute) {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const { response } = await dialog.showMessageBox(win || undefined, {
+        type: "warning",
+        title: "Uninstall CyberGuard local data",
+        message:
+          "This permanently deletes the managed data root and crypto keys (crypto-shred). " +
+          "External evidence paths are NOT deleted. TCC must be removed manually. Continue?",
+        buttons: ["Cancel", "Delete local data"],
+        defaultId: 0,
+        cancelId: 0,
+      });
+      if (response !== 1) {
+        return { ok: false, canceled: true, executed: false };
+      }
+    }
+    return rpc("uninstall.execute", {
+      confirm: Boolean(confirm),
+      dry_run: dryRun !== false,
+    });
+  }
+);

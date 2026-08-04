@@ -1,17 +1,17 @@
-# CyberGuard Desktop (M1 skeleton)
+# CyberGuard Desktop
 
 macOS-first **single-operator agent app**: Electron shell + Python sidecar over **stdin/stdout JSONL** (no listen ports).
 
 ## Status
 
-**M1 skeleton + M1.5 live LLM path** (self-use; not for distribution)
+**M0a–M5 product paths + M7 delivery engineering** (development build; **not notarized, not for distribution**)
 
-- Default: mock LLM + mock tools (safe)
-- Optional: **live OpenAI-compatible LLM** via env / `provider.json` (tools still mock until M2)
-- Built-in SOP: `sidecar/skills/alert_triage.md`
-- Capability tier: `readonly` has no `ExecOperations` / `EditOperations`
-- FileVault status surfaced on `ping` + UI banner
-- Orphan cleanup: process group + PPID watchdog + Electron SIGTERM
+- Mock or live OpenAI-compatible LLM; Seatbelt host tools (M2); Plan Mode self-approval (M4)
+- Trust Gate, evidence catalog, pause/resume (M5); local episodic + session encryption (M3)
+- Built-in SOP skills (progressive disclosure); MCP stdio + Keychain secret slots
+- M7: encrypted export / uninstall / update verify / EDR·notarization docs
+- UI: Context → **Data · Export / Uninstall**; tray menu entries
+- Packaging skeleton: `npm run pack:check` (no certs); `dist:mac` needs Developer ID
 
 ## Layout
 
@@ -265,10 +265,22 @@ Default without config remains **mock**.
 # unit: pytest tests/test_desktop_m15_provider.py -k watchdog
 ```
 
-## Security notes (M1/M1.5)
+## Packaging (M7 skeleton)
+
+```bash
+cd apps/desktop
+npm run pack:check    # no Apple certs required — must PASS
+# Optional full build (installs electron-builder via package.json):
+# npm run dist:dir    # unsigned directory
+# npm run dist:mac    # needs CSC_NAME + APPLE_* for real notarization
+```
+
+See `docs/desktop/15-NOTARIZATION-AND-UNINSTALL.md`.
+
+## Security notes
 
 - No listening sockets
-- Real host tool execution blocked until M2 sandbox exit criteria
-- Dev build banner: no sandbox / no at-rest encryption
-- FileVault-off is warned explicitly (does not pretend app crypto replaces it)
-- Do not distribute this build; do not process real production secrets without M2+
+- Dev build is **not notarized** — do not distribute (INV-38)
+- Local audit hash chain is tamper-evident, **not** WORM
+- FileVault-off is warned explicitly (app crypto does not replace it)
+- Export does not include raw Keychain secrets; uninstall crypto-shreds session keys

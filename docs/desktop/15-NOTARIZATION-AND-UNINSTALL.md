@@ -32,15 +32,37 @@ macOS **Developer ID + Notarization** 要求将待分发的二进制（或含二
 
 证书吊销 / 过期：运维 runbook 单独维护（证书轮换后强制升级通道）。
 
+### 仓库内骨架（无证书也可跑）
+
+| 路径 / 命令 | 作用 |
+|-------------|------|
+| `apps/desktop/electron-builder.yml` | appId、mac hardenedRuntime、afterSign、产物命名 |
+| `apps/desktop/entitlements/release.plist` | GA Hardened Runtime 最小权限 |
+| `apps/desktop/scripts/notarize.cjs` | afterSign：无 `APPLE_*` 时 **DRY-RUN 退出 0**（不宣称已公证） |
+| `npm run pack:check` | 校验骨架完整性 + 模拟 dry-run 公证钩子 |
+| `npm run dist:dir` / `dist:mac` | 需 `electron-builder`；真实公证还要 `CSC_NAME` + `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` |
+
+```bash
+cd apps/desktop
+npm run pack:check          # 无证书，应 PASS
+# CYBERGUARD_NOTARIZE_DRY_RUN=1 强制跳过提交（默认缺凭证即 dry-run）
+```
+
+**INV-38**：缺证书时流水线不得在 UI/日志中写成「已公证」。
+
 ---
 
 ## B. 卸载流程
 
 ### B.1 应用内（推荐）
 
+**UI**：右侧 Context → **Data · Export / Uninstall (M7)**；托盘菜单亦有入口。  
+Export 走系统「另存为」对话框 + 口令（≥8）；Uninstall 先 Inventory / Dry-run，真正删除前有二次确认框。
+
 ```text
 RPC uninstall.inventory   → 预览将删除 / 不删除的内容
 RPC uninstall.execute { "confirm": true, "dry_run": false }
+RPC export.encrypted { dest_path, passphrase }
 ```
 
 或 headless：

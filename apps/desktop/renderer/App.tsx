@@ -69,7 +69,36 @@ declare global {
         reason?: string
       ) => Promise<{ ok: boolean }>;
       planList?: () => Promise<{ plans: unknown[] }>;
+      exportEncrypted?: (
+        passphrase: string
+      ) => Promise<{
+        ok?: boolean;
+        canceled?: boolean;
+        method?: string;
+        dest?: string;
+        path?: string;
+        sha256?: string;
+        plaintext_sha256?: string;
+        error?: string;
+      }>;
+      uninstallInventory?: () => Promise<{
+        data_root?: string;
+        will_delete?: Array<{ name: string; approx_bytes?: number }>;
+        will_not_delete?: { evidence_outside_data_root?: string[] };
+        manual_steps?: Array<{ item: string; action: string }>;
+      }>;
+      uninstallExecute?: (opts: {
+        confirm: boolean;
+        dryRun: boolean;
+      }) => Promise<{
+        ok?: boolean;
+        canceled?: boolean;
+        executed?: boolean;
+        deleted?: string[];
+        dry_run?: boolean;
+      }>;
       onEvent: (handler: (ev: Ev) => void) => () => void;
+      onOpenDataPanel?: (handler: () => void) => () => void;
     };
   }
 }
@@ -409,6 +438,12 @@ export function App() {
   const [runStatus, setRunStatus] = useState<string>("idle");
   const [pausedRunId, setPausedRunId] = useState<string | null>(null);
   const [evidenceHint, setEvidenceHint] = useState<string>("—");
+  const [exportPass, setExportPass] = useState("");
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportMsg, setExportMsg] = useState<string | null>(null);
+  const [uninstallPreview, setUninstallPreview] = useState<string | null>(null);
+  const [uninstallBusy, setUninstallBusy] = useState(false);
+  const [showDataPanel, setShowDataPanel] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const taskRef = useRef(task);
   taskRef.current = task;
@@ -648,6 +683,114 @@ export function App() {
     }
   }, [api, pendingPlan]);
 
+  const onExport = useCallback(async () => {
+    if (!api?.exportEncrypted) {
+      setExportMsg("export API unavailable (open via Electron)");
+      return;
+    }
+    if (exportPass.trim().length < 8) {
+      setExportMsg("passphrase ≥ 8 characters");
+      return;
+    }
+    setExportBusy(true);
+    setExportMsg(null);
+    try {
+      const r = await api.exportEncrypted(exportPass);
+      if (r?.canceled) {
+        setExportMsg("export canceled");
+      } else if (r?.ok === false) {
+        setExportMsg(String(r.error || "export failed"));
+      } else {
+        const dest = r.dest || r.path || "file";
+        const hash = r.plaintext_sha256 || r.sha256;
+        setExportMsg(
+          `exported (${r.method || "encrypted"}) → ${dest}` +
+            (hash ? ` · sha256 ${String(hash).slice(0, 12)}…` : "")
+        );
+        setExportPass("");
+      }
+    } catch (e) {
+      setExportMsg(String(e));
+    } finally {
+      setExportBusy(false);
+    }
+  }, [api, exportPass]);
+
+  const onUninstallInventory = useCallback(async () => {
+    if (!api?.uninstallInventory) {
+      setUninstallPreview("uninstall API unavailable");
+      return;
+    }
+    setUninstallBusy(true);
+    try {
+      const inv = await api.uninstallInventory();
+      const del = (inv.will_delete || [])
+        .map((c) => `  - ${c.name} (${c.approx_bytes ?? "?"} B)`)
+        .join("\n");
+      const keep = (inv.will_not_delete?.evidence_outside_data_root || []).join(
+        "\n  - "
+      );
+      const manual = (inv.manual_steps || [])
+        .map((m) => `  - ${m.item}: ${m.action}`)
+        .join("\n");
+      setUninstallPreview(
+        `data_root: ${inv.data_root || "?"}\n` +
+          `will delete:\n${del || "  (empty)"}\n` +
+          `will NOT delete (external evidence):\n  - ${keep || "(none)"}\n` +
+          `manual steps:\n${manual || "  (none)"}`
+      );
+    } catch (e) {
+      setUninstallPreview(String(e));
+    } finally {
+      setUninstallBusy(false);
+    }
+  }, [api]);
+
+  const onUninstallDryRun = useCallback(async () => {
+    if (!api?.uninstallExecute) return;
+    setUninstallBusy(true);
+    try {
+      const r = await api.uninstallExecute({ confirm: true, dryRun: true });
+      setUninstallPreview(
+        (uninstallPreview ? uninstallPreview + "\n\n" : "") +
+          `dry_run result: executed=${String(r.executed)} ok=${String(r.ok)}`
+      );
+    } catch (e) {
+      setUninstallPreview(String(e));
+    } finally {
+      setUninstallBusy(false);
+    }
+  }, [api, uninstallPreview]);
+
+  const onUninstallExecute = useCallback(async () => {
+    if (!api?.uninstallExecute) return;
+    setUninstallBusy(true);
+    try {
+      const r = await api.uninstallExecute({ confirm: true, dryRun: false });
+      if (r?.canceled) {
+        setUninstallPreview("uninstall canceled");
+      } else {
+        setUninstallPreview(
+          `executed=${String(r.executed)} deleted=${(r.deleted || []).join(", ") || "—"}`
+        );
+        if (r.executed) {
+          setSessions([]);
+          setSessionId(null);
+          setEvents([]);
+        }
+      }
+    } catch (e) {
+      setUninstallPreview(String(e));
+    } finally {
+      setUninstallBusy(false);
+    }
+  }, [api]);
+
+  useEffect(() => {
+    if (!api?.onOpenDataPanel) return;
+    return api.onOpenDataPanel(() => setShowDataPanel(true));
+  }, [api]);
+
   const statusLabel = useMemo(() => {
     if (!api) return "no preload (open via Electron)";
     if (pingOk === null) return "connecting…";
@@ -657,9 +800,9 @@ export function App() {
   return (
     <div className="app">
       <div className="banner">
-        <strong>M3/M4 development build</strong> — not for distribution.
-        Plan Mode uses <em>自批准</em> (approval_type=self) on this node — not
-        segregation-of-duties. Timeout = reject. LLM: <code>{providerMode}</code>.
+        <strong>Development build (not notarized)</strong> — not for distribution.
+        Plan Mode uses <em>自批准</em> (approval_type=self) — not segregation-of-duties.
+        Timeout = reject. LLM: <code>{providerMode}</code>. Local hash chain ≠ WORM.
       </div>
       {pendingPlan && (
         <div className="plan-panel">
@@ -907,7 +1050,7 @@ export function App() {
             </div>
             <p style={{ color: "var(--muted)", fontSize: 12, marginTop: 16 }}>
               Readonly 档不暴露本机 Exec。MCP 来自{" "}
-              <code>mcp_servers.json</code>。破坏性主机工具等 M2 沙箱。
+              <code>mcp_servers.json</code>。
             </p>
             {mcpTools.length > 0 && (
               <div style={{ marginTop: 12, fontSize: 12 }}>
@@ -923,12 +1066,89 @@ export function App() {
                 </ul>
               </div>
             )}
+
+            <div className="data-panel">
+              <button
+                type="button"
+                className="secondary data-panel-toggle"
+                onClick={() => setShowDataPanel((v) => !v)}
+              >
+                {showDataPanel ? "▾" : "▸"} Data · Export / Uninstall (M7)
+              </button>
+              {showDataPanel && (
+                <div className="data-panel-body">
+                  <div className="data-section">
+                    <div className="data-section-title">Encrypted export</div>
+                    <p className="data-hint">
+                      Sessions / audit / evidence index / episodic. Keys not included.
+                      Prefer age when installed; else CGX1 (PBKDF2+Fernet).
+                    </p>
+                    <input
+                      type="password"
+                      className="data-input"
+                      value={exportPass}
+                      onChange={(e) => setExportPass(e.target.value)}
+                      placeholder="passphrase (≥8)"
+                      autoComplete="new-password"
+                      disabled={exportBusy}
+                    />
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => void onExport()}
+                      disabled={exportBusy || !api?.exportEncrypted}
+                    >
+                      {exportBusy ? "Exporting…" : "Export…"}
+                    </button>
+                    {exportMsg && (
+                      <pre className="data-msg">{exportMsg}</pre>
+                    )}
+                  </div>
+                  <div className="data-section">
+                    <div className="data-section-title">Uninstall local data</div>
+                    <p className="data-hint">
+                      Crypto-shred keys + delete data_root. External evidence listed only.
+                      TCC must be removed manually.
+                    </p>
+                    <div className="row data-actions">
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => void onUninstallInventory()}
+                        disabled={uninstallBusy}
+                      >
+                        Inventory
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => void onUninstallDryRun()}
+                        disabled={uninstallBusy}
+                      >
+                        Dry-run
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-reject"
+                        onClick={() => void onUninstallExecute()}
+                        disabled={uninstallBusy}
+                      >
+                        Delete data…
+                      </button>
+                    </div>
+                    {uninstallPreview && (
+                      <pre className="data-msg">{uninstallPreview}</pre>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
       <div className="footer">
-        CyberGuard Desktop · M1.5 · live LLM path · not for distribution
+        CyberGuard Desktop · M7 engineering · not notarized · not for distribution
       </div>
     </div>
   );
