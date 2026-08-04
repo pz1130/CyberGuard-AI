@@ -286,12 +286,67 @@ class MasterAgent:
 
         state["current_state"] = AgentState.WAIT_FOR_SUB_RESULTS
 
-        task_plan = state.get("task_plan", [])
+        task_plan = list(state.get("task_plan", []) or [])
         user_id = state.get("user_id")
         request_id = state.get("request_id")
         provider_id = state.get("provider_id")
+        dispatch_depth = int(state.get("dispatch_depth") or 0)
 
         if not task_plan:
+            state["current_state"] = AgentState.VALIDATE_RESULTS
+            return state
+
+        # INV-23 · fan-out gates before any I/O
+        from app.config import settings as app_settings
+        from app.services.fanout_gate import apply_fanout_gates, limits_from_settings
+
+        fanout_limits = limits_from_settings(app_settings)
+        # Expert / explicit user fan-out: still concurrency-capped, but allow larger plans
+        if any(
+            (t.get("dispatch_source") if isinstance(t, dict) else None) == "user_expert"
+            for t in task_plan
+        ):
+            fanout_limits.max_plan_size = max(fanout_limits.max_plan_size, 32)
+            fanout_limits.require_target = True  # expert tasks carry agent_id
+        gate = apply_fanout_gates(
+            task_plan, limits=fanout_limits, dispatch_depth=dispatch_depth
+        )
+        task_plan = gate.accepted
+        gated_denied: Dict[str, Any] = {}
+        if gate.rejected:
+            for i, item in enumerate(gate.rejected):
+                t = item["task"] if isinstance(item.get("task"), dict) else {}
+                key = str(
+                    t.get("agent_id")
+                    or t.get("agent_name")
+                    or t.get("agent_type")
+                    or f"rejected-{i}"
+                )
+                # uniquify key collisions among rejects
+                base = key
+                n = 1
+                while key in gated_denied:
+                    key = f"{base}#{n}"
+                    n += 1
+                gated_denied[key] = {
+                    "status": "denied",
+                    "output": None,
+                    "error": f"INV-23 fan-out gate: {item.get('reason')}",
+                }
+            await log_audit(
+                user_id=user_id,
+                agent_id=None,
+                action="fanout_gate",
+                input_data={"plan_in": len(state.get("task_plan") or [])},
+                output_data={
+                    "accepted": len(gate.accepted),
+                    "rejected": len(gate.rejected),
+                    "reasons": [r.get("reason") for r in gate.rejected],
+                },
+                request_id=request_id,
+            )
+        if not task_plan:
+            state["sub_results"] = gated_denied
             state["current_state"] = AgentState.VALIDATE_RESULTS
             return state
 
@@ -468,7 +523,14 @@ class MasterAgent:
             return agent_type, result
 
         start = time.monotonic()
-        tasks = [run_task(t) for t in task_plan]
+        # INV-23 · concurrency cap (semaphore); order of results preserved via gather
+        sem = asyncio.Semaphore(max(1, int(fanout_limits.max_concurrent)))
+
+        async def run_task_limited(task: Dict[str, Any]) -> tuple[str, Dict[str, Any]]:
+            async with sem:
+                return await run_task(task)
+
+        tasks = [run_task_limited(t) for t in task_plan]
         results_list = await asyncio.gather(*tasks, return_exceptions=True)
 
         results: Dict[str, Any] = {}
@@ -504,7 +566,13 @@ class MasterAgent:
             if results[key].get("status") == "needs_approval":
                 state["approval_required"] = True
 
-        state["sub_results"] = results
+        if gated_denied:
+            # Preserve INV-23 rejections alongside executed results
+            merged = dict(gated_denied)
+            merged.update(results)
+            state["sub_results"] = merged
+        else:
+            state["sub_results"] = results
         state["current_state"] = AgentState.VALIDATE_RESULTS
         return state
 

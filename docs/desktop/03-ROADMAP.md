@@ -315,7 +315,7 @@ Windows / Linux 平台支持。这是**已知并主动接受的推迟**，不是
 4. `agent_episodes` 只增不减，且 `_maybe_record_episode` 硬编码 `success=True`，失败经验一条不存
 5. `master.py` 两处**用户可控输入直接驱动控制流**且绕过 guardrail：`_parse_intent_node` 关键词触发 group chat、`_validation_node` 关键词判定高风险
 6. ~~**跨 agent 派发缺少权限继承校验（提权路径）**~~ → **已修（INV-21，2026-08）**：`app/services/privilege_inherit.py` + `master._sub_agent_executor_node` 在 execute 前比较 source/target 的 `permission_level` 与 `autonomy_tier`。LLM 派发默认 medium/L2 封顶；`user_explicit` / `user_expert` 为可信上下文。用例：`tests/test_privilege_inherit.py`。
-7. `_sub_agent_executor_node` 的 `asyncio.gather` fan-out **无并发上限、无嵌套深度限制、允许不指定目标的派发**。见 INV-23。
+7. ~~`_sub_agent_executor_node` fan-out 无闸~~ → **已修（INV-23，2026-08）**：`fanout_gate.py` + config（`SUB_AGENT_MAX_CONCURRENT/PLAN_SIZE/PER_AGENT/DEPTH`、`SUB_AGENT_REQUIRE_TARGET`）；semaphore 并发；拒绝无目标与超深度。用例：`tests/test_fanout_gate.py`。
 8. 安全边界与功能路径共用同一套 best-effort 异常处理模式。功能性降级（经验召回、搜索、OCR 失败）静默 no-op 是好设计，但该模式不可蔓延到沙箱初始化、策略加载、审计写入等安全路径。见 INV-25。
 
 9. **token 估算对中文严重低估（会导致线上报错，优先级高）** —— `context_compressor.estimate_tokens` 用 `total_chars // 4`，注释写着 "Conservative for CJK content"。**这个判断是反的**：`4 chars ≈ 1 token` 是英文经验值，中文一个汉字通常 1–1.5 token，`chars//4` 把 4 个汉字算成 1 token，**低估约 4–6 倍**。

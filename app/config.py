@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     # Sub-Agent Defaults
     SUB_AGENT_TIMEOUT: int = 30
     SUB_AGENT_MAX_RETRIES: int = 2
+    # INV-23 · fan-out gates (conservative defaults)
+    SUB_AGENT_MAX_CONCURRENT: int = 4          # semaphore for parallel execute
+    SUB_AGENT_MAX_PLAN_SIZE: int = 12          # hard cap on tasks per master turn
+    SUB_AGENT_MAX_PER_AGENT: int = 2           # same agent_id occurrences per plan
+    SUB_AGENT_MAX_DEPTH: int = 1               # master=0; sub dispatch depth ≤ this
+    SUB_AGENT_REQUIRE_TARGET: bool = True  # need agent_id, agent_name, or agent_type
 
     # Public base URL used to inject manifest_url into external agent payloads.
     # Leave empty to disable manifest_url injection (safe default).
