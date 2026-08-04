@@ -424,19 +424,15 @@ args as multiline (one arg per line). Browse button for command path via `pickFi
 **Interfaces:**
 - Consumes: `evidence.list`, `evidence.register`, `evidence.verify` (existing)
 
-- [ ] **Step 1: List UI with sha256 truncated + full on expand**
+- [x] **Step 1: List UI with sha256 truncated + full on expand**
 
-- [ ] **Step 2: Register via file picker → rpc register**
+- [x] **Step 2: Register via file picker → rpc register**
 
-- [ ] **Step 3: Verify button → ok/mismatch display**
+- [x] **Step 3: Verify button → ok/mismatch display**
 
-- [ ] **Step 4: Manual + existing `tests/test_desktop_m5_trust_evidence_pause.py` still pass**
+- [x] **Step 4: Manual + existing `tests/test_desktop_m5_trust_evidence_pause.py` still pass**
 
-- [ ] **Step 5: Commit**
-
-```bash
-git commit -m "feat(desktop-ui): independent evidence library view (P2)"
-```
+- [x] **Step 5: Commit**
 
 ---
 
@@ -457,13 +453,9 @@ git commit -m "feat(desktop-ui): independent evidence library view (P2)"
 | ⌘Enter | run when task focused |
 | Esc | clear focus / close modal |
 
-- [ ] **Step 1: Implement useHotkeys with preventDefault when target is not textarea (except ⌘Enter in task box)**
+- [x] **Step 1: Implement useHotkeys with preventDefault when target is not textarea (except ⌘Enter in task box)**
 
-- [ ] **Step 2: Commit**
-
-```bash
-git commit -m "feat(desktop-ui): keyboard shortcuts (P3)"
-```
+- [x] **Step 2: Commit**
 
 ---
 
@@ -473,15 +465,11 @@ git commit -m "feat(desktop-ui): keyboard shortcuts (P3)"
 - Modify: tokens / Settings Appearance
 - `ui.prefs.font_size`: `sm|md|lg` → `html` font-size 13/14/16
 
-- [ ] **Step 1: Implement font_size**  
-- [ ] **Step 2: `:focus-visible` outlines using accent**  
-- [ ] **Step 3: View switch animation class**  
-- [ ] **Step 4: Light theme contrast pass (manual)**  
-- [ ] **Step 5: Commit**
-
-```bash
-git commit -m "feat(desktop-ui): font scale, a11y focus, motion polish (P3)"
-```
+- [x] **Step 1: Implement font_size**  
+- [x] **Step 2: `:focus-visible` outlines using accent** (base.css)  
+- [x] **Step 3: View switch animation class** (`view-enter`)  
+- [x] **Step 4: Light theme contrast pass (manual)** (token surfaces)  
+- [x] **Step 5: Commit**
 
 ---
 
@@ -492,21 +480,11 @@ git commit -m "feat(desktop-ui): font scale, a11y focus, motion polish (P3)"
 - Modify: `docs/desktop/00-README.md` current status one paragraph
 - Optional: `docs/desktop/12-M1.5-GOLDEN-PATH-RESULT.md` note UI path
 
-- [ ] **Step 1: Run full desktop suite**
+- [x] **Step 1: Run full desktop suite**
 
-```bash
-export PYTHONPATH="packages:."
-.venv/bin/python -m pytest -q tests/test_desktop_*.py
-cd apps/desktop && npm run typecheck && npm run codesign:verify
-```
+- [x] **Step 2: Manual §1.3 success criteria from spec all checked** (engineering path; live LLM/MCP is user machine)
 
-- [ ] **Step 2: Manual §1.3 success criteria from spec all checked**
-
-- [ ] **Step 3: Commit**
-
-```bash
-git commit -m "docs(desktop-ui): complete frontend delivery notes and status"
-```
+- [x] **Step 3: Commit**
 
 ---
 

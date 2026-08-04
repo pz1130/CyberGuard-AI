@@ -31,6 +31,13 @@ contextBridge.exposeInMainWorld("cyberguard", {
     ipcRenderer.invoke("sidecar:mcp-config:delete", { id }),
   mcpDiscover: (tier) => ipcRenderer.invoke("sidecar:mcp:discover", { tier }),
   pickFile: (opts) => ipcRenderer.invoke("dialog:pick-file", opts || {}),
+  // P2 evidence
+  evidenceList: (limit) =>
+    ipcRenderer.invoke("sidecar:evidence:list", { limit }),
+  evidenceRegister: (path, note) =>
+    ipcRenderer.invoke("sidecar:evidence:register", { path, note }),
+  evidenceVerify: (evidenceId) =>
+    ipcRenderer.invoke("sidecar:evidence:verify", { evidenceId }),
   // M7 delivery
   exportEncrypted: (passphrase) =>
     ipcRenderer.invoke("sidecar:export:encrypted", { passphrase }),

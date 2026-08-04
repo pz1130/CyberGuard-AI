@@ -67,7 +67,7 @@ Web 端 21 个 Tab 功能不减。**对已部署 CyberGuard 的客户，桌面�
 
 ## 当前状态
 
-**M0a–M5 功能主路径 + M7 交付工程主路径已落地**（分支 `security-enhance`；**禁止分发**直至 Developer ID 真公证）
+**M0a–M5 功能主路径 + M7 交付工程主路径已落地**；桌面前端 **P0–P3**（Workbench / Settings / Evidence / 快捷键与偏好）在分支 `feature/desktop-app-frontend`。**禁止分发**直至 Developer ID 真公证。
 
 **已落地**
 
@@ -75,6 +75,7 @@ Web 端 21 个 Tab 功能不减。**对已部署 CyberGuard 的客户，桌面�
 - **M1–M1.5**：Electron + JSONL sidecar + live LLM 路径 + MCP stdio
 - **M2**：Seatbelt 双旋钮、host_* 沙箱工具、TCC 探测、逃逸套件（evidence/secrets 只读 + 网络探针；见 `13-M2-EXIT-CHECKLIST.md`）
 - **M3–M5**：Keychain secrets、审计哈希链、本地经验库、敌对来源、会话加密/crypto-shred、SOP progressive disclosure、Plan Mode、Trust Gate、证据/断网恢复
+- **桌面 UI P0–P3**：三栏 Workbench、Settings 内配 LLM/MCP（密钥不回显）、Evidence 注册/校验、双主题+字号、⌘ 快捷键
 - **M7 工程**：加密导出 / 卸载 / 更新验签 / EDR·公证文档 + `electron-builder` 骨架 + 应用内导出/卸载 UI
 - **服务端遗留 #1–#10**：会话锁、progressive skills、INV-13/21/23/25、episodes prune、截断方向等（见 `CHANGELOG.md`）
 - headless：`./apps/desktop/scripts/headless_demo.sh` · Electron：`cd apps/desktop && npm run dev`

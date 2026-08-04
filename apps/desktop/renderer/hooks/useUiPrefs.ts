@@ -1,0 +1,72 @@
+import { useCallback, useEffect, useState } from "react";
+import { useTheme } from "./useTheme";
+
+export type FontSize = "small" | "medium" | "large";
+
+const FONT_KEY = "cg.font_size";
+
+function applyFont(size: FontSize) {
+  document.documentElement.dataset.font = size;
+}
+
+function readFont(): FontSize {
+  try {
+    const v = localStorage.getItem(FONT_KEY);
+    if (v === "small" || v === "medium" || v === "large") return v;
+  } catch {
+    /* ignore */
+  }
+  return "medium";
+}
+
+export function useUiPrefs() {
+  const { theme, setTheme, resolved, cycleTheme } = useTheme();
+  const [fontSize, setFontSizeState] = useState<FontSize>(() => readFont());
+
+  useEffect(() => {
+    applyFont(fontSize);
+  }, [fontSize]);
+
+  useEffect(() => {
+    const api = typeof window !== "undefined" ? window.cyberguard : undefined;
+    if (!api?.prefsGet) return;
+    void api
+      .prefsGet()
+      .then((p) => {
+        const t = p?.theme;
+        if (t === "dark" || t === "light" || t === "system") {
+          setTheme(t);
+        }
+        const f = p?.font_size;
+        if (f === "small" || f === "medium" || f === "large") {
+          setFontSizeState(f);
+          try {
+            localStorage.setItem(FONT_KEY, f);
+          } catch {
+            /* ignore */
+          }
+          applyFont(f);
+        }
+      })
+      .catch(() => undefined);
+  }, [setTheme]);
+
+  const setFontSize = useCallback((size: FontSize) => {
+    setFontSizeState(size);
+    try {
+      localStorage.setItem(FONT_KEY, size);
+    } catch {
+      /* ignore */
+    }
+    applyFont(size);
+  }, []);
+
+  return {
+    theme,
+    setTheme,
+    resolved,
+    cycleTheme,
+    fontSize,
+    setFontSize,
+  };
+}

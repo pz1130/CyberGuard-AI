@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { PlanPanel } from "./components/PlanPanel";
 import { StatusBar } from "./components/StatusBar";
 import { useDesktopRuntime } from "./hooks/useDesktopRuntime";
-import { useTheme } from "./hooks/useTheme";
+import { useHotkeys } from "./hooks/useHotkeys";
+import { useUiPrefs } from "./hooks/useUiPrefs";
 import type { ActiveView, SettingsSection } from "./lib/types";
 import "./lib/types";
 import { EvidenceView } from "./views/EvidenceView";
@@ -10,17 +11,40 @@ import { SettingsView } from "./views/SettingsView";
 import { WorkbenchView } from "./views/WorkbenchView";
 
 export function App() {
-  const { theme, setTheme, cycleTheme, resolved } = useTheme();
+  const { theme, setTheme, cycleTheme, resolved, fontSize, setFontSize } =
+    useUiPrefs();
   const [activeView, setActiveView] = useState<ActiveView>("workbench");
   const [settingsSection, setSettingsSection] = useState<
     SettingsSection | undefined
   >(undefined);
   const rt = useDesktopRuntime();
 
-  const openSettings = (section?: SettingsSection) => {
+  const openSettings = useCallback((section?: SettingsSection) => {
     setSettingsSection(section);
     setActiveView("settings");
-  };
+  }, []);
+
+  const hotkeyHandlers = useMemo(
+    () => ({
+      onNewSession: () => {
+        setActiveView("workbench");
+        rt.onNewInvestigation();
+      },
+      onSettings: () => openSettings(),
+      onWorkbench: () => setActiveView("workbench"),
+      onEvidence: () => setActiveView("evidence"),
+      onRun: () => {
+        if (activeView === "workbench") void rt.onRun();
+      },
+      onEscape: () => {
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+      },
+    }),
+    [activeView, openSettings, rt.onNewInvestigation, rt.onRun]
+  );
+  useHotkeys(hotkeyHandlers);
 
   return (
     <div className="app">
@@ -158,6 +182,7 @@ export function App() {
         <EvidenceView
           evidenceHint={rt.evidenceHint}
           onBackToWorkbench={() => setActiveView("workbench")}
+          onCountChange={(n) => rt.setEvidenceHint(`evidence: ${n}`)}
         />
       )}
 
@@ -165,10 +190,12 @@ export function App() {
         <SettingsView
           theme={theme}
           resolved={resolved}
+          fontSize={fontSize}
           providerMode={rt.providerMode}
           dataRoot={rt.dataRoot}
           onCycleTheme={cycleTheme}
           onSetTheme={setTheme}
+          onSetFontSize={setFontSize}
           focusSection={settingsSection}
           onProviderSaved={(mode) => rt.setProviderMode(mode)}
           showDataPanel={rt.showDataPanel}
@@ -188,8 +215,8 @@ export function App() {
       )}
 
       <div className="footer">
-        CyberGuard Desktop · M7 engineering · not notarized · not for
-        distribution
+        CyberGuard Desktop · P0–P3 UI · not notarized · not for distribution ·
+        ⌘1 Workbench · ⌘2 Evidence · ⌘, Settings · ⌘N New
       </div>
     </div>
   );

@@ -38,27 +38,6 @@ export function useTheme() {
     applyDom(resolved);
   }, [resolved]);
 
-  // Prefer ui.prefs from sidecar when available (P1); fall back to localStorage
-  useEffect(() => {
-    const api = typeof window !== "undefined" ? window.cyberguard : undefined;
-    if (!api?.prefsGet) return;
-    void api
-      .prefsGet()
-      .then((p) => {
-        const t = p?.theme;
-        if (t === "dark" || t === "light" || t === "system") {
-          setThemeState(t);
-          try {
-            localStorage.setItem(STORAGE_KEY, t);
-          } catch {
-            /* ignore */
-          }
-          applyDom(resolveTheme(t));
-        }
-      })
-      .catch(() => undefined);
-  }, []);
-
   useEffect(() => {
     if (theme !== "system") return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");

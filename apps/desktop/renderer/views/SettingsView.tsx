@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { DataPanel } from "../components/DataPanel";
+import type { FontSize } from "../hooks/useUiPrefs";
 import type {
   McpServerPublic,
   ProviderPublic,
@@ -10,10 +11,12 @@ import type {
 type Props = {
   theme: ThemeMode;
   resolved: "dark" | "light";
+  fontSize: FontSize;
   providerMode: string;
   dataRoot: string;
   onCycleTheme: () => void;
   onSetTheme: (mode: ThemeMode) => void;
+  onSetFontSize: (size: FontSize) => void;
   focusSection?: SettingsSection;
   onProviderSaved?: (mode: string) => void;
   // data panel (export/uninstall)
@@ -46,10 +49,12 @@ const emptyMcp = (): McpServerPublic & { secret?: string } => ({
 export function SettingsView({
   theme,
   resolved,
+  fontSize,
   providerMode,
   dataRoot,
   onCycleTheme,
   onSetTheme,
+  onSetFontSize,
   focusSection,
   onProviderSaved,
   showDataPanel,
@@ -282,6 +287,15 @@ export function SettingsView({
       await api?.prefsSet?.({ theme: next });
     } catch {
       /* localStorage still holds theme via useTheme */
+    }
+  };
+
+  const onFontSelect = async (next: FontSize) => {
+    onSetFontSize(next);
+    try {
+      await api?.prefsSet?.({ font_size: next });
+    } catch {
+      /* localStorage fallback */
     }
   };
 
@@ -533,7 +547,7 @@ export function SettingsView({
           <h3>Appearance</h3>
           <p>
             Theme: <strong>{theme}</strong> (resolved{" "}
-            <strong>{resolved}</strong>)
+            <strong>{resolved}</strong>) · Font: <strong>{fontSize}</strong>
           </p>
           <label className="field-label">
             Theme
@@ -546,11 +560,26 @@ export function SettingsView({
               <option value="system">system</option>
             </select>
           </label>
+          <label className="field-label">
+            Font size
+            <select
+              value={fontSize}
+              onChange={(e) => void onFontSelect(e.target.value as FontSize)}
+            >
+              <option value="small">small (13px)</option>
+              <option value="medium">medium (14px)</option>
+              <option value="large">large (16px)</option>
+            </select>
+          </label>
           <div className="empty-actions mt-10">
             <button type="button" className="secondary" onClick={onCycleTheme}>
               Cycle theme
             </button>
           </div>
+          <p className="muted-copy mt-10">
+            Shortcuts: ⌘1 Workbench · ⌘2 Evidence · ⌘, Settings · ⌘N New ·
+            ⌘Enter Run
+          </p>
         </div>
 
         <div className="settings-card" id="settings-data">

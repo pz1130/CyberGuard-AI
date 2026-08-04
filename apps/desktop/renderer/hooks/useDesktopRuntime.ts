@@ -413,6 +413,7 @@ export function useDesktopRuntime() {
     runStatus,
     pausedRunId,
     evidenceHint,
+    setEvidenceHint,
     exportPass,
     setExportPass,
     exportBusy,

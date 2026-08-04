@@ -403,6 +403,17 @@ ipcMain.handle("dialog:pick-file", async (event, opts = {}) => {
   return { ok: true, path: filePaths[0], paths: filePaths };
 });
 
+// P2 — evidence library
+ipcMain.handle("sidecar:evidence:list", async (_e, { limit } = {}) =>
+  rpc("evidence.list", { limit: limit || 100 })
+);
+ipcMain.handle("sidecar:evidence:register", async (_e, { path, note } = {}) =>
+  rpc("evidence.register", { path, note: note || "" })
+);
+ipcMain.handle("sidecar:evidence:verify", async (_e, { evidenceId } = {}) =>
+  rpc("evidence.verify", { evidence_id: evidenceId })
+);
+
 // M7 — encrypted export (save dialog on host, encrypt via sidecar)
 ipcMain.handle("sidecar:export:encrypted", async (event, { passphrase }) => {
   if (!passphrase || String(passphrase).length < 8) {

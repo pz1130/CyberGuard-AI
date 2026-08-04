@@ -29,8 +29,17 @@ apps/desktop/
   README.md
 ```
 
-**Theme:** default `dark`; chrome toggle cycles dark → light → system (`localStorage` key `cg.theme`).  
-**P0 UI:** three-column Workbench + placeholders for Evidence/Settings (full Settings GUI = P1).
+**Theme:** default `dark`; chrome toggle / Settings cycle dark → light → system (`localStorage` + `ui.prefs`).  
+**Font:** Settings → Appearance (`small` / `medium` / `large` → `html[data-font]`).  
+**UI waves:** P0 shell · P1 Settings (LLM/MCP GUI) · P2 Evidence catalog · P3 shortcuts/polish.  
+**Shortcuts:** `⌘1` Workbench · `⌘2` Evidence · `⌘,` Settings · `⌘N` New investigation · `⌘Enter` Run.
+
+### Settings (no JSON required)
+
+1. **LLM** — mode / base URL / model / API key (Keychain; never re-shown) · Save · Test  
+2. **MCP** — list/upsert/delete · secret slots · Discover tools · Browse command  
+3. **Evidence** — Register file (picker) · list with sha256 · Verify integrity  
+4. **Data** — encrypted export / uninstall inventory
 
 ## Prerequisites
 

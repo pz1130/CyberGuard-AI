@@ -68,6 +68,31 @@ export type McpServerPublic = {
   has_secret?: boolean;
 };
 
+export type EvidenceItem = {
+  evidence_id: string;
+  path: string;
+  name: string;
+  sha256: string;
+  size: number;
+  readonly: boolean;
+  trusted_dir?: boolean;
+  registered_at: number;
+  note?: string;
+  source?: string;
+  mount?: string;
+};
+
+export type EvidenceVerifyResult = {
+  ok: boolean;
+  evidence_id: string;
+  expected_sha256?: string;
+  current_sha256?: string;
+  error?: string;
+  path?: string;
+  name?: string;
+  readonly?: boolean;
+};
+
 declare global {
   interface Window {
     cyberguard?: {
@@ -127,6 +152,12 @@ declare global {
         title?: string;
         properties?: string[];
       }) => Promise<{ ok?: boolean; canceled?: boolean; path?: string }>;
+      evidenceList?: (limit?: number) => Promise<{ evidence: EvidenceItem[] }>;
+      evidenceRegister?: (
+        path: string,
+        note?: string
+      ) => Promise<{ ok?: boolean; item?: EvidenceItem }>;
+      evidenceVerify?: (evidenceId: string) => Promise<EvidenceVerifyResult>;
       exportEncrypted?: (passphrase: string) => Promise<{
         ok?: boolean;
         canceled?: boolean;
