@@ -18,11 +18,28 @@ macOS-first **single-operator agent app**: Electron shell + Python sidecar over 
 ```
 apps/desktop/
   electron/          Main process + preload (contextIsolation)
-  renderer/          React + Vite single workbench
+  renderer/          React + Vite UI
+    App.tsx          Shell (chrome / banner / status / view switch)
+    hooks/           useTheme, useDesktopRuntime
+    components/      EventCard, PlanPanel, SessionList, StatusBar, …
+    views/           WorkbenchView · EvidenceView · SettingsView
+    styles/          tokens (dark default) + base + motion + views
   sidecar/           Python JSONL RPC host
   package.json
   README.md
 ```
+
+**Theme:** default `dark`; chrome toggle / Settings cycle dark → light → system (`localStorage` + `ui.prefs`).  
+**Font:** Settings → Appearance (`small` / `medium` / `large` → `html[data-font]`).  
+**UI waves:** P0 shell · P1 Settings (LLM/MCP GUI) · P2 Evidence catalog · P3 shortcuts/polish.  
+**Shortcuts:** `⌘1` Workbench · `⌘2` Evidence · `⌘,` Settings · `⌘N` New investigation · `⌘Enter` Run.
+
+### Settings (no JSON required)
+
+1. **LLM** — mode / base URL / model / API key (Keychain; never re-shown) · Save · Test  
+2. **MCP** — list/upsert/delete · secret slots · Discover tools · Browse command  
+3. **Evidence** — Register file (picker) · list with sha256 · Verify integrity  
+4. **Data** — encrypted export / uninstall inventory
 
 ## Prerequisites
 

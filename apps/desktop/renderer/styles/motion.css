@@ -1,0 +1,37 @@
+.view-enter {
+  animation: cg-view-in var(--motion-base) var(--ease-out) both;
+}
+
+@keyframes cg-view-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.btn-soft,
+.nav-tab,
+.session-list button,
+.chrome-icon-btn {
+  transition:
+    background var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+
+.session-list button:hover,
+.nav-tab:hover:not(.active),
+.chrome-icon-btn:hover {
+  transform: translateY(-1px);
+}
+
+.pill,
+.status-bar span {
+  transition: color var(--motion-fast) var(--ease-out);
+}

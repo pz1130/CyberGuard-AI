@@ -476,6 +476,96 @@ class SidecarServer:
                 self._write(result_msg(req_id, {"events": tail_policy_events(n)}))
                 return
 
+            if method == "provider.get":
+                from apps.desktop.sidecar.provider import get_provider_public
+
+                self._write(result_msg(req_id, get_provider_public()))
+                return
+
+            if method == "provider.set":
+                from apps.desktop.sidecar.provider import set_provider_config
+
+                try:
+                    out = set_provider_config(params if isinstance(params, dict) else {})
+                    self._write(result_msg(req_id, out))
+                except Exception as exc:  # noqa: BLE001
+                    self._write(
+                        error_msg(req_id, "provider", f"{type(exc).__name__}: {exc}")
+                    )
+                return
+
+            if method == "provider.test":
+                from apps.desktop.sidecar.provider import test_provider_connection
+
+                try:
+                    out = await test_provider_connection()
+                    self._write(result_msg(req_id, out))
+                except Exception as exc:  # noqa: BLE001
+                    self._write(
+                        error_msg(req_id, "provider", f"{type(exc).__name__}: {exc}")
+                    )
+                return
+
+            if method == "ui.prefs.get":
+                from apps.desktop.sidecar.ui_prefs import get_prefs
+
+                self._write(result_msg(req_id, get_prefs()))
+                return
+
+            if method == "ui.prefs.set":
+                from apps.desktop.sidecar.ui_prefs import set_prefs
+
+                try:
+                    out = set_prefs(params if isinstance(params, dict) else {})
+                    self._write(result_msg(req_id, out))
+                except Exception as exc:  # noqa: BLE001
+                    self._write(
+                        error_msg(req_id, "ui.prefs", f"{type(exc).__name__}: {exc}")
+                    )
+                return
+
+            if method == "mcp.config.list":
+                from apps.desktop.sidecar.mcp_config import list_mcp_config_public
+
+                self._write(result_msg(req_id, list_mcp_config_public()))
+                return
+
+            if method == "mcp.config.upsert":
+                from apps.desktop.sidecar.mcp_config import upsert_mcp_server
+
+                try:
+                    out = upsert_mcp_server(params if isinstance(params, dict) else {})
+                    self._write(result_msg(req_id, out))
+                except Exception as exc:  # noqa: BLE001
+                    self._write(
+                        error_msg(req_id, "mcp.config", f"{type(exc).__name__}: {exc}")
+                    )
+                return
+
+            if method == "mcp.config.delete":
+                from apps.desktop.sidecar.mcp_config import delete_mcp_server
+
+                try:
+                    out = delete_mcp_server(str(params.get("id") or params.get("server_id") or ""))
+                    self._write(result_msg(req_id, out))
+                except Exception as exc:  # noqa: BLE001
+                    self._write(
+                        error_msg(req_id, "mcp.config", f"{type(exc).__name__}: {exc}")
+                    )
+                return
+
+            if method == "mcp.config.install_demo":
+                from apps.desktop.sidecar.mcp_config import install_demo_echo_mcp
+
+                try:
+                    out = install_demo_echo_mcp()
+                    self._write(result_msg(req_id, out))
+                except Exception as exc:  # noqa: BLE001
+                    self._write(
+                        error_msg(req_id, "mcp.config", f"{type(exc).__name__}: {exc}")
+                    )
+                return
+
             if method == "mcp.list":
                 self._write(
                     result_msg(

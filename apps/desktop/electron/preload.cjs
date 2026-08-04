@@ -18,6 +18,28 @@ contextBridge.exposeInMainWorld("cyberguard", {
   planReject: (planId, reason) =>
     ipcRenderer.invoke("sidecar:plan:reject", { planId, reason }),
   planList: () => ipcRenderer.invoke("sidecar:plan:list"),
+  // P1 settings
+  providerGet: () => ipcRenderer.invoke("sidecar:provider:get"),
+  providerSet: (params) => ipcRenderer.invoke("sidecar:provider:set", params || {}),
+  providerTest: () => ipcRenderer.invoke("sidecar:provider:test"),
+  prefsGet: () => ipcRenderer.invoke("sidecar:prefs:get"),
+  prefsSet: (params) => ipcRenderer.invoke("sidecar:prefs:set", params || {}),
+  mcpConfigList: () => ipcRenderer.invoke("sidecar:mcp-config:list"),
+  mcpConfigUpsert: (params) =>
+    ipcRenderer.invoke("sidecar:mcp-config:upsert", params || {}),
+  mcpConfigDelete: (id) =>
+    ipcRenderer.invoke("sidecar:mcp-config:delete", { id }),
+  mcpConfigInstallDemo: () =>
+    ipcRenderer.invoke("sidecar:mcp-config:install-demo"),
+  mcpDiscover: (tier) => ipcRenderer.invoke("sidecar:mcp:discover", { tier }),
+  pickFile: (opts) => ipcRenderer.invoke("dialog:pick-file", opts || {}),
+  // P2 evidence
+  evidenceList: (limit) =>
+    ipcRenderer.invoke("sidecar:evidence:list", { limit }),
+  evidenceRegister: (path, note) =>
+    ipcRenderer.invoke("sidecar:evidence:register", { path, note }),
+  evidenceVerify: (evidenceId) =>
+    ipcRenderer.invoke("sidecar:evidence:verify", { evidenceId }),
   // M7 delivery
   exportEncrypted: (passphrase) =>
     ipcRenderer.invoke("sidecar:export:encrypted", { passphrase }),
