@@ -313,7 +313,7 @@ Windows / Linux 平台支持。这是**已知并主动接受的推迟**，不是
 2. 两套独立的上下文压缩实现（`context_compressor.py` 8000 est-token vs `internal_agent._maybe_compact` 24000 字符），阈值、提示词、语言均不同
 3. Skills 全文注入 system prompt，未做按需加载
 4. `agent_episodes` 只增不减，且 `_maybe_record_episode` 硬编码 `success=True`，失败经验一条不存
-5. `master.py` 两处**用户可控输入直接驱动控制流**且绕过 guardrail：`_parse_intent_node` 关键词触发 group chat、`_validation_node` 关键词判定高风险
+5. ~~`master.py` 关键词驱动控制流~~ → **已修（INV-13，2026-08）**：group chat 仅 `intent==group_chat` 或 UI 预置；HITL 仅 `needs_approval` / `requires_approval` / `risk_level` 结构化字段；对抗用例见 `tests/test_inv13_control_flow.py`
 6. ~~**跨 agent 派发缺少权限继承校验（提权路径）**~~ → **已修（INV-21，2026-08）**：`app/services/privilege_inherit.py` + `master._sub_agent_executor_node` 在 execute 前比较 source/target 的 `permission_level` 与 `autonomy_tier`。LLM 派发默认 medium/L2 封顶；`user_explicit` / `user_expert` 为可信上下文。用例：`tests/test_privilege_inherit.py`。
 7. ~~`_sub_agent_executor_node` fan-out 无闸~~ → **已修（INV-23，2026-08）**：`fanout_gate.py` + config（`SUB_AGENT_MAX_CONCURRENT/PLAN_SIZE/PER_AGENT/DEPTH`、`SUB_AGENT_REQUIRE_TARGET`）；semaphore 并发；拒绝无目标与超深度。用例：`tests/test_fanout_gate.py`。
 8. 安全边界与功能路径共用同一套 best-effort 异常处理模式。功能性降级（经验召回、搜索、OCR 失败）静默 no-op 是好设计，但该模式不可蔓延到沙箱初始化、策略加载、审计写入等安全路径。见 INV-25。

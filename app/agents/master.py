@@ -106,10 +106,15 @@ class MasterAgent:
         return "sub_agents"
 
     def _validation_decision(self, state: MasterAgentState) -> str:
-        """Decide based on validation result."""
-        if state.get("validation_passed", False):
-            return "approved"
-        return "rejected"
+        """Decide based on structured validation flags (INV-13).
+
+        HITL only when ``approval_required`` is set from structured signals
+        (needs_approval status, requires_approval, risk_level). Agent failures
+        alone go to summarizer so errors surface without keyword-based HITL.
+        """
+        if state.get("approval_required"):
+            return "rejected"
+        return "approved"
 
     async def _start_node(self, state: MasterAgentState) -> MasterAgentState:
         """Start node - initialize state."""
@@ -251,9 +256,12 @@ class MasterAgent:
                 state["error_message"] = f"Intent parsing failed: {e}"
                 return state
 
-        # Check for group chat trigger
-        if any(keyword in user_input.lower() for keyword in ["group chat", "discuss", "all agents"]):
+        # INV-13: group chat only via structured intent (or UI-preset flag),
+        # never via raw keyword match on user_input.
+        intent = (state.get("intent") or "").strip().lower()
+        if intent == "group_chat":
             state["group_chat_active"] = True
+        # Preserve explicit UI / caller pre-set of group_chat_active (truthy only).
 
         # Log audit
         await log_audit(
@@ -261,7 +269,11 @@ class MasterAgent:
             agent_id=None,
             action="parse_intent",
             input_data={"user_input": user_input},
-            output_data={"intent": state.get("intent"), "task_plan": state.get("task_plan")},
+            output_data={
+                "intent": state.get("intent"),
+                "task_plan": state.get("task_plan"),
+                "group_chat_active": bool(state.get("group_chat_active")),
+            },
             request_id=state.get("request_id"),
         )
 
@@ -621,27 +633,37 @@ class MasterAgent:
         return state
 
     async def _validation_node(self, state: MasterAgentState) -> MasterAgentState:
-        """Validate sub-agent results for consistency and hallucinations."""
+        """Validate sub-agent results for consistency and structured risk."""
         state["current_state"] = AgentState.VALIDATE_RESULTS
 
-        sub_results = state.get("sub_results", {})
+        sub_results = state.get("sub_results", {}) or {}
+        task_plan = state.get("task_plan", []) or []
 
         errors = []
         passed = True
+        approval_required = bool(state.get("approval_required"))
 
-        # Basic validation
         for agent_id, result in sub_results.items():
-            if result.get("status") == "failed":
+            if not isinstance(result, dict):
+                continue
+            status = (result.get("status") or "").lower()
+            if status in ("failed", "denied", "halted", "error"):
                 errors.append(f"Agent {agent_id} failed: {result.get('error')}")
                 passed = False
+            # INV-13: structured HITL signals only — never scan free-text output
+            if status == "needs_approval" or result.get("requires_approval") is True:
+                approval_required = True
+            risk = str(
+                result.get("risk_level") or result.get("risk_tier") or ""
+            ).lower()
+            if risk in ("high", "critical"):
+                approval_required = True
 
-        # Check for high-risk indicators
-        for agent_id, result in sub_results.items():
-            output = str(result.get("output", ""))
-            if any(kw in output.lower() for kw in ["critical", "emergency", "immediate action"]):
-                # Flag for human review
-                state["approval_required"] = True
+        for task in task_plan:
+            if isinstance(task, dict) and task.get("requires_approval"):
+                approval_required = True
 
+        state["approval_required"] = approval_required
         state["validation_passed"] = passed
         state["validation_errors"] = errors
         return state
@@ -767,26 +789,44 @@ class MasterAgent:
 
         request_id = state.get("request_id", "")
 
-        # Summarise what needs approval for the admin dashboard
-        sub_results = state.get("sub_results", {})
-        risk_keywords = ["critical", "emergency", "delete", "deploy", "drop", "truncate"]
-        risk_level = "high" if any(
-            kw in str(sub_results).lower()
-            for kw in risk_keywords
-        ) else "medium"
+        # INV-13: risk_level from structured fields only (not free-text keywords)
+        sub_results = state.get("sub_results", {}) or {}
+        task_plan = state.get("task_plan", []) or []
+        risk_level = "medium"
+        for v in sub_results.values():
+            if not isinstance(v, dict):
+                continue
+            if (v.get("status") or "").lower() == "needs_approval":
+                risk_level = "high"
+            rl = str(v.get("risk_level") or v.get("risk_tier") or "").lower()
+            if rl in ("high", "critical"):
+                risk_level = "high"
+        if any(
+            isinstance(t, dict) and t.get("requires_approval") for t in task_plan
+        ):
+            risk_level = "high"
 
         # Build a human-readable description
         if sub_results:
             descriptions = [
                 f"{k}: {v.get('output', '')[:200]}"
                 for k, v in sub_results.items()
-                if v.get("status") == "needs_approval"
+                if isinstance(v, dict)
+                and (
+                    (v.get("status") or "").lower() == "needs_approval"
+                    or v.get("requires_approval") is True
+                    or str(v.get("risk_level") or v.get("risk_tier") or "").lower()
+                    in ("high", "critical")
+                )
             ]
-            action_description = "; ".join(descriptions) or "Agent execution requires approval"
+            action_description = (
+                "; ".join(descriptions) or "Agent execution requires approval"
+            )
         else:
-            task_plan = state.get("task_plan", [])
             action_description = "; ".join(
-                t.get("task", "")[:200] for t in task_plan if t.get("requires_approval")
+                t.get("task", "")[:200]
+                for t in task_plan
+                if isinstance(t, dict) and t.get("requires_approval")
             ) or "Task requires human approval"
 
         from app.services.approval_service import ApprovalService
