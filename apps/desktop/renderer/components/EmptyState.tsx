@@ -13,33 +13,29 @@ export function EmptyState({
   onFillSample,
 }: Props) {
   return (
-    <div className="empty-hero">
-      <div className="empty-kicker">Workbench · ready</div>
-      <h3>开始一次调查</h3>
-      <ol>
-        <li>
-          <strong>LLM</strong> — Settings 配置 live key（密钥不回显）
-        </li>
-        <li>
-          <strong>数据</strong> — Install file alerts MCP 或导入 JSON/CSV
-        </li>
-        <li>
-          <strong>任务</strong> — 下方输入，或一键填入示例后 Run
-        </li>
-      </ol>
+    <div className="empty-hero empty-hero-compact">
+      <div className="empty-hero-top">
+        <div>
+          <div className="empty-kicker">Ready</div>
+          <h3>调查从这里开始</h3>
+        </div>
+        <p className="empty-blurb">
+          配好 LLM 与告警数据源后，在下方输入任务即可。
+        </p>
+      </div>
       <div className="empty-actions">
         <button type="button" className="secondary" onClick={onOpenSettingsLlm}>
-          Configure LLM
+          1 · LLM
         </button>
         <button type="button" className="secondary" onClick={onOpenSettingsMcp}>
-          Add data source
+          2 · 数据源
         </button>
         <button
           type="button"
           className="primary"
           onClick={() => onFillSample(SAMPLE_TASK)}
         >
-          Fill sample task
+          3 · 示例任务
         </button>
       </div>
     </div>

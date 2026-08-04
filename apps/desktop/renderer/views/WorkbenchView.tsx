@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DataPanel } from "../components/DataPanel";
 import { EmptyState } from "../components/EmptyState";
 import { EventCard } from "../components/EventCard";
@@ -38,7 +38,6 @@ type Props = {
   providerMode: string;
   onOpenSettingsLlm: () => void;
   onOpenSettingsMcp: () => void;
-  // data panel
   showDataPanel: boolean;
   onToggleDataPanel: () => void;
   exportPass: string;
@@ -56,10 +55,15 @@ type Props = {
 
 export function WorkbenchView(props: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showSteer, setShowSteer] = useState(false);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [props.events]);
+  }, [props.events, props.streamText]);
+
+  const paused =
+    props.runStatus === "已暂停" || props.runStatus === "paused";
 
   return (
     <div className="workbench view-enter">
@@ -71,18 +75,21 @@ export function WorkbenchView(props: Props) {
         onDelete={props.onDeleteSession}
       />
 
-      <div className="col">
-        <h2>Execution</h2>
-        <div className="col-body">
-          {(props.runStatus === "已暂停" || props.runStatus === "paused") && (
-            <div className="submitted-banner pause-banner">
-              运行已暂停
-              {props.pausedRunId ? ` · ${props.pausedRunId.slice(0, 8)}…` : ""}
+      <div className="col col-main">
+        <div className="col-head">
+          <h2>Investigation</h2>
+          {props.running && <span className="pill ok">Running</span>}
+          {paused && <span className="pill warn">Paused</span>}
+        </div>
+
+        <div className="col-body timeline-wrap">
+          {paused && (
+            <div className="inline-alert warn">
+              <span>已暂停{props.pausedRunId ? ` · ${props.pausedRunId.slice(0, 8)}` : ""}</span>
               {props.onResume ? (
                 <button
                   type="button"
                   className="primary"
-                  style={{ marginLeft: 10 }}
                   onClick={() => void props.onResume?.()}
                 >
                   Resume
@@ -90,13 +97,9 @@ export function WorkbenchView(props: Props) {
               ) : null}
             </div>
           )}
-          {props.lastSubmitted && (
-            <div className="submitted-banner">
-              本次提交：<strong>{props.lastSubmitted}</strong>
-            </div>
-          )}
+
           <div className="timeline">
-            {props.events.length === 0 && (
+            {props.events.length === 0 && !props.streaming && (
               <EmptyState
                 onOpenSettingsLlm={props.onOpenSettingsLlm}
                 onOpenSettingsMcp={props.onOpenSettingsMcp}
@@ -113,7 +116,7 @@ export function WorkbenchView(props: Props) {
             {(props.streaming || props.streamText) && (
               <div className="ev type-stream report">
                 <div className="ev-label">
-                  {props.streaming ? "流式输出…" : "流式草稿"}
+                  {props.streaming ? "流式输出" : "草稿"}
                   {props.streaming ? (
                     <span className="stream-cursor" aria-hidden>
                       ▍
@@ -123,13 +126,14 @@ export function WorkbenchView(props: Props) {
                 {props.streamText ? (
                   <Markdown text={props.streamText} />
                 ) : (
-                  <div className="ev-meta">waiting for tokens…</div>
+                  <div className="ev-meta">waiting…</div>
                 )}
               </div>
             )}
             <div ref={bottomRef} />
           </div>
         </div>
+
         <div className="composer">
           <textarea
             value={props.task}
@@ -140,17 +144,19 @@ export function WorkbenchView(props: Props) {
                 void props.onRun();
               }
             }}
-            placeholder="在这里输入任务，例如：这批告警里哪些值得优先处理？给出理由与建议动作。"
+            placeholder="描述任务… 例如：分诊 high/critical 告警，给出优先级与建议动作"
             disabled={props.running}
+            rows={3}
           />
-          <div className="row">
+          <div className="composer-bar">
             <select
               value={props.tier}
               onChange={(e) => props.onTierChange(e.target.value as Tier)}
               disabled={props.running}
+              title="能力档位"
             >
-              <option value="readonly">readonly（无本机 Exec）</option>
-              <option value="full">full</option>
+              <option value="readonly">只读</option>
+              <option value="full">完整</option>
             </select>
             <button
               className="primary"
@@ -158,7 +164,7 @@ export function WorkbenchView(props: Props) {
               onClick={() => void props.onRun()}
               disabled={!props.hasApi || props.running || !props.task.trim()}
             >
-              {props.running ? "Running…" : "Run"}
+              {props.running ? "运行中…" : "Run"}
             </button>
             <button
               className="secondary"
@@ -168,129 +174,153 @@ export function WorkbenchView(props: Props) {
             >
               Abort
             </button>
-            {props.onResume &&
-            (props.pausedRunId ||
-              props.runStatus === "已暂停" ||
-              props.runStatus === "paused") ? (
-              <button
-                className="secondary"
-                type="button"
-                onClick={() => void props.onResume?.()}
-                disabled={props.running}
-              >
-                Resume
-              </button>
-            ) : null}
-          </div>
-          <div className="hint">
-            Run 始终使用<strong>上方输入框当前文字</strong>
-            （新建调查，不沿用旧会话标题）。⌘/Ctrl+Enter 也可运行。
-          </div>
-          <div className="row">
-            <input
-              className="steer-input"
-              value={props.steerText}
-              onChange={(e) => props.onSteerTextChange(e.target.value)}
-              placeholder="运行中途补充说明（Steer）…"
-              disabled={!props.running || !props.runId}
-            />
             <button
-              className="secondary"
               type="button"
-              onClick={() => void props.onSteer()}
-              disabled={
-                !props.running || !props.runId || !props.steerText.trim()
-              }
+              className="ghost-btn"
+              onClick={() => setShowSteer((v) => !v)}
+              disabled={!props.running || !props.runId}
             >
               Steer
             </button>
+            <span className="composer-hint">⌘↵</span>
           </div>
+          {showSteer && (
+            <div className="row steer-row">
+              <input
+                className="steer-input"
+                value={props.steerText}
+                onChange={(e) => props.onSteerTextChange(e.target.value)}
+                placeholder="运行中途补充说明…"
+                disabled={!props.running || !props.runId}
+              />
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => void props.onSteer()}
+                disabled={
+                  !props.running || !props.runId || !props.steerText.trim()
+                }
+              >
+                发送
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="col">
-        <h2>Context</h2>
+      <div className="col col-context">
+        <div className="col-head">
+          <h2>This run</h2>
+        </div>
         <div className="col-body">
-          <div className="context-section">
-            <div className="context-h">Auth / capabilities</div>
-            <div className="kv">
-              <span>llm</span>
-              <span>
-                <span
-                  className={`pill ${props.providerMode === "live" ? "ok" : "warn"}`}
-                >
-                  {props.providerMode}
-                </span>
-              </span>
-              <span>tier</span>
-              <span>{props.tier}</span>
-              <span>read</span>
-              <span>
-                {props.caps?.has_read ? "yes" : "no"}
-                {props.caps?.real_read ? " · real" : " · mock"}
-              </span>
-              <span>exec / edit</span>
-              <span>
-                {props.caps?.has_exec ? "exec" : "no-exec"} ·{" "}
-                {props.caps?.has_edit ? "edit" : "no-edit"}
-              </span>
-              <span>sandbox</span>
-              <span className="mono-sm">
-                {props.caps?.sandbox_impl || "—"}/
-                {props.caps?.policy?.sandbox_mode || "—"}
+          <div className="context-summary">
+            <div className="context-row">
+              <span>LLM</span>
+              <span
+                className={`pill ${props.providerMode === "live" ? "ok" : "warn"}`}
+              >
+                {props.providerMode}
               </span>
             </div>
-          </div>
-
-          <div className="context-section mt-12">
-            <div className="context-h">Run</div>
-            <div className="kv">
-              <span>status</span>
-              <span>{props.runStatus}</span>
-              <span>run_id</span>
-              <span className="mono-sm">{props.runId ?? "—"}</span>
-              <span>session</span>
+            <div className="context-row">
+              <span>档位</span>
+              <span>{props.tier === "readonly" ? "只读" : "完整"}</span>
+            </div>
+            <div className="context-row">
+              <span>沙箱</span>
               <span className="mono-sm">
-                {props.sessionId
-                  ? `${props.sessionId.slice(0, 12)}…`
-                  : "—"}
+                {props.caps?.sandbox_impl || "—"}
               </span>
+            </div>
+            <div className="context-row">
+              <span>状态</span>
+              <span>{props.runStatus}</span>
             </div>
           </div>
 
           {props.mcpTools.length > 0 && (
             <div className="context-section mt-12">
-              <div className="context-h">MCP tools（本轮）</div>
-              <ul className="mcp-tools-list">
+              <div className="context-h">本轮工具</div>
+              <div className="tool-chips">
                 {props.mcpTools.map((n) => (
-                  <li key={n} className="mono-sm">
-                    {n}
-                  </li>
+                  <span key={n} className="pill mono-xs" title={n}>
+                    {n.replace(/^mcp__/, "").slice(0, 28)}
+                  </span>
                 ))}
-              </ul>
+              </div>
             </div>
           )}
 
-          <p className="muted-copy mt-12">
-            data_root:{" "}
-            <code className="mono-xs">{props.dataRoot || "—"}</code>
-          </p>
+          <div className="context-actions mt-12">
+            <button
+              type="button"
+              className="secondary context-full-btn"
+              onClick={props.onOpenSettingsMcp}
+            >
+              配置数据源
+            </button>
+            <button
+              type="button"
+              className="secondary context-full-btn"
+              onClick={props.onOpenSettingsLlm}
+            >
+              配置 LLM
+            </button>
+          </div>
 
-          <DataPanel
-            open={props.showDataPanel}
-            onToggle={props.onToggleDataPanel}
-            exportPass={props.exportPass}
-            onExportPass={props.onExportPass}
-            exportBusy={props.exportBusy}
-            exportMsg={props.exportMsg}
-            onExport={props.onExport}
-            exportAvailable={props.exportAvailable}
-            uninstallBusy={props.uninstallBusy}
-            uninstallPreview={props.uninstallPreview}
-            onInventory={props.onUninstallInventory}
-            onDryRun={props.onUninstallDryRun}
-            onExecute={props.onUninstallExecute}
-          />
+          <button
+            type="button"
+            className="ghost-btn advanced-toggle"
+            onClick={() => setShowAdvanced((v) => !v)}
+          >
+            {showAdvanced ? "▾ 调试信息" : "▸ 调试信息"}
+          </button>
+          {showAdvanced && (
+            <div className="context-advanced">
+              <div className="kv">
+                <span>read</span>
+                <span>
+                  {props.caps?.has_read ? "yes" : "no"}
+                  {props.caps?.real_read ? " · real" : ""}
+                </span>
+                <span>exec/edit</span>
+                <span>
+                  {props.caps?.has_exec ? "exec" : "—"}/
+                  {props.caps?.has_edit ? "edit" : "—"}
+                </span>
+                <span>run_id</span>
+                <span className="mono-xs">{props.runId ?? "—"}</span>
+                <span>session</span>
+                <span className="mono-xs">
+                  {props.sessionId
+                    ? `${props.sessionId.slice(0, 10)}…`
+                    : "—"}
+                </span>
+                <span>data_root</span>
+                <span className="mono-xs" title={props.dataRoot}>
+                  …/{props.dataRoot.split("/").slice(-2).join("/") || "—"}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {props.showDataPanel && (
+            <DataPanel
+              open={true}
+              onToggle={props.onToggleDataPanel}
+              exportPass={props.exportPass}
+              onExportPass={props.onExportPass}
+              exportBusy={props.exportBusy}
+              exportMsg={props.exportMsg}
+              onExport={props.onExport}
+              exportAvailable={props.exportAvailable}
+              uninstallBusy={props.uninstallBusy}
+              uninstallPreview={props.uninstallPreview}
+              onInventory={props.onUninstallInventory}
+              onDryRun={props.onUninstallDryRun}
+              onExecute={props.onUninstallExecute}
+            />
+          )}
         </div>
       </div>
     </div>

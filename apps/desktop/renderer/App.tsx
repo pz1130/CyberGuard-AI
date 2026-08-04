@@ -10,6 +10,9 @@ import { EvidenceView } from "./views/EvidenceView";
 import { SettingsView } from "./views/SettingsView";
 import { WorkbenchView } from "./views/WorkbenchView";
 
+const DEV_TITLE =
+  "Development build · not notarized · not for distribution. Plan Mode = 自批准 (approval_type=self), timeout=reject. Local hash chain ≠ WORM.";
+
 export function App() {
   const { theme, setTheme, cycleTheme, resolved, fontSize, setFontSize } =
     useUiPrefs();
@@ -20,6 +23,7 @@ export function App() {
   const [highlightEvidenceId, setHighlightEvidenceId] = useState<
     string | undefined
   >(undefined);
+  const [bannerOpen, setBannerOpen] = useState(false);
   const rt = useDesktopRuntime();
 
   const openEvidence = useCallback((evidenceId?: string) => {
@@ -54,6 +58,9 @@ export function App() {
   );
   useHotkeys(hotkeyHandlers);
 
+  const showMockChip = rt.providerMode === "mock";
+  const showCritical = Boolean(rt.fvWarning || rt.tccWarning || showMockChip);
+
   return (
     <div className="app">
       <header className="chrome">
@@ -62,7 +69,7 @@ export function App() {
             <span className="chrome-mark" aria-hidden />
             <div className="chrome-brand-meta">
               <span className="chrome-brand-name">CyberGuard</span>
-              <span className="chrome-brand-sub">Desktop · ops</span>
+              <span className="chrome-brand-sub">Desktop</span>
             </div>
           </div>
           <nav className="chrome-nav" aria-label="Primary">
@@ -90,27 +97,37 @@ export function App() {
           </nav>
         </div>
         <div className="chrome-right">
-          <span className="pill warn" title="Development build — not for distribution">
+          <button
+            type="button"
+            className="pill warn chrome-dev-btn"
+            title={DEV_TITLE}
+            onClick={() => setBannerOpen((v) => !v)}
+          >
             DEV
-          </span>
+          </button>
           <button
             type="button"
             className="chrome-icon-btn"
             onClick={cycleTheme}
             title={`Theme: ${theme} (${resolved})`}
           >
-            {resolved === "dark" ? "◐ Dark" : "☀ Light"}
-            {theme === "system" ? " · Auto" : ""}
+            {resolved === "dark" ? "Dark" : "Light"}
           </button>
         </div>
       </header>
 
-      <div className="banner">
-        <strong>Development build (not notarized)</strong> — not for
-        distribution. Plan Mode uses <em>自批准</em> (approval_type=self) — not
-        segregation-of-duties. Timeout = reject. LLM:{" "}
-        <code>{rt.providerMode}</code>. Local hash chain ≠ WORM.
-      </div>
+      {bannerOpen && (
+        <div className="banner banner-compact">
+          <span>{DEV_TITLE}</span>
+          <button
+            type="button"
+            className="banner-dismiss"
+            onClick={() => setBannerOpen(false)}
+          >
+            收起
+          </button>
+        </div>
+      )}
 
       {rt.pendingPlan && activeView === "workbench" && (
         <PlanPanel
@@ -122,17 +139,30 @@ export function App() {
         />
       )}
 
-      {rt.fvWarning && (
-        <div className="banner banner-danger">
-          <strong>FileVault:</strong> {rt.fvWarning}
-        </div>
-      )}
-      {rt.tccWarning && (
-        <div className="banner banner-warn">
-          <strong>TCC:</strong> {rt.tccWarning}
-          {rt.tccGuidance ? (
-            <div className="banner-sub">{rt.tccGuidance}</div>
-          ) : null}
+      {showCritical && (
+        <div className="alert-strip">
+          {rt.fvWarning && (
+            <span className="alert-chip danger" title={rt.fvWarning}>
+              FileVault: {rt.fvWarning}
+            </span>
+          )}
+          {rt.tccWarning && (
+            <span
+              className="alert-chip warn"
+              title={rt.tccGuidance || rt.tccWarning}
+            >
+              TCC: {rt.tccWarning}
+            </span>
+          )}
+          {showMockChip && (
+            <button
+              type="button"
+              className="alert-chip warn alert-chip-btn"
+              onClick={() => openSettings("llm")}
+            >
+              LLM 为 mock · 点此配置 key
+            </button>
+          )}
         </div>
       )}
 
@@ -150,21 +180,6 @@ export function App() {
         pausedRunId={rt.pausedRunId}
         evidenceHint={rt.evidenceHint}
       />
-
-      {rt.providerMode === "mock" && (
-        <div className="banner banner-warn">
-          <strong>LLM is mock</strong> — live key missing or not loaded. Open{" "}
-          <button
-            type="button"
-            className="linkish"
-            onClick={() => openSettings("llm")}
-          >
-            Settings → LLM
-          </button>
-          , paste API key, Save, then Test. (Keys stay in secrets store, never
-          re-shown.)
-        </div>
-      )}
 
       {activeView === "workbench" && (
         <WorkbenchView
@@ -254,11 +269,6 @@ export function App() {
           onUninstallExecute={() => void rt.onUninstallExecute()}
         />
       )}
-
-      <div className="footer">
-        CyberGuard Desktop · not notarized · not for distribution · ⌘1 Workbench
-        · ⌘2 Evidence · ⌘, Settings · ⌘N New · ⌘Enter Run
-      </div>
     </div>
   );
 }

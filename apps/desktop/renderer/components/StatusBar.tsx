@@ -13,12 +13,7 @@ type Props = {
   evidenceHint: string;
 };
 
-function pillClass(kind: "ok" | "bad" | ""): string {
-  if (kind === "ok") return "ok";
-  if (kind === "bad") return "bad";
-  return "";
-}
-
+/** Compact status: 4 primary pills; rest in title tooltips on “more”. */
 export function StatusBar({
   statusLabel,
   pingOk,
@@ -33,55 +28,58 @@ export function StatusBar({
   pausedRunId,
   evidenceHint,
 }: Props) {
-  const sb =
-    sandboxImpl === "none" ? "bad" : sandboxImpl === "seatbelt" ? "ok" : "";
-  const tcc =
-    tccSummary === "restricted"
-      ? "bad"
-      : tccSummary === "fda_likely"
-        ? "ok"
-        : "";
-  const run =
-    runStatus === "已暂停" || runStatus === "paused" || runStatus === "running"
-      ? runStatus === "running"
-        ? "ok"
-        : "bad"
-      : "";
-  const llm = providerMode === "live" ? "ok" : "bad";
+  const sbBad = sandboxImpl === "none";
+  const sbOk = sandboxImpl === "seatbelt";
+  const llmOk = providerMode === "live";
+  const runPaused =
+    runStatus === "已暂停" || runStatus === "paused";
+  const runBusy = runStatus === "running";
+
+  const moreTitle = [
+    `tcc: ${tccSummary}`,
+    tccWarning || tccGuidance || "",
+    `tier: ${tier}`,
+    evidenceHint,
+    "ports: none (JSONL stdio)",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <div className="status-bar" role="status">
-      <span className={pillClass(pingOk ? "ok" : "bad")}>
-        <span aria-hidden>●</span> {statusLabel}
+      <span className={pingOk ? "ok" : "bad"} title={statusLabel}>
+        <span aria-hidden className="status-dot" />
+        {pingOk ? "Online" : "Offline"}
       </span>
       <span
-        className={pillClass(sb)}
+        className={sbBad ? "bad" : sbOk ? "ok" : ""}
         title={
-          sandboxImpl === "none"
-            ? "无 OS 沙箱 — 真实本机工具保持禁用"
-            : `impl=${sandboxImpl}`
+          sbBad
+            ? "No OS sandbox — host tools stay disabled"
+            : `sandbox ${sandboxImpl}/${sandboxMode}`
         }
       >
-        sandbox {sandboxImpl}/{sandboxMode}
+        {sbOk ? "Sandbox" : sbBad ? "No sandbox" : sandboxImpl}
       </span>
       <span
-        className={pillClass(tcc)}
-        title={tccGuidance || tccWarning || "TCC probe (heuristic)"}
+        className={llmOk ? "ok" : "bad"}
+        title={`LLM mode: ${providerMode}`}
       >
-        tcc {tccSummary}
+        LLM {providerMode}
       </span>
-      <span className={pillClass(llm)}>llm {providerMode}</span>
-      <span>tier {tier}</span>
       <span
-        className={pillClass(run === "bad" ? "bad" : run === "ok" ? "ok" : "")}
-        title={pausedRunId ? `paused run ${pausedRunId}` : undefined}
+        className={runPaused ? "bad" : runBusy ? "ok" : ""}
+        title={
+          pausedRunId
+            ? `paused ${pausedRunId}`
+            : `run ${runStatus} · tier ${tier}`
+        }
       >
-        run {runStatus}
+        {runPaused ? "Paused" : runBusy ? "Running" : "Idle"}
       </span>
-      <span title="Evidence browser items (read-only + sha256)">
-        {evidenceHint}
+      <span className="status-more" title={moreTitle}>
+        {evidenceHint.replace(/^evidence:\s*/i, "Ev ")} · {tier}
       </span>
-      <span title="No listen ports — JSONL stdio only">stdio</span>
     </div>
   );
 }
