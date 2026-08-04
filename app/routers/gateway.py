@@ -92,6 +92,13 @@ class SendMessageResponse(BaseModel):
     message_id: int
 
 
+class ExecuteToolRequest(BaseModel):
+    execution_id: Optional[str] = None
+    tool_id: int
+    args: dict = Field(default_factory=dict)
+    confidence: Optional[float] = None
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -301,7 +308,7 @@ async def manifest(x_api_key: str = Header(..., alias="X-Api-Key")):
                 schema = {}
             tools.append(ManifestTool(
                 id=t.id, name=t.name, description=t.description,
-                command_template=t.command_template, input_schema=schema,
+                command_template=None if agent.governed else t.command_template, input_schema=schema,
             ))
 
         mrows = (await session.execute(
@@ -323,7 +330,35 @@ async def manifest(x_api_key: str = Header(..., alias="X-Api-Key")):
     return ManifestResponse(
         agent_id=agent.id,
         agent_name=agent.agent_name,
+        governed=bool(agent.governed),
         skills=skills,
         tools=tools,
         mcp_tools=mcp_tools,
     )
+
+
+@router.post("/gateway/execute-tool")
+async def gateway_execute_tool(body: ExecuteToolRequest,
+                               x_api_key: str = Header(..., alias="X-Api-Key")):
+    """Governed tool execution for wrapped agents. The agent calls this instead
+    of running the tool itself; the action passes the full gatekeeper."""
+    agent = await _auth_agent(x_api_key)
+    allowed_ids = set(agent.associated_tools or [])
+    if body.tool_id not in allowed_ids:
+        raise HTTPException(status_code=403, detail="tool not assigned to this agent")
+
+    async with AsyncSessionLocal() as session:
+        tool = (await session.execute(
+            select(Tool).where(Tool.id == body.tool_id, Tool.is_active.is_(True)))).scalar_one_or_none()
+        if tool is None:
+            raise HTTPException(status_code=404, detail="tool not found")
+        user_id = 0
+        if body.execution_id:
+            gm = (await session.execute(
+                select(GatewayMessage).where(GatewayMessage.execution_id == body.execution_id)
+            )).scalar_one_or_none()
+            if gm and gm.sender_user_id:
+                user_id = gm.sender_user_id
+
+    from app.services.agent_wrapper import broker_execute
+    return await broker_execute(agent, tool, user_id=user_id, args=body.args, confidence=body.confidence)

@@ -82,3 +82,25 @@ async def export_audit_logs(
         "logs": [AuditLogRead.model_validate(l).model_dump() for l in logs],
         "filename": f"audit_export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json",
     }
+
+
+from app.core.audit import verify_chain
+
+
+@router.get("/audit/verify")
+async def audit_verify(
+    _=Depends(require_permission(Permission.AUDIT_READ)),
+):
+    ok, broken_at = await verify_chain()
+    return {"intact": ok, "first_broken_row_id": broken_at}
+
+
+from app.services.audit_worm import export_new
+
+
+@router.post("/audit/worm-export")
+async def audit_worm_export(
+    retain_days: int = 365,
+    _=Depends(require_permission(Permission.AUDIT_READ)),
+):
+    return await export_new(retain_days=retain_days)

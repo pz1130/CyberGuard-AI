@@ -82,6 +82,9 @@ class MasterAgentState(TypedDict, total=False):
     # | "expert" (fan out to all active sub-agents)
     mode: Optional[str]
 
+    # INV-23 nesting: master turn starts at 0; sub-agent-spawned plans would be 1+
+    dispatch_depth: Optional[int]
+
     # Conversation history (list of {"role": "user"/"assistant", "content": str})
     # Injected from the conversations table so the LLM has multi-turn memory
     conversation_history: Optional[List[Dict[str, Any]]]

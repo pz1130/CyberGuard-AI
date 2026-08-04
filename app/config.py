@@ -37,12 +37,25 @@ class Settings(BaseSettings):
     MASTER_AGENT_TEMPERATURE: float = 0.7
 
     # Context Compressor (master-agent conversation-history compression)
+    # CONTEXT_COMPRESS_MAX_TOKENS is the *fallback* absolute threshold when no
+    # model context_window is available. Preferred path: remaining_budget(
+    #   context_window - reserve_output - reserve_system).
     CONTEXT_COMPRESS_MAX_TOKENS: int = 8000
     CONTEXT_COMPRESS_KEEP_LAST: int = 6
+    CONTEXT_COMPRESS_RESERVE_OUTPUT: int = 1024
+    CONTEXT_COMPRESS_RESERVE_SYSTEM: int = 512
+    # Default context window when provider model entry has none (M0a-2 catalog).
+    DEFAULT_CONTEXT_WINDOW: int = 128000
 
     # Sub-Agent Defaults
     SUB_AGENT_TIMEOUT: int = 30
     SUB_AGENT_MAX_RETRIES: int = 2
+    # INV-23 · fan-out gates (conservative defaults)
+    SUB_AGENT_MAX_CONCURRENT: int = 4          # semaphore for parallel execute
+    SUB_AGENT_MAX_PLAN_SIZE: int = 12          # hard cap on tasks per master turn
+    SUB_AGENT_MAX_PER_AGENT: int = 2           # same agent_id occurrences per plan
+    SUB_AGENT_MAX_DEPTH: int = 1               # master=0; sub dispatch depth ≤ this
+    SUB_AGENT_REQUIRE_TARGET: bool = True  # need agent_id, agent_name, or agent_type
 
     # Public base URL used to inject manifest_url into external agent payloads.
     # Leave empty to disable manifest_url injection (safe default).
@@ -68,8 +81,20 @@ class Settings(BaseSettings):
     GROUPCHAT_CONSENSUS_LOW: float = 0.65       # min cosine < LOW  => no consensus
     GROUPCHAT_JACCARD_THRESHOLD: float = 0.7    # lexical fallback threshold
 
-    # Auto-approve approval requests without human intervention
+    # Auto-approve approval requests without human intervention.
+    # NDB Std §B5: security actions must never auto-approve. Default off outside dev.
     AUTO_APPROVE: bool = True
+
+    # Kill switch file trigger (NDB Std §Kill Switch)
+    KILL_SWITCH_FILE: str = "var/governance/kill_switch"
+
+    # PII filter settings (NDB Std §Data Lineage & PII / A5)
+    PII_FILTER_ENABLED: bool = True
+    PII_HANDLING_POLICY: str = "redact"
+
+    # Egress allowlist (defense-in-depth over SSRF block-list)
+    EGRESS_ALLOWLIST_ENABLED: bool = False
+    EGRESS_ALLOWLIST: str = ""
 
     @model_validator(mode="after")
     def validate_security_keys(self) -> "Settings":
@@ -92,6 +117,14 @@ class Settings(BaseSettings):
             )
         if errors:
             raise ValueError("\n".join(errors))
+        # NDB Std §B5: never auto-approve security actions outside development.
+        if self.ENVIRONMENT != "development" and self.AUTO_APPROVE:
+            import warnings
+            warnings.warn(
+                "AUTO_APPROVE is enabled in non-development environment. "
+                "NDB Standard requires human approval for security actions.",
+                stacklevel=2,
+            )
         return self
 
     @property

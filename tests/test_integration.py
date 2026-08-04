@@ -315,7 +315,7 @@ class TestMasterAgentStateMachine(unittest.IsolatedAsyncioTestCase):
         mock_router.chat.assert_awaited_once()
 
     async def test_group_chat_trigger(self):
-        """'all agents' keyword → group_chat_active=True."""
+        """Structured intent=group_chat → group_chat_active (INV-13, not keywords)."""
         agent, mock_router = self._make_agent()
         mock_router.parse_intent = AsyncMock(return_value={
             "intent": "group_chat",
@@ -324,12 +324,12 @@ class TestMasterAgentStateMachine(unittest.IsolatedAsyncioTestCase):
         })
         with patch("app.core.audit.log_audit", new_callable=AsyncMock):
             result = await agent.run(
-                user_input="Let's discuss this with all agents",
+                user_input="Please coordinate agents on this case",
                 user_id=1,
             )
-        # group_chat_active should have been set (keyword trigger)
         # With empty task_plan in group chat, summarizer handles it
         self.assertIn("final_summary", result)
+        self.assertTrue(result.get("group_chat_active"))
 
     async def test_conversation_history_injected(self):
         """conversation_history is passed through to the state."""

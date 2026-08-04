@@ -2,59 +2,47 @@
 
 Runs an inline tool-call loop against the LLM Router. See:
   docs/superpowers/specs/2026-05-28-internal-agents-design.md
+
+M0a-1: loop guards, compaction, and ``run_loop`` live in ``agent_core``;
+this module owns DB/memory/skills/MCP wiring and dispatches tools.
 """
-import asyncio
+import asyncio  # re-exported for tests that monkeypatch internal_agent.asyncio.sleep
 import json
 import logging
 import time
-from collections import Counter
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 from sqlalchemy import select
 
+from agent_core.compact import maybe_compact_messages
+from agent_core.loop_utils import (
+    AUTO_CONTINUE_MAX,
+    CONTEXT_COMPACT_CHARS,
+    CONTEXT_KEEP_RECENT,
+    LLM_RETRY_BACKOFF,
+    LLM_RETRY_MAX,
+    LOOP_DETECT_THRESHOLD,
+    REFLECT_GUIDANCE,
+    REFLECT_MAX,
+    TOOL_CALL_BUDGET_DEFAULT,
+    TOOL_CALL_BUDGET_LIMITED,
+    TOOL_RESULT_MAX_CHARS,
+    budget_notice as _budget_notice_core,
+    estimate_message_chars,
+    loop_notice as _loop_notice_core,
+    messages_to_text,
+    tool_call_fingerprint,
+    truncate_tool_result,
+)
+from agent_core.pipeline import run_tool_call
+from agent_core.run_loop import RunLoopConfig, run_loop
+
 from app.core.database import AsyncSessionLocal
 from app.models.conversation import Conversation
 from app.services.llm_router import get_llm_router
 from app.services.tool_executor import execute_tool
-
-
-# --- Tunables (aligned with QwenPaw's ReActAgent behaviours) ---------------
-# Truncate oversized tool outputs so a single noisy tool can't blow the
-# context window (cf. QwenPaw LightContextManager._prune_tool_result).
-TOOL_RESULT_MAX_CHARS = 8000
-# When the model answers with text but never used a tool, nudge it to either
-# call a tool or confirm completion — bounded to avoid loops / runaway cost
-# (cf. QwenPaw _auto_continue_if_text_only).
-AUTO_CONTINUE_MAX = 2
-# Compact older history once the running message buffer exceeds this size
-# (~6k tokens at ~4 chars/token), keeping the most recent turns verbatim
-# (cf. QwenPaw _compact_context / context_compact_threshold).
-CONTEXT_COMPACT_CHARS = 24000
-CONTEXT_KEEP_RECENT = 6
-
-# --- Reflector / loop guard (cf. PentAGI Reflector + execution monitoring) --
-# Same (tool name + normalized args) seen this many times across steps ==
-# the agent is stuck repeating itself instead of making progress.
-LOOP_DETECT_THRESHOLD = 3
-# How many reflector interventions to allow before aborting a stuck loop.
-REFLECT_MAX = 2
-# Bounded self-recovery on transient LLM failures before failing the turn.
-LLM_RETRY_MAX = 2
-LLM_RETRY_BACKOFF = 0.5  # base seconds between retries (linear backoff)
-
-# Hard cap on total tool executions per run, preventing runaway operations
-# (cf. PentAGI: 100 for general agents, 20 for limited ones). Once spent, the
-# agent is forced to answer from what it already has rather than erroring out.
-TOOL_CALL_BUDGET_DEFAULT = 100
-TOOL_CALL_BUDGET_LIMITED = 20
-
-# Injected as a user nudge when a loop is detected, to break the rut.
-REFLECT_GUIDANCE = (
-    "你似乎在重复同一个操作且没有进展。请停下来反思：要么换一种"
-    "完全不同的方法或参数，要么基于已有信息直接给出最终答复。"
-)
 
 
 # ---------------------------------------------------------------------------
@@ -149,6 +137,16 @@ class InternalAgentRunner:
             TOOL_CALL_BUDGET_LIMITED if self.permission_level == "low"
             else TOOL_CALL_BUDGET_DEFAULT
         )
+        _gov = meta.get("governance") or {}
+        # Prefer first-class governance columns (Plan 2); fall back to metadata_json.
+        self._governance_cfg = {
+            "autonomy_tier": config.get("autonomy_tier") or _gov.get("autonomy_tier", "L2"),
+            "allowed_categories": config.get("allowed_categories") or _gov.get("allowed_categories"),
+            "escalate_to_human_below": config.get("escalate_to_human_below") or _gov.get("escalate_to_human_below", 0.60),
+            "is_poc": config.get("is_poc") if config.get("is_poc") is not None else _gov.get("is_poc", True),
+            "agent_name": config.get("agent_name"),
+        }
+        self._pii_policy: Optional[str] = config.get("pii_handling_policy")
 
     # -------- Memory --------
 
@@ -200,34 +198,50 @@ class InternalAgentRunner:
     ) -> None:
         if parent_conversation_id is None or not messages:
             return
+        from app.services.conversation_messages import (
+            parse_messages,
+            serialize_messages,
+            stamp_message,
+        )
+
         async with AsyncSessionLocal() as s:
+            # Lock slice row after ensure-exists to avoid concurrent RMW loss
             row = await self._get_or_create_slice_row(s, parent_conversation_id, user_id)
-            existing = json.loads(row.messages_json or "[]")
-            existing.extend(messages)
-            row.messages_json = json.dumps(existing, ensure_ascii=False)
+            await s.flush()
+            result = await s.execute(
+                select(Conversation)
+                .where(Conversation.id == row.id)
+                .with_for_update()
+            )
+            locked = result.scalar_one()
+            existing = parse_messages(locked.messages_json)
+            for m in messages:
+                existing.append(stamp_message(dict(m)))
+            locked.messages_json = serialize_messages(existing)
             await s.commit()
 
     # -------- System prompt assembly --------
 
-    async def _load_skill_bodies(self, skill_ids: List[int]) -> Dict[int, str]:
+    async def _load_skill_catalog(self, skill_ids: List[int]) -> List[Dict[str, Any]]:
+        """Metadata only (name + description) — progressive disclosure."""
         if not skill_ids:
-            return {}
-        from app.models.skill import Skill
-        async with AsyncSessionLocal() as s:
-            result = await s.execute(select(Skill).where(Skill.id.in_(skill_ids),
-                                                          Skill.is_active.is_(True)))
-            rows = result.scalars().all()
-        return {r.id: (r.md_content or "") for r in rows}
+            return []
+        from app.services.skill_loader import SkillLoader
+        return await SkillLoader.load_skill_catalog(skill_ids)
+
+    async def _load_skill_bodies(self, skill_ids: List[int]) -> Dict[int, str]:
+        """Deprecated full-body load — tests may still patch this; prefer catalog."""
+        catalog = await self._load_skill_catalog(skill_ids)
+        # Bodies intentionally omitted from catalog path
+        return {int(s["id"]): "" for s in catalog if s.get("id") is not None}
 
     async def _build_system_prompt(self, task: Optional[str] = None) -> str:
         parts = [self.system_prompt] if self.system_prompt else []
-        bodies = await self._load_skill_bodies(self.associated_skills)
-        if bodies:
-            parts.append("\n\n## Skills available to you\n")
-            for sid in self.associated_skills:
-                body = bodies.get(sid)
-                if body:
-                    parts.append(f"\n### Skill #{sid}\n{body}\n")
+        # Progressive disclosure: name+description only; body via load_skill tool
+        catalog = await self._load_skill_catalog(self.associated_skills)
+        if catalog:
+            from app.services.skill_loader import SkillLoader
+            parts.append("\n\n" + SkillLoader.format_catalog_prompt(catalog))
 
         if self.enable_episodic and task:
             try:
@@ -356,61 +370,119 @@ class InternalAgentRunner:
                         },
                     },
                 })
+
+        # Progressive skill load (body not in system prompt)
+        if self.associated_skills:
+            tools.append({
+                "type": "function",
+                "function": {
+                    "name": "load_skill",
+                    "description": (
+                        "Load the full text of an associated skill/SOP by name or id. "
+                        "Use after consulting the skill catalog in the system prompt."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Skill name or numeric id",
+                            },
+                        },
+                        "required": ["name"],
+                    },
+                },
+            })
         return tools
 
     # -------- Tool dispatch --------
 
     async def _dispatch(self, call) -> str:
-        """Execute a single tool_call and return a JSON-safe string result."""
+        """Execute a single tool_call and return a JSON-safe string result.
+
+        Every branch goes through ``agent_core.pipeline.run_tool_call`` (INV-28).
+        Pool tools additionally re-enter the pipeline inside ``execute_tool``;
+        nested pipeline is intentional (outer = agent dispatch, inner = pool gates).
+        """
         name = call.function.name
         try:
             args = json.loads(call.function.arguments or "{}")
         except json.JSONDecodeError:
             args = {}
 
-        # 1. MCP tool lookup
-        if hasattr(self, "_mcp_by_name") and name in self._mcp_by_name:
-            from app.services.mcp_executor import execute_mcp_tool
-            tool_row, server_row = self._mcp_by_name[name]
-            try:
-                result = await execute_mcp_tool(server_row, tool_row.tool_name, args)
-                return json.dumps(result, ensure_ascii=False, default=str)
-            except Exception as e:
-                return f"ERROR: MCP tool {name!r} failed: {e}"
+        async def _execute(_ctx, bound_args: dict) -> str:
+            # 1. MCP tool lookup
+            if hasattr(self, "_mcp_by_name") and name in self._mcp_by_name:
+                from app.services.mcp_executor import execute_mcp_tool
+                tool_row, server_row = self._mcp_by_name[name]
+                try:
+                    result = await execute_mcp_tool(server_row, tool_row.tool_name, bound_args)
+                    return json.dumps(result, ensure_ascii=False, default=str)
+                except Exception as e:
+                    return f"ERROR: MCP tool {name!r} failed: {e}"
 
-        # 2. KB synthetic tool
-        if name == "kb_search" and self.knowledge_base_id:
-            try:
-                chunks = await knowledge_service.search(
-                    self.knowledge_base_id,
-                    args.get("query", ""),
-                    args.get("top_k", 5),
+            # 1b. Progressive skill body load
+            if name == "load_skill":
+                from app.services.skill_loader import SkillLoader
+                key = bound_args.get("name") or bound_args.get("id") or ""
+                skill = await SkillLoader.load_skill_body(
+                    key, allowed_ids=self.associated_skills or None
                 )
-                return json.dumps(chunks, ensure_ascii=False, default=str)
-            except Exception as e:
-                return f"ERROR: kb_search failed: {e}"
+                if not skill:
+                    return json.dumps(
+                        {
+                            "status": "error",
+                            "is_error": True,
+                            "error": f"unknown or unauthorized skill: {key!r}",
+                        },
+                        ensure_ascii=False,
+                    )
+                return SkillLoader.wrap_skill_body(skill)
 
-        # 3. Search synthetic tools (OSINT web / vuln recon)
-        if name in ("web_search", "vuln_search") and self.enable_search:
-            try:
-                fn = getattr(search_service, name)
-                results = await fn(args.get("query", ""), args.get("limit", 5))
-                return json.dumps(results, ensure_ascii=False, default=str)
-            except Exception as e:
-                return f"ERROR: {name} failed: {e}"
+            # 2. KB synthetic tool
+            if name == "kb_search" and self.knowledge_base_id:
+                try:
+                    chunks = await knowledge_service.search(
+                        self.knowledge_base_id,
+                        bound_args.get("query", ""),
+                        bound_args.get("top_k", 5),
+                    )
+                    return json.dumps(chunks, ensure_ascii=False, default=str)
+                except Exception as e:
+                    return f"ERROR: kb_search failed: {e}"
 
-        # 4. Executable pool Tool
-        if getattr(self, "_pool_tools_by_name", None) and name in self._pool_tools_by_name:
-            tool_row = self._pool_tools_by_name[name]
-            res = await execute_tool(tool_row, args, user_id=getattr(self, "_user_id", 0))
-            if res.get("status") == "completed":
-                return res.get("stdout", "") or "(no output)"
-            if res.get("status") == "needs_approval":
-                return (f"NEEDS_APPROVAL: tool {name!r} is high-permission; "
-                        f"an approval request was created for a human to review.")
-            return f"ERROR: tool {name!r}: {res.get('error') or res.get('stderr') or res}"
+            # 3. Search synthetic tools (OSINT web / vuln recon)
+            if name in ("web_search", "vuln_search") and self.enable_search:
+                try:
+                    fn = getattr(search_service, name)
+                    results = await fn(bound_args.get("query", ""), bound_args.get("limit", 5))
+                    return json.dumps(results, ensure_ascii=False, default=str)
+                except Exception as e:
+                    return f"ERROR: {name} failed: {e}"
 
-        return f"ERROR: unknown tool {name!r}"
+            # 4. Executable pool Tool (inner pipeline: kill switch / gatekeeper / runner)
+            if getattr(self, "_pool_tools_by_name", None) and name in self._pool_tools_by_name:
+                tool_row = self._pool_tools_by_name[name]
+                from app.services.governance_config import load_governance
+                governance = load_governance(self._governance_cfg) if self._governance_cfg else None
+                res = await execute_tool(tool_row, bound_args, user_id=getattr(self, "_user_id", 0),
+                                         governance=governance, confidence=None)
+                if res.get("status") == "completed":
+                    return res.get("stdout", "") or "(no output)"
+                if res.get("status") == "needs_approval":
+                    return (f"NEEDS_APPROVAL: tool {name!r} is high-permission; "
+                            f"an approval request was created for a human to review.")
+                return f"ERROR: tool {name!r}: {res.get('error') or res.get('stderr') or res}"
+
+            return f"ERROR: unknown tool {name!r}"
+
+        return await run_tool_call(
+            tool_name=name,
+            arguments=args,
+            user_id=getattr(self, "_user_id", None),
+            metadata={"backend": "internal_dispatch", "agent_name": self.agent_name},
+            execute=_execute,
+        )
 
     async def _resolve_mcp_lookup(self) -> None:
         """Populate self._mcp_by_name = {tool_name: (MCPTool, MCPServer)} for dispatch."""
@@ -427,292 +499,106 @@ class InternalAgentRunner:
             for tool, server in result.all():
                 self._mcp_by_name[tool.tool_name] = (tool, server)
 
-    # -------- Tool-result pruning + context compaction --------
+    # -------- Tool-result pruning + context compaction (agent_core wrappers) --
 
     @staticmethod
     def _fingerprint(name: str, arguments: str) -> str:
-        """Stable identity for a tool call: name + order-invariant arguments.
-
-        Two calls with the same name and semantically equal arguments (regardless
-        of JSON key order) share a fingerprint, so the loop guard can count
-        genuine repeats. Unparseable arguments fall back to the raw string.
-        """
-        try:
-            norm = json.dumps(json.loads(arguments or "{}"), sort_keys=True,
-                              ensure_ascii=False)
-        except (json.JSONDecodeError, TypeError):
-            norm = arguments or ""
-        return f"{name}::{norm}"
+        return tool_call_fingerprint(name, arguments)
 
     @staticmethod
     def _loop_notice(name: str, count: int) -> str:
-        return (f"LOOP_DETECTED: 你已用相同参数调用 {name} {count} 次，结果不会改变。"
-                f"请改用其他工具或参数，或直接给出最终答复。")
+        return _loop_notice_core(name, count)
 
     @staticmethod
     def _budget_notice(budget: int) -> str:
-        return (f"BUDGET_EXHAUSTED: 已达到工具调用上限（{budget} 次），"
-                f"该调用未执行。请基于已有信息给出最终答复。")
+        return _budget_notice_core(budget)
 
     @staticmethod
     def _truncate_tool_result(text: str) -> str:
-        """Cap a single tool result so noisy tools can't blow the context."""
-        if text is None:
-            return ""
-        if len(text) <= TOOL_RESULT_MAX_CHARS:
-            return text
-        dropped = len(text) - TOOL_RESULT_MAX_CHARS
-        return text[:TOOL_RESULT_MAX_CHARS] + f"\n…[truncated {dropped} chars]"
+        return truncate_tool_result(text, max_chars=TOOL_RESULT_MAX_CHARS)
 
     @staticmethod
     def _estimate_chars(messages: List[Dict[str, Any]]) -> int:
-        total = 0
-        for m in messages:
-            total += len(str(m.get("content") or ""))
-            for tc in (m.get("tool_calls") or []):
-                fn = tc.get("function", {}) if isinstance(tc, dict) else {}
-                total += len(str(fn.get("arguments") or "")) + len(str(fn.get("name") or ""))
-        return total
+        return estimate_message_chars(messages)
 
     @staticmethod
     def _messages_to_text(messages: List[Dict[str, Any]]) -> str:
-        lines = []
-        for m in messages:
-            role = m.get("role", "?")
-            content = str(m.get("content") or "")
-            for tc in (m.get("tool_calls") or []):
-                fn = tc.get("function", {}) if isinstance(tc, dict) else {}
-                content += f" [tool_call {fn.get('name')}({fn.get('arguments')})]"
-            lines.append(f"{role}: {content}")
-        return "\n".join(lines)
+        return messages_to_text(messages)
 
     async def _maybe_compact(self, messages: List[Dict[str, Any]], router) -> List[Dict[str, Any]]:
         """Summarise older messages when the buffer grows too large.
 
-        Keeps the leading system message and the last CONTEXT_KEEP_RECENT
-        messages verbatim; replaces the middle with an LLM-produced summary.
-        On any failure falls back to simply dropping the middle.
+        M0a-2: prefer remaining-budget threshold from model context_window.
         """
-        if self._estimate_chars(messages) <= CONTEXT_COMPACT_CHARS:
-            return messages
-        if len(messages) <= CONTEXT_KEEP_RECENT + 2:
-            return messages  # too few to bother
+        from agent_core.model_limits import resolve_model_limits
 
-        system = messages[0]
-        recent = messages[-CONTEXT_KEEP_RECENT:]
-        # A 'tool' message must follow its assistant tool_calls; if the recent
-        # window starts mid tool-exchange, drop the orphaned leading tool msgs.
-        while recent and recent[0].get("role") == "tool":
-            recent = recent[1:]
-        middle = messages[1:len(messages) - len(recent)]
-        if not middle:
-            return messages
-
-        summary_prompt = [
-            {"role": "system", "content":
-                "You compress conversation history for an AI agent. Produce a concise "
-                "summary that preserves facts, user intent, decisions, and key tool "
-                "results. Use markdown with ## section headers."},
-            {"role": "user", "content":
-                "Summarize the conversation so far:\n\n" + self._messages_to_text(middle)},
-        ]
         try:
-            summary = await router.chat(
-                messages=summary_prompt,
-                provider_id=self.llm_provider_id,
-                model=self.llm_model,
-                tools=None,
-            )
-            if not isinstance(summary, str):
-                summary = getattr(summary, "content", None) or ""
-            summary = summary.strip()
-            if not summary:
-                raise ValueError("empty summary")
-            digest = {"role": "system",
-                      "content": "## 对话摘要（早期消息已压缩）\n" + summary}
-            return [system, digest] + recent
+            from app.services.model_limits import limits_for_provider_model
+            cw, mo = await limits_for_provider_model(self.llm_provider_id, self.llm_model)
         except Exception:
-            # Fallback: drop the middle entirely rather than fail the turn.
-            return [system] + recent
+            cw, mo = resolve_model_limits(self.llm_model)
+
+        return await maybe_compact_messages(
+            messages,
+            router.chat,
+            keep_recent=CONTEXT_KEEP_RECENT,
+            context_window=cw,
+            reserve_output=mo or 1024,
+            chat_kwargs={
+                "provider_id": self.llm_provider_id,
+                "model": self.llm_model,
+                "tools": None,
+                "pii_policy": self._pii_policy,
+            },
+        )
 
     # -------- Public entry point --------
 
     async def _run_loop(self, task: str, conversation_id: Optional[int],
                         user_id: int):
-        """Shared tool-call loop. Yields semantic events:
-
-          {"type": "start", "agent_id", "agent_name"}
-          {"type": "tool_call_start", "name", "arguments", "call_id"}
-          {"type": "tool_call_end", "name", "call_id", "result_preview", "error"}
-          {"type": "answer_ready", "messages", "new_messages",
-                                   "candidate_text", "tool_call_log"}   # terminal-ish
-          {"type": "error", "status": "failed"|"error", "error", ["tool_call_log"]}
-
-        On ``answer_ready`` the model is ready to produce the final answer but
-        it has NOT been generated/streamed yet — the consumer finalizes it.
-        Persistence is the consumer's job (batch uses candidate_text; stream
-        re-generates), so this generator never writes memory.
-        """
+        """Shared tool-call loop — delegates to ``agent_core.run_loop``."""
         system_prompt = await self._build_system_prompt(task)
         tools = await self._build_tools()
         await self._resolve_mcp_lookup()
         history = await self._load_memory(conversation_id)
-
-        messages: List[Dict[str, Any]] = [{"role": "system", "content": system_prompt}]
-        messages.extend(history)
-        messages.append({"role": "user", "content": task})
-
-        new_messages: List[Dict[str, Any]] = [{"role": "user", "content": task}]
-        tool_call_log: List[Dict[str, Any]] = []
-
         router = get_llm_router()
-        tool_used_ever = False
-        auto_continue_used = 0
-        fingerprints: Counter = Counter()  # tool-call fingerprint -> times seen
-        reflections_used = 0               # reflector interventions so far
-        tool_calls_made = 0                # total tools dispatched this run
 
-        yield {"type": "start", "agent_id": self.agent_id, "agent_name": self.agent_name}
+        async def _chat(*, messages, tools=None):
+            return await router.chat(
+                messages=messages,
+                provider_id=self.llm_provider_id,
+                model=self.llm_model,
+                tools=tools if tools else None,
+                pii_policy=self._pii_policy,
+            )
 
-        for step in range(self.max_steps):
-            messages = await self._maybe_compact(messages, router)
+        async def _compact(messages):
+            return await self._maybe_compact(messages, router)
 
-            # Self-recovery: retry transient LLM failures with linear backoff
-            # before failing the turn (cf. PentAGI Reflector recovery).
-            msg = None
-            last_err: Optional[Exception] = None
-            for attempt in range(LLM_RETRY_MAX + 1):
-                try:
-                    msg = await router.chat(
-                        messages=messages,
-                        provider_id=self.llm_provider_id,
-                        model=self.llm_model,
-                        tools=tools if tools else None,
-                    )
-                    break
-                except Exception as e:
-                    last_err = e
-                    if attempt < LLM_RETRY_MAX:
-                        yield {"type": "reflection", "reason": "llm_error",
-                               "attempt": attempt + 1}
-                        await asyncio.sleep(LLM_RETRY_BACKOFF * (attempt + 1))
-            if msg is None:
-                yield {"type": "error", "status": "failed",
-                       "error": f"LLM error at step {step} after "
-                                f"{LLM_RETRY_MAX + 1} attempts: {last_err}"}
-                return
-
-            if isinstance(msg, str):
-                tool_calls = None
-                text_only = True
-                candidate_text = msg
-            else:
-                tool_calls = getattr(msg, "tool_calls", None)
-                text_only = not tool_calls
-                candidate_text = getattr(msg, "content", None) or ""
-
-            if text_only:
-                if tools and not tool_used_ever and auto_continue_used < AUTO_CONTINUE_MAX:
-                    auto_continue_used += 1
-                    messages.append({
-                        "role": "user",
-                        "content": "如果任务尚未完成，请调用相应工具继续；"
-                                   "如果确认已完成，请直接给出最终答复。",
-                    })
-                    continue
-                yield {"type": "answer_ready", "messages": messages,
-                       "new_messages": new_messages,
-                       "candidate_text": candidate_text,
-                       "tool_call_log": tool_call_log}
-                return
-
-            tool_used_ever = True
-            assistant_msg = {
-                "role": "assistant",
-                "content": getattr(msg, "content", None) or "",
-                "tool_calls": [
-                    {
-                        "id": c.id,
-                        "type": "function",
-                        "function": {"name": c.function.name,
-                                      "arguments": c.function.arguments},
-                    } for c in tool_calls
-                ],
-            }
-            messages.append(assistant_msg)
-            new_messages.append(assistant_msg)
-
-            for c in tool_calls:
-                yield {"type": "tool_call_start", "name": c.function.name,
-                       "arguments": c.function.arguments, "call_id": c.id}
-
-            # Per-call guards, evaluated synchronously before any await so the
-            # shared counters can't interleave across the gathered coroutines:
-            #   * budget gate — hard cap on total tool executions per run;
-            #   * loop guard  — short-circuit identical repeats into a notice.
-            loop_hit = False
-            budget_hit = False
-
-            async def _dispatch_or_reflect(call):
-                nonlocal loop_hit, budget_hit, tool_calls_made
-                if tool_calls_made >= self.tool_call_budget:
-                    budget_hit = True
-                    logger.warning("internal agent %s: tool-call budget (%d) exhausted",
-                                   self.agent_name, self.tool_call_budget)
-                    return self._budget_notice(self.tool_call_budget)
-                tool_calls_made += 1
-                fp = self._fingerprint(call.function.name, call.function.arguments)
-                fingerprints[fp] += 1
-                if fingerprints[fp] >= LOOP_DETECT_THRESHOLD:
-                    loop_hit = True
-                    logger.warning("internal agent %s: tool-call loop on %r (x%d)",
-                                   self.agent_name, call.function.name, fingerprints[fp])
-                    return self._loop_notice(call.function.name, fingerprints[fp])
-                return await self._dispatch(call)
-
-            results = await asyncio.gather(*[_dispatch_or_reflect(c) for c in tool_calls])
-            for call, result_str in zip(tool_calls, results):
-                result_str = self._truncate_tool_result(result_str)
-                tool_call_log.append({"name": call.function.name,
-                                       "arguments": call.function.arguments,
-                                       "result_preview": result_str[:200]})
-                tool_msg = {"role": "tool", "tool_call_id": call.id,
-                            "content": result_str}
-                messages.append(tool_msg)
-                new_messages.append(tool_msg)
-                yield {"type": "tool_call_end", "name": call.function.name,
-                       "call_id": call.id, "result_preview": result_str[:200],
-                       "error": result_str.startswith(
-                           ("ERROR", "LOOP_DETECTED", "BUDGET_EXHAUSTED"))}
-
-            if budget_hit:
-                # Hard cap reached: withdraw tools so the next turn must answer
-                # from what it already gathered, rather than erroring out.
-                tools = None
-                yield {"type": "reflection", "reason": "budget",
-                       "tool_calls_made": tool_calls_made}
-                messages.append({"role": "user", "content": (
-                    f"已达到本次任务的工具调用上限（{self.tool_call_budget} 次），"
-                    f"不会再执行任何工具。请基于已获取的信息直接给出最终答复。")})
-                continue
-
-            if loop_hit:
-                reflections_used += 1
-                yield {"type": "reflection", "reason": "loop",
-                       "count": reflections_used}
-                if reflections_used > REFLECT_MAX:
-                    yield {"type": "error", "status": "error",
-                           "error": (f"aborted: agent stuck in a tool-call loop "
-                                     f"(repeated identical calls); reflector gave up "
-                                     f"after {REFLECT_MAX} nudges"),
-                           "tool_call_log": tool_call_log}
-                    return
-                # One reflector nudge to push the model onto a different path.
-                messages.append({"role": "user", "content": REFLECT_GUIDANCE})
-
-        yield {"type": "error", "status": "error",
-               "error": f"exceeded tool_loop_max_steps ({self.max_steps})",
-               "tool_call_log": tool_call_log}
+        cfg = RunLoopConfig(
+            max_steps=self.max_steps,
+            tool_call_budget=self.tool_call_budget,
+            agent_id=self.agent_id,
+            agent_name=self.agent_name,
+            auto_continue_max=AUTO_CONTINUE_MAX,
+            loop_detect_threshold=LOOP_DETECT_THRESHOLD,
+            reflect_max=REFLECT_MAX,
+            llm_retry_max=LLM_RETRY_MAX,
+            llm_retry_backoff=LLM_RETRY_BACKOFF,
+            tool_result_max_chars=TOOL_RESULT_MAX_CHARS,
+            reflect_guidance=REFLECT_GUIDANCE,
+        )
+        async for ev in run_loop(
+            task=task,
+            system_prompt=system_prompt,
+            history=history,
+            tools=tools,
+            config=cfg,
+            chat=_chat,
+            dispatch=self._dispatch,
+            compact=_compact,
+        ):
+            yield ev
 
     async def execute(self, task: str, conversation_id: Optional[int],
                       user_id: int) -> Dict[str, Any]:
@@ -743,23 +629,36 @@ class InternalAgentRunner:
                 # start / tool_call_* events are not surfaced in batch mode
 
         if final_event is None or final_event["type"] == "error":
+            err = (
+                final_event["error"]
+                if final_event
+                else "no result produced"
+            )
+            tool_log = (
+                final_event.get("tool_call_log", []) if final_event else []
+            )
+            # Record failed episodes too (success=False) so we retain negative signal
+            await self._maybe_record_episode(
+                task, f"FAILED: {err}", tool_log, success=False
+            )
             if final_event and final_event.get("status") == "failed":
                 return {
                     "status": "failed",
                     "output": None,
-                    "error": final_event["error"],
+                    "error": err,
                     "agent_id": self.agent_id,
                     "agent_name": self.agent_name,
                     "execution_time": round(time.monotonic() - start, 2),
+                    "tool_calls": tool_log,
                 }
             return {
                 "status": "error",
                 "output": None,
-                "error": final_event["error"] if final_event else "no result produced",
+                "error": err,
                 "agent_id": self.agent_id,
                 "agent_name": self.agent_name,
                 "execution_time": round(time.monotonic() - start, 2),
-                "tool_calls": final_event.get("tool_call_log", []) if final_event else [],
+                "tool_calls": tool_log,
             }
 
         # answer_ready: batch mode uses the candidate text directly (no re-stream)
@@ -767,7 +666,9 @@ class InternalAgentRunner:
         new_messages = final_event["new_messages"]
         new_messages.append({"role": "assistant", "content": final_text})
         await self._append_memory(conversation_id, user_id, new_messages)
-        await self._maybe_record_episode(task, final_text, final_event["tool_call_log"])
+        await self._maybe_record_episode(
+            task, final_text, final_event["tool_call_log"], success=True
+        )
 
         return {
             "status": "completed",
@@ -778,17 +679,29 @@ class InternalAgentRunner:
             "tool_calls": final_event["tool_call_log"],
         }
 
-    async def _maybe_record_episode(self, task: str, output: str,
-                                    tool_call_log: List[Dict[str, Any]]) -> None:
-        """Record a successful run as an episode (best-effort, opt-in)."""
+    async def _maybe_record_episode(
+        self,
+        task: str,
+        output: str,
+        tool_call_log: List[Dict[str, Any]],
+        *,
+        success: bool = True,
+    ) -> None:
+        """Record a run as an episode (best-effort, opt-in). success=False for failures."""
         if not self.enable_episodic:
             return
         try:
             from app.services.episodic_memory import distill_approach
             await episodic_memory.record(
-                self.agent_id, task, distill_approach(tool_call_log), output,
-                success=True, tool_count=len(tool_call_log),
-                embedding=self._episode_embedding, provider_id=self.llm_provider_id)
+                self.agent_id,
+                task,
+                distill_approach(tool_call_log),
+                output,
+                success=success,
+                tool_count=len(tool_call_log),
+                embedding=self._episode_embedding if success else None,
+                provider_id=self.llm_provider_id,
+            )
         except Exception as e:               # noqa: BLE001 - never break the run
             logger.debug("episodic record failed: %s", e)
 
@@ -818,6 +731,12 @@ class InternalAgentRunner:
                 if t in ("start", "tool_call_start", "tool_call_end", "reflection"):
                     yield ev
                 elif t == "error":
+                    await self._maybe_record_episode(
+                        task,
+                        f"FAILED: {ev.get('error')}",
+                        ev.get("tool_call_log") or [],
+                        success=False,
+                    )
                     yield {"type": "error", "content": ev["error"]}
                     return
                 elif t == "answer_ready":
@@ -830,17 +749,26 @@ class InternalAgentRunner:
                             messages=messages,
                             provider_id=self.llm_provider_id,
                             model=self.llm_model,
+                            pii_policy=self._pii_policy,
                         ):
                             parts.append(delta)
                             yield {"type": "text", "content": delta}
                     except Exception as e:
+                        await self._maybe_record_episode(
+                            task,
+                            f"FAILED: stream error: {e}",
+                            ev.get("tool_call_log") or [],
+                            success=False,
+                        )
                         yield {"type": "error", "content": f"stream error: {e}"}
                         return
 
                     final_text = "".join(parts)
                     new_messages.append({"role": "assistant", "content": final_text})
                     await self._append_memory(conversation_id, user_id, new_messages)
-                    await self._maybe_record_episode(task, final_text, ev["tool_call_log"])
+                    await self._maybe_record_episode(
+                        task, final_text, ev["tool_call_log"], success=True
+                    )
                     yield {"type": "done", "output": final_text,
                            "execution_time": round(time.monotonic() - start, 2),
                            "tool_calls": ev["tool_call_log"]}

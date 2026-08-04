@@ -1,31 +1,26 @@
-"""LLM model routing service."""
+"""LLM model routing service.
+
+M0a-1: pure helpers and resilience live in ``packages/llm_router``. This module
+keeps DB/provider/master-config/PII wiring and business methods (parse_intent,
+generate_summary, build_chat_system_prompt).
+"""
 import asyncio
 import json
 import logging
-import re
 from types import SimpleNamespace
 from typing import Dict, Any, Optional, List
 from openai import AsyncOpenAI
 
+from llm_router import acall_with_retry, rate_limit
+from llm_router.utils import (
+    extract_json_object as _extract_json_object_pure,
+    model_name as _model_name,
+    strip_think_blocks as _strip_think_blocks_pure,
+)
+
 logger = logging.getLogger(__name__)
 
 from app.config import settings
-from app.core.llm_resilience import acall_with_retry, rate_limit
-
-
-def _model_name(model) -> Optional[str]:
-    """Normalize a model reference to the bare model-name string the provider expects.
-
-    A provider's ``models`` are stored as ``{"name": ..., "model_type": ...}`` dicts,
-    and the UI may pass a model picked from that list as the whole object. The OpenAI
-    client must receive just the name string, or the provider rejects the request with
-    ``unknown model '{'name': ...}'``. Accepts str, dict, pydantic ModelInfo, or None.
-    """
-    if model is None or isinstance(model, str):
-        return model
-    if isinstance(model, dict):
-        return model.get("name")
-    return getattr(model, "name", None) or str(model)
 
 
 def _record_generation(name, model, input_messages, output, response,
@@ -209,75 +204,50 @@ class LLMRouter:
 
     @staticmethod
     def _strip_think_blocks(text: str) -> str:
-        """Remove provider-specific reasoning tags from visible output.
+        """Remove provider-specific reasoning tags from visible output."""
+        return _strip_think_blocks_pure(text)
 
-        <think>...</think> (and variants like <think>0, <think>_1) and
-        <reasoning>...</reasoning> are always stripped — they are internal model
-        chain-of-thought, never meant for the end user. Other markup follows
-        ``_should_strip_think()`` via the caller.
+    def _guard_messages(self, messages, pii_policy=None):
+        """Redact PII + block secrets across all message contents (A5).
+
+        Returns a NEW message list (originals untouched). Best-effort proof
+        record; raises SecretsDetectedError/PIIBlockedError to abort the call.
         """
-        if not text:
-            return text
-        # Internal CoT blocks — always stripped regardless of preserve_think.
-        # Multiple tag variants observed across providers (MiniMax M3, Qwen3,
-        # DeepSeek, etc.): <think>, <think>0, <think>_1, <think>abc; and
-        # <reasoning>...</reasoning>.
-        text = re.sub(
-            r"<think[^>]*>[\s\S]*?</think>\s*", "", text, flags=re.IGNORECASE
-        )
-        text = re.sub(
-            r"<reasoning>[\s\S]*?</reasoning>\s*", "", text, flags=re.IGNORECASE
-        )
-        return text.strip()
+        from app.config import settings
+        if not settings.PII_FILTER_ENABLED or not messages:
+            return messages
+        from app.core.pii import apply_policy
+        policy = pii_policy or settings.PII_HANDLING_POLICY
+        cleaned, total = [], 0
+        for m in messages:
+            content = m.get("content")
+            if isinstance(content, str) and content:
+                new_content, findings = apply_policy(content, policy=policy)
+                total += len(findings)
+                cleaned.append({**m, "content": new_content})
+            else:
+                cleaned.append(m)
+        if total:
+            self._emit_pii_proof(total, policy)
+        return cleaned
+
+    def _emit_pii_proof(self, count, policy):
+        """POC proof: log redaction COUNT only — never the values."""
+        try:
+            import asyncio
+            from app.core.audit import record_action
+            asyncio.get_event_loop().create_task(record_action(
+                user_id=None, action="pii_redaction", action_category="annotate",
+                input_data={"policy": policy, "redactions": count},
+                output_data={"redactions": count}))
+        except Exception:
+            import logging
+            logging.getLogger("pii").info("pii_redaction policy=%s count=%d", policy, count)
 
     @staticmethod
     def _extract_json_object(text: str) -> Optional[Dict[str, Any]]:
-        """
-        Extract and parse the first balanced top-level JSON object from text.
-        Handles provider outputs like: <think>...</think>{...json...}
-        """
-        cleaned = LLMRouter._strip_think_blocks(text)
-
-        # Fast path: pure JSON
-        try:
-            data = json.loads(cleaned)
-            if isinstance(data, dict):
-                return data
-        except json.JSONDecodeError:
-            pass
-
-        # Balanced-brace scan
-        start = cleaned.find("{")
-        if start < 0:
-            return None
-        depth = 0
-        in_str = False
-        esc = False
-        for i in range(start, len(cleaned)):
-            ch = cleaned[i]
-            if in_str:
-                if esc:
-                    esc = False
-                elif ch == "\\":
-                    esc = True
-                elif ch == '"':
-                    in_str = False
-                continue
-            if ch == '"':
-                in_str = True
-            elif ch == "{":
-                depth += 1
-            elif ch == "}":
-                depth -= 1
-                if depth == 0:
-                    candidate = cleaned[start:i + 1]
-                    try:
-                        data = json.loads(candidate)
-                        if isinstance(data, dict):
-                            return data
-                    except json.JSONDecodeError:
-                        return None
-        return None
+        """Extract and parse the first balanced top-level JSON object from text."""
+        return _extract_json_object_pure(text)
 
     async def _get_provider_from_db(self, provider_id: int) -> Optional[Dict[str, Any]]:
         """Fetch provider config from database by ID."""
@@ -288,7 +258,10 @@ class LLMRouter:
         try:
             async with get_db_context() as session:
                 result = await session.execute(
-                    text("SELECT name, api_key_encrypted, base_url, models, metadata_json FROM providers WHERE id = :id AND is_active = true"),
+                    text(
+                        "SELECT name, api_key_encrypted, base_url, models, metadata_json, provider_type "
+                        "FROM providers WHERE id = :id AND is_active = true"
+                    ),
                     {"id": provider_id}
                 )
                 row = result.fetchone()
@@ -322,6 +295,7 @@ class LLMRouter:
                     "base_url": base_url,
                     "models": models,
                     "metadata_json": row[4] or {},
+                    "provider_type": row[5],
                 }
         except Exception:
             return None
@@ -596,12 +570,13 @@ Examples:
         }) as span:
             try:
                 await rate_limit(provider_id, await self._provider_rpm(provider_id))
+                _pi_messages = self._guard_messages([
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_input},
+                ])
                 response = await acall_with_retry(lambda: client.chat.completions.create(
                     model=active_model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_input},
-                    ],
+                    messages=_pi_messages,
                     temperature=temperature_override if temperature_override is not None else (master_config.get("temperature") or settings.MASTER_AGENT_TEMPERATURE),
                     response_format={"type": "json_object"},
                 ), label="parse_intent")
@@ -683,12 +658,13 @@ Examples:
             )
 
             await rate_limit(provider_id, await self._provider_rpm(provider_id))
+            _gs_messages = self._guard_messages([
+                {"role": "system", "content": summarizer_prompt},
+                {"role": "user", "content": f"Results:\n{results_text}"},
+            ])
             response = await acall_with_retry(lambda: client.chat.completions.create(
                 model=active_model,
-                messages=[
-                    {"role": "system", "content": summarizer_prompt},
-                    {"role": "user", "content": f"Results:\n{results_text}"},
-                ],
+                messages=_gs_messages,
                 temperature=temperature_override if temperature_override is not None else (master_config.get("temperature") or 0.3),
             ), label="generate_summary")
             raw_content = response.choices[0].message.content or ""
@@ -716,6 +692,10 @@ Examples:
         model_override: Optional[str] = None,
         temperature_override: Optional[float] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
+        pii_policy: Optional[str] = None,
+        thinking: Optional[str] = None,
+        enable_prompt_cache: bool = False,
+        prompt_cache_key: Optional[str] = None,
     ):
         """General chat completion.
 
@@ -723,20 +703,33 @@ Examples:
             - str (final text) when `tools` is None — backward-compatible.
             - openai ChatCompletionMessage when `tools` is provided, so callers
               can inspect `.tool_calls`.
+
+        M0a-2 extras:
+            thinking — portable level off|minimal|low|medium|high|xhigh
+            enable_prompt_cache — mark system content for Anthropic-style cache
+            prompt_cache_key — optional OpenAI-style cache routing key
         """
         from app.core.telemetry import get_tracer
+        from llm_router.cache_control import apply_prompt_cache_key, mark_system_for_cache
+        from llm_router.thinking import apply_thinking_to_kwargs
+        from agent_core.messages import messages_for_model
+
         tracer = get_tracer()
 
         # Determine active model
         active_model = model_override or model
         active_provider_id = provider_id
+        provider_config = None
         if not active_model and provider_id:
-            config = await self.get_provider_config_async(provider_id)
-            if config and config.get("models"):
-                active_model = config["models"][0]
+            provider_config = await self.get_provider_config_async(provider_id)
+            if provider_config and provider_config.get("models"):
+                active_model = provider_config["models"][0]
         active_model = _model_name(active_model or settings.MASTER_AGENT_MODEL)
 
         master_config = await self._load_master_config()
+
+        # Drop exclude_from_context before any provider call (M0a-2)
+        messages = messages_for_model(messages)
 
         # Mock mode — return a simple acknowledgment
         if settings.MOCK_MODE:
@@ -747,6 +740,11 @@ Examples:
             return mock_text
 
         client = await self.get_client_async(provider_id=provider_id)
+        if provider_config is None and provider_id:
+            provider_config = await self.get_provider_config_async(provider_id)
+        provider_type = (provider_config or {}).get("provider_type") or (
+            provider_config or {}
+        ).get("name")
 
         with tracer.start_as_current_span(
             f"llm.chat/{active_model}",
@@ -757,6 +755,11 @@ Examples:
                 "llm.has_tools": bool(tools),
             },
         ) as span:
+            messages = self._guard_messages(messages, pii_policy)
+            if enable_prompt_cache:
+                messages = mark_system_for_cache(
+                    messages, provider_type=str(provider_type or ""), enabled=True
+                )
             kwargs = {
                 "model": active_model,
                 "messages": messages,
@@ -765,6 +768,16 @@ Examples:
             if tools:
                 kwargs["tools"] = tools
                 kwargs["tool_choice"] = "auto"
+
+            # Thinking / reasoning effort (portable level → provider params)
+            thinking_level = thinking or (master_config or {}).get("thinking_level")
+            kwargs = apply_thinking_to_kwargs(
+                kwargs,
+                level=thinking_level,
+                model=active_model or "",
+                provider_type=str(provider_type or ""),
+            )
+            kwargs = apply_prompt_cache_key(kwargs, cache_key=prompt_cache_key)
 
             await rate_limit(provider_id, await self._provider_rpm(provider_id))
             response = await acall_with_retry(
@@ -792,6 +805,7 @@ Examples:
         provider_id: Optional[int] = None,
         model_override: Optional[str] = None,
         temperature_override: Optional[float] = None,
+        pii_policy: Optional[str] = None,
     ):
         """Stream chat completion tokens as an async generator.
 
@@ -800,6 +814,7 @@ Examples:
             async for chunk in router.stream_chat(messages, provider_id=1):
                 yield f"data: {chunk}\\n\\n"
         """
+        messages = self._guard_messages(messages, pii_policy)
         active_model = model_override or model
         if not active_model and provider_id:
             config = await self.get_provider_config_async(provider_id)

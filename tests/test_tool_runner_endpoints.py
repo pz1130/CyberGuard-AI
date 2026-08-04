@@ -51,11 +51,15 @@ class TestToolRunnerMcpEndpoints(unittest.TestCase):
     def test_rpc_echo(self):
         r = self.client.post("/mcp/rpc", headers=_HDR, json={
             "name": "epc", "command": sys.executable, "args": [_FIXTURE], "env": {},
-            "method": "tools/call", "params": {"name": "x", "arguments": {"a": 1}},
+            "method": "tools/call",
+            "params": {"name": "echo", "arguments": {"a": 1}},
             "timeout": 10,
         })
-        self.assertEqual(r.status_code, 200)
-        self.assertEqual(r.json()["result"], {"echo": {"name": "x", "arguments": {"a": 1}}})
+        self.assertEqual(r.status_code, 200, r.text)
+        result = r.json()["result"]
+        self.assertFalse(result.get("isError"))
+        text = result["content"][0]["text"].replace(" ", "")
+        self.assertIn('"a":1', text)
 
     def test_rpc_failure_returns_500(self):
         r = self.client.post("/mcp/rpc", headers=_HDR, json={

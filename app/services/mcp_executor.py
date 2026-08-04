@@ -6,6 +6,7 @@ key), then proxies STDIO start/stop/status/call/discovery over HTTP. HTTP-transp
 MCP runs in-process here (already stateless and multi-worker safe).
 """
 import json
+import logging
 import os
 from typing import Any, Dict, Optional
 
@@ -14,14 +15,24 @@ import httpx
 from app.core.security import decrypt_data
 from app.models.mcp import MCPServer
 
+logger = logging.getLogger(__name__)
+
 TOOL_RUNNER_URL = os.environ.get("TOOL_RUNNER_URL", "http://tool-runner:9000")
 RUNNER_TOKEN = os.environ.get("RUNNER_TOKEN", "")
 
 
 def _decrypt_env(server: MCPServer) -> dict:
-    if server.env_vars_encrypted:
+    """Decrypt MCP env. Fail loudly if ciphertext present but unreadable (INV-25)."""
+    if not server.env_vars_encrypted:
+        return {}
+    try:
         return json.loads(decrypt_data(server.env_vars_encrypted))
-    return {}
+    except Exception as e:
+        name = getattr(server, "name", "?")
+        logger.error("MCP server %s: env decrypt failed: %s", name, e)
+        raise RuntimeError(
+            f"MCP server {name!r}: cannot decrypt env_vars_encrypted"
+        ) from e
 
 
 def _spawn_spec(server: MCPServer) -> dict:
@@ -54,15 +65,18 @@ async def _start_stdio_server(server: MCPServer) -> bool:
     try:
         data = await _runner_post("/mcp/start", _spawn_spec(server))
         return bool(data.get("running"))
-    except Exception:
+    except Exception as e:  # noqa: BLE001
+        logger.warning(
+            "MCP start failed for %s: %s", getattr(server, "name", "?"), e
+        )
         return False
 
 
 async def _stop_stdio_server(server_name: str) -> None:
     try:
         await _runner_post("/mcp/stop", {"name": server_name})
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        logger.warning("MCP stop failed for %s: %s", server_name, e)
 
 
 async def stdio_status(server_name: str) -> bool:
@@ -70,7 +84,8 @@ async def stdio_status(server_name: str) -> bool:
     try:
         data = await _runner_post("/mcp/status", {"name": server_name})
         return bool(data.get("running"))
-    except Exception:
+    except Exception as e:  # noqa: BLE001
+        logger.debug("MCP status check failed for %s: %s", server_name, e)
         return False
 
 

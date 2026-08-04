@@ -28,6 +28,18 @@ class ModelInfo(BaseModel):
     verified: Optional[bool] = None
     last_tested_at: Optional[str] = None
     test_error: Optional[str] = None
+    # M0a-2: used for remaining-budget compression thresholds (INV compression).
+    # Optional — filled from catalog on seed/probe/discover when absent.
+    context_window: Optional[int] = Field(
+        default=None,
+        description="Model context window in tokens (input side).",
+        ge=256,
+    )
+    max_output_tokens: Optional[int] = Field(
+        default=None,
+        description="Max completion tokens the model may emit.",
+        ge=1,
+    )
 
 
 class ProviderBase(BaseModel):

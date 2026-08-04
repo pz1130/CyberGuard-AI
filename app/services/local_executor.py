@@ -1,7 +1,10 @@
 """Built-in local agent executor — fallback when no remote sub-agent is registered."""
 import json
+import logging
 from typing import Dict, Any, Optional
 from app.services.llm_router import get_llm_router
+
+logger = logging.getLogger(__name__)
 
 
 # Keyword → agent type mapping for intent resolution
@@ -107,24 +110,45 @@ def match_agent_type(task_description: str) -> Optional[str]:
 class LocalAgentExecutor:
     """
     Fallback executor that runs tasks directly via LLM when no remote
-    sub-agent is available. Loads skills from DB by agent_type category,
-    falling back to built-in prompts when no skill is found.
+    sub-agent is available.
+
+    Skills: **catalog only** (name + description) — no full SOP body in the
+    system prompt (progressive disclosure; local path has no load_skill tool).
+    Role behaviour comes from built-in fallback prompts.
     """
 
     def __init__(self, llm_router=None):
         self.llm_router = llm_router or get_llm_router()
 
     async def _get_system_prompt(self, agent_type: str) -> str:
-        """Load skill prompt from DB by category, fall back to built-in prompt."""
+        """Built-in role prompt + optional skill catalog (no full bodies)."""
         from app.services.skill_loader import SkillLoader
 
+        base = FALLBACK_SYSTEM_PROMPTS.get(
+            agent_type, FALLBACK_SYSTEM_PROMPTS["general"]
+        )
+        parts = [base]
         try:
-            skill_content = await SkillLoader.load_skills_for_agent_type(agent_type)
-            if skill_content:
-                return skill_content
-        except Exception:
-            pass  # DB unavailable — use fallback
-        return FALLBACK_SYSTEM_PROMPTS.get(agent_type, FALLBACK_SYSTEM_PROMPTS["general"])
+            catalog = await SkillLoader.load_catalog_for_agent_type(agent_type)
+            if catalog:
+                parts.append(
+                    SkillLoader.format_catalog_prompt(
+                        catalog,
+                        intro=(
+                            "## Related skill catalog (reference only)\n"
+                            "Full procedure bodies are **not** injected here "
+                            "(local fallback has no load_skill tool). "
+                            "Use name/description as high-level guidance only."
+                        ),
+                    )
+                )
+        except Exception as e:  # noqa: BLE001 — functional degrade, must be visible
+            logger.warning(
+                "local_executor skill catalog load failed for %s: %s",
+                agent_type,
+                e,
+            )
+        return "\n\n".join(parts)
 
     async def execute(
         self,

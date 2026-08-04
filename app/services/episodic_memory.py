@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 EPISODE_EMBED_MODEL = "text-embedding-3-small"
 EPISODE_EMBED_DIM = 1536
 OUTCOME_MAX_CHARS = 1000
+# Cap growth: keep newest N episodes per agent after each record (failures + successes).
+EPISODE_MAX_PER_AGENT = 200
 
 
 def distill_approach(tool_call_log: List[Dict[str, Any]]) -> str:
@@ -91,8 +93,13 @@ class EpisodicMemoryService:
         self, db, *, agent_id: int, task: str, approach: str, outcome: str,
         success: bool = True, tool_count: int = 0,
         embedding: Optional[List[float]] = None, provider_id: Optional[int] = None,
+        max_per_agent: int = EPISODE_MAX_PER_AGENT,
     ) -> None:
-        """Insert one episode. Best-effort: any failure logs and returns."""
+        """Insert one episode (success or failure). Best-effort; never raises.
+
+        Recall still filters ``success = true``. Failures are retained for
+        analysis and bounded by per-agent prune after insert.
+        """
         if embedding is None:
             embedding = await self._embed(task, provider_id)
         if embedding is None:
@@ -109,11 +116,28 @@ class EpisodicMemoryService:
                 ),
                 {"agent_id": agent_id, "task_text": task,
                  "emb": json.dumps(embedding), "approach": approach,
-                 "outcome": outcome, "success": success, "tool_count": tool_count},
+                 "outcome": outcome, "success": bool(success), "tool_count": tool_count},
             )
+            if max_per_agent and max_per_agent > 0:
+                await db.execute(
+                    text(
+                        "DELETE FROM agent_episodes "
+                        "WHERE agent_id = :agent_id AND id NOT IN ("
+                        "  SELECT id FROM agent_episodes "
+                        "  WHERE agent_id = :agent_id "
+                        "  ORDER BY created_at DESC NULLS LAST, id DESC "
+                        "  LIMIT :keep"
+                        ")"
+                    ),
+                    {"agent_id": agent_id, "keep": int(max_per_agent)},
+                )
             await db.commit()
         except Exception as e:                       # noqa: BLE001
             logger.warning("episodic memory: record failed: %s", e)
+            try:
+                await db.rollback()
+            except Exception:  # noqa: BLE001
+                pass
 
 
 _service: Optional[EpisodicMemoryService] = None

@@ -871,7 +871,13 @@ export default function Agents() {
                   </div>
 
                   {/* Skill / Tool / MCP-tool assignment */}
-                  <PoolPicker label="SKILLS" options={skillsPool} selected={form.associated_skills} onToggle={id => toggleId('associated_skills', id)} />
+                  <div>
+                    <PoolPicker label="SKILLS" options={skillsPool} selected={form.associated_skills} onToggle={id => toggleId('associated_skills', id)} />
+                    <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 6, lineHeight: 1.5 }}>
+                      Internal agents: catalog only in system prompt (name + description). Full SOP body via{' '}
+                      <code style={{ color: 'var(--cyan)' }}>load_skill</code> at runtime. Prefer short, action-oriented skill descriptions.
+                    </div>
+                  </div>
                   <PoolPicker label="TOOLS" options={toolsPool} selected={form.associated_tools} onToggle={id => toggleId('associated_tools', id)} />
                   <PoolPicker label="MCP TOOLS" options={mcpToolsPool} selected={form.associated_mcp_tools} onToggle={id => toggleId('associated_mcp_tools', id)} />
                 </>

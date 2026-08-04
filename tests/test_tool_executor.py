@@ -62,7 +62,8 @@ async def test_execute_tool_dispatches_to_runner():
         "stdout": "hi", "stderr": "", "exit_code": 0, "duration_ms": 5, "timed_out": False})
     client = AsyncMock()
     client.__aenter__.return_value.post = AsyncMock(return_value=fake_resp)
-    with patch.object(te.httpx, "AsyncClient", return_value=client):
+    with patch("app.services.kill_switch.is_halted", AsyncMock(return_value=False)), \
+         patch.object(te.httpx, "AsyncClient", return_value=client):
         res = await te.execute_tool(_tool(), {"msg": "hi"}, user_id=1)
     assert res["status"] == "completed"
     assert res["stdout"] == "hi"
@@ -71,7 +72,8 @@ async def test_execute_tool_dispatches_to_runner():
 @pytest.mark.asyncio
 async def test_execute_tool_high_permission_needs_approval():
     from app.services import tool_executor as te
-    with patch.object(te, "_create_approval", AsyncMock()):
+    with patch("app.services.kill_switch.is_halted", AsyncMock(return_value=False)), \
+         patch.object(te, "_create_approval", AsyncMock()):
         res = await te.execute_tool(_tool(permission_level="high"), {"msg": "x"}, user_id=1)
     assert res["status"] == "needs_approval"
 
@@ -79,7 +81,8 @@ async def test_execute_tool_high_permission_needs_approval():
 @pytest.mark.asyncio
 async def test_execute_tool_rejects_bad_args():
     from app.services import tool_executor as te
-    res = await te.execute_tool(_tool(), {"bogus": "x"}, user_id=1)
+    with patch("app.services.kill_switch.is_halted", AsyncMock(return_value=False)):
+        res = await te.execute_tool(_tool(), {"bogus": "x"}, user_id=1)
     assert res["status"] == "error"
     assert "unknown argument" in res["error"]
 
@@ -87,8 +90,9 @@ async def test_execute_tool_rejects_bad_args():
 @pytest.mark.asyncio
 async def test_execute_tool_rbac_denied():
     from app.services import tool_executor as te
-    res = await te.execute_tool(_tool(required_permission="tool:exec"),
-                                {"msg": "x"}, user_id=1, caller_permissions=set())
+    with patch("app.services.kill_switch.is_halted", AsyncMock(return_value=False)):
+        res = await te.execute_tool(_tool(required_permission="tool:exec"),
+                                    {"msg": "x"}, user_id=1, caller_permissions=set())
     assert res["status"] == "error"
     assert "permission" in res["error"].lower()
 

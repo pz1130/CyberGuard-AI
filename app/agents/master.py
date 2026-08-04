@@ -106,10 +106,15 @@ class MasterAgent:
         return "sub_agents"
 
     def _validation_decision(self, state: MasterAgentState) -> str:
-        """Decide based on validation result."""
-        if state.get("validation_passed", False):
-            return "approved"
-        return "rejected"
+        """Decide based on structured validation flags (INV-13).
+
+        HITL only when ``approval_required`` is set from structured signals
+        (needs_approval status, requires_approval, risk_level). Agent failures
+        alone go to summarizer so errors surface without keyword-based HITL.
+        """
+        if state.get("approval_required"):
+            return "rejected"
+        return "approved"
 
     async def _start_node(self, state: MasterAgentState) -> MasterAgentState:
         """Start node - initialize state."""
@@ -147,6 +152,7 @@ class MasterAgent:
                 "agent_id": aid,
                 "task": user_input,
                 "requires_approval": False,
+                "dispatch_source": "user_explicit",  # INV-21: user chose the agent
             }]
             await log_audit(
                 user_id=user_id,
@@ -201,6 +207,7 @@ class MasterAgent:
                         "agent_name": a["agent_name"],
                         "task": user_input,
                         "requires_approval": False,
+                        "dispatch_source": "user_expert",  # INV-21: user chose fan-out
                     }
                     for a in active
                 ]
@@ -237,14 +244,24 @@ class MasterAgent:
                     model_override=state.get("model_override"),
                 )
                 state["intent"] = parsed.get("intent")
-                state["task_plan"] = parsed.get("task_plan", [])
+                raw_plan = parsed.get("task_plan", []) or []
+                # INV-21: mark LLM-chosen targets so run_task applies the medium/L2 cap
+                state["task_plan"] = [
+                    {**t, "dispatch_source": t.get("dispatch_source") or "llm"}
+                    if isinstance(t, dict)
+                    else t
+                    for t in raw_plan
+                ]
             except Exception as e:
                 state["error_message"] = f"Intent parsing failed: {e}"
                 return state
 
-        # Check for group chat trigger
-        if any(keyword in user_input.lower() for keyword in ["group chat", "discuss", "all agents"]):
+        # INV-13: group chat only via structured intent (or UI-preset flag),
+        # never via raw keyword match on user_input.
+        intent = (state.get("intent") or "").strip().lower()
+        if intent == "group_chat":
             state["group_chat_active"] = True
+        # Preserve explicit UI / caller pre-set of group_chat_active (truthy only).
 
         # Log audit
         await log_audit(
@@ -252,7 +269,11 @@ class MasterAgent:
             agent_id=None,
             action="parse_intent",
             input_data={"user_input": user_input},
-            output_data={"intent": state.get("intent"), "task_plan": state.get("task_plan")},
+            output_data={
+                "intent": state.get("intent"),
+                "task_plan": state.get("task_plan"),
+                "group_chat_active": bool(state.get("group_chat_active")),
+            },
             request_id=state.get("request_id"),
         )
 
@@ -277,12 +298,67 @@ class MasterAgent:
 
         state["current_state"] = AgentState.WAIT_FOR_SUB_RESULTS
 
-        task_plan = state.get("task_plan", [])
+        task_plan = list(state.get("task_plan", []) or [])
         user_id = state.get("user_id")
         request_id = state.get("request_id")
         provider_id = state.get("provider_id")
+        dispatch_depth = int(state.get("dispatch_depth") or 0)
 
         if not task_plan:
+            state["current_state"] = AgentState.VALIDATE_RESULTS
+            return state
+
+        # INV-23 · fan-out gates before any I/O
+        from app.config import settings as app_settings
+        from app.services.fanout_gate import apply_fanout_gates, limits_from_settings
+
+        fanout_limits = limits_from_settings(app_settings)
+        # Expert / explicit user fan-out: still concurrency-capped, but allow larger plans
+        if any(
+            (t.get("dispatch_source") if isinstance(t, dict) else None) == "user_expert"
+            for t in task_plan
+        ):
+            fanout_limits.max_plan_size = max(fanout_limits.max_plan_size, 32)
+            fanout_limits.require_target = True  # expert tasks carry agent_id
+        gate = apply_fanout_gates(
+            task_plan, limits=fanout_limits, dispatch_depth=dispatch_depth
+        )
+        task_plan = gate.accepted
+        gated_denied: Dict[str, Any] = {}
+        if gate.rejected:
+            for i, item in enumerate(gate.rejected):
+                t = item["task"] if isinstance(item.get("task"), dict) else {}
+                key = str(
+                    t.get("agent_id")
+                    or t.get("agent_name")
+                    or t.get("agent_type")
+                    or f"rejected-{i}"
+                )
+                # uniquify key collisions among rejects
+                base = key
+                n = 1
+                while key in gated_denied:
+                    key = f"{base}#{n}"
+                    n += 1
+                gated_denied[key] = {
+                    "status": "denied",
+                    "output": None,
+                    "error": f"INV-23 fan-out gate: {item.get('reason')}",
+                }
+            await log_audit(
+                user_id=user_id,
+                agent_id=None,
+                action="fanout_gate",
+                input_data={"plan_in": len(state.get("task_plan") or [])},
+                output_data={
+                    "accepted": len(gate.accepted),
+                    "rejected": len(gate.rejected),
+                    "reasons": [r.get("reason") for r in gate.rejected],
+                },
+                request_id=request_id,
+            )
+        if not task_plan:
+            state["sub_results"] = gated_denied
             state["current_state"] = AgentState.VALIDATE_RESULTS
             return state
 
@@ -293,6 +369,7 @@ class MasterAgent:
 
         remote_agents: Dict[str, Dict] = {}
         remote_agents_by_name: Dict[str, Dict] = {}
+        agents_by_id: Dict[int, Dict] = {}
         try:
             async with get_db_context() as session:
                 result = await session.execute(select(AgentConfig).where(AgentConfig.is_active.is_(True)))
@@ -303,12 +380,25 @@ class MasterAgent:
                         "agent_name": agent_obj.agent_name,
                         "backend_type": backend,
                         "endpoint_url": agent_obj.endpoint_url,
+                        "permission_level": getattr(agent_obj, "permission_level", "medium") or "medium",
+                        "autonomy_tier": getattr(agent_obj, "autonomy_tier", "L2") or "L2",
                     }
+                    agents_by_id[int(agent_obj.id)] = agent_dict
                     if backend not in remote_agents:
                         remote_agents[backend] = agent_dict
                     remote_agents_by_name[agent_obj.agent_name] = agent_dict
-        except Exception:
-            pass  # No DB agents — will use local executor for all tasks
+        except Exception as e:
+            # Functional degradation (route to local executor) is OK, but must be visible
+            logger.warning(
+                "sub-agent registry load failed; falling back to local executor: %s", e
+            )
+
+        from app.services.privilege_inherit import (
+            check_dispatch,
+            context_for_dispatch_source,
+            snapshot_from_mapping,
+            unbound_target_snapshot,
+        )
 
         # Build execution coroutines
         async def run_task(task: Dict[str, Any]) -> tuple[str, Dict[str, Any]]:
@@ -316,6 +406,86 @@ class MasterAgent:
             task_desc = task.get("task", "")
             agent_id = task.get("agent_id")  # explicit ID override
             agent_name = task.get("agent_name")  # explicit name override
+            dispatch_source = task.get("dispatch_source") or "llm"
+
+            # Kill switch — do not dispatch new work while halted (NDB Std §Kill Switch).
+            from app.services.kill_switch import is_halted
+            if await is_halted(agent_id=agent_id):
+                from app.core.audit import record_action
+                await record_action(
+                    user_id=user_id, agent_id=agent_id, agent_name=agent_name or agent_type,
+                    action="dispatch:halted", action_category="annotate",
+                    input_data={"task": task_desc[:500]}, output_data={"halted": True})
+                return str(agent_id or agent_type), {"status": "halted",
+                                                     "error": "kill switch engaged — dispatch refused"}
+
+            # Resolve target agent config (for privilege + routing)
+            target_cfg: Optional[Dict[str, Any]] = None
+            if agent_id is not None:
+                try:
+                    aid_int = int(agent_id)
+                    target_cfg = agents_by_id.get(aid_int)
+                    # Not in the active map (or DB load failed earlier) — load by id
+                    # so we still know target privilege before execute (INV-21).
+                    if target_cfg is None:
+                        loaded = await self.executor._load_config_dict(aid_int)
+                        if loaded:
+                            target_cfg = loaded
+                            agents_by_id[aid_int] = loaded
+                except (TypeError, ValueError):
+                    target_cfg = None
+            if target_cfg is None and agent_name and agent_name in remote_agents_by_name:
+                target_cfg = remote_agents_by_name[agent_name]
+            if target_cfg is None and agent_type in remote_agents:
+                target_cfg = remote_agents[agent_type]
+
+            # INV-21 · privilege inheritance (before any execute)
+            source_priv = context_for_dispatch_source(dispatch_source)
+            target_priv = (
+                snapshot_from_mapping(target_cfg)
+                if target_cfg is not None
+                else unbound_target_snapshot()
+            )
+            allowed, deny_reason = check_dispatch(source_priv, target_priv)
+            if not allowed:
+                from app.core.audit import record_action
+                await record_action(
+                    user_id=user_id,
+                    agent_id=agent_id or (target_cfg or {}).get("id"),
+                    agent_name=agent_name or (target_cfg or {}).get("agent_name") or agent_type,
+                    action="dispatch:denied_privilege",
+                    action_category="annotate",
+                    input_data={
+                        "task": task_desc[:500],
+                        "agent_type": agent_type,
+                        "dispatch_source": dispatch_source,
+                        "source_permission": source_priv.permission_level,
+                        "source_autonomy": source_priv.autonomy_tier,
+                        "target_permission": target_priv.permission_level,
+                        "target_autonomy": target_priv.autonomy_tier,
+                    },
+                    output_data={"dispatched": False, "reason": deny_reason, "inv": "INV-21"},
+                )
+                key = str(agent_id or agent_name or agent_type)
+                return key, {
+                    "status": "denied",
+                    "output": None,
+                    "error": f"INV-21 privilege inheritance refused: {deny_reason}",
+                    "agent_id": agent_id or (target_cfg or {}).get("id"),
+                }
+
+            # Audit the dispatch decision (NDB Std §Audit Trail).
+            from app.core.audit import record_action
+            await record_action(
+                user_id=user_id, agent_id=agent_id, agent_name=agent_name or agent_type,
+                action="dispatch", action_category="annotate",
+                input_data={
+                    "task": task_desc[:500],
+                    "agent_type": agent_type,
+                    "dispatch_source": dispatch_source,
+                },
+                output_data={"dispatched": True, "privilege_check": "ok"},
+            )
 
             # Try remote if registered AND has endpoint URL
             if agent_id:
@@ -368,14 +538,27 @@ class MasterAgent:
             return agent_type, result
 
         start = time.monotonic()
-        tasks = [run_task(t) for t in task_plan]
+        # INV-23 · concurrency cap (semaphore); order of results preserved via gather
+        sem = asyncio.Semaphore(max(1, int(fanout_limits.max_concurrent)))
+
+        async def run_task_limited(task: Dict[str, Any]) -> tuple[str, Dict[str, Any]]:
+            async with sem:
+                return await run_task(task)
+
+        tasks = [run_task_limited(t) for t in task_plan]
         results_list = await asyncio.gather(*tasks, return_exceptions=True)
 
         results: Dict[str, Any] = {}
         for i, r in enumerate(results_list):
-            agent_type = task_plan[i].get("agent_type", "general")
+            task_i = task_plan[i]
+            agent_type = task_i.get("agent_type", "general")
             if isinstance(r, Exception):
-                results[agent_type] = {
+                key = str(
+                    task_i.get("agent_id")
+                    or task_i.get("agent_name")
+                    or agent_type
+                )
+                results[key] = {
                     "status": "failed",
                     "output": None,
                     "error": str(r),
@@ -388,9 +571,9 @@ class MasterAgent:
             # Log audit per task
             await log_audit(
                 user_id=user_id,
-                agent_id=str(results[key].get("agent_id", "")),
+                agent_id=str(results[key].get("agent_id", "") or key),
                 action="sub_agent_execute",
-                input_data={"task": task_plan[i].get("task")},
+                input_data={"task": task_i.get("task")},
                 output_data=results[key],
                 request_id=request_id,
             )
@@ -398,7 +581,13 @@ class MasterAgent:
             if results[key].get("status") == "needs_approval":
                 state["approval_required"] = True
 
-        state["sub_results"] = results
+        if gated_denied:
+            # Preserve INV-23 rejections alongside executed results
+            merged = dict(gated_denied)
+            merged.update(results)
+            state["sub_results"] = merged
+        else:
+            state["sub_results"] = results
         state["current_state"] = AgentState.VALIDATE_RESULTS
         return state
 
@@ -447,27 +636,37 @@ class MasterAgent:
         return state
 
     async def _validation_node(self, state: MasterAgentState) -> MasterAgentState:
-        """Validate sub-agent results for consistency and hallucinations."""
+        """Validate sub-agent results for consistency and structured risk."""
         state["current_state"] = AgentState.VALIDATE_RESULTS
 
-        sub_results = state.get("sub_results", {})
+        sub_results = state.get("sub_results", {}) or {}
+        task_plan = state.get("task_plan", []) or []
 
         errors = []
         passed = True
+        approval_required = bool(state.get("approval_required"))
 
-        # Basic validation
         for agent_id, result in sub_results.items():
-            if result.get("status") == "failed":
+            if not isinstance(result, dict):
+                continue
+            status = (result.get("status") or "").lower()
+            if status in ("failed", "denied", "halted", "error"):
                 errors.append(f"Agent {agent_id} failed: {result.get('error')}")
                 passed = False
+            # INV-13: structured HITL signals only — never scan free-text output
+            if status == "needs_approval" or result.get("requires_approval") is True:
+                approval_required = True
+            risk = str(
+                result.get("risk_level") or result.get("risk_tier") or ""
+            ).lower()
+            if risk in ("high", "critical"):
+                approval_required = True
 
-        # Check for high-risk indicators
-        for agent_id, result in sub_results.items():
-            output = str(result.get("output", ""))
-            if any(kw in output.lower() for kw in ["critical", "emergency", "immediate action"]):
-                # Flag for human review
-                state["approval_required"] = True
+        for task in task_plan:
+            if isinstance(task, dict) and task.get("requires_approval"):
+                approval_required = True
 
+        state["approval_required"] = approval_required
         state["validation_passed"] = passed
         state["validation_errors"] = errors
         return state
@@ -522,14 +721,44 @@ class MasterAgent:
                     expert_no_agents=bool(state.get("expert_mode_no_agents")),
                 )
                 history = state.get("conversation_history") or []
-                history, _compressed, _degraded = await maybe_compress(history, self.llm_router)
+                # M0a-2: threshold from remaining budget (context_window - reserves)
+                model_name = (
+                    state.get("model_override")
+                    or state.get("model")
+                    or None
+                )
+                provider_id = state.get("provider_id")
+                try:
+                    from app.services.model_limits import limits_for_provider_model
+                    from app.config import settings as _settings
+                    _cw, _mo = await limits_for_provider_model(provider_id, model_name)
+                    if not model_name:
+                        _cw = int(getattr(_settings, "DEFAULT_CONTEXT_WINDOW", _cw))
+                except Exception:
+                    from app.config import settings as _settings
+                    _cw = int(getattr(_settings, "DEFAULT_CONTEXT_WINDOW", 128000))
+                    _mo = int(getattr(_settings, "CONTEXT_COMPRESS_RESERVE_OUTPUT", 1024))
+                history, _compressed, _degraded = await maybe_compress(
+                    history,
+                    self.llm_router,
+                    context_window=_cw,
+                    reserve_output=_mo,
+                )
                 # Observability hook: set so callers (status surface, audit) can see
                 # whether compression ran / whether the LLM call degraded.
-                state["context_compression"] = {"compressed": _compressed, "degraded": _degraded}
+                state["context_compression"] = {
+                    "compressed": _compressed,
+                    "degraded": _degraded,
+                    "context_window": _cw,
+                    "reserve_output": _mo,
+                }
+                from agent_core.messages import messages_for_model
+
                 messages: List[Dict[str, str]] = [
                     {"role": "system", "content": system_prompt}
                 ]
-                messages.extend(history)
+                # History may include exclude_from_context rows (evidence, etc.)
+                messages.extend(messages_for_model(history))
                 messages.append({"role": "user", "content": user_input})
                 state["final_summary"] = await self.llm_router.chat(
                     messages=messages,
@@ -537,6 +766,7 @@ class MasterAgent:
                     model=state.get("model"),
                     model_override=state.get("model_override"),
                     temperature_override=state.get("temperature_override"),
+                    enable_prompt_cache=True,
                 )
                 logger.debug(f"_summarizer_node chat() returned: {state['final_summary'][:100]}")
             except Exception as e:
@@ -562,26 +792,44 @@ class MasterAgent:
 
         request_id = state.get("request_id", "")
 
-        # Summarise what needs approval for the admin dashboard
-        sub_results = state.get("sub_results", {})
-        risk_keywords = ["critical", "emergency", "delete", "deploy", "drop", "truncate"]
-        risk_level = "high" if any(
-            kw in str(sub_results).lower()
-            for kw in risk_keywords
-        ) else "medium"
+        # INV-13: risk_level from structured fields only (not free-text keywords)
+        sub_results = state.get("sub_results", {}) or {}
+        task_plan = state.get("task_plan", []) or []
+        risk_level = "medium"
+        for v in sub_results.values():
+            if not isinstance(v, dict):
+                continue
+            if (v.get("status") or "").lower() == "needs_approval":
+                risk_level = "high"
+            rl = str(v.get("risk_level") or v.get("risk_tier") or "").lower()
+            if rl in ("high", "critical"):
+                risk_level = "high"
+        if any(
+            isinstance(t, dict) and t.get("requires_approval") for t in task_plan
+        ):
+            risk_level = "high"
 
         # Build a human-readable description
         if sub_results:
             descriptions = [
                 f"{k}: {v.get('output', '')[:200]}"
                 for k, v in sub_results.items()
-                if v.get("status") == "needs_approval"
+                if isinstance(v, dict)
+                and (
+                    (v.get("status") or "").lower() == "needs_approval"
+                    or v.get("requires_approval") is True
+                    or str(v.get("risk_level") or v.get("risk_tier") or "").lower()
+                    in ("high", "critical")
+                )
             ]
-            action_description = "; ".join(descriptions) or "Agent execution requires approval"
+            action_description = (
+                "; ".join(descriptions) or "Agent execution requires approval"
+            )
         else:
-            task_plan = state.get("task_plan", [])
             action_description = "; ".join(
-                t.get("task", "")[:200] for t in task_plan if t.get("requires_approval")
+                t.get("task", "")[:200]
+                for t in task_plan
+                if isinstance(t, dict) and t.get("requires_approval")
             ) or "Task requires human approval"
 
         from app.services.approval_service import ApprovalService

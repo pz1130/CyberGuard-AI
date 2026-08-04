@@ -25,6 +25,8 @@ class ApprovalRequest(Base):
 
     # Risk & urgency
     risk_level = Column(String(20), default="medium")                            # low / medium / high / critical
+    required_approver_role = Column(String(20), nullable=True)                   # min RBAC role to decide (A3 routing)
+    required_approver_label = Column(String(100), nullable=True)                 # Standard's approver label (display)
     urgency = Column(String(20), default="normal")                              # normal / urgent
 
     # Status: pending / approved / rejected / expired / cancelled

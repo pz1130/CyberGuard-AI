@@ -181,13 +181,15 @@ async def _seed_presets(db: AsyncSession):
         # Store as JSON-serializable dicts; the column can't hold ModelInfo objects.
         # `verified` / `last_tested_at` / `test_error` are left unset — only a real
         # test/probe call (which routes through `_stamp_model_verified`) can fill them.
+        # context_window / max_output_tokens filled from catalog when absent (M0a-2).
+        from app.services.model_limits import enrich_models_list
         provider = Provider(
             name=preset.name,
             provider_type=preset.provider_type,
             api_key_encrypted=encrypt_data(preset.api_key) if preset.api_key else None,
             base_url=preset.base_url,
             api_version=preset.api_version,
-            models=[m.model_dump() for m in preset.models],
+            models=enrich_models_list([m.model_dump() for m in preset.models]),
             is_active=preset.is_active,
             metadata_json=preset.metadata_json,
         )
@@ -352,8 +354,10 @@ def _stamp_model_verified(
 
     The list is replaced (not mutated) so SQLAlchemy detects the JSON change
     when the caller assigns the result back to `provider.models = ...`.
+    Also fills context_window / max_output_tokens when missing (M0a-2 catalog).
     """
     from datetime import datetime as _dt
+    from app.services.model_limits import enrich_model_entry
 
     result: list = [dict(m) if isinstance(m, dict) else {"name": str(m), "model_type": "chat"}
                     for m in (models or [])]
@@ -363,15 +367,18 @@ def _stamp_model_verified(
             entry["verified"] = bool(ok)
             entry["last_tested_at"] = now_iso
             entry["test_error"] = (err or "")[:200] if not ok else None
+            # Fill limits only on the model we just stamped (leave siblings untouched).
+            if entry.get("model_type", "chat") == "chat":
+                entry.update(enrich_model_entry(entry))
             return result
-    # Not found — append a stub
-    result.append({
+    # Not found — append a stub with catalog limits
+    result.append(enrich_model_entry({
         "name": model_name,
         "model_type": "chat",
         "verified": bool(ok),
         "last_tested_at": now_iso,
         "test_error": (err or "")[:200] if not ok else None,
-    })
+    }))
     return result
 
 
@@ -434,6 +441,7 @@ async def create_provider(
         except SSRFError as e:
             raise HTTPException(status_code=400, detail=f"Invalid base_url: {e}")
 
+    from app.services.model_limits import enrich_models_list
     provider = Provider(
         name=body.name,
         provider_type=body.provider_type,
@@ -441,7 +449,7 @@ async def create_provider(
         base_url=body.base_url,
         api_version=body.api_version,
         # Store as JSON-serializable dicts; the column can't hold ModelInfo objects.
-        models=[m.model_dump() for m in body.models],
+        models=enrich_models_list([m.model_dump() for m in body.models]),
         is_active=body.is_active,
         metadata_json=body.metadata_json,
     )
@@ -563,7 +571,13 @@ async def discover_provider_models(
     if not ids:
         raise HTTPException(status_code=404, detail="Provider returned no models")
 
-    return {"models": [{"name": name, "model_type": "chat"} for name in ids]}
+    from app.services.model_limits import enrich_model_entry
+    return {
+        "models": [
+            enrich_model_entry({"name": name, "model_type": "chat"})
+            for name in ids
+        ]
+    }
 
 
 @router.post("/providers/{provider_id}/models/probe")
@@ -590,6 +604,8 @@ async def probe_provider_capabilities(
 
     client = await get_llm_router().get_client_async(provider_id=provider_id)
 
+    from app.services.model_limits import enrich_model_entry
+
     updated = []
     for m in models:
         # Models are stored as dicts, but tolerate a stray legacy string.
@@ -608,6 +624,8 @@ async def probe_provider_capabilities(
             except Exception as e:  # noqa: BLE001 - one bad model shouldn't abort the batch
                 entry["verified"] = False
                 entry["test_error"] = str(e)[:200]
+        if entry.get("model_type", "chat") == "chat":
+            entry = enrich_model_entry(entry)
         updated.append(entry)
 
     # Reassign (not in-place mutate) so SQLAlchemy detects the JSON change.

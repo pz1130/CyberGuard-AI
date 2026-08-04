@@ -68,38 +68,54 @@ async def test_save_then_load_memory_round_trip(parent_conv_and_internal_agent):
     await runner._append_memory(parent_conversation_id=ids["parent_id"],
                                  user_id=ids["user_id"], messages=new_msgs)
     loaded = await runner._load_memory(parent_conversation_id=ids["parent_id"])
-    assert loaded == new_msgs
+    # append stamps created_at (conversation_messages); compare role/content only
+    assert [(m["role"], m["content"]) for m in loaded] == [
+        (m["role"], m["content"]) for m in new_msgs
+    ]
+    assert all(m.get("created_at") for m in loaded)
 
 
 @pytest.mark.asyncio
-async def test_build_system_prompt_concatenates_skills(monkeypatch):
+async def test_build_system_prompt_catalog_not_full_body(monkeypatch):
+    """Progressive disclosure: catalog name+desc only; full body not in prompt."""
     from app.services.internal_agent import InternalAgentRunner
     cfg = {"id": 1, "agent_name": "x", "system_prompt": "BASE",
            "associated_skills": [101, 102], "metadata_json": {},
            "permission_level": "medium"}
 
-    async def fake_loader(ids):
-        return {101: "skill A body", 102: "skill B body"}
+    async def fake_catalog(ids):
+        return [
+            {"id": 101, "name": "skill_a", "description": "desc A", "version": "1"},
+            {"id": 102, "name": "skill_b", "description": "desc B", "version": "1"},
+        ]
 
     runner = InternalAgentRunner(cfg)
-    monkeypatch.setattr(runner, "_load_skill_bodies", fake_loader)
+    monkeypatch.setattr(runner, "_load_skill_catalog", fake_catalog)
     prompt = await runner._build_system_prompt()
-    assert "BASE" in prompt and "skill A body" in prompt and "skill B body" in prompt
+    assert "BASE" in prompt
+    assert "skill_a" in prompt and "desc A" in prompt
+    assert "load_skill" in prompt
+    assert "skill A body" not in prompt
 
 
 @pytest.mark.asyncio
-async def test_build_tools_includes_kb_when_kb_set(monkeypatch):
+async def test_build_tools_includes_kb_and_load_skill(monkeypatch):
     from app.services.internal_agent import InternalAgentRunner
     cfg = {"id": 1, "agent_name": "x", "system_prompt": "",
-           "associated_skills": [], "metadata_json": {"mcp_tool_ids": []},
+           "associated_skills": [9], "metadata_json": {"mcp_tool_ids": []},
            "knowledge_base_id": 7, "permission_level": "medium"}
     runner = InternalAgentRunner(cfg)
 
     async def fake_mcp(*_a, **_kw): return []
+
+    async def fake_pool(*_a, **_kw): return []
+
     monkeypatch.setattr(runner, "_load_mcp_tools", fake_mcp)
+    monkeypatch.setattr(runner, "_load_pool_tools", fake_pool)
     tools = await runner._build_tools()
     names = [t["function"]["name"] for t in tools]
     assert "kb_search" in names
+    assert "load_skill" in names
 
 
 @pytest.mark.asyncio
@@ -119,7 +135,7 @@ async def test_build_system_prompt_injects_episodes_when_enabled(monkeypatch):
            "associated_skills": [], "metadata_json": {"enable_episodic": True},
            "permission_level": "medium"}
     runner = InternalAgentRunner(cfg)
-    monkeypatch.setattr(runner, "_load_skill_bodies", AsyncMock(return_value={}))
+    monkeypatch.setattr(runner, "_load_skill_catalog", AsyncMock(return_value=[]))
 
     prompt = await runner._build_system_prompt("scan host 1.2.3.4")
     assert "过往成功经验" in prompt and "web_search→vuln_search" in prompt
@@ -456,7 +472,7 @@ async def test_tool_call_budget_caps_dispatch_and_forces_answer(monkeypatch):
     n = {"i": 0}
     # A model that keeps requesting (distinct, so the loop guard never trips)
     # tools while tools are offered, and only answers once tools are withdrawn.
-    async def fake_chat(*, messages, provider_id, model, tools):
+    async def fake_chat(*, messages, provider_id, model, tools, **kwargs):
         if not tools:
             return SimpleNamespace(content="final after budget", tool_calls=None)
         n["i"] += 1
@@ -587,7 +603,7 @@ async def test_no_auto_continue_without_tools(monkeypatch):
 @pytest.mark.asyncio
 async def test_maybe_compact_summarizes_when_oversized(monkeypatch):
     from app.services.internal_agent import (
-        InternalAgentRunner, CONTEXT_COMPACT_CHARS, CONTEXT_KEEP_RECENT,
+        InternalAgentRunner, CONTEXT_KEEP_RECENT,
     )
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
@@ -597,13 +613,26 @@ async def test_maybe_compact_summarizes_when_oversized(monkeypatch):
            "permission_level": "medium"}
     runner = InternalAgentRunner(cfg)
 
+    # M0a-2: compaction thresholds use remaining token budget from model limits.
+    # Force a tiny window so the oversized buffer actually triggers summarize.
+    async def _tiny_limits(_pid, _model):
+        return 2_000, 256
+
+    monkeypatch.setattr(
+        "app.services.model_limits.limits_for_provider_model",
+        _tiny_limits,
+    )
+    monkeypatch.setattr(
+        "agent_core.model_limits.resolve_model_limits",
+        lambda *a, **k: (2_000, 256),
+    )
+
     # Build an oversized buffer: system + many big user/assistant turns.
     big = "y" * 2000
     messages = [{"role": "system", "content": "SYS"}]
     for i in range(20):
         messages.append({"role": "user", "content": big})
         messages.append({"role": "assistant", "content": big})
-    assert runner._estimate_chars(messages) > CONTEXT_COMPACT_CHARS
 
     chat = AsyncMock(return_value="## Summary\ncondensed history")
     out = await runner._maybe_compact(messages, SimpleNamespace(chat=chat))

@@ -28,6 +28,7 @@ class ManifestMCPTool(BaseModel):
 class ManifestResponse(BaseModel):
     agent_id: int
     agent_name: str
+    governed: bool = False
     skills: list[ManifestSkill]
     tools: list[ManifestTool]
     mcp_tools: list[ManifestMCPTool]

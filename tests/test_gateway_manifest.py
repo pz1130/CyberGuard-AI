@@ -37,7 +37,7 @@ def test_manifest_schemas_round_trip():
 
 def _fake_agent(skills=None, tools=None, mcp=None):
     return SimpleNamespace(
-        id=7, agent_name="ScanBot",
+        id=7, agent_name="ScanBot", governed=False,
         associated_skills=skills,
         associated_tools=tools,
         associated_mcp_tools=mcp,
@@ -165,7 +165,7 @@ async def test_poll_has_manifest_true_when_skills_assigned():
     from app.routers import gateway as gw
 
     agent_with_skills = SimpleNamespace(
-        id=5, agent_name="Bot",
+        id=5, agent_name="Bot", governed=False,
         associated_skills=[1, 2],
         associated_tools=None,
         associated_mcp_tools=None,
@@ -205,7 +205,7 @@ async def test_poll_has_manifest_false_when_no_pools():
     from app.routers import gateway as gw
 
     bare_agent = SimpleNamespace(
-        id=5, agent_name="Bot",
+        id=5, agent_name="Bot", governed=False,
         associated_skills=None,
         associated_tools=None,
         associated_mcp_tools=None,
@@ -240,7 +240,7 @@ async def test_poll_has_manifest_true_when_idle_but_skills_assigned():
     from app.routers import gateway as gw
 
     agent_with_skills = SimpleNamespace(
-        id=6, agent_name="IdleBot",
+        id=6, agent_name="IdleBot", governed=False,
         associated_skills=[1],
         associated_tools=None,
         associated_mcp_tools=None,
