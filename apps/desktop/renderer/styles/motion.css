@@ -24,7 +24,9 @@
 .session-list button,
 .session-list .session-main,
 .mcp-list-item,
-.settings-card {
+.settings-card,
+.settings-tile,
+.preset-chip {
   transition:
     border-color var(--motion-fast) var(--ease-out),
     background var(--motion-fast) var(--ease-out),

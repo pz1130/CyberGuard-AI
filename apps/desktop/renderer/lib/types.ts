@@ -42,7 +42,14 @@ export type PendingPlan = {
 
 export type ActiveView = "workbench" | "evidence" | "settings";
 
-export type SettingsSection = "llm" | "mcp" | "appearance" | "data" | "about";
+export type SettingsSection =
+  | "hub"
+  | "llm"
+  | "mcp"
+  | "skills"
+  | "appearance"
+  | "data"
+  | "about";
 
 export type ProviderPublic = {
   mode: string;
@@ -50,7 +57,15 @@ export type ProviderPublic = {
   model: string;
   temperature: number;
   has_api_key: boolean;
-  effective?: { mode?: string; model?: string; has_api_key?: boolean };
+  preset_id?: string | null;
+  local?: boolean;
+  requires_api_key?: boolean;
+  effective?: {
+    mode?: string;
+    model?: string;
+    has_api_key?: boolean;
+    local?: boolean;
+  };
   ok?: boolean;
 };
 
@@ -139,6 +154,7 @@ declare global {
         model?: string;
         temperature?: number;
         api_key?: string;
+        preset_id?: string;
       }) => Promise<ProviderPublic & { ok?: boolean }>;
       providerTest?: () => Promise<{
         ok: boolean;

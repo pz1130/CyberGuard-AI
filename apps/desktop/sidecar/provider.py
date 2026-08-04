@@ -39,6 +39,21 @@ from apps.desktop.sidecar.paths import data_root
 logger = logging.getLogger("cyberguard.desktop.provider")
 
 
+def _is_local_base_url(url: str) -> bool:
+    """Local / LAN OpenAI-compatible servers may not need an API key."""
+    u = (url or "").strip().lower()
+    if not u:
+        return False
+    markers = (
+        "localhost",
+        "127.0.0.1",
+        "0.0.0.0",
+        "[::1]",
+        "host.docker.internal",
+    )
+    return any(m in u for m in markers)
+
+
 @dataclass(frozen=True)
 class ProviderConfig:
     mode: str  # mock | live
@@ -46,10 +61,16 @@ class ProviderConfig:
     api_key: str = ""
     model: str = "gpt-4o-mini"
     temperature: float = 0.3
+    preset_id: str = ""
 
     @property
     def is_live(self) -> bool:
-        return self.mode == "live" and bool(self.api_key)
+        if self.mode != "live":
+            return False
+        # Local Ollama / LM Studio / vLLM often need no key
+        if self.api_key:
+            return True
+        return _is_local_base_url(self.base_url)
 
     def public_status(self) -> Dict[str, Any]:
         """Safe for UI / ping — never includes api_key."""
@@ -58,6 +79,8 @@ class ProviderConfig:
             "model": self.model if self.is_live else "mock",
             "base_url": self.base_url if self.is_live else None,
             "has_api_key": bool(self.api_key) if self.mode == "live" else False,
+            "local": _is_local_base_url(self.base_url),
+            "preset_id": self.preset_id or None,
         }
 
 
@@ -111,15 +134,19 @@ def load_provider_config() -> ProviderConfig:
     except (TypeError, ValueError):
         temperature = 0.3
 
+    preset_id = str(file_cfg.get("preset_id") or "")
     cfg = ProviderConfig(
         mode=mode,
         base_url=str(base_url).rstrip("/"),
         api_key=str(api_key),
         model=str(model),
         temperature=temperature,
+        preset_id=preset_id,
     )
-    if mode == "live" and not cfg.api_key:
-        logger.warning("LLM mode=live but no API key — falling back to mock")
+    if mode == "live" and not cfg.api_key and not _is_local_base_url(cfg.base_url):
+        logger.warning(
+            "LLM mode=live but no API key (and not local URL) — falling back to mock"
+        )
         return ProviderConfig(mode="mock")
     return cfg
 
@@ -138,6 +165,7 @@ def get_provider_public() -> Dict[str, Any]:
         temperature = float(file_cfg.get("temperature", 0.3))
     except (TypeError, ValueError):
         temperature = 0.3
+    preset_id = str(file_cfg.get("preset_id") or "")
 
     has_key = False
     try:
@@ -157,6 +185,9 @@ def get_provider_public() -> Dict[str, Any]:
         "model": model,
         "temperature": temperature,
         "has_api_key": has_key,
+        "preset_id": preset_id or None,
+        "local": _is_local_base_url(base_url),
+        "requires_api_key": not _is_local_base_url(base_url),
         "effective": effective,
     }
 
@@ -189,6 +220,11 @@ def set_provider_config(params: Dict[str, Any]) -> Dict[str, Any]:
     except (TypeError, ValueError):
         temperature = 0.3
 
+    preset_id = params.get("preset_id")
+    if preset_id is None:
+        preset_id = file_cfg.get("preset_id") or ""
+    preset_id = str(preset_id or "")
+
     api_key = params.get("api_key")
     if api_key is not None and str(api_key).strip():
         from apps.desktop.sidecar.secrets_store import set_provider_api_key
@@ -200,6 +236,7 @@ def set_provider_config(params: Dict[str, Any]) -> Dict[str, Any]:
         "base_url": base_url,
         "model": model,
         "temperature": temperature,
+        "preset_id": preset_id,
         # never persist key in file
         "api_key_in_keychain": True,
     }
@@ -233,7 +270,9 @@ async def test_provider_connection() -> Dict[str, Any]:
     try:
         from openai import AsyncOpenAI
 
-        client = AsyncOpenAI(api_key=cfg.api_key, base_url=cfg.base_url)
+        client = AsyncOpenAI(
+            api_key=cfg.api_key or "local", base_url=cfg.base_url
+        )
         # Minimal completion — 1 token style prompt
         await client.chat.completions.create(
             model=cfg.model,
@@ -274,7 +313,8 @@ async def live_chat(
     from llm_router.utils import strip_think_blocks
     from types import SimpleNamespace
 
-    client = AsyncOpenAI(api_key=cfg.api_key, base_url=cfg.base_url)
+    # Local servers often omit keys; OpenAI client still wants a non-empty string
+    client = AsyncOpenAI(api_key=cfg.api_key or "local", base_url=cfg.base_url)
     # Strip non-API fields from messages
     clean_msgs = []
     for m in messages:

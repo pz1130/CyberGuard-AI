@@ -31,7 +31,7 @@ export function App() {
     setActiveView("evidence");
   }, []);
 
-  const openSettings = useCallback((section?: SettingsSection) => {
+  const openSettings = useCallback((section: SettingsSection = "hub") => {
     setSettingsSection(section);
     setActiveView("settings");
   }, []);
