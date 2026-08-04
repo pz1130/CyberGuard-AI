@@ -51,6 +51,19 @@ export type SettingsSection =
   | "data"
   | "about";
 
+export type SkillPublic = {
+  name: string;
+  description: string;
+  version?: string;
+  source?: string;
+  mode?: string;
+  requires_tools?: string[];
+  sha256?: string;
+  path?: string | null;
+  readonly?: boolean;
+  body?: string;
+};
+
 export type ProviderPublic = {
   mode: string;
   base_url: string;
@@ -130,12 +143,57 @@ declare global {
         sessionId: string
       ) => Promise<{ ok?: boolean; deleted?: boolean }>;
       skillsList?: () => Promise<{
-        skills: Array<{
-          name: string;
-          description: string;
-          version?: string;
-          source?: string;
-        }>;
+        ok?: boolean;
+        skills: SkillPublic[];
+        drafts?: SkillPublic[];
+        dirs?: { approved?: string; drafts?: string; builtin?: string };
+      }>;
+      skillsGet?: (
+        name: string,
+        source?: string
+      ) => Promise<{ ok?: boolean; skill?: SkillPublic; error?: string }>;
+      skillsSaveDraft?: (params: {
+        name: string;
+        description?: string;
+        body: string;
+        version?: string;
+        mode?: string;
+        requires_tools?: string[];
+      }) => Promise<{
+        ok?: boolean;
+        skill?: SkillPublic;
+        error?: string;
+        warning?: string;
+      }>;
+      skillsImport?: (params: {
+        path?: string;
+        content?: string;
+        name?: string;
+      }) => Promise<{
+        ok?: boolean;
+        skill?: SkillPublic;
+        error?: string;
+        warning?: string;
+      }>;
+      skillsApprove?: (
+        name: string
+      ) => Promise<{
+        ok?: boolean;
+        skill?: SkillPublic;
+        error?: string;
+        message?: string;
+      }>;
+      skillsDelete?: (
+        name: string,
+        source: string
+      ) => Promise<{ ok?: boolean; deleted?: string; error?: string }>;
+      skillsFork?: (
+        name: string
+      ) => Promise<{
+        ok?: boolean;
+        skill?: SkillPublic;
+        error?: string;
+        warning?: string;
       }>;
       resume?: (runId: string) => Promise<{ ok?: boolean }>;
       planApprove?: (

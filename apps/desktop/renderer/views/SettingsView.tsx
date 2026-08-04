@@ -13,6 +13,7 @@ import type {
   McpServerPublic,
   ProviderPublic,
   SettingsSection,
+  SkillPublic,
   ThemeMode,
 } from "../lib/types";
 
@@ -174,9 +175,24 @@ export function SettingsView({
   const [mcpMsg, setMcpMsg] = useState<string | null>(null);
   const [mcpBusy, setMcpBusy] = useState(false);
   const [discoverMsg, setDiscoverMsg] = useState<string | null>(null);
-  const [skills, setSkills] = useState<
-    Array<{ name: string; description: string; version?: string; source?: string }>
-  >([]);
+  const [skills, setSkills] = useState<SkillPublic[]>([]);
+  const [skillDrafts, setSkillDrafts] = useState<SkillPublic[]>([]);
+  const [skillDirs, setSkillDirs] = useState<{
+    approved?: string;
+    drafts?: string;
+    builtin?: string;
+  }>({});
+  const [skillMsg, setSkillMsg] = useState<string | null>(null);
+  const [skillBusy, setSkillBusy] = useState(false);
+  const [skillName, setSkillName] = useState("");
+  const [skillDesc, setSkillDesc] = useState("");
+  const [skillBody, setSkillBody] = useState("");
+  const [skillVersion, setSkillVersion] = useState("1.0.0");
+  const [skillMode, setSkillMode] = useState("both");
+  const [skillEditSource, setSkillEditSource] = useState<
+    "new" | "draft" | "approved" | "builtin"
+  >("new");
+  const [skillSelected, setSkillSelected] = useState<string | null>(null);
 
   const preset = useMemo(() => findPreset(presetId), [presetId]);
   const requiresKey = useMemo(() => {
@@ -226,10 +242,243 @@ export function SettingsView({
     try {
       const r = await api.skillsList();
       setSkills(r.skills || []);
+      setSkillDrafts(r.drafts || []);
+      setSkillDirs(r.dirs || {});
     } catch {
       setSkills([]);
+      setSkillDrafts([]);
     }
   }, [api]);
+
+  const resetSkillEditor = useCallback(() => {
+    setSkillName("");
+    setSkillDesc("");
+    setSkillBody(
+      "# SOP · my_skill\n\n1. Step one\n2. Step two\n\nConstraints:\n- Prefer read-only investigation.\n"
+    );
+    setSkillVersion("1.0.0");
+    setSkillMode("both");
+    setSkillEditSource("new");
+    setSkillSelected(null);
+    setSkillMsg(null);
+  }, []);
+
+  const openSkill = useCallback(
+    async (name: string, source?: string) => {
+      if (!api?.skillsGet) {
+        setSkillMsg("skills API unavailable");
+        return;
+      }
+      setSkillBusy(true);
+      setSkillMsg(null);
+      try {
+        const r = await api.skillsGet(name, source);
+        if (!r.ok || !r.skill) {
+          setSkillMsg(r.error || "load failed");
+          return;
+        }
+        const s = r.skill;
+        setSkillName(s.name);
+        setSkillDesc(s.description || "");
+        setSkillBody(s.body || "");
+        setSkillVersion(s.version || "1.0.0");
+        setSkillMode(s.mode || "both");
+        setSkillEditSource(
+          (s.source as "draft" | "approved" | "builtin") || "draft"
+        );
+        setSkillSelected(s.name);
+      } catch (e) {
+        setSkillMsg(String(e));
+      } finally {
+        setSkillBusy(false);
+      }
+    },
+    [api]
+  );
+
+  const onSaveSkillDraft = async () => {
+    if (!api?.skillsSaveDraft) {
+      setSkillMsg("skills save unavailable");
+      return;
+    }
+    if (!skillName.trim() || !skillBody.trim()) {
+      setSkillMsg("name 与 body 必填");
+      return;
+    }
+    setSkillBusy(true);
+    setSkillMsg(null);
+    try {
+      const r = await api.skillsSaveDraft({
+        name: skillName.trim(),
+        description: skillDesc.trim(),
+        body: skillBody,
+        version: skillVersion.trim() || "1.0.0",
+        mode: skillMode,
+      });
+      if (!r.ok) {
+        setSkillMsg(r.error || "save failed");
+        return;
+      }
+      setSkillEditSource("draft");
+      setSkillSelected(r.skill?.name || skillName.trim());
+      setSkillMsg(
+        `草稿已保存 · ${r.skill?.name}` +
+          (r.warning ? ` · ⚠ ${r.warning}` : " · 批准后才会进 agent catalog")
+      );
+      await loadSkills();
+    } catch (e) {
+      setSkillMsg(String(e));
+    } finally {
+      setSkillBusy(false);
+    }
+  };
+
+  const onApproveSkill = async () => {
+    if (!api?.skillsApprove || !skillName.trim()) return;
+    setSkillBusy(true);
+    setSkillMsg(null);
+    try {
+      // Ensure latest editor content is in drafts first
+      if (skillEditSource === "new" || skillEditSource === "draft") {
+        const saved = await api.skillsSaveDraft?.({
+          name: skillName.trim(),
+          description: skillDesc.trim(),
+          body: skillBody,
+          version: skillVersion.trim() || "1.0.0",
+          mode: skillMode,
+        });
+        if (saved && saved.ok === false) {
+          setSkillMsg(saved.error || "save draft failed");
+          return;
+        }
+      }
+      const r = await api.skillsApprove(skillName.trim());
+      if (!r.ok) {
+        setSkillMsg(r.error || "approve failed");
+        return;
+      }
+      setSkillEditSource("approved");
+      setSkillMsg(r.message || `已批准 · ${skillName}`);
+      await loadSkills();
+    } catch (e) {
+      setSkillMsg(String(e));
+    } finally {
+      setSkillBusy(false);
+    }
+  };
+
+  const onDeleteSkill = async () => {
+    if (!api?.skillsDelete || !skillName.trim()) return;
+    const src =
+      skillEditSource === "approved"
+        ? "approved"
+        : skillEditSource === "draft"
+          ? "draft"
+          : null;
+    if (!src) {
+      setSkillMsg("内置技能不可删除");
+      return;
+    }
+    if (!window.confirm(`删除 ${src} skill「${skillName}」？`)) return;
+    setSkillBusy(true);
+    setSkillMsg(null);
+    try {
+      const r = await api.skillsDelete(skillName.trim(), src);
+      if (!r.ok) {
+        setSkillMsg(r.error || "delete failed");
+        return;
+      }
+      setSkillMsg(`已删除 · ${skillName} (${src})`);
+      resetSkillEditor();
+      await loadSkills();
+    } catch (e) {
+      setSkillMsg(String(e));
+    } finally {
+      setSkillBusy(false);
+    }
+  };
+
+  const onImportSkill = async () => {
+    if (!api?.skillsImport || !api.pickFile) {
+      setSkillMsg("import / file picker unavailable");
+      return;
+    }
+    setSkillBusy(true);
+    setSkillMsg(null);
+    try {
+      const picked = await api.pickFile({
+        title: "Import skill Markdown",
+        properties: ["openFile"],
+      });
+      if (!picked?.path || picked.canceled) {
+        setSkillMsg("canceled");
+        return;
+      }
+      const r = await api.skillsImport({ path: picked.path });
+      if (!r.ok || !r.skill) {
+        setSkillMsg(r.error || "import failed");
+        return;
+      }
+      setSkillName(r.skill.name);
+      setSkillDesc(r.skill.description || "");
+      setSkillBody(r.skill.body || "");
+      setSkillVersion(r.skill.version || "1.0.0");
+      setSkillMode(r.skill.mode || "both");
+      setSkillEditSource("draft");
+      setSkillSelected(r.skill.name);
+      setSkillMsg(
+        `已导入为草稿 · ${r.skill.name}` +
+          (r.warning ? ` · ⚠ ${r.warning}` : " · 请检查后批准")
+      );
+      await loadSkills();
+    } catch (e) {
+      setSkillMsg(String(e));
+    } finally {
+      setSkillBusy(false);
+    }
+  };
+
+  const onForkSkill = async () => {
+    if (!api?.skillsFork || !skillName.trim()) return;
+    setSkillBusy(true);
+    setSkillMsg(null);
+    try {
+      const r = await api.skillsFork(skillName.trim());
+      if (!r.ok || !r.skill) {
+        setSkillMsg(r.error || "fork failed");
+        return;
+      }
+      setSkillName(r.skill.name);
+      setSkillDesc(r.skill.description || "");
+      setSkillBody(r.skill.body || "");
+      setSkillVersion(r.skill.version || "1.0.0");
+      setSkillMode(r.skill.mode || "both");
+      setSkillEditSource("draft");
+      setSkillSelected(r.skill.name);
+      setSkillMsg(
+        `已复制到草稿 · ${r.skill.name}` +
+          (r.warning ? ` · ⚠ ${r.warning}` : " · 改名后批准可覆盖流程")
+      );
+      await loadSkills();
+    } catch (e) {
+      setSkillMsg(String(e));
+    } finally {
+      setSkillBusy(false);
+    }
+  };
+
+  const onRevealSkillDir = async (which: "approved" | "drafts") => {
+    const p = which === "approved" ? skillDirs.approved : skillDirs.drafts;
+    if (!p || !api?.showItemInFolder) {
+      setSkillMsg("path unavailable");
+      return;
+    }
+    try {
+      await api.showItemInFolder(p);
+    } catch (e) {
+      setSkillMsg(String(e));
+    }
+  };
 
   useEffect(() => {
     void loadProvider();
@@ -926,27 +1175,220 @@ export function SettingsView({
       {section === "skills" && (
         <div className="settings-detail">
           <div className="settings-card">
-            <h3>内置技能</h3>
+            <h3>技能 SOP</h3>
             <p className="data-hint">
-              仅 catalog（name + description）。正文经{" "}
-              <code className="mono">load_skill</code> 按需加载。
+              流程：新建/导入 → 草稿 → <strong>批准</strong> 后进入 agent catalog。
+              内置只读；运行时用 <code className="mono">load_skill</code> 拉正文。
             </p>
-            {skills.length === 0 ? (
-              <p className="muted-copy">暂无（sidecar 离线？）</p>
-            ) : (
-              <ul className="skill-catalog">
-                {skills.map((s) => (
-                  <li key={s.name}>
-                    <strong>{s.name}</strong>
-                    {s.version ? <span className="pill">v{s.version}</span> : null}
-                    {s.source ? (
-                      <span className="pill accent">{s.source}</span>
-                    ) : null}
-                    <div className="muted-copy">{s.description}</div>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <div className="empty-actions">
+              <button
+                type="button"
+                className="primary"
+                onClick={resetSkillEditor}
+                disabled={skillBusy}
+              >
+                + 新建
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => void onImportSkill()}
+                disabled={skillBusy}
+              >
+                从 Markdown 导入…
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => void onRevealSkillDir("drafts")}
+              >
+                打开草稿目录
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => void onRevealSkillDir("approved")}
+              >
+                打开已批准
+              </button>
+            </div>
+          </div>
+
+          <div className="settings-card">
+            <h3>已生效（catalog）</h3>
+            <div className="mcp-list">
+              {skills.length === 0 && (
+                <p className="muted-copy">暂无（sidecar 离线？）</p>
+              )}
+              {skills.map((s) => (
+                <button
+                  key={`${s.source}-${s.name}`}
+                  type="button"
+                  className={`mcp-list-item${
+                    skillSelected === s.name && skillEditSource !== "draft"
+                      ? " active"
+                      : ""
+                  }`}
+                  onClick={() => void openSkill(s.name, s.source)}
+                >
+                  <strong>{s.name}</strong>
+                  <span className="muted-copy">
+                    {s.source || "?"}
+                    {s.version ? ` · v${s.version}` : ""}
+                    {s.readonly ? " · 只读" : ""}
+                  </span>
+                  <div className="mono-xs">{s.description}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="settings-card">
+            <h3>
+              草稿{" "}
+              <span className="pill warn">不参与装配</span>
+            </h3>
+            <div className="mcp-list">
+              {skillDrafts.length === 0 && (
+                <p className="muted-copy">无草稿</p>
+              )}
+              {skillDrafts.map((s) => (
+                <button
+                  key={`draft-${s.name}`}
+                  type="button"
+                  className={`mcp-list-item${
+                    skillSelected === s.name && skillEditSource === "draft"
+                      ? " active"
+                      : ""
+                  }`}
+                  onClick={() => void openSkill(s.name, "draft")}
+                >
+                  <strong>{s.name}</strong>
+                  <span className="muted-copy">
+                    draft{s.version ? ` · v${s.version}` : ""}
+                  </span>
+                  <div className="mono-xs">{s.description}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="settings-card">
+            <h3>
+              编辑器{" "}
+              {skillEditSource !== "new" ? (
+                <span
+                  className={`pill${
+                    skillEditSource === "builtin"
+                      ? ""
+                      : skillEditSource === "approved"
+                        ? " ok"
+                        : " warn"
+                  }`}
+                >
+                  {skillEditSource}
+                </span>
+              ) : (
+                <span className="pill">new</span>
+              )}
+            </h3>
+            <label className="field-label">
+              Name（字母开头，a-z 0-9 _ -）
+              <input
+                className="data-input"
+                value={skillName}
+                onChange={(e) => setSkillName(e.target.value)}
+                disabled={skillBusy || skillEditSource === "builtin"}
+                placeholder="my_custom_sop"
+              />
+            </label>
+            <label className="field-label">
+              Description（catalog 一行摘要）
+              <input
+                className="data-input"
+                value={skillDesc}
+                onChange={(e) => setSkillDesc(e.target.value)}
+                disabled={skillBusy || skillEditSource === "builtin"}
+                placeholder="When to use this SOP"
+              />
+            </label>
+            <div className="row mt-8">
+              <label className="field-label" style={{ flex: 1, marginTop: 0 }}>
+                Version
+                <input
+                  className="data-input"
+                  value={skillVersion}
+                  onChange={(e) => setSkillVersion(e.target.value)}
+                  disabled={skillBusy || skillEditSource === "builtin"}
+                />
+              </label>
+              <label className="field-label" style={{ flex: 1, marginTop: 0 }}>
+                Mode
+                <select
+                  value={skillMode}
+                  onChange={(e) => setSkillMode(e.target.value)}
+                  disabled={skillBusy || skillEditSource === "builtin"}
+                >
+                  <option value="both">both</option>
+                  <option value="advisory">advisory</option>
+                  <option value="operator">operator</option>
+                </select>
+              </label>
+            </div>
+            <label className="field-label">
+              Body（Markdown 规程正文）
+              <textarea
+                className="plan-edit skill-body-edit"
+                rows={12}
+                value={skillBody}
+                onChange={(e) => setSkillBody(e.target.value)}
+                disabled={skillBusy || skillEditSource === "builtin"}
+                placeholder="# SOP …"
+              />
+            </label>
+            <div className="empty-actions mt-10">
+              {skillEditSource === "builtin" ? (
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => void onForkSkill()}
+                  disabled={skillBusy}
+                >
+                  复制到草稿编辑
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => void onSaveSkillDraft()}
+                    disabled={skillBusy}
+                  >
+                    保存草稿
+                  </button>
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={() => void onApproveSkill()}
+                    disabled={skillBusy}
+                  >
+                    批准生效
+                  </button>
+                  {(skillEditSource === "draft" ||
+                    skillEditSource === "approved") && (
+                    <button
+                      type="button"
+                      className="btn-reject"
+                      onClick={() => void onDeleteSkill()}
+                      disabled={skillBusy}
+                    >
+                      删除
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+            {skillMsg && <pre className="data-msg">{skillMsg}</pre>}
           </div>
         </div>
       )}

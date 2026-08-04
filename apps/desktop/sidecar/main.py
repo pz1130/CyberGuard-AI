@@ -386,21 +386,75 @@ class SidecarServer:
                 return
 
             if method == "skills.list":
-                from apps.desktop.sidecar.skill_loader import list_skills
+                from apps.desktop.sidecar.skill_loader import list_skills_managed
 
-                rows = [
-                    {
-                        "name": s.name,
-                        "description": s.description,
-                        "version": s.version,
-                        "source": s.source,
-                        "mode": s.mode,
-                        "requires_tools": s.requires_tools,
-                        "sha256": s.sha256[:16],
-                    }
-                    for s in list_skills(include_body=False)
-                ]
-                self._write(result_msg(req_id, {"skills": rows}))
+                self._write(result_msg(req_id, list_skills_managed()))
+                return
+
+            if method == "skills.get":
+                from apps.desktop.sidecar.skill_loader import get_managed_skill
+
+                name = str(params.get("name") or "")
+                source = params.get("source")
+                self._write(
+                    result_msg(
+                        req_id,
+                        get_managed_skill(
+                            name,
+                            source=str(source) if source else None,
+                        ),
+                    )
+                )
+                return
+
+            if method == "skills.save_draft":
+                from apps.desktop.sidecar.skill_loader import save_draft
+
+                self._write(
+                    result_msg(
+                        req_id,
+                        save_draft(params if isinstance(params, dict) else {}),
+                    )
+                )
+                return
+
+            if method == "skills.import":
+                from apps.desktop.sidecar.skill_loader import import_draft
+
+                self._write(
+                    result_msg(
+                        req_id,
+                        import_draft(
+                            path=params.get("path"),
+                            content=params.get("content"),
+                            name_override=params.get("name"),
+                        ),
+                    )
+                )
+                return
+
+            if method == "skills.approve":
+                from apps.desktop.sidecar.skill_loader import approve_skill
+
+                name = str(params.get("name") or "")
+                self._write(result_msg(req_id, approve_skill(name)))
+                return
+
+            if method == "skills.delete":
+                from apps.desktop.sidecar.skill_loader import delete_managed_skill
+
+                name = str(params.get("name") or "")
+                source = str(params.get("source") or "")
+                self._write(
+                    result_msg(req_id, delete_managed_skill(name, source=source))
+                )
+                return
+
+            if method == "skills.fork":
+                from apps.desktop.sidecar.skill_loader import fork_to_draft
+
+                name = str(params.get("name") or "")
+                self._write(result_msg(req_id, fork_to_draft(name)))
                 return
 
             if method == "skills.load":

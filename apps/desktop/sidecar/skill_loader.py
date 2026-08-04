@@ -419,3 +419,351 @@ LOAD_SKILL_TOOL: Dict[str, Any] = {
         },
     },
 }
+
+
+# ── Skill management (desktop Settings) ──────────────────────────────
+
+_NAME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]{0,63}$")
+
+
+def _ensure_user_skill_dirs() -> None:
+    for d in (approved_dir(), drafts_dir()):
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            logger.warning("mkdir skill dir failed %s: %s", d, type(exc).__name__)
+
+
+def normalize_skill_name(name: str) -> str:
+    n = (name or "").strip()
+    n = n.replace(" ", "_")
+    return n
+
+
+def validate_skill_name(name: str) -> Optional[str]:
+    """Return error message or None if ok."""
+    n = normalize_skill_name(name)
+    if not n:
+        return "name required"
+    if not _NAME_RE.match(n):
+        return (
+            "name must start with a letter and use only "
+            "letters, digits, _ or - (max 64)"
+        )
+    return None
+
+
+def _skill_to_public(sk: SkillMeta, *, include_body: bool = False) -> Dict[str, Any]:
+    out: Dict[str, Any] = {
+        "name": sk.name,
+        "description": sk.description,
+        "version": sk.version,
+        "source": sk.source,
+        "mode": sk.mode,
+        "requires_tools": list(sk.requires_tools or []),
+        "sha256": (sk.sha256 or "")[:16],
+        "path": str(sk.path) if sk.path else None,
+        "readonly": sk.source == "builtin",
+    }
+    if include_body:
+        out["body"] = sk.body or ""
+    return out
+
+
+def render_skill_markdown(
+    *,
+    name: str,
+    description: str,
+    body: str,
+    version: str = "1.0.0",
+    mode: str = "both",
+    requires_tools: Optional[Sequence[str]] = None,
+) -> str:
+    tools = list(requires_tools or [])
+    tools_s = "[" + ", ".join(tools) + "]" if tools else "[]"
+    mode_s = mode if mode in ("advisory", "operator", "both") else "both"
+    desc = (description or "").replace("\n", " ").strip()
+    body_s = (body or "").strip()
+    if not body_s:
+        body_s = f"# SOP · {name}\n\n(procedure body)\n"
+    return (
+        "---\n"
+        f"name: {name}\n"
+        f"description: {desc}\n"
+        f'version: "{version or "1.0.0"}"\n'
+        f"requires_tools: {tools_s}\n"
+        f"mode: {mode_s}\n"
+        "---\n\n"
+        f"{body_s}\n"
+    )
+
+
+def list_drafts(*, include_body: bool = False) -> List[SkillMeta]:
+    _ensure_user_skill_dirs()
+    out: List[SkillMeta] = []
+    for path in _iter_skill_files(drafts_dir()):
+        sk = _skill_from_file(path, "draft")
+        if sk:
+            if not include_body:
+                sk.body = ""
+            out.append(sk)
+    out.sort(key=lambda s: s.name)
+    return out
+
+
+def list_skills_managed() -> Dict[str, Any]:
+    """Settings-facing inventory: active catalog + drafts + paths."""
+    _ensure_user_skill_dirs()
+    active = [_skill_to_public(s) for s in list_skills(include_body=False)]
+    drafts = [
+        _skill_to_public(s) for s in list_drafts(include_body=False)
+    ]
+    return {
+        "ok": True,
+        "skills": active,
+        "drafts": drafts,
+        "dirs": {
+            "approved": str(approved_dir()),
+            "drafts": str(drafts_dir()),
+            "builtin": str(builtin_dir()),
+        },
+    }
+
+
+def get_managed_skill(
+    name: str, *, source: Optional[str] = None
+) -> Dict[str, Any]:
+    """Load one skill with body. source: builtin|approved|draft|auto."""
+    n = normalize_skill_name(name)
+    if not n:
+        return {"ok": False, "error": "name required"}
+
+    src = (source or "auto").strip().lower()
+    candidates: List[tuple[str, Path]] = []
+    if src in ("auto", "draft"):
+        candidates.append(("draft", drafts_dir() / f"{n}.md"))
+    if src in ("auto", "approved"):
+        candidates.append(("approved", approved_dir() / f"{n}.md"))
+    if src in ("auto", "builtin"):
+        candidates.append(("builtin", builtin_dir() / f"{n}.md"))
+        # stem may differ from frontmatter name — scan
+        for path in _iter_skill_files(builtin_dir()):
+            candidates.append(("builtin", path))
+
+    seen: set[str] = set()
+    for s, path in candidates:
+        key = f"{s}:{path}"
+        if key in seen:
+            continue
+        seen.add(key)
+        if not path.is_file():
+            continue
+        sk = _skill_from_file(path, s)
+        if sk and sk.name == n:
+            return {"ok": True, "skill": _skill_to_public(sk, include_body=True)}
+
+    # Fallback: catalog by name (builtin/approved)
+    sk = get_skill(n)
+    if sk and (src == "auto" or sk.source == src):
+        return {"ok": True, "skill": _skill_to_public(sk, include_body=True)}
+
+    return {"ok": False, "error": f"skill not found: {n}"}
+
+
+def save_draft(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Create or update a draft skill under data_root/skills/drafts/."""
+    _ensure_user_skill_dirs()
+    name = normalize_skill_name(str(params.get("name") or ""))
+    err = validate_skill_name(name)
+    if err:
+        return {"ok": False, "error": err}
+
+    # Refuse shadowing builtin without explicit fork note — still allow draft
+    # but warn; approve will fail if name collides with builtin.
+    description = str(params.get("description") or "").strip()
+    body = str(params.get("body") or "").strip()
+    version = str(params.get("version") or "1.0.0").strip() or "1.0.0"
+    mode = str(params.get("mode") or "both").strip().lower()
+    if mode not in ("advisory", "operator", "both"):
+        mode = "both"
+    tools_in = params.get("requires_tools") or []
+    if isinstance(tools_in, str):
+        tools_in = [t.strip() for t in tools_in.split(",") if t.strip()]
+    tools = [str(t).strip() for t in tools_in if str(t).strip()]
+
+    if not description:
+        description = f"Custom skill {name}"
+    if not body:
+        return {"ok": False, "error": "body required"}
+
+    md = render_skill_markdown(
+        name=name,
+        description=description,
+        body=body,
+        version=version,
+        mode=mode,
+        requires_tools=tools,
+    )
+    path = drafts_dir() / f"{name}.md"
+    try:
+        path.write_text(md, encoding="utf-8")
+        try:
+            path.chmod(0o600)
+        except OSError:
+            pass
+    except OSError as exc:
+        return {"ok": False, "error": f"write failed: {exc}"}
+
+    sk = _skill_from_file(path, "draft")
+    if not sk:
+        return {"ok": False, "error": "saved but parse failed"}
+    warn = None
+    if any(s.name == name and s.source == "builtin" for s in list_skills()):
+        warn = (
+            f"name '{name}' collides with builtin — approve will be blocked; "
+            "rename the draft to take effect"
+        )
+    return {
+        "ok": True,
+        "skill": _skill_to_public(sk, include_body=True),
+        "warning": warn,
+    }
+
+
+def import_draft(
+    *,
+    path: Optional[str] = None,
+    content: Optional[str] = None,
+    name_override: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Import markdown from file path or raw content into drafts."""
+    _ensure_user_skill_dirs()
+    raw = ""
+    if content is not None and str(content).strip():
+        raw = str(content)
+    elif path:
+        p = Path(path).expanduser()
+        if not p.is_file():
+            return {"ok": False, "error": f"file not found: {path}"}
+        try:
+            raw = p.read_text(encoding="utf-8")
+        except OSError as exc:
+            return {"ok": False, "error": f"read failed: {exc}"}
+    else:
+        return {"ok": False, "error": "path or content required"}
+
+    # Parse via temp write to reuse parser
+    meta, body = _parse_frontmatter(raw)
+    name = normalize_skill_name(
+        str(name_override or meta.get("name") or Path(path or "imported").stem)
+    )
+    err = validate_skill_name(name)
+    if err:
+        return {"ok": False, "error": err}
+
+    description = str(
+        meta.get("description")
+        or meta.get("summary")
+        or (body.strip().splitlines()[0][:120] if body.strip() else name)
+    ).strip()
+    version = str(meta.get("version") or "1.0.0").strip()
+    mode = str(meta.get("mode") or "both").strip().lower()
+    tools = meta.get("requires_tools") or []
+    if isinstance(tools, str):
+        tools = [t.strip() for t in tools.split(",") if t.strip()]
+
+    return save_draft(
+        {
+            "name": name,
+            "description": description,
+            "body": body.strip() or raw,
+            "version": version,
+            "mode": mode,
+            "requires_tools": tools,
+        }
+    )
+
+
+def approve_skill(name: str) -> Dict[str, Any]:
+    """Promote draft → approved. Does not load drafts at runtime until approved."""
+    _ensure_user_skill_dirs()
+    n = normalize_skill_name(name)
+    err = validate_skill_name(n)
+    if err:
+        return {"ok": False, "error": err}
+
+    # Builtin always wins — refuse name collision
+    for sk in list_skills(include_body=False):
+        if sk.name == n and sk.source == "builtin":
+            return {
+                "ok": False,
+                "error": (
+                    f"cannot approve '{n}': name reserved by builtin skill; "
+                    "rename the draft first"
+                ),
+            }
+
+    draft_path = drafts_dir() / f"{n}.md"
+    if not draft_path.is_file():
+        return {"ok": False, "error": f"no draft named '{n}'"}
+
+    sk = _skill_from_file(draft_path, "draft")
+    if not sk:
+        return {"ok": False, "error": "draft parse failed"}
+
+    dest = approved_dir() / f"{n}.md"
+    try:
+        text = draft_path.read_text(encoding="utf-8")
+        dest.write_text(text, encoding="utf-8")
+        try:
+            dest.chmod(0o600)
+        except OSError:
+            pass
+        draft_path.unlink(missing_ok=True)
+    except OSError as exc:
+        return {"ok": False, "error": f"approve failed: {exc}"}
+
+    approved = _skill_from_file(dest, "approved")
+    return {
+        "ok": True,
+        "skill": _skill_to_public(approved, include_body=True) if approved else None,
+        "message": f"approved '{n}' — now available to the agent",
+    }
+
+
+def delete_managed_skill(name: str, *, source: str) -> Dict[str, Any]:
+    """Delete draft or approved only. Builtin is immutable."""
+    n = normalize_skill_name(name)
+    src = (source or "").strip().lower()
+    if src not in ("draft", "approved"):
+        return {"ok": False, "error": "source must be draft or approved"}
+    if src == "draft":
+        path = drafts_dir() / f"{n}.md"
+    else:
+        path = approved_dir() / f"{n}.md"
+    if not path.is_file():
+        return {"ok": False, "error": f"not found: {src}/{n}"}
+    try:
+        path.unlink()
+    except OSError as exc:
+        return {"ok": False, "error": f"delete failed: {exc}"}
+    return {"ok": True, "deleted": n, "source": src}
+
+
+def fork_to_draft(name: str) -> Dict[str, Any]:
+    """Copy builtin/approved skill into drafts for editing (new editable copy)."""
+    n = normalize_skill_name(name)
+    got = get_managed_skill(n, source="auto")
+    if not got.get("ok"):
+        return got
+    skill = got["skill"]
+    return save_draft(
+        {
+            "name": skill["name"],
+            "description": skill.get("description") or "",
+            "body": skill.get("body") or "",
+            "version": skill.get("version") or "1.0.0",
+            "mode": skill.get("mode") or "both",
+            "requires_tools": skill.get("requires_tools") or [],
+        }
+    )

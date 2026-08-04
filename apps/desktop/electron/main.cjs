@@ -370,6 +370,24 @@ ipcMain.handle("sidecar:sessions:delete", async (_e, { sessionId } = {}) =>
   rpc("sessions.delete", { session_id: sessionId, crypto_shred: true })
 );
 ipcMain.handle("sidecar:skills:list", async () => rpc("skills.list", {}));
+ipcMain.handle("sidecar:skills:get", async (_e, { name, source } = {}) =>
+  rpc("skills.get", { name, source })
+);
+ipcMain.handle("sidecar:skills:save-draft", async (_e, params) =>
+  rpc("skills.save_draft", params || {})
+);
+ipcMain.handle("sidecar:skills:import", async (_e, params) =>
+  rpc("skills.import", params || {})
+);
+ipcMain.handle("sidecar:skills:approve", async (_e, { name } = {}) =>
+  rpc("skills.approve", { name })
+);
+ipcMain.handle("sidecar:skills:delete", async (_e, { name, source } = {}) =>
+  rpc("skills.delete", { name, source })
+);
+ipcMain.handle("sidecar:skills:fork", async (_e, { name } = {}) =>
+  rpc("skills.fork", { name })
+);
 ipcMain.handle("sidecar:resume", async (_e, { runId } = {}) =>
   rpc("agent.resume", { run_id: runId })
 );

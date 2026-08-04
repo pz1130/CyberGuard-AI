@@ -16,6 +16,17 @@ contextBridge.exposeInMainWorld("cyberguard", {
   deleteSession: (sessionId) =>
     ipcRenderer.invoke("sidecar:sessions:delete", { sessionId }),
   skillsList: () => ipcRenderer.invoke("sidecar:skills:list"),
+  skillsGet: (name, source) =>
+    ipcRenderer.invoke("sidecar:skills:get", { name, source }),
+  skillsSaveDraft: (params) =>
+    ipcRenderer.invoke("sidecar:skills:save-draft", params || {}),
+  skillsImport: (params) =>
+    ipcRenderer.invoke("sidecar:skills:import", params || {}),
+  skillsApprove: (name) =>
+    ipcRenderer.invoke("sidecar:skills:approve", { name }),
+  skillsDelete: (name, source) =>
+    ipcRenderer.invoke("sidecar:skills:delete", { name, source }),
+  skillsFork: (name) => ipcRenderer.invoke("sidecar:skills:fork", { name }),
   resume: (runId) => ipcRenderer.invoke("sidecar:resume", { runId }),
   planApprove: (planId, revisedPlan) =>
     ipcRenderer.invoke("sidecar:plan:approve", { planId, revisedPlan }),
