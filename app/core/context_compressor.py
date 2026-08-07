@@ -8,10 +8,26 @@ window when the LLM is unavailable.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any, Iterable, List, Mapping, Optional, Sequence
 
 
 logger = logging.getLogger(__name__)
+
+
+# CJK ideographs, kana, and hangul. Every codepoint in these ranges costs
+# roughly one token on the tokenizers used by the providers we support, versus
+# ~4 characters per token for latin text. Counting them at 4 chars/token (the
+# old behaviour) under-estimated Chinese context by 2-4x, so compaction only
+# fired long after the model's context window had already overflowed.
+_CJK_RE = re.compile(
+    r"[぀-ヿ"          # hiragana + katakana
+    r"㐀-䶿"           # CJK ext A
+    r"一-鿿"           # CJK unified
+    r"豈-﫿"           # CJK compatibility
+    r"가-힯"           # hangul syllables
+    r"\U00020000-\U0002ffff]"  # CJK ext B-F
+)
 
 
 # Module-level summary prompt. Kept short and project-style (Chinese, matching
@@ -28,19 +44,30 @@ _SUMMARY_PROMPT = (
 )
 
 
-def estimate_tokens(messages: Iterable[Mapping[str, Any]]) -> int:
-    """Rough token estimate: sum of content character lengths divided by 4.
+def estimate_text_tokens(text: str) -> int:
+    """Rough token estimate for one string, weighting CJK at ~1 token/char.
 
-    Conservative for CJK content (counts chars, not bytes). Tolerates missing
-    or non-string `content` by coercing via `str()`.
+    Non-CJK characters keep the classic ~4 chars/token ratio (floor division,
+    so short latin strings still estimate 0).
     """
-    total_chars = 0
+    if not text:
+        return 0
+    cjk = len(_CJK_RE.findall(text))
+    return cjk + (len(text) - cjk) // 4
+
+
+def estimate_tokens(messages: Iterable[Mapping[str, Any]]) -> int:
+    """Rough token estimate across messages.
+
+    Tolerates missing or non-string `content` by coercing via `str()`.
+    """
+    total = 0
     for m in messages:
         content = m.get("content") if isinstance(m, Mapping) else None
         if not isinstance(content, str):
             content = str(content)
-        total_chars += len(content)
-    return total_chars // 4
+        total += estimate_text_tokens(content)
+    return total
 
 
 def select_window(

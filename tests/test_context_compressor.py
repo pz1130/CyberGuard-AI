@@ -25,9 +25,19 @@ def test_estimate_tokens_long_string():
     assert estimate_tokens([{"role": "user", "content": "x" * 401}]) == 100
 
 
-def test_estimate_tokens_cjk_is_chars_not_bytes():
-    # 4 CJK chars // 4 == 1
-    assert estimate_tokens([{"role": "user", "content": "你好世界"}]) == 1
+def test_estimate_tokens_cjk_counts_one_token_per_char():
+    # CJK costs ~1 token per codepoint, not 4 chars/token: 4 chars -> 4 tokens.
+    assert estimate_tokens([{"role": "user", "content": "你好世界"}]) == 4
+
+
+def test_estimate_tokens_mixed_cjk_and_latin():
+    # 2 CJK (2 tokens) + 8 latin chars (8 // 4 == 2) == 4
+    assert estimate_tokens([{"role": "user", "content": "你好" + "a" * 8}]) == 4
+
+
+def test_estimate_tokens_kana_and_hangul_count_as_cjk():
+    assert estimate_tokens([{"role": "user", "content": "こんにちは"}]) == 5
+    assert estimate_tokens([{"role": "user", "content": "안녕하세요"}]) == 5
 
 
 def test_estimate_tokens_missing_content_key_coerced_to_None_string():
