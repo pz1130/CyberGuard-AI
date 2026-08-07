@@ -186,10 +186,21 @@ ENCRYPTION_KEY=   # 32-byte hex for AES-256
 SECRET_KEY=       # JWT secret
 MASTER_AGENT_MODEL=gpt-4o
 MASTER_AGENT_TEMPERATURE=0.7
-MOCK_MODE=true    # Set to false when real API keys are configured
+MOCK_MODE=false   # Set to true to demo without real API keys
 API_WORKERS=4     # Uvicorn worker processes
-AUTO_APPROVE=false # true bypasses the human approval gate (dev only)
+
+# Fail-closed security defaults. All three default to false and are REFUSED
+# at startup when ENVIRONMENT=production.
+AUTO_APPROVE=false                 # true bypasses the human approval gate (dev only)
+SUB_AGENT_ALLOW_INSECURE_HTTP=false # true permits http:// sub-agent endpoints,
+                                    # which carry decrypted credentials (dev only)
+ALLOW_PLAINTEXT_AGENT_API_KEY=false # true permits reading an unencrypted
+                                    # metadata_json.api_key (legacy migration only)
 ```
+
+> Local development note: `AUTO_APPROVE` now defaults to **false**, so approval
+> requests wait for a human decision instead of self-approving. Set
+> `AUTO_APPROVE=true` in `.env` if you want the old local behaviour.
 
 ## Testing
 

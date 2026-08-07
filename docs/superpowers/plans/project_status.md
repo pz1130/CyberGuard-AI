@@ -1,27 +1,97 @@
 ---
 name: project_status
-description: CyberGuard platform implementation status — last updated 2026-06-03 (full suite verified 272/272 on a fresh pgvector container; migration chain unified to a single head 017_agent_episodes; chat attachments #13 + groupchat semantic consensus #14 merged)
+description: CyberGuard platform implementation status — last updated 2026-08-07 (agent-core audit phases 0-4 delivered; suite 498 passing; alembic head 032_agent_run_events; residual #14/#26/eval)
 type: project
 ---
 
-# CyberGuard Project Status — 2026-06-03 (updated)
+# CyberGuard Project Status — 2026-08-07 (updated)
 
 ## ▶ Resume point (next session)
 
-- **Branch:** `main` — all work committed, working tree clean, in sync with `origin/main`. Latest commit: this refresh (immediately after `6128df4`).
-- **Branches:** only `main` (local + remote). All feature branches merged & cleaned up.
-- **Open PRs / issues:** none.
-- **Tests:** 26 test files (`tests/test_*.py`). **Full suite: 272/272 passing** on a fresh `pgvector/pgvector:pg16` container (port 5433, see local-test-db-ports.md). TypeScript: 0 errors.
-- **Alembic heads (single):** `017_agent_episodes`. The bridge migration `002b_create_document_chunks` is now a real ancestor of 003 (down_revision corrected at `6128df4`). Dev-startup multiple-head handling (PR #12) is no longer strictly required but is harmless.
-- **Archived work:** tag `archive/fix-and-enhance` (`d1a802c`, pushed to origin) preserves the deleted local `feature/fix-and-enhance` branch — only `app/providers/` (native multi-provider layer) is unique/worth re-porting; do not merge wholesale (migration chain collides).
+- **Tests:** 55 test files (`tests/test_*.py`). **Full suite: 498/498 passing**
+  against `docker compose up -d postgres redis`.
+- **Alembic head (single):** `032_agent_run_events`. Run
+  `alembic -c alembic.ini upgrade head` on deploy. LangGraph also creates
+  checkpoint tables via `AsyncPostgresSaver.setup()` on first run.
+- **Agent-core audit:** phases **0–4 delivered**. Full inventory:
+  [2026-08-07-agent-core-audit-backlog.md](2026-08-07-agent-core-audit-backlog.md).
+- **Next residual work:** per-turn model adaptation (#14), provider
+  `context_window` metadata (#26), MCP tool tagging (ops), evaluation corpus,
+  recovery UI.
+
+### Behaviour changes shipped 2026-08-07 (operator-visible)
+
+- `AUTO_APPROVE` now defaults to **false**; approval requests wait for a human.
+  Set `AUTO_APPROVE=true` in `.env` for the old local behaviour.
+- Approval no longer blocks a worker for up to an hour: the master graph
+  **suspends via `interrupt()`** and resumes when an admin decides
+  (`resume_master_agent_task`). Execution status may be `waiting_approval`.
+- `SUB_AGENT_ALLOW_INSECURE_HTTP` and `ALLOW_PLAINTEXT_AGENT_API_KEY` added,
+  default false. All three are **startup errors** when `ENVIRONMENT=production`.
+- Sub-agent endpoints must be `https` (requests carry decrypted env vars).
+- Tool output now reaches the model inside `<untrusted_tool_output>` fences.
+- New deps: `langgraph-checkpoint-postgres`, `psycopg[binary,pool]`.
 
 ### Remaining known issues (prioritized)
 
 | Priority | Issue |
 |----------|-------|
-| 🟢 Low | LangChain deprecation: `JsonPlusSerializer.allowed_objects`, handle on dependency upgrade |
+| 🟠 Med | Existing MCP tools are untagged, so category rules stay inert for them. Audit #5 follow-up |
+| 🟡 Low | No agent-behaviour evaluation suite — injection red-team corpus, prompt regression baseline |
+| 🟡 Low | Per-turn model adaptation (cheap recon → escalate). Audit #14 |
+| 🟡 Low | Provider `context_window` / pricing metadata for real compaction. Audit #26 |
+| 🟡 Low | Recovery sweep logs interrupted runs; no operator UI yet |
+| 🟢 Low | LangChain deprecation: `JsonPlusSerializer.allowed_objects` (AgentState enum in checkpoints) |
 | 🟢 Low | GlobalSearch not covering Users page (optional, depends on UX needs) |
 | 🟢 Low | Security page `require_mfa` field missing (removed from UI rewrite, backend not implementing) |
+
+---
+
+## Session 2026-08-07 — Agent core audit, phases 3-4
+
+Completed the outstanding orchestration and governance items from the audit.
+
+- **Phase 3 (orchestration):** durable checkpointer
+  (`app/core/graph_checkpoint.py` — Postgres / MemorySaver); approval via
+  LangGraph `interrupt()` so workers are not held open; validation back-edge
+  replan (capped); real validation scoring EN+ZH (`app/agents/validation.py`);
+  removed unused `ToolNode`; loop events from `agent_run_events` into graph
+  state; `messages_json` append under row lock; startup recovery sweep.
+- **Phase 4 (budgets / prompts):** heuristic tool confidence so
+  `escalate_to_human_below` can fire; tool-call budget tracks `max_steps`;
+  sequential execution for side-effect categories; budget/loop decided before
+  `asyncio.gather`; prompt registry; structured `generate_summary` JSON;
+  mid-string injection screen for untrusted content only; `AGENTS.md`.
+
+Suite 477 → **498**.
+
+---
+
+## Session 2026-08-07 — Agent core audit, phases 0-2
+
+Benchmarked the agent implementation against the
+[pi](https://github.com/earendil-works/pi) harness and produced a 31-item
+inventory across loop / graph / prompt engineering. Delivered 16 items in three
+phases; every guard was reverted and re-run to prove its tests fail without it
+(3 guards → 10 failures, 5 → 12, 6 → 28). Suite 365 → 477.
+
+- **Phase 0 (crashes):** `UnboundLocalError` in the master dispatch fan-out;
+  refusing tool calls from length-truncated responses; a termination contract so
+  governance refusals end the run; CJK token estimation (compaction had been
+  firing after the context window already overflowed); retry backoff.
+- **Phase 1 (security):** the governance gate now covers MCP / KB / search, which
+  previously bypassed kill switch, gatekeeper and audit entirely; retrieved
+  content is fenced and screened for indirect prompt injection; sub-agent TLS
+  enforced; plaintext API-key fallback refused; fail-closed defaults.
+- **Phase 2 (core):** episodic memory no longer records every run as a success
+  (it was recalling failed approaches as "过往成功经验"); skills disclose
+  progressively; batch and streaming unified onto one streamed path with tool-call
+  delta reassembly, removing a duplicate full-context LLM call; governance moved
+  into a `before_tool` hook chain that pool tools also pass through; new
+  append-only, hash-chained `agent_run_events` table with `tool_started` written
+  *before* execution and a `replay` verdict for crash recovery.
+
+Full detail is in the audit backlog document.
 
 ---
 
