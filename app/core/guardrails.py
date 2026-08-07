@@ -523,6 +523,88 @@ async def check_prompt(
 # ----------------------------------------------------------------------
 
 
+# Mid-string injection patterns for *retrieved* content only. User-input
+# patterns stay `^`-anchored (changing them would re-score the whole prompt
+# path); for tool/KB/web output we also scan interiors so a planted sentence
+# mid-page is not missed (audit phase-1 follow-up).
+_UNTRUSTED_MID_PATTERNS: list[tuple[str, re.Pattern, str]] = [
+    (
+        "direct_instruction_override",
+        re.compile(
+            r'(ignore|forget|disregard|discard)\s+(all?\s+)?(previous|prior|above|'
+            r'instructions?|rules?|guidelines?|system)\b',
+            re.IGNORECASE,
+        ),
+        "Retrieved content contains a direct instruction-override attempt",
+    ),
+    (
+        "jailbreak_prefix",
+        re.compile(
+            r'(you\s+are\s+now|pretend\s+you\s+are|switch\s+to\s+being|'
+            r'act\s+as\s+if\s+you\s+are|imagine\s+you\s+are)\b',
+            re.IGNORECASE,
+        ),
+        "Retrieved content contains a jailbreak role-play attempt",
+    ),
+]
+
+
+def check_untrusted_content(text: str) -> GuardrailResult:
+    """Screen content the agent *fetched* (tool output, RAG chunks, MCP results).
+
+    Deliberately narrower than `check_prompt_sync`, because the two surfaces have
+    opposite false-positive profiles:
+
+    - Markup rules are dropped. HTML tags, markdown links and code fences are
+      what fetched pages and knowledge-base documents are made of; flagging them
+      would fire on nearly every result and train the reader to ignore warnings.
+    - Structural rules (entropy, repetition) are dropped. Scan output, hashes and
+      CJK prose routinely look "anomalous" without being hostile.
+    - What remains — instruction overrides, jailbreak prefixes, system-prompt
+      tags, delimiter breaks, role-play and system impersonation — has no
+      legitimate reason to appear in data an agent retrieved, so a single hit is
+      enough to annotate rather than needing to clear a score threshold.
+    - Unlike the user-input path, mid-string injection is also matched: a
+      fetched page can plant a trigger phrase after legitimate content.
+    """
+    p_flags, p_msgs = _check_injection_patterns(text)
+    s_flags, s_msgs = _check_soft_reject_patterns(text)
+
+    # Extra mid-string pass (does not affect user-input scoring).
+    for name, pattern, msg in _UNTRUSTED_MID_PATTERNS:
+        if name in p_flags:
+            continue
+        if pattern.search(text or ""):
+            p_flags.append(name)
+            p_msgs.append(msg)
+
+    flags = p_flags + s_flags
+    messages = p_msgs + s_msgs
+    total_score = min(len(p_flags) * 0.35 + len(s_flags) * 0.15, 1.0)
+
+    if "jailbreak_prefix" in flags or "recursive_injection" in flags or total_score >= 0.7:
+        risk_level: Literal["low", "medium", "high", "critical"] = "critical"
+    elif p_flags:
+        risk_level = "high"
+    elif flags:
+        risk_level = "medium"
+    else:
+        risk_level = "low"
+
+    message = (f"Detected {len(flags)} signal(s) in retrieved content: "
+               f"{', '.join(flags[:5])}") if flags else "No injection signals detected"
+
+    return GuardrailResult(
+        passed=not flags,
+        blocked=False,          # retrieved content is annotated, never dropped
+        risk_level=risk_level,
+        score=round(total_score, 3),
+        flags=flags,
+        message=message,
+        sanitized=None,
+    )
+
+
 def check_prompt_sync(text: str, *, block: bool = False) -> GuardrailResult:
     """
     Synchronous version of check_prompt — does not call LLM classifier.
