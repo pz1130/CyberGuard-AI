@@ -28,6 +28,30 @@ def _model_name(model) -> Optional[str]:
     return getattr(model, "name", None) or str(model)
 
 
+# Substrings a provider uses when it rejects the structured-output parameter
+# itself, as opposed to failing the request for any other reason.
+_RESPONSE_FORMAT_REJECTION_MARKERS = (
+    "response_format", "json_object", "json_schema", "structured output",
+)
+
+
+def is_response_format_rejection(exc: Exception) -> bool:
+    """Whether *exc* means "this provider won't take response_format".
+
+    Only a 4xx that names the parameter counts. A rate limit, a timeout or a
+    5xx is a transient failure: re-sending without the contract would silently
+    downgrade the output *and* pay for the call twice.
+    """
+    status = getattr(exc, "status_code", None) or getattr(exc, "status", None)
+    if status is not None and not (400 <= int(status) < 500):
+        return False
+    if status is None and not isinstance(exc, (TypeError, ValueError)):
+        # No HTTP status to go on (transport errors, wrapped retries).
+        return False
+    message = str(exc).lower()
+    return any(marker in message for marker in _RESPONSE_FORMAT_REJECTION_MARKERS)
+
+
 def _record_generation(name, model, input_messages, output, response,
                        provider_id) -> None:
     """Best-effort Langfuse generation record. No-op unless Langfuse is set up."""
@@ -714,10 +738,11 @@ Examples:
                 "llm.provider_id": provider_id,
             },
         ) as span:
+            from app.core.prompts import get_prompt
             summarizer_prompt = (
                 summarizer_prompt_override
                 or master_config.get("summarizer_prompt")
-                or "You are CyberGuard's summarizer. Create a concise summary of agent results."
+                or get_prompt("summarizer")
             )
 
             await rate_limit(provider_id, await self._provider_rpm(provider_id))
@@ -725,11 +750,33 @@ Examples:
                 {"role": "system", "content": summarizer_prompt},
                 {"role": "user", "content": f"Results:\n{results_text}"},
             ])
-            response = await acall_with_retry(lambda: client.chat.completions.create(
+            # Structured contract (audit #29): downstream validation/UI/audit
+            # all parse free text otherwise. Prefer json_object; fall back to
+            # plain text if the provider rejects the format.
+            create_kwargs = dict(
                 model=active_model,
                 messages=_gs_messages,
                 temperature=temperature_override if temperature_override is not None else (master_config.get("temperature") or 0.3),
-            ), label="generate_summary")
+                response_format={"type": "json_object"},
+            )
+            try:
+                response = await acall_with_retry(
+                    lambda: client.chat.completions.create(**create_kwargs),
+                    label="generate_summary",
+                )
+            except Exception as e:
+                # Only a rejected request *shape* is worth re-sending without
+                # the contract. Retrying on a rate limit or a dropped
+                # connection just pays for the same full-context call twice.
+                if not is_response_format_rejection(e):
+                    raise
+                logger.info("generate_summary: provider rejected json_object "
+                            "(%s); retrying as plain text", e)
+                create_kwargs.pop("response_format", None)
+                response = await acall_with_retry(
+                    lambda: client.chat.completions.create(**create_kwargs),
+                    label="generate_summary",
+                )
             raw_content = response.choices[0].message.content or ""
             # Always strip internal reasoning blocks (<think>/<reasoning>), even if
             # the provider has preserve_think=true. preserve_think is reserved for
@@ -745,6 +792,13 @@ Examples:
                  {"role": "user", "content": f"Results:\n{results_text}"}],
                 content, response, provider_id)
 
+            parsed = self._extract_json_object(content)
+            if isinstance(parsed, dict) and (parsed.get("summary") or parsed.get("action_items")):
+                return {
+                    "summary": parsed.get("summary") or content,
+                    "action_items": list(parsed.get("action_items") or []),
+                    "risk_score": parsed.get("risk_score"),
+                }
             return content
 
     async def chat(
@@ -783,7 +837,8 @@ Examples:
             last_msg = messages[-1]["content"] if messages else ""
             mock_text = f"🛡️ **CyberGuard (Mock Mode)**\n\n已收到您的消息：\"{last_msg[:100]}\"\n\n当前运行在 Mock 模式下，请配置真实的 AI Provider（Providers 页面）以获得实际的安全分析能力。"
             if tools:
-                return SimpleNamespace(content=mock_text, tool_calls=None)
+                return SimpleNamespace(content=mock_text, tool_calls=None,
+                                       finish_reason="stop")
             return mock_text
 
         client = await self.get_client_async(provider_id=provider_id)
@@ -823,8 +878,134 @@ Examples:
                                response, active_provider_id)
 
             if tools:
-                return SimpleNamespace(content=content, tool_calls=message.tool_calls)
+                # finish_reason is forwarded so the caller can detect a
+                # length-truncated response: streamed tool-call arguments are
+                # finalized by a best-effort JSON salvage parser, so truncated
+                # arguments can still parse and validate while being incomplete.
+                return SimpleNamespace(
+                    content=content,
+                    tool_calls=message.tool_calls,
+                    finish_reason=response.choices[0].finish_reason,
+                )
             return content
+
+    async def stream_chat_events(
+        self,
+        messages: List[Dict[str, Any]],
+        model: Optional[str] = None,
+        provider_id: Optional[int] = None,
+        model_override: Optional[str] = None,
+        temperature_override: Optional[float] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        pii_policy: Optional[str] = None,
+    ):
+        """Stream one assistant turn as structured events, tool calls included.
+
+        Unlike `stream_chat`, this accumulates streamed tool-call deltas, so a
+        turn can be streamed to the user *and* still drive the tool loop. That
+        removes the agent runner's need to re-generate the final answer with a
+        second, tool-less call — which cost an extra full-context request and
+        could return different text than the batch path produced.
+
+        Yields:
+            {"type": "text", "delta": str}
+            {"type": "done", "content": str, "tool_calls": [...],
+             "finish_reason": str}
+            {"type": "error", "error": str}
+
+        `tool_calls` entries mirror the non-streaming shape
+        (`.id` / `.function.name` / `.function.arguments`) so callers can treat
+        both paths identically.
+        """
+        messages = self._guard_messages(messages, pii_policy)
+        active_model = model_override or model
+        if not active_model and provider_id:
+            config = await self.get_provider_config_async(provider_id)
+            if config and config.get("models"):
+                active_model = config["models"][0]
+        active_model = _model_name(active_model or settings.MASTER_AGENT_MODEL)
+        master_config = await self._load_master_config()
+
+        if settings.MOCK_MODE:
+            mock = "🛡️ **CyberGuard (Mock Mode)** — 未配置真实 AI Provider。"
+            yield {"type": "text", "delta": mock}
+            yield {"type": "done", "content": mock, "tool_calls": None,
+                   "finish_reason": "stop"}
+            return
+
+        kwargs: Dict[str, Any] = {
+            "model": active_model,
+            "messages": messages,
+            "temperature": (temperature_override if temperature_override is not None
+                            else (master_config.get("temperature")
+                                  or settings.MASTER_AGENT_TEMPERATURE)),
+            "stream": True,
+        }
+        if tools:
+            kwargs["tools"] = tools
+            kwargs["tool_choice"] = "auto"
+
+        parts: List[str] = []
+        # Keyed by the provider's tool_call index; name and arguments both arrive
+        # in fragments and must be concatenated in arrival order.
+        pending: Dict[int, Dict[str, Any]] = {}
+        finish_reason: Optional[str] = None
+        usage = None
+
+        try:
+            client = await self.get_client_async(provider_id=provider_id)
+            await rate_limit(provider_id, await self._provider_rpm(provider_id))
+            # Retry only the handshake; a mid-stream failure is not replayable.
+            stream = await acall_with_retry(
+                lambda: client.chat.completions.create(**kwargs),
+                label="stream_chat_events")
+            async for chunk in stream:
+                if getattr(chunk, "usage", None):
+                    usage = chunk.usage
+                if not chunk.choices:
+                    continue
+                choice = chunk.choices[0]
+                delta = choice.delta
+                if getattr(delta, "content", None):
+                    parts.append(delta.content)
+                    yield {"type": "text", "delta": delta.content}
+                for tc in (getattr(delta, "tool_calls", None) or []):
+                    slot = pending.setdefault(
+                        getattr(tc, "index", 0),
+                        {"id": None, "name": "", "arguments": ""})
+                    if getattr(tc, "id", None):
+                        slot["id"] = tc.id
+                    fn = getattr(tc, "function", None)
+                    if fn is not None:
+                        if getattr(fn, "name", None):
+                            slot["name"] += fn.name
+                        if getattr(fn, "arguments", None):
+                            slot["arguments"] += fn.arguments
+                if getattr(choice, "finish_reason", None):
+                    finish_reason = choice.finish_reason
+        except Exception as e:
+            yield {"type": "error", "error": str(e)}
+            return
+
+        content = self._strip_think_blocks("".join(parts))
+        tool_calls = [
+            SimpleNamespace(
+                id=slot["id"] or f"call_{index}",
+                type="function",
+                function=SimpleNamespace(name=slot["name"],
+                                          arguments=slot["arguments"]),
+            )
+            for index, slot in sorted(pending.items())
+        ] or None
+
+        if usage is not None:
+            await self._record_token_usage(
+                active_model, provider_id, SimpleNamespace(usage=usage))
+        _record_generation("stream_chat_events", active_model, messages, content,
+                           None, provider_id)
+
+        yield {"type": "done", "content": content, "tool_calls": tool_calls,
+               "finish_reason": finish_reason}
 
     async def stream_chat(
         self,
