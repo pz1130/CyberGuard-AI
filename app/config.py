@@ -69,8 +69,19 @@ class Settings(BaseSettings):
     GROUPCHAT_JACCARD_THRESHOLD: float = 0.7    # lexical fallback threshold
 
     # Auto-approve approval requests without human intervention.
-    # NDB Std §B5: security actions must never auto-approve. Default off outside dev.
-    AUTO_APPROVE: bool = True
+    # NDB Std §B5: security actions must never auto-approve. Defaults off — a
+    # security product must fail closed, so enabling this is an explicit opt-in
+    # and is refused outright in production.
+    AUTO_APPROVE: bool = False
+
+    # Sub-agent transport. Endpoints receive the agent's decrypted env vars in
+    # the request body, so plaintext HTTP would put credentials on the wire and
+    # into the peer's access logs. Opt-in escape hatch for local development.
+    SUB_AGENT_ALLOW_INSECURE_HTTP: bool = False
+
+    # Allow reading a sub-agent API key from metadata_json.api_key (unencrypted).
+    # Legacy/dev only; refused in production.
+    ALLOW_PLAINTEXT_AGENT_API_KEY: bool = False
 
     # Kill switch file trigger (NDB Std §Kill Switch)
     KILL_SWITCH_FILE: str = "var/governance/kill_switch"
@@ -102,9 +113,27 @@ class Settings(BaseSettings):
                 "REDIS_PASSWORD is using the default value. "
                 "Set the CYBERGUARD_REDIS_PASSWORD environment variable."
             )
+        # NDB Std §B5: never auto-approve security actions in production. This
+        # is an error rather than a warning — a warning that nobody reads is the
+        # same as no control at all.
+        if self.ENVIRONMENT == "production":
+            if self.AUTO_APPROVE:
+                errors.append(
+                    "AUTO_APPROVE must be disabled in production. "
+                    "NDB Standard requires human approval for security actions."
+                )
+            if self.SUB_AGENT_ALLOW_INSECURE_HTTP:
+                errors.append(
+                    "SUB_AGENT_ALLOW_INSECURE_HTTP must be disabled in production: "
+                    "sub-agent requests carry decrypted credentials."
+                )
+            if self.ALLOW_PLAINTEXT_AGENT_API_KEY:
+                errors.append(
+                    "ALLOW_PLAINTEXT_AGENT_API_KEY must be disabled in production: "
+                    "agent API keys must be stored encrypted."
+                )
         if errors:
             raise ValueError("\n".join(errors))
-        # NDB Std §B5: never auto-approve security actions outside development.
         if self.ENVIRONMENT != "development" and self.AUTO_APPROVE:
             import warnings
             warnings.warn(

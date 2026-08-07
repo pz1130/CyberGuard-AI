@@ -1,15 +1,41 @@
 """Sub-Agent HTTP executor wrapper."""
+import asyncio
 import httpx
 import json
+import logging
 import re
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
+logger = logging.getLogger(__name__)
+
+# Base delay for the exponential backoff between sub-agent retry attempts.
+RETRY_BACKOFF_BASE_SECONDS = 0.5
+
 from app.config import settings
+from app.core.egress import enforce_egress as _validate_endpoint_url
 from app.core.security import decrypt_data
 from app.core.rbac import Permission
 from app.services.internal_agent import InternalAgentRunner
+
+
+def require_secure_endpoint(url: str) -> str:
+    """Validate an endpoint URL for egress AND require TLS.
+
+    Sub-agent requests carry the agent's decrypted env vars in the body, so a
+    plaintext endpoint puts credentials on the wire and into the peer's access
+    logs. HTTP is refused unless explicitly enabled for local development
+    (and the config validator forbids that flag in production).
+    """
+    validated = _validate_endpoint_url(url)
+    if urlparse(validated).scheme != "https" and not settings.SUB_AGENT_ALLOW_INSECURE_HTTP:
+        raise ValueError(
+            "sub-agent endpoint must use https (requests carry decrypted "
+            "credentials); set SUB_AGENT_ALLOW_INSECURE_HTTP=true for local "
+            "development only"
+        )
+    return validated
 
 
 def _resolve_api_key(config: Dict[str, Any]) -> str:
@@ -18,7 +44,7 @@ def _resolve_api_key(config: Dict[str, Any]) -> str:
     Priority:
       1. env_vars_encrypted JSON field with key "OPENCLAW_API_KEY"
       2. metadata_json.api_key_encrypted  (AES-256 encrypted)
-      3. metadata_json.api_key            (plain, legacy / dev)
+      3. metadata_json.api_key            (plain, legacy / dev — opt-in only)
     """
     # 1. env_vars_encrypted
     env_enc = config.get("env_vars_encrypted")
@@ -40,10 +66,18 @@ def _resolve_api_key(config: Dict[str, Any]) -> str:
         except Exception:
             pass
 
-    # 3. metadata_json.api_key (plain)
-    return meta.get("api_key", "")
-
-from app.core.egress import enforce_egress as _validate_endpoint_url
+    # 3. metadata_json.api_key (plain) — refused unless explicitly opted in, so
+    #    a legacy row can't silently keep a credential in cleartext forever.
+    plain = meta.get("api_key", "")
+    if plain and not settings.ALLOW_PLAINTEXT_AGENT_API_KEY:
+        logger.error(
+            "agent %r has a plaintext metadata_json.api_key; refusing to use it. "
+            "Re-save the agent to encrypt it, or set "
+            "ALLOW_PLAINTEXT_AGENT_API_KEY=true for local development.",
+            config.get("agent_name"),
+        )
+        return ""
+    return plain
 
 
 class SubAgentWrapper:
@@ -98,9 +132,9 @@ class SubAgentWrapper:
                 "error": f"No endpoint configured for agent {self.agent_name}",
             }
 
-        # SSRF protection + scheme check
+        # SSRF floor + egress allowlist + TLS requirement
         try:
-            validated_url = _validate_endpoint_url(self.endpoint_url)
+            validated_url = require_secure_endpoint(self.endpoint_url)
         except ValueError as e:
             return {"status": "error", "output": None, "error": f"Invalid endpoint URL: {e}"}
 
@@ -118,13 +152,9 @@ class SubAgentWrapper:
         error_msg = "No attempts made"
         for attempt in range(self.max_retries):
             try:
-                # Enforce HTTPS; verify certs in production
-                import ssl
-                parsed = urlparse(validated_url)
-                verify_certs = parsed.scheme == "https"
                 async with httpx.AsyncClient(
                     timeout=self.timeout,
-                    verify=verify_certs,
+                    verify=True,
                 ) as client:
                     response = await client.post(
                         f"{validated_url}/execute",
@@ -161,8 +191,11 @@ class SubAgentWrapper:
             except Exception as e:
                 error_msg = str(e)
 
+            # Exponential backoff between attempts. Without this the retries
+            # fire back-to-back within milliseconds, which hammers an already
+            # struggling sub-agent instead of giving it room to recover.
             if attempt < self.max_retries - 1:
-                continue
+                await asyncio.sleep(RETRY_BACKOFF_BASE_SECONDS * (2 ** attempt))
 
         return {
             "status": "failed",
@@ -176,14 +209,12 @@ class SubAgentWrapper:
             return {"success": False, "error": "No endpoint configured"}
 
         try:
-            validated_url = _validate_endpoint_url(self.endpoint_url)
+            validated_url = require_secure_endpoint(self.endpoint_url)
         except ValueError as e:
             return {"success": False, "error": str(e)}
 
         try:
-            parsed = urlparse(validated_url)
-            verify_certs = parsed.scheme == "https"
-            async with httpx.AsyncClient(timeout=10, verify=verify_certs) as client:
+            async with httpx.AsyncClient(timeout=10, verify=True) as client:
                 response = await client.get(
                     f"{validated_url}/health",
                     headers=self._get_headers(),
@@ -200,14 +231,12 @@ class SubAgentWrapper:
             return {"status": "offline", "error": "No endpoint configured"}
 
         try:
-            validated_url = _validate_endpoint_url(self.endpoint_url)
+            validated_url = require_secure_endpoint(self.endpoint_url)
         except ValueError as e:
             return {"status": "offline", "error": str(e)}
 
         try:
-            parsed = urlparse(validated_url)
-            verify_certs = parsed.scheme == "https"
-            async with httpx.AsyncClient(timeout=10, verify=verify_certs) as client:
+            async with httpx.AsyncClient(timeout=10, verify=True) as client:
                 response = await client.get(
                     f"{validated_url}/status",
                     headers=self._get_headers(),
