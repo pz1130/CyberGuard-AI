@@ -3,6 +3,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor
+from typing import Optional
 
 from celery import shared_task
 from celery.exceptions import MaxRetriesExceededError
@@ -229,14 +230,17 @@ def _save_to_conversation_async(conversation_id: int, user_input: str, result: d
 
         SessionLocal = get_sync_session()
         with SessionLocal() as session:
-            conv_result = session.execute(
+            # Row-lock so concurrent workers cannot overwrite each other's
+            # appends (audit #23: messages_json was a whole-document rewrite).
+            # Read under the lock — an unlocked read first would just be a
+            # second round trip for a value we cannot trust anyway.
+            locked = session.execute(
                 select(Conversation).where(Conversation.id == conversation_id)
-            )
-            conv = conv_result.scalar_one_or_none()
-            if not conv:
+                .with_for_update()
+            ).scalar_one_or_none()
+            if not locked:
                 return
-
-            messages = json.loads(conv.messages_json or "[]")
+            messages = json.loads(locked.messages_json or "[]")
 
             # Add user message
             messages.append({
@@ -267,8 +271,8 @@ def _save_to_conversation_async(conversation_id: int, user_input: str, result: d
                 "created_at": datetime.now(timezone.utc).isoformat(),
             })
 
-            conv.messages_json = json.dumps(messages, ensure_ascii=False)
-            conv.updated_at = datetime.now(timezone.utc)
+            locked.messages_json = json.dumps(messages, ensure_ascii=False)
+            locked.updated_at = datetime.now(timezone.utc)
             session.commit()
     except Exception as e:
         logger.warning(f"Failed to save to conversation {conversation_id}: {e}")
@@ -376,6 +380,7 @@ def _run_async_master_agent(execution_id: str, user_input: str, user_id: int, **
             user_input=run_input,
             user_id=user_id,
             conversation_history=conversation_history,
+            execution_id=execution_id,
             **{**kwargs, **conv_overrides},
         )
 
@@ -420,6 +425,24 @@ def run_master_agent_task(self, execution_id: str, user_input: str, user_id: int
         # Run master agent in thread pool (it's async but Celery is sync)
         result = _run_async_master_agent(execution_id, user_input, user_id, **kwargs)
 
+        # Graph suspended on human approval — do NOT mark completed. The
+        # decide endpoint resumes the graph and finishes the execution.
+        if isinstance(result, dict) and result.get("interrupted"):
+            future = _executor.submit(
+                _update_execution_with_result_sync,
+                execution_id, "waiting_approval", result, None,
+            )
+            future.result()
+            logger.info(
+                f"[run_master_agent_task] execution_id={execution_id} "
+                f"waiting_approval request_id={result.get('request_id')}"
+            )
+            return {
+                "status": "waiting_approval",
+                "execution_id": execution_id,
+                "result": result,
+            }
+
         # Update status to completed with result
         future = _executor.submit(
             _update_execution_with_result_sync, execution_id, "completed", result, None
@@ -453,6 +476,75 @@ def run_master_agent_task(self, execution_id: str, user_input: str, user_id: int
             raise
         logger.error(f"[run_master_agent_task] execution_id={execution_id} error: {e}")
         raise
+
+
+@shared_task(
+    bind=True,
+    ignore_result=True,
+    max_retries=2,
+    default_retry_delay=5,
+)
+def resume_master_agent_task(
+    self,
+    thread_id: str,
+    decision: str,
+    comment: Optional[str] = None,
+    execution_id: Optional[str] = None,
+    conversation_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+    user_input: Optional[str] = None,
+):
+    """Resume a master graph suspended on approval (checkpointer + interrupt)."""
+    import asyncio
+    from app.agents.master import get_master_agent
+
+    logger.info(
+        "[resume_master_agent_task] thread_id=%s decision=%s execution_id=%s",
+        thread_id, decision, execution_id,
+    )
+
+    async def _run():
+        from app.core.database import engine
+        await engine.dispose()
+        master = get_master_agent()
+        return await master.resume(
+            thread_id, decision=decision, comment=comment, user_id=user_id,
+        )
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        result = loop.run_until_complete(_run())
+    except Exception as e:
+        logger.error("[resume_master_agent_task] failed: %s", e)
+        if execution_id:
+            _update_execution_with_result_sync(execution_id, "failed", None, str(e))
+        raise
+    finally:
+        loop.close()
+
+    if isinstance(result, dict) and result.get("interrupted"):
+        # Nested interrupt (unlikely) — keep waiting.
+        if execution_id:
+            _update_execution_with_result_sync(
+                execution_id, "waiting_approval", result, None)
+        return {"status": "waiting_approval", "result": result}
+
+    status = "completed"
+    if decision != "approved":
+        status = "failed" if decision in ("rejected", "expired") else "completed"
+
+    if execution_id:
+        err = None
+        if decision != "approved":
+            err = (result or {}).get("error_message") or f"Approval {decision}"
+        _update_execution_with_result_sync(execution_id, status, result, err)
+
+    if conversation_id and result and decision == "approved":
+        _save_to_conversation_async(
+            conversation_id, user_input or "", result)
+
+    return {"status": status, "execution_id": execution_id, "result": result}
 
 
 def _auto_title_conversation(conversation_id: int, user_input: str, result: dict):

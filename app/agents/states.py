@@ -61,8 +61,15 @@ class MasterAgentState(TypedDict, total=False):
 
     # Human approval
     approval_required: bool
-    approval_status: Optional[str]  # approved, rejected, pending
+    approval_status: Optional[str]  # approved, rejected, pending, expired
     approval_comment: Optional[str]
+    approval_record_id: Optional[int]
+    # Which gate of this run we are on. Gives each approval its own request_id,
+    # and `approval_granted_round` scopes a decision to the gate it was given
+    # for — otherwise one "approved" stands in for every later gate too.
+    approval_round: int
+    approval_granted_round: Optional[int]
+    approval_request_id: Optional[str]
 
     # Error handling
     error_message: Optional[str]
@@ -95,6 +102,21 @@ class MasterAgentState(TypedDict, total=False):
     summarizer_prompt_override: Optional[str]
     model_override: Optional[str]
     temperature_override: Optional[float]
+
+    # Graph orchestration (phase 3)
+    replan_count: int
+    max_replans: int
+    pre_approved: bool  # after human approval, re-dispatch may skip the gate
+    pending_agents: Optional[List[Any]]
+    # Surface of the internal-agent tool loop (from agent_run_events)
+    loop_events: Optional[List[Dict[str, Any]]]
+    # Set when interrupt() suspended the graph awaiting a human
+    interrupted: bool
+    thread_id: Optional[str]
+    # Celery execution id — stored so decide can resume the right run
+    execution_id: Optional[str]
+    expert_mode_no_agents: bool
+    context: Optional[Dict[str, Any]]
 
 
 class SubAgentResult(TypedDict):

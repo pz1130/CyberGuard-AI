@@ -374,18 +374,34 @@ class AgentExecutor:
         # Check permission level (external — internal handles it internally)
         permission_level = config_dict.get("permission_level", "medium")
         kind = config_dict.get("kind") or "external"
+        # Set by the master graph when it re-dispatches a task a human has just
+        # approved. Without honouring it the re-dispatch hits this same blanket
+        # refusal, so approving never actually lets the action run.
+        pre_approved = bool((context or {}).get("pre_approved"))
 
         if kind == "internal":
-            runner = InternalAgentRunner(config_dict)
+            runner = InternalAgentRunner(config_dict, pre_approved=pre_approved)
             conv_id = (context or {}).get("conversation_id")
             result = await runner.execute(task=task, conversation_id=conv_id, user_id=user_id)
         else:
-            if permission_level == "high":
+            if permission_level == "high" and not pre_approved:
                 return {
                     "status": "needs_approval",
                     "output": None,
                     "error": "High permission agent requires approval",
                 }
+            if permission_level == "high":
+                # One approval authorises one dispatch. Record it so the
+                # override is provable after the fact.
+                from app.core.audit import record_action
+                await record_action(
+                    user_id=user_id or None, agent_id=agent_id,
+                    agent_name=config_dict.get("agent_name"),
+                    action="dispatch:pre_approved", action_category="annotate",
+                    risk_tier="high",
+                    input_data={"task": task[:500]},
+                    output_data={"permission_level": permission_level,
+                                 "approved_by_human": True})
             backend = config_dict["backend_type"]
             if backend == "openclaw":
                 result = await self._execute_openclaw(config_dict, task)
