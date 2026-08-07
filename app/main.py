@@ -125,6 +125,14 @@ async def lifespan(app: FastAPI):
 
     _ks_task = _aio.create_task(_killswitch_file_poller())
 
+    # Recover interrupted agent runs left by a previous crash (audit #24).
+    # Best-effort: never block startup on a recovery failure.
+    try:
+        from app.services.run_recovery import sweep_interrupted_runs
+        await sweep_interrupted_runs()
+    except Exception as e:
+        logger.warning(f"Run recovery sweep skipped: {e}")
+
     yield
     # Shutdown
     _ks_task.cancel()

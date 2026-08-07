@@ -24,6 +24,7 @@ from app.models.episode import AgentEpisode
 from app.models.n8n import N8NConnection
 from app.models.master_config import MasterAgentConfig
 from app.models.sso import SsoConfig, SsoRoleMapping
+from app.models.run_event import AgentRunEvent
 
 __all__ = [
     "User", "RoleModel",
@@ -49,4 +50,5 @@ __all__ = [
     "N8NConnection",
     "MasterAgentConfig",
     "SsoConfig", "SsoRoleMapping",
+    "AgentRunEvent",
 ]
