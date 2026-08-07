@@ -434,13 +434,15 @@ def test_tool_call_budget_derives_from_permission():
     from app.services.internal_agent import (
         InternalAgentRunner, TOOL_CALL_BUDGET_DEFAULT, TOOL_CALL_BUDGET_LIMITED,
     )
-    base = {"id": 1, "agent_name": "x", "metadata_json": {}}
+    base = {"id": 1, "agent_name": "x", "metadata_json": {},
+            "tool_loop_max_steps": 8}
     low = InternalAgentRunner({**base, "permission_level": "low"})
     med = InternalAgentRunner({**base, "permission_level": "medium"})
     override = InternalAgentRunner({**base, "permission_level": "low",
                                     "tool_call_budget": 5})
-    assert low.tool_call_budget == TOOL_CALL_BUDGET_LIMITED
-    assert med.tool_call_budget == TOOL_CALL_BUDGET_DEFAULT
+    # Defaults track max_steps so the budget branch is reachable (audit #4).
+    assert low.tool_call_budget == min(TOOL_CALL_BUDGET_LIMITED, 8 * 3)
+    assert med.tool_call_budget == min(TOOL_CALL_BUDGET_DEFAULT, max(8 * 5, 16))
     assert override.tool_call_budget == 5            # explicit config wins
 
 
@@ -587,7 +589,7 @@ async def test_no_auto_continue_without_tools(monkeypatch):
 @pytest.mark.asyncio
 async def test_maybe_compact_summarizes_when_oversized(monkeypatch):
     from app.services.internal_agent import (
-        InternalAgentRunner, CONTEXT_COMPACT_CHARS, CONTEXT_KEEP_RECENT,
+        InternalAgentRunner, CONTEXT_COMPACT_TOKENS, CONTEXT_KEEP_RECENT,
     )
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
@@ -603,7 +605,7 @@ async def test_maybe_compact_summarizes_when_oversized(monkeypatch):
     for i in range(20):
         messages.append({"role": "user", "content": big})
         messages.append({"role": "assistant", "content": big})
-    assert runner._estimate_chars(messages) > CONTEXT_COMPACT_CHARS
+    assert runner._estimate_tokens(messages) > CONTEXT_COMPACT_TOKENS
 
     chat = AsyncMock(return_value="## Summary\ncondensed history")
     out = await runner._maybe_compact(messages, SimpleNamespace(chat=chat))
@@ -613,7 +615,7 @@ async def test_maybe_compact_summarizes_when_oversized(monkeypatch):
     assert "## 对话摘要" in out[1]["content"]           # digest inserted
     assert "condensed history" in out[1]["content"]
     assert len(out) <= 2 + CONTEXT_KEEP_RECENT          # system + digest + recent
-    assert runner._estimate_chars(out) < runner._estimate_chars(messages)
+    assert runner._estimate_tokens(out) < runner._estimate_tokens(messages)
 
 
 @pytest.mark.asyncio
@@ -647,7 +649,9 @@ async def test_agent_executor_routes_internal_kind(monkeypatch):
 
     captured = {}
     class FakeRunner:
-        def __init__(self, cfg): captured["cfg"] = cfg
+        def __init__(self, cfg, *, pre_approved=False):
+            captured["cfg"] = cfg
+            captured["pre_approved"] = pre_approved
         async def execute(self, task, conversation_id, user_id):
             captured["task"] = task
             return {"status": "completed", "output": "ok",
@@ -731,15 +735,14 @@ async def test_execute_stream_no_tools_emits_text_then_done(parent_conv_and_inte
 
     ids = parent_conv_and_internal_agent
 
-    async def fake_stream(*args, **kwargs):
+    # The loop streams the turn itself; there is no second, tool-less call.
+    async def fake_events(*args, **kwargs):
         for piece in ["Hel", "lo!"]:
-            yield piece
+            yield {"type": "text", "delta": piece}
+        yield {"type": "done", "content": "Hello!", "tool_calls": None,
+               "finish_reason": "stop"}
 
-    # No tools -> first chat returns text-only -> answer_ready -> re-stream.
-    fake_router = SimpleNamespace(
-        chat=AsyncMock(return_value=SimpleNamespace(content="ignored batch text", tool_calls=None)),
-        stream_chat=fake_stream,
-    )
+    fake_router = SimpleNamespace(stream_chat_events=fake_events)
     monkeypatch.setattr(ia_mod, "get_llm_router", lambda: fake_router)
 
     runner = ia_mod.InternalAgentRunner({
@@ -771,16 +774,19 @@ async def test_execute_stream_tool_then_answer(parent_conv_and_internal_agent, m
     def tc(cid, name):
         return SimpleNamespace(id=cid, function=SimpleNamespace(name=name, arguments="{}"))
 
-    step1 = SimpleNamespace(content="", tool_calls=[tc("c1", "kb_search")])
-    step2 = SimpleNamespace(content="batch final", tool_calls=None)
+    turns = [
+        [{"type": "done", "content": "", "tool_calls": [tc("c1", "kb_search")],
+          "finish_reason": "tool_calls"}],
+        [{"type": "text", "delta": "done "}, {"type": "text", "delta": "answer"},
+         {"type": "done", "content": "done answer", "tool_calls": None,
+          "finish_reason": "stop"}],
+    ]
 
-    async def fake_stream(*args, **kwargs):
-        yield "done answer"
+    async def fake_events(*args, **kwargs):
+        for ev in turns.pop(0):
+            yield ev
 
-    fake_router = SimpleNamespace(
-        chat=AsyncMock(side_effect=[step1, step2]),
-        stream_chat=fake_stream,
-    )
+    fake_router = SimpleNamespace(stream_chat_events=fake_events)
     monkeypatch.setattr(ia_mod, "get_llm_router", lambda: fake_router)
 
     runner = ia_mod.InternalAgentRunner({
@@ -840,3 +846,364 @@ async def test_agent_executor_execute_stream_routes_internal(parent_conv_and_int
         agent_id=ids["agent_id"], task="hi", user_id=ids["user_id"])]
     assert events[0]["type"] == "start"
     assert events[-1]["type"] == "done"
+
+
+# ---------------------------------------------------------------------------
+# Truncated tool calls (finish_reason == "length")
+# ---------------------------------------------------------------------------
+
+def _tool_step(name="scan", args='{"target": "10.0.0.0/8"}', finish_reason=None,
+               call_id="c1"):
+    """An assistant message carrying one tool call, optionally length-truncated."""
+    from types import SimpleNamespace
+    kwargs = {"content": "", "tool_calls": [SimpleNamespace(
+        id=call_id, function=SimpleNamespace(name=name, arguments=args))]}
+    if finish_reason is not None:
+        kwargs["finish_reason"] = finish_reason
+    return SimpleNamespace(**kwargs)
+
+
+@pytest.mark.asyncio
+async def test_truncated_response_refuses_to_execute_its_tool_calls(monkeypatch):
+    """A response cut off by the output token limit may carry tool arguments
+    that parse and validate while being semantically incomplete. None may run."""
+    from app.services import internal_agent as ia_mod
+    from app.services.internal_agent import InternalAgentRunner
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    seq = [_tool_step(finish_reason="length"), "answer after retry"]
+    fake_router = SimpleNamespace(chat=AsyncMock(side_effect=seq))
+    monkeypatch.setattr(ia_mod, "get_llm_router", lambda: fake_router)
+
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
+           "llm_model": "m", "tool_loop_max_steps": 4, "memory_window": 0,
+           "associated_skills": [], "metadata_json": {"mcp_tool_ids": []},
+           "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+
+    dispatched = []
+    async def never_called(call):
+        dispatched.append(call.function.name)
+        return "should not happen"
+    monkeypatch.setattr(runner, "_dispatch", never_called)
+
+    res = await runner.execute(task="go", conversation_id=None, user_id=1)
+
+    assert dispatched == []                       # nothing executed
+    assert res["status"] == "completed"            # model got to re-issue
+    assert res["output"] == "answer after retry"
+    assert "TRUNCATED_TOOL_CALL" in res["tool_calls"][0]["result_preview"]
+
+
+@pytest.mark.asyncio
+async def test_truncated_response_emits_reflection_event(monkeypatch):
+    from app.services import internal_agent as ia_mod
+    from app.services.internal_agent import InternalAgentRunner
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    seq = [_tool_step(finish_reason="length"), "done"]
+    monkeypatch.setattr(ia_mod, "get_llm_router",
+                        lambda: SimpleNamespace(chat=AsyncMock(side_effect=seq)))
+
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
+           "llm_model": "m", "tool_loop_max_steps": 4, "memory_window": 0,
+           "associated_skills": [], "metadata_json": {"mcp_tool_ids": []},
+           "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+    monkeypatch.setattr(runner, "_dispatch", AsyncMock(return_value="x"))
+
+    events = [ev async for ev in runner._run_loop("go", None, 1)]
+    reasons = [e.get("reason") for e in events if e["type"] == "reflection"]
+    assert "truncated_tool_call" in reasons
+    ends = [e for e in events if e["type"] == "tool_call_end"]
+    assert ends and all(e["error"] for e in ends)
+
+
+@pytest.mark.asyncio
+async def test_normal_finish_reason_still_executes_tools(monkeypatch):
+    """Guard against over-blocking: a normal stop must not be treated as truncated."""
+    from app.services import internal_agent as ia_mod
+    from app.services.internal_agent import InternalAgentRunner
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    seq = [_tool_step(finish_reason="tool_calls"), "final"]
+    monkeypatch.setattr(ia_mod, "get_llm_router",
+                        lambda: SimpleNamespace(chat=AsyncMock(side_effect=seq)))
+
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
+           "llm_model": "m", "tool_loop_max_steps": 4, "memory_window": 0,
+           "associated_skills": [], "metadata_json": {"mcp_tool_ids": []},
+           "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+    dispatch = AsyncMock(return_value="scan output")
+    monkeypatch.setattr(runner, "_dispatch", dispatch)
+
+    res = await runner.execute(task="go", conversation_id=None, user_id=1)
+    assert dispatch.await_count == 1
+    assert res["status"] == "completed"
+
+
+# ---------------------------------------------------------------------------
+# Termination contract: governance refusals stop the run
+# ---------------------------------------------------------------------------
+
+def _pool_tool(name):
+    """A Tool-pool row shaped the way _build_tools expects.
+
+    Tagged "observe" so the before_tool governance chain lets it through — these
+    tests are about what the loop does with execute_tool's *result*. Gate
+    behaviour for pool tools is covered in test_internal_agent_governance.py.
+    """
+    from types import SimpleNamespace
+    return SimpleNamespace(id=1, name=name, description="", input_schema_json=None,
+                           command_template=f"{name} {{host}}",
+                           action_category="observe", risk_tier="low",
+                           rollback_command_template=None,
+                           permission_level="medium")
+
+
+def _wire_pool_tool(monkeypatch, runner, name):
+    """Register one executable pool tool through the loaders.
+
+    _build_tools() rebuilds _pool_tools_by_name on every run, so the fake has to
+    be injected at the loader level rather than assigned onto the runner.
+    """
+    from unittest.mock import AsyncMock
+    monkeypatch.setattr(runner, "_load_mcp_tools", AsyncMock(return_value=[]))
+    monkeypatch.setattr(runner, "_load_pool_tools",
+                        AsyncMock(return_value=[_pool_tool(name)]))
+
+
+@pytest.mark.parametrize("tool_status,expected", [
+    ("needs_approval", "needs_approval"),
+    ("denied", "denied"),
+    ("halted", "halted"),
+])
+@pytest.mark.asyncio
+async def test_governance_refusal_terminates_the_run(monkeypatch, tool_status, expected):
+    """A refusal must end the run, not become text the model can work around
+    by reaching for a different tool."""
+    from app.services import internal_agent as ia_mod
+    from app.services.internal_agent import InternalAgentRunner
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    # The model would happily keep going if we let it.
+    chat = AsyncMock(side_effect=[
+        _tool_step(name="isolate_host", call_id="c1"),
+        _tool_step(name="other_tool", call_id="c2"),
+        "sneaky answer",
+    ])
+    monkeypatch.setattr(ia_mod, "get_llm_router",
+                        lambda: SimpleNamespace(chat=chat))
+    monkeypatch.setattr(ia_mod, "execute_tool",
+                        AsyncMock(return_value={"status": tool_status,
+                                                 "error": "refused by policy"}))
+
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
+           "llm_model": "m", "tool_loop_max_steps": 10, "memory_window": 0,
+           "associated_skills": [], "metadata_json": {"mcp_tool_ids": []},
+           "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+    _wire_pool_tool(monkeypatch, runner, "isolate_host")
+
+    res = await runner.execute(task="isolate host h1", conversation_id=None, user_id=1)
+
+    assert res["status"] == expected
+    assert res["output"] is None
+    # Stopped on the refusal — never asked the model for a follow-up move.
+    assert chat.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_completed_tool_does_not_terminate_the_run(monkeypatch):
+    """Guard against over-terminating: a successful tool keeps the loop going."""
+    from app.services import internal_agent as ia_mod
+    from app.services.internal_agent import InternalAgentRunner
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    chat = AsyncMock(side_effect=[_tool_step(name="grep"), "final answer"])
+    monkeypatch.setattr(ia_mod, "get_llm_router", lambda: SimpleNamespace(chat=chat))
+    monkeypatch.setattr(ia_mod, "execute_tool",
+                        AsyncMock(return_value={"status": "completed",
+                                                 "stdout": "3 matches"}))
+
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
+           "llm_model": "m", "tool_loop_max_steps": 10, "memory_window": 0,
+           "associated_skills": [], "metadata_json": {"mcp_tool_ids": []},
+           "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+    _wire_pool_tool(monkeypatch, runner, "grep")
+
+    res = await runner.execute(task="go", conversation_id=None, user_id=1)
+    assert res["status"] == "completed"
+    assert res["output"] == "final answer"
+
+
+@pytest.mark.asyncio
+async def test_terminated_run_is_not_recorded_as_a_successful_episode(monkeypatch):
+    """A refused run must not be written to episodic memory as experience."""
+    from app.services import internal_agent as ia_mod
+    from app.services.internal_agent import InternalAgentRunner
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    monkeypatch.setattr(ia_mod, "get_llm_router", lambda: SimpleNamespace(
+        chat=AsyncMock(return_value=_tool_step(name="isolate_host"))))
+    monkeypatch.setattr(ia_mod, "execute_tool",
+                        AsyncMock(return_value={"status": "denied", "error": "nope"}))
+    recorder = AsyncMock()
+    monkeypatch.setattr(ia_mod, "episodic_memory", SimpleNamespace(
+        recall=AsyncMock(return_value=([], None)), record=recorder))
+
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
+           "llm_model": "m", "tool_loop_max_steps": 4, "memory_window": 0,
+           "associated_skills": [], "enable_episodic": True,
+           "metadata_json": {"mcp_tool_ids": []}, "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+    _wire_pool_tool(monkeypatch, runner, "isolate_host")
+
+    res = await runner.execute(task="go", conversation_id=None, user_id=1)
+    assert res["status"] == "denied"
+    assert recorder.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_terminated_run_surfaces_on_the_streaming_path(monkeypatch):
+    from app.services import internal_agent as ia_mod
+    from app.services.internal_agent import InternalAgentRunner
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    monkeypatch.setattr(ia_mod, "get_llm_router", lambda: SimpleNamespace(
+        chat=AsyncMock(return_value=_tool_step(name="isolate_host"))))
+    monkeypatch.setattr(ia_mod, "execute_tool", AsyncMock(
+        return_value={"status": "needs_approval", "error": "approval required"}))
+
+    cfg = {"id": 1, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
+           "llm_model": "m", "tool_loop_max_steps": 4, "memory_window": 0,
+           "associated_skills": [], "metadata_json": {"mcp_tool_ids": []},
+           "permission_level": "medium"}
+    runner = InternalAgentRunner(cfg)
+    _wire_pool_tool(monkeypatch, runner, "isolate_host")
+
+    events = [ev async for ev in runner.execute_stream("go", None, 1)]
+    assert events[-1]["type"] == "error"
+    assert events[-1]["status"] == "needs_approval"
+
+
+# ---------------------------------------------------------------------------
+# Episodic memory records how the run actually ended
+# ---------------------------------------------------------------------------
+
+def _episodic_runner(monkeypatch, chat_seq, **overrides):
+    """A runner with episodic memory on and a recording spy attached."""
+    from app.services import internal_agent as ia_mod
+    from app.services.internal_agent import InternalAgentRunner
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    monkeypatch.setattr(ia_mod, "get_llm_router", lambda: SimpleNamespace(
+        chat=AsyncMock(side_effect=chat_seq)))
+    recorded = {}
+
+    class Spy:
+        async def recall(self, *a, **kw):
+            return ([], None)
+        async def record(self, agent_id, task, approach, outcome, success=True,
+                         tool_count=0, embedding=None, provider_id=None):
+            recorded.update(success=success, approach=approach, outcome=outcome)
+    monkeypatch.setattr(ia_mod, "episodic_memory", Spy())
+
+    cfg = {"id": 7, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
+           "llm_model": "m", "tool_loop_max_steps": 20, "memory_window": 0,
+           "associated_skills": [], "enable_episodic": True,
+           "metadata_json": {"mcp_tool_ids": []}, "permission_level": "medium"}
+    cfg.update(overrides)
+    return InternalAgentRunner(cfg), recorded
+
+
+@pytest.mark.asyncio
+async def test_clean_run_is_recorded_as_successful(monkeypatch):
+    from unittest.mock import AsyncMock
+    runner, recorded = _episodic_runner(
+        monkeypatch, [_tool_step("grep"), "clean answer"])
+    monkeypatch.setattr(runner, "_dispatch", AsyncMock(return_value="3 matches"))
+
+    res = await runner.execute(task="go", conversation_id=None, user_id=1)
+    assert res["status"] == "completed"
+    assert recorded["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_run_that_hit_a_tool_error_is_not_recorded_as_success(monkeypatch):
+    """An answer produced despite failing tools is not experience worth
+    replaying to future runs."""
+    from unittest.mock import AsyncMock
+    runner, recorded = _episodic_runner(
+        monkeypatch, [_tool_step("grep"), "answer despite failure"])
+    monkeypatch.setattr(runner, "_dispatch",
+                        AsyncMock(return_value="ERROR: tool blew up"))
+
+    res = await runner.execute(task="go", conversation_id=None, user_id=1)
+    assert res["status"] == "completed"      # user still gets an answer
+    assert recorded["success"] is False      # but it is not replayed as success
+
+
+@pytest.mark.asyncio
+async def test_run_that_looped_is_not_recorded_as_success(monkeypatch):
+    from unittest.mock import AsyncMock
+    from app.services.internal_agent import LOOP_DETECT_THRESHOLD
+
+    seq = [_tool_step("spin")] * LOOP_DETECT_THRESHOLD + ["recovered answer"]
+    runner, recorded = _episodic_runner(monkeypatch, seq)
+    monkeypatch.setattr(runner, "_dispatch", AsyncMock(return_value="same"))
+
+    res = await runner.execute(task="go", conversation_id=None, user_id=1)
+    assert res["status"] == "completed"
+    assert recorded["success"] is False
+
+
+@pytest.mark.asyncio
+async def test_run_with_truncated_tool_calls_is_not_recorded_as_success(monkeypatch):
+    from unittest.mock import AsyncMock
+    runner, recorded = _episodic_runner(
+        monkeypatch, [_tool_step(finish_reason="length"), "answer after retry"])
+    monkeypatch.setattr(runner, "_dispatch", AsyncMock(return_value="x"))
+
+    res = await runner.execute(task="go", conversation_id=None, user_id=1)
+    assert res["status"] == "completed"
+    assert recorded["success"] is False
+
+
+@pytest.mark.asyncio
+async def test_degraded_reasons_are_reported_on_answer_ready(monkeypatch):
+    from unittest.mock import AsyncMock
+    runner, _ = _episodic_runner(
+        monkeypatch, [_tool_step("grep"), "answer"])
+    monkeypatch.setattr(runner, "_dispatch", AsyncMock(return_value="ERROR: nope"))
+
+    events = [ev async for ev in runner._run_loop("go", None, 1)]
+    answer = next(e for e in events if e["type"] == "answer_ready")
+    assert answer["degraded_reasons"] == ["tool_error"]
+
+
+@pytest.mark.asyncio
+async def test_plain_string_error_results_are_still_flagged_as_errors(monkeypatch):
+    """Regression: the untrusted-content fence prepends a tag, so classifying
+    the *fenced* text hid the ERROR:/LOOP_DETECTED: prefixes that MCP, kb_search
+    and the search tools use to report failure."""
+    from unittest.mock import AsyncMock
+    runner, _ = _episodic_runner(monkeypatch, [_tool_step("mcp_call"), "answer"])
+    monkeypatch.setattr(runner, "_dispatch", AsyncMock(
+        return_value="ERROR: MCP tool 'mcp_call' failed: connection refused"))
+
+    events = [ev async for ev in runner._run_loop("go", None, 1)]
+    end = next(e for e in events if e["type"] == "tool_call_end")
+    assert end["error"] is True
+    # ...and the content still reaches the model fenced.
+    assert end["result_preview"].startswith("<untrusted_tool_output")
