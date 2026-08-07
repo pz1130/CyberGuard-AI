@@ -18,8 +18,15 @@ from sqlalchemy import text
 logger = logging.getLogger(__name__)
 
 EPISODE_EMBED_MODEL = "text-embedding-3-small"
+# Default column width for agent_episodes.task_embedding (migration 017).
+# Multi-dim KB embeddings (migration 004) may return other sizes; we accept
+# whatever the router returns as long as it is non-empty (audit #31).
 EPISODE_EMBED_DIM = 1536
 OUTCOME_MAX_CHARS = 1000
+# Cap episodes per agent. Recall always takes the top-k nearest neighbours, so
+# without a cap the table grows without bound and one early bad episode can stay
+# attached to a common task shape forever. Oldest rows are pruned first.
+EPISODE_MAX_PER_AGENT = 500
 
 
 def distill_approach(tool_call_log: List[Dict[str, Any]]) -> str:
@@ -50,8 +57,16 @@ class EpisodicMemoryService:
         except Exception as e:                       # noqa: BLE001 - degrade gracefully
             logger.warning("episodic memory: embed failed: %s", e)
             return None
-        if not vecs or len(vecs[0]) != EPISODE_EMBED_DIM:
-            logger.warning("episodic memory: unexpected embedding shape; skipping")
+        if not vecs or not vecs[0]:
+            logger.warning("episodic memory: empty embedding; skipping")
+            return None
+        dim = len(vecs[0])
+        if dim != EPISODE_EMBED_DIM:
+            # Table is vector(1536); other dims cannot be stored without a
+            # migration. Log and skip rather than crash the agent run.
+            logger.warning(
+                "episodic memory: embedding dim %d != table dim %d; skipping",
+                dim, EPISODE_EMBED_DIM)
             return None
         return vecs[0]
 
@@ -111,9 +126,23 @@ class EpisodicMemoryService:
                  "emb": json.dumps(embedding), "approach": approach,
                  "outcome": outcome, "success": success, "tool_count": tool_count},
             )
+            await self._prune(db, agent_id)
             await db.commit()
         except Exception as e:                       # noqa: BLE001
             logger.warning("episodic memory: record failed: %s", e)
+
+    @staticmethod
+    async def _prune(db, agent_id: int) -> None:
+        """Drop this agent's oldest episodes beyond EPISODE_MAX_PER_AGENT."""
+        await db.execute(
+            text(
+                "DELETE FROM agent_episodes WHERE id IN ("
+                "  SELECT id FROM agent_episodes WHERE agent_id = :agent_id"
+                "  ORDER BY id DESC OFFSET :keep"
+                ")"
+            ),
+            {"agent_id": agent_id, "keep": EPISODE_MAX_PER_AGENT},
+        )
 
 
 _service: Optional[EpisodicMemoryService] = None

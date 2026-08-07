@@ -65,11 +65,47 @@ async def test_record_inserts_and_reuses_supplied_embedding():
                      tool_count=2, embedding=_vec())
 
     router.embed.assert_not_called()                 # reused supplied embedding
-    db.execute.assert_awaited_once()
-    _, params = db.execute.call_args.args
+    # Two statements now: the insert, then the per-agent prune.
+    assert db.execute.await_count == 2
+    insert_sql, params = db.execute.await_args_list[0].args
+    assert "INSERT INTO agent_episodes" in str(insert_sql)
     assert params["agent_id"] == 7 and params["tool_count"] == 2
     assert len(params["outcome"]) == 1000            # truncated to OUTCOME_MAX_CHARS
     db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_record_prunes_oldest_episodes_beyond_the_cap():
+    """Recall always takes the top-k nearest neighbours, so an uncapped table
+    lets one early bad episode stay attached to a task shape forever."""
+    from app.services.episodic_memory import EPISODE_MAX_PER_AGENT
+
+    db = MagicMock()
+    db.execute = AsyncMock()
+    db.commit = AsyncMock()
+    svc = EpisodicMemoryService(router=_fake_router())
+
+    await svc.record(db, agent_id=7, task="t", approach="a", outcome="o",
+                     embedding=_vec())
+
+    prune_sql, params = db.execute.await_args_list[1].args
+    assert "DELETE FROM agent_episodes" in str(prune_sql)
+    assert params == {"agent_id": 7, "keep": EPISODE_MAX_PER_AGENT}
+
+
+@pytest.mark.asyncio
+async def test_record_persists_the_supplied_success_flag():
+    """success must reflect how the run actually ended; recall filters on it."""
+    db = MagicMock()
+    db.execute = AsyncMock()
+    db.commit = AsyncMock()
+    svc = EpisodicMemoryService(router=_fake_router())
+
+    await svc.record(db, agent_id=7, task="t", approach="a", outcome="o",
+                     success=False, embedding=_vec())
+
+    _, params = db.execute.await_args_list[0].args
+    assert params["success"] is False
 
 
 @pytest.mark.asyncio
