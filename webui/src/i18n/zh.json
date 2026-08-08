@@ -322,6 +322,8 @@
   },
   "chat": {
     "title": "聊天",
+    "awaitingApproval": "等待人工审批",
+    "awaitingApprovalNotice": "⏸ 该任务触发了高风险操作，已暂停等待人工审批。请到「审批管理」页面处理；批准后本次回答会自动继续。",
     "placeholder": "输入消息...",
     "send": "发送",
     "newChat": "新建对话",
