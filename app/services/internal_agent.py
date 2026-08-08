@@ -443,14 +443,16 @@ class InternalAgentRunner:
         from app.services.gatekeeper import gatekeeper_check, Decision
         from app.services.governance_config import load_governance
         from app.services.kill_switch import is_halted
+        from app.services.tool_confidence import estimate_tool_confidence
 
         name = ctx.tool_name
         meta = self._tool_meta(name)
         governance = load_governance(self._governance_cfg)
         governance.halted = await is_halted(agent_id=self.agent_id)
-        # confidence stays None until a real estimator lands; `escalate_to_human_below`
-        # is dead configuration until then (audit #10, tracked separately).
-        verdict = gatekeeper_check(meta, governance, confidence=None)
+        # A real confidence signal, so `escalate_to_human_below` stops being
+        # dead configuration (audit #10).
+        confidence = estimate_tool_confidence(meta, args)
+        verdict = gatekeeper_check(meta, governance, confidence=confidence)
 
         # INV-29: the audit emit is awaited and its failure is *not* swallowed.
         # A refusal we cannot prove afterwards is not a control.
@@ -459,6 +461,7 @@ class InternalAgentRunner:
             agent_id=self.agent_id, agent_name=self.agent_name,
             action=f"gatekeeper:{verdict.decision.value}",
             action_category=verdict.category, risk_tier=verdict.risk_tier,
+            confidence=confidence,
             input_data={"tool": name, "transport": meta["transport"], "args": args},
             output_data={"decision": verdict.decision.value, "reason": verdict.reason},
         )
