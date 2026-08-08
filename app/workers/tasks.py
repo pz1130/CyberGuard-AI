@@ -359,6 +359,9 @@ def _run_async_master_agent(execution_id: str, user_input: str, user_id: int, **
             user_input=run_input,
             user_id=user_id,
             conversation_history=conversation_history,
+            # Carried into the approval payload so the decide endpoint can
+            # resume this exact run and finish this exact execution.
+            execution_id=execution_id,
             **{**kwargs, **conv_overrides},
         )
 
@@ -402,6 +405,21 @@ def run_master_agent_task(self, execution_id: str, user_input: str, user_id: int
 
         # Run master agent in thread pool (it's async but Celery is sync)
         result = _run_async_master_agent(execution_id, user_input, user_id, **kwargs)
+
+        # Graph suspended on human approval — do NOT mark completed. The decide
+        # endpoint resumes the graph and finishes the execution.
+        if isinstance(result, dict) and result.get("interrupted"):
+            future = _executor.submit(
+                _update_execution_with_result_sync,
+                execution_id, "waiting_approval", result, None,
+            )
+            future.result()
+            logger.info(
+                f"[run_master_agent_task] execution_id={execution_id} "
+                f"waiting_approval request_id={result.get('request_id')}"
+            )
+            return {"status": "waiting_approval", "execution_id": execution_id,
+                    "result": result}
 
         # Update status to completed with result
         future = _executor.submit(
@@ -726,3 +744,70 @@ def run_group_chat_completion_task(self, session_id: str):
     except Exception as e:
         logger.error(f"[run_group_chat_completion_task] session_id={session_id} error: {e}")
         raise
+
+
+@shared_task(
+    bind=True,
+    ignore_result=True,
+    max_retries=2,
+    default_retry_delay=5,
+)
+def resume_master_agent_task(
+    self,
+    thread_id: str,
+    decision: str,
+    comment: str | None = None,
+    execution_id: str | None = None,
+    conversation_id: int | None = None,
+    user_id: int | None = None,
+    user_input: str | None = None,
+):
+    """Resume a master graph suspended on approval (checkpointer + interrupt).
+
+    The decision arrives in the API process; the run lives here. The durable
+    checkpointer is what lets a different process pick it back up.
+    """
+    import asyncio as _asyncio
+    from app.agents.master import get_master_agent
+
+    logger.info(
+        "[resume_master_agent_task] thread_id=%s decision=%s execution_id=%s",
+        thread_id, decision, execution_id,
+    )
+
+    async def _run():
+        from app.core.database import engine
+        await engine.dispose()
+        return await get_master_agent().resume(
+            thread_id, decision=decision, comment=comment, user_id=user_id)
+
+    loop = _asyncio.new_event_loop()
+    _asyncio.set_event_loop(loop)
+    try:
+        result = loop.run_until_complete(_run())
+    except Exception as e:
+        logger.error("[resume_master_agent_task] failed: %s", e)
+        if execution_id:
+            _update_execution_with_result_sync(execution_id, "failed", None, str(e))
+        raise
+    finally:
+        loop.close()
+
+    if isinstance(result, dict) and result.get("interrupted"):
+        # The run hit a second gate — still waiting on a human.
+        if execution_id:
+            _update_execution_with_result_sync(
+                execution_id, "waiting_approval", result, None)
+        return {"status": "waiting_approval", "result": result}
+
+    approved = decision == "approved"
+    status = "completed" if approved else "failed"
+    if execution_id:
+        err = None if approved else (
+            (result or {}).get("error_message") or f"Approval {decision}")
+        _update_execution_with_result_sync(execution_id, status, result, err)
+
+    if conversation_id and result and approved:
+        _save_to_conversation_async(conversation_id, user_input or "", result)
+
+    return {"status": status, "execution_id": execution_id, "result": result}

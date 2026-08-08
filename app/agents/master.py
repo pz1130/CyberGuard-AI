@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 
 from langgraph.graph import StateGraph, END
-from langgraph.prebuilt import ToolNode
+from langgraph.types import interrupt, Command
 
 from app.agents.states import MasterAgentState, AgentState, SubAgentResult
 from app.services.agent_executor import AgentExecutor
@@ -22,6 +22,20 @@ logger = logging.getLogger(__name__)
 _RISK_TIER_WEIGHT = {"low": 0.0, "medium": 0.15, "high": 0.3, "critical": 0.4}
 # Statuses that mean the sub-agent did not do its job.
 _FAILED_STATUSES = frozenset({"failed", "denied", "halted", "error"})
+
+
+def approval_request_id(run_request_id: str, approval_round: int) -> str:
+    """Stable, per-gate approval id.
+
+    ``approval_requests.request_id`` is ``String(36)``, so the round cannot be
+    a suffix — a uuid plus ``-ap1`` overflows the column. A uuid5 keeps the
+    width and stays deterministic, which is what makes the create idempotent
+    when ``interrupt()`` re-runs the node on resume.
+    """
+    if not approval_round:
+        return run_request_id
+    return str(uuid.uuid5(uuid.NAMESPACE_URL,
+                          f"cyberguard/approval/{run_request_id}/{approval_round}"))
 
 
 def derive_risk_score(sub_results: Dict[str, Any]) -> float:
@@ -65,13 +79,15 @@ class MasterAgent:
     ERROR                          END
     """
 
-    def __init__(self, llm_router=None):
+    def __init__(self, llm_router=None, checkpointer=None):
         self.executor = AgentExecutor()
         self.llm_router = llm_router
-        self.graph = self._build_graph()
+        # Optional injected checkpointer (tests pass MemorySaver). When None,
+        # run/resume open one via graph_checkpoint.open_checkpointer.
+        self._checkpointer = checkpointer
 
-    def _build_graph(self) -> StateGraph:
-        """Build the LangGraph state machine."""
+    def _build_graph(self, checkpointer=None) -> StateGraph:
+        """Build and compile the LangGraph state machine."""
         workflow = StateGraph(MasterAgentState)
 
         # Add nodes
@@ -117,10 +133,21 @@ class MasterAgent:
 
         workflow.add_edge("group_chat_moderator_node", "summarizer_node")
         workflow.add_edge("summarizer_node", END)
-        workflow.add_edge("approval_node", END)
+
+        # The approval node suspends on interrupt(); on resume it routes onward
+        # instead of ending the run, so an approved action actually gets to run.
+        workflow.add_conditional_edges(
+            "approval_node",
+            self._approval_decision,
+            {
+                "re_execute": "sub_agent_executor_node",
+                "summarize": "summarizer_node",
+                "rejected": "error_node",
+            }
+        )
         workflow.add_edge("error_node", END)
 
-        return workflow.compile()
+        return workflow.compile(checkpointer=checkpointer)
 
     def _route_decision(self, state: MasterAgentState) -> str:
         """Decide routing based on parsed intent."""
@@ -132,11 +159,14 @@ class MasterAgent:
             # No tasks — go to summarizer for direct LLM response
             return "summarize_direct"
 
-        # Check if any task requires approval
-        for task in task_plan:
-            if task.get("requires_approval", False):
-                state["approval_required"] = True
-                return "approval"
+        # Check if any task requires approval. `pre_approved` is set by the
+        # approval node after a human decides, so the re-dispatch does not walk
+        # straight back into the gate it just cleared.
+        if not state.get("pre_approved"):
+            for task in task_plan:
+                if task.get("requires_approval", False):
+                    state["approval_required"] = True
+                    return "approval"
 
         return "sub_agents"
 
@@ -147,9 +177,40 @@ class MasterAgent:
         (needs_approval status, requires_approval, risk_level). Agent failures
         alone go to summarizer so errors surface without keyword-based HITL.
         """
-        if state.get("approval_required"):
+        if state.get("approval_required") and not self._approval_is_current(state):
             return "rejected"
         return "approved"
+
+    @staticmethod
+    def _approval_is_current(state: MasterAgentState) -> bool:
+        """Whether a human decision covers *this* gate.
+
+        A decision is spent once the dispatch it authorised has run. Testing
+        only ``approval_status == "approved"`` let the first approval stand in
+        for every later gate in the thread, so a second high-risk action was
+        never shown to anyone.
+        """
+        if state.get("approval_status") != "approved":
+            return False
+        granted = state.get("approval_granted_round")
+        return granted is not None and int(granted) == int(state.get("approval_round") or 0)
+
+    def _approval_decision(self, state: MasterAgentState) -> str:
+        """Route after a decision comes back through interrupt()."""
+        if state.get("approval_status") != "approved":
+            return "rejected"
+        # Re-dispatch when a tool was blocked before it ran; otherwise the human
+        # signed off on high-risk *output* and there is nothing left to execute.
+        sub_results = state.get("sub_results") or {}
+        blocked = any(
+            isinstance(r, dict) and (r.get("status") or "").lower() == "needs_approval"
+            for r in sub_results.values()
+        )
+        planned = any(
+            isinstance(t, dict) and t.get("requires_approval")
+            for t in (state.get("task_plan") or [])
+        )
+        return "re_execute" if (blocked or planned) else "summarize"
 
     async def _start_node(self, state: MasterAgentState) -> MasterAgentState:
         """Start node - initialize state."""
@@ -338,6 +399,15 @@ class MasterAgent:
         request_id = state.get("request_id")
         provider_id = state.get("provider_id")
         dispatch_depth = int(state.get("dispatch_depth") or 0)
+        # A human has approved this dispatch. Without carrying it the executors
+        # hit the same blanket high-permission refusal and the approved action
+        # never runs — the run just re-summarises itself.
+        pre_approved = bool(state.get("pre_approved"))
+        dispatch_context = {
+            "conversation_id": state.get("conversation_id"),
+            "pre_approved": pre_approved,
+            "request_id": request_id,
+        }
 
         if not task_plan:
             state["current_state"] = AgentState.VALIDATE_RESULTS
@@ -528,7 +598,7 @@ class MasterAgent:
                     agent_id=agent_id,
                     task=task_desc,
                     user_id=user_id,
-                    context={"conversation_id": state.get("conversation_id")},
+                    context=dispatch_context,
                 )
                 return str(agent_id), result
 
@@ -545,7 +615,7 @@ class MasterAgent:
                         agent_id=agent["id"],
                         task=task_desc,
                         user_id=user_id,
-                        context={"conversation_id": state.get("conversation_id")},
+                        context=dispatch_context,
                     )
                     return agent_name, result
 
@@ -557,7 +627,7 @@ class MasterAgent:
                         agent_id=agent["id"],
                         task=task_desc,
                         user_id=user_id,
-                        context={"conversation_id": state.get("conversation_id")},
+                        context=dispatch_context,
                     )
                     return agent_type, result
 
@@ -623,6 +693,28 @@ class MasterAgent:
             state["sub_results"] = merged
         else:
             state["sub_results"] = results
+
+        # A human decision authorises exactly one re-dispatch. Retire the whole
+        # decision here — clearing `pre_approved` alone is not enough, because
+        # `_validation_decision` treats a lingering approval_status="approved"
+        # as standing permission and would wave the next gate through without
+        # anyone seeing it. Bumping the round also gives the next approval its
+        # own request_id instead of reusing the spent one.
+        if pre_approved:
+            spent_round = int(state.get("approval_round") or 0)
+            state["pre_approved"] = False
+            state["approval_record_id"] = None
+            state["approval_round"] = spent_round + 1
+            # The plan entries just dispatched are what the human approved, so
+            # their gate is spent. Left standing, `requires_approval` re-raises
+            # in _validation_node on every pass and the run can never finish.
+            # The flag is replaced by a record of which round cleared it rather
+            # than simply dropped, so the audit trail still shows it was gated.
+            for task in state.get("task_plan") or []:
+                if isinstance(task, dict) and task.get("requires_approval"):
+                    task["requires_approval"] = False
+                    task["approved_in_round"] = spent_round
+
         state["current_state"] = AgentState.VALIDATE_RESULTS
         return state
 
@@ -817,15 +909,35 @@ class MasterAgent:
         return state
 
     async def _approval_node(self, state: MasterAgentState) -> MasterAgentState:
-        """Handle human approval for high-risk operations.
+        """Human approval via LangGraph ``interrupt()``.
 
-        Creates a DB record and WAITS until an admin approves/rejects via
-        the REST API (POST /api/v1/approvals/{id}/decide) or the request expires.
+        Creates a DB approval record, then suspends the graph. The worker
+        returns immediately with ``interrupted=True``; when an admin decides,
+        ``MasterAgent.resume`` feeds the decision back through ``Command``.
+        The previous implementation polled a fresh DB session every 2s for up
+        to an hour, holding one of four API workers for the whole wait.
+
+        ``interrupt()`` re-runs the node from the top on resume **and discards
+        the writes it made before suspending**, so "create only once" cannot be
+        a state flag — on resume the flag is gone and we would open a duplicate,
+        leaving a dangling pending approval behind every approved run.
+        Idempotency therefore comes from a deterministic per-round request_id
+        that is looked up before creating.
         """
         state["current_state"] = AgentState.HUMAN_APPROVAL
-        state["approval_status"] = "pending"
 
-        request_id = state.get("request_id", "")
+        # Already decided *for this gate* (e.g. AUTO_APPROVE settled it before
+        # the interrupt). A decision from an earlier gate must not short-circuit
+        # this one, so the check is round-scoped rather than status-only.
+        if state.get("approval_status") in ("rejected", "expired") or \
+                self._approval_is_current(state):
+            return state
+
+        run_request_id = state.get("request_id") or str(uuid.uuid4())
+        state["request_id"] = run_request_id
+        approval_round = int(state.get("approval_round") or 0)
+        request_id = approval_request_id(run_request_id, approval_round)
+        state["approval_request_id"] = request_id
 
         # INV-13: risk_level from structured fields only (not free-text keywords)
         sub_results = state.get("sub_results", {}) or {}
@@ -847,7 +959,9 @@ class MasterAgent:
         # Build a human-readable description
         if sub_results:
             descriptions = [
-                f"{k}: {v.get('output', '')[:200]}"
+                # `output` is legitimately None on a refusal, and the key is
+                # present — so a bare .get(..., '') still yields None here.
+                f"{k}: {str(v.get('output') or '')[:200]}"
                 for k, v in sub_results.items()
                 if isinstance(v, dict)
                 and (
@@ -867,10 +981,13 @@ class MasterAgent:
                 if isinstance(t, dict) and t.get("requires_approval")
             ) or "Task requires human approval"
 
+        from app.config import settings
         from app.services.approval_service import ApprovalService
 
-        # Write pending request to DB (non-blocking notification via SSE)
-        try:
+        existing = await ApprovalService.get_by_request_id(request_id)
+        if existing is not None:
+            state["approval_record_id"] = existing.id
+        else:
             record = await ApprovalService.create_request(
                 request_id=request_id,
                 user_id=state.get("user_id", 0),
@@ -881,37 +998,67 @@ class MasterAgent:
                     "sub_results": sub_results,
                     "task_plan": state.get("task_plan"),
                     "user_input": state.get("user_input"),
+                    # How a different process finds this run to resume it.
+                    "thread_id": state.get("thread_id") or run_request_id,
+                    "execution_id": state.get("execution_id"),
+                    "conversation_id": state.get("conversation_id"),
+                    "approval_round": approval_round,
+                    # INV-06 / INV-38: on the server a different human decides.
+                    # Leaving this unmarked would let a local self-approval be
+                    # read later as separation of duties.
+                    "approval_type": "separation_of_duties",
                 },
                 risk_level=risk_level,
                 urgency="urgent" if risk_level == "high" else "normal",
                 expires_in_minutes=60,
             )
             state["approval_record_id"] = record.id
-        except Exception as e:
-            # Log but don't hard-fail — admin can still manage via DB
-            import logging
-            logging.getLogger(__name__).error(f"[approval] Failed to create DB record: {e}")
 
-        # WAIT for human decision (suspends graph execution, does NOT block event loop)
-        try:
-            status, comment = await ApprovalService.wait_for_decision(
-                request_id=request_id,
-                timeout_seconds=3600,  # 1 hour
-            )
-        except asyncio.TimeoutError:
-            status = "expired"
+            if settings.AUTO_APPROVE:
+                await ApprovalService.decide(
+                    request_id, "approved", approver_id=0,
+                    comment="Auto-approved by system",
+                )
+                state["approval_status"] = "approved"
+                state["approval_comment"] = "Auto-approved by system"
+                state["approval_granted_round"] = approval_round
+                state["approval_required"] = False
+                state["pre_approved"] = True
+                state["validation_passed"] = True
+                state["current_state"] = AgentState.SUMMARIZE
+                return state
+
+        # Suspend here. Resume value: {"status": ..., "comment": ...}
+        decision = interrupt({
+            "kind": "approval",
+            "request_id": request_id,
+            "approval_record_id": state.get("approval_record_id"),
+            "action": "agent_execution",
+        })
+
+        if isinstance(decision, dict):
+            status = decision.get("status") or decision.get("decision") or "rejected"
+            comment = decision.get("comment")
+        else:
+            status = str(decision or "rejected")
+            comment = None
 
         state["approval_status"] = status
         state["approval_comment"] = comment
+        state["interrupted"] = False
 
-        # Transition based on decision
         if status == "approved":
+            # Scope the decision to this gate; the executor spends it and bumps
+            # the round, so the next gate has to ask again.
+            state["approval_granted_round"] = approval_round
+            state["approval_required"] = False
+            state["pre_approved"] = True
             state["validation_passed"] = True
             state["current_state"] = AgentState.SUMMARIZE
         else:
-            # rejected or expired
+            # INV-05: a timeout is a refusal, not a default-allow.
             state["validation_passed"] = False
-            state["error_message"] = f"Approval {status}: {comment or 'timeout'}"
+            state["error_message"] = f"Approval {status}: {comment or 'no comment'}"
             state["current_state"] = AgentState.ERROR
 
         return state
@@ -921,21 +1068,87 @@ class MasterAgent:
         state["current_state"] = AgentState.ERROR
         return state
 
-    async def run(self, user_input: str, user_id: int, **kwargs) -> Dict[str, Any]:
-        """Run the master agent with user input."""
+    def _thread_config(self, thread_id: str) -> Dict[str, Any]:
+        return {"configurable": {"thread_id": thread_id}}
+
+    async def _ainvoke(self, payload, *, thread_id: str, session_id: str,
+                       user_id: int) -> Dict[str, Any]:
+        """Invoke the graph on ``thread_id`` with a live checkpointer."""
         from app.core.langfuse_tracing import trace_run
+        from app.core.graph_checkpoint import open_checkpointer
 
-        initial_state = MasterAgentState(
-            user_input=user_input,
-            user_id=user_id,
-            current_state=AgentState.START,
-            group_chat_active=False,
+        config = self._thread_config(thread_id)
+
+        async def _go(checkpointer):
+            graph = self._build_graph(checkpointer)
+            with trace_run(session_id=session_id, agent_name="master", user_id=user_id):
+                return await graph.ainvoke(payload, config=config)
+
+        if self._checkpointer is not None:
+            return await _go(self._checkpointer)
+        async with open_checkpointer() as checkpointer:
+            return await _go(checkpointer)
+
+    async def run(self, user_input: str, user_id: int, **kwargs) -> Dict[str, Any]:
+        """Run the master agent with user input.
+
+        When the graph suspends on approval the returned dict has
+        ``interrupted=True`` and ``approval_status="pending"`` — the caller
+        (the Celery task) must mark the execution waiting, not complete.
+        """
+        request_id = kwargs.pop("request_id", None) or str(uuid.uuid4())
+        thread_id = kwargs.pop("thread_id", None) or request_id
+
+        initial_state: Dict[str, Any] = {
+            "user_input": user_input,
+            "user_id": user_id,
+            "current_state": AgentState.START,
+            "group_chat_active": False,
+            "request_id": request_id,
+            "thread_id": thread_id,
+            "approval_round": 0,
+            "pre_approved": False,
+            "interrupted": False,
             **kwargs,
-        )
+        }
 
-        session_id = str(kwargs.get("conversation_id") or uuid.uuid4())
-        with trace_run(session_id=session_id, agent_name="master", user_id=user_id):
-            result = await self.graph.ainvoke(initial_state)
+        result = await self._ainvoke(
+            initial_state, thread_id=thread_id,
+            session_id=str(kwargs.get("conversation_id") or uuid.uuid4()),
+            user_id=user_id)
+        return self._normalize_result(result, thread_id=thread_id, request_id=request_id)
+
+    async def resume(self, thread_id: str, *, decision: str,
+                     comment: Optional[str] = None,
+                     user_id: Optional[int] = None) -> Dict[str, Any]:
+        """Resume a graph suspended on approval."""
+        result = await self._ainvoke(
+            Command(resume={"status": decision, "comment": comment}),
+            thread_id=thread_id, session_id=thread_id, user_id=user_id or 0)
+        return self._normalize_result(
+            result, thread_id=thread_id,
+            request_id=(result or {}).get("request_id") or thread_id)
+
+    def _normalize_result(self, result: Dict[str, Any], *, thread_id: str,
+                          request_id: str) -> Dict[str, Any]:
+        """Flag interrupted runs so the worker does not mark them completed."""
+        if not isinstance(result, dict):
+            return {"final_summary": str(result), "thread_id": thread_id,
+                    "request_id": request_id}
+
+        result = dict(result)
+        interrupts = result.pop("__interrupt__", None) or []
+        if interrupts:
+            result["interrupted"] = True
+            result["approval_status"] = result.get("approval_status") or "pending"
+            result["current_state"] = AgentState.HUMAN_APPROVAL
+            # Interrupt objects are not JSON-friendly; keep only their values
+            # so Celery and the execution record can carry them.
+            result["interrupt_payload"] = [getattr(i, "value", i) for i in interrupts]
+        else:
+            result.setdefault("interrupted", False)
+        result["thread_id"] = thread_id
+        result.setdefault("request_id", request_id)
         return result
 
 

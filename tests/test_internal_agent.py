@@ -676,7 +676,9 @@ async def test_agent_executor_routes_internal_kind(monkeypatch):
 
     captured = {}
     class FakeRunner:
-        def __init__(self, cfg): captured["cfg"] = cfg
+        def __init__(self, cfg, *, pre_approved=False):
+            captured["cfg"] = cfg
+            captured["pre_approved"] = pre_approved
         async def execute(self, task, conversation_id, user_id):
             captured["task"] = task
             return {"status": "completed", "output": "ok",

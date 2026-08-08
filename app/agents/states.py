@@ -61,8 +61,21 @@ class MasterAgentState(TypedDict, total=False):
 
     # Human approval
     approval_required: bool
-    approval_status: Optional[str]  # approved, rejected, pending
+    approval_status: Optional[str]  # approved, rejected, pending, expired
     approval_comment: Optional[str]
+    approval_record_id: Optional[int]
+    # Which gate of this run we are on. A decision is valid only for the round
+    # it was granted in, so one approval cannot stand in for every later gate.
+    approval_round: int
+    approval_granted_round: Optional[int]
+    approval_request_id: Optional[str]
+    # Set after a human approves; consumed by the next dispatch and then cleared.
+    pre_approved: bool
+    # True while the graph is suspended on interrupt() awaiting a human.
+    interrupted: bool
+    # Checkpoint thread — how a different process finds this run to resume it.
+    thread_id: Optional[str]
+    execution_id: Optional[str]
 
     # Error handling
     error_message: Optional[str]

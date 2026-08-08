@@ -111,7 +111,11 @@ episodic_memory = _EpisodicAdapter()
 
 
 class InternalAgentRunner:
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], *, pre_approved: bool = False):
+        # A human has already approved this dispatch, so the *first* gated tool
+        # call may proceed. Deliberately consumed once: one approval authorises
+        # one action, not every gated action the run later thinks of.
+        self._pre_approved: bool = bool(pre_approved)
         self.agent_id: int = config["id"]
         self.agent_name: str = config["agent_name"]
         self.system_prompt: str = config.get("system_prompt") or ""
@@ -467,6 +471,21 @@ class InternalAgentRunner:
                          "error": f"tool {name!r} was refused — {verdict.reason}"},
                 reason=status)
         if verdict.decision is Decision.NEEDS_APPROVAL:
+            if self._pre_approved:
+                # A human already signed off on this dispatch. Spend the
+                # approval on this one call so the next gated tool still stops.
+                self._pre_approved = False
+                await record_action(
+                    user_id=getattr(self, "_user_id", None) or None,
+                    agent_id=self.agent_id, agent_name=self.agent_name,
+                    action="gatekeeper:pre_approved",
+                    action_category=verdict.category, risk_tier=verdict.risk_tier,
+                    input_data={"tool": name, "args": args},
+                    output_data={"decision": "allowed",
+                                 "reason": "prior human approval",
+                                 "approval_type": "separation_of_duties"},
+                )
+                return None
             await self._request_approval(name, args, verdict.risk_tier)
             return BlockedResult(
                 payload={"status": "needs_approval", "is_error": True,
@@ -710,7 +729,10 @@ class InternalAgentRunner:
         start = time.monotonic()
         self._user_id = user_id
 
-        if self.permission_level == "high":
+        # A prior human approval covers this dispatch; without honouring it the
+        # graph's post-approval re-dispatch hits the same refusal and the
+        # approved work never runs. The per-tool gate still applies.
+        if self.permission_level == "high" and not self._pre_approved:
             return {
                 "status": "needs_approval",
                 "output": None,
@@ -820,7 +842,7 @@ class InternalAgentRunner:
         start = time.monotonic()
         self._user_id = user_id
 
-        if self.permission_level == "high":
+        if self.permission_level == "high" and not self._pre_approved:
             yield {"type": "error",
                    "content": "High permission internal agent requires approval"}
             return
