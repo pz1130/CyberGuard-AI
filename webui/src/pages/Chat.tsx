@@ -390,25 +390,58 @@ export default function Chat() {
     localStorage.removeItem('activeChatTaskId')
   }
 
-  // Resume polling
-  const resumePolling = (taskId: string) => {
+  // A run that hits a governance gate suspends server-side and stays that way
+  // until a human decides, so it must not keep reporting PROCESSING with no
+  // explanation. Once approved the same task finishes on its own, so we keep
+  // polling — just slowly, because a decision can take an hour.
+  const RUNNING_POLL_MS = 2000
+  const AWAITING_APPROVAL_POLL_MS = 10000
+
+  const startPolling = (taskId: string, label: string) => {
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
     let seconds = 0
-    pollIntervalRef.current = setInterval(async () => {
-      seconds += 2
+    let announcedApproval = false
+    let intervalMs = RUNNING_POLL_MS
+
+    const tick = async () => {
+      seconds += intervalMs / 1000
       if (!isMountedRef.current) return
-      setPollingStatus(`RESUMING... (${seconds}s)`)
+      setPollingStatus(
+        announcedApproval
+          ? `${t('chat.awaitingApproval')} (${seconds}s)`
+          : `${label} (${seconds}s)`)
       const task = await pollForResult(taskId)
       if (!isMountedRef.current) return
+
       if (task?.status === 'completed' || task?.status === 'failed') {
         clearInterval(pollIntervalRef.current!)
         pollIntervalRef.current = null
+        activeTaskIdRef.current = null
+        localStorage.removeItem('activeChatTaskId')
         handleTaskResult(task)
         setLoading(false)
         setPollingStatus('')
+        return
       }
-    }, 2000)
+
+      if (task?.status === 'waiting_approval' && !announcedApproval) {
+        announcedApproval = true
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: t('chat.awaitingApprovalNotice'),
+          created_at: new Date().toISOString(),
+        }])
+        // Back off: the next state change needs a person, not a faster poll.
+        clearInterval(pollIntervalRef.current!)
+        intervalMs = AWAITING_APPROVAL_POLL_MS
+        pollIntervalRef.current = setInterval(tick, intervalMs)
+      }
+    }
+
+    pollIntervalRef.current = setInterval(tick, intervalMs)
   }
+
+  const resumePolling = (taskId: string) => startPolling(taskId, 'RESUMING...')
 
   // Resume polling on mount if there's an active task from a previous session
   useEffect(() => {
@@ -525,24 +558,7 @@ export default function Chat() {
         activeTaskIdRef.current = taskId
         localStorage.setItem('activeChatTaskId', taskId)
 
-        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
-        let seconds = 0
-        pollIntervalRef.current = setInterval(async () => {
-          seconds += 2
-          if (!isMountedRef.current) return
-          setPollingStatus(`PROCESSING... (${seconds}s)`)
-          const task = await pollForResult(taskId)
-          if (!isMountedRef.current) return
-          if (task?.status === 'completed' || task?.status === 'failed') {
-            clearInterval(pollIntervalRef.current!)
-            pollIntervalRef.current = null
-            activeTaskIdRef.current = null
-            localStorage.removeItem('activeChatTaskId')
-            handleTaskResult(task)
-            setLoading(false)
-            setPollingStatus('')
-          }
-        }, 2000)
+        startPolling(taskId, 'PROCESSING...')
       } catch (e: any) {
         setMessages(prev => [...prev, { role: 'assistant', content: `⚠ SYSTEM ERROR — ${e?.message || 'TRANSMISSION FAILURE'}`, created_at: new Date().toISOString() }])
         setLoading(false)

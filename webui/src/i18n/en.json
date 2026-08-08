@@ -322,6 +322,8 @@
   },
   "chat": {
     "title": "Chat",
+    "awaitingApproval": "AWAITING APPROVAL",
+    "awaitingApprovalNotice": "⏸ This task triggered a high-risk action and is paused for human approval. Decide it on the Approvals page — the answer resumes automatically once approved.",
     "placeholder": "Type a message...",
     "send": "Send",
     "newChat": "New Chat",
