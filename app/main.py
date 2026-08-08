@@ -129,6 +129,21 @@ async def lifespan(app: FastAPI):
 
     _ks_task = _aio.create_task(_killswitch_file_poller())
 
+    # Give the agent audit event stream a durable sink. The default bus ships
+    # with zero subscribers, so without this every emit is a no-op and the
+    # evidence trail exists in shape only.
+    from agent_core.events import get_default_audit_bus
+    from app.services.run_event_log import RunEventSink
+    get_default_audit_bus().subscribe(RunEventSink().handle)
+
+    # Report runs a previous crash left mid-flight. Read-only: replaying a
+    # side-effecting tool is never automatic.
+    try:
+        from app.services.run_recovery import sweep_interrupted_runs
+        await sweep_interrupted_runs()
+    except Exception as e:  # noqa: BLE001 - a recovery *report* is not a boundary
+        logger.warning(f"Run recovery sweep skipped: {e}")
+
     yield
     # Shutdown
     _ks_task.cancel()
