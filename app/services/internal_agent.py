@@ -36,7 +36,7 @@ from agent_core.loop_utils import (
     tool_call_fingerprint,
     truncate_tool_result,
 )
-from agent_core.pipeline import run_tool_call
+from agent_core.pipeline import BlockedResult, run_tool_call
 from agent_core.run_loop import RunLoopConfig, run_loop
 
 from app.core.database import AsyncSessionLocal
@@ -395,6 +395,107 @@ class InternalAgentRunner:
             })
         return tools
 
+    # -------- Tool governance (INV-28 before_tool_call) --------
+
+    def _tool_meta(self, name: str) -> Dict[str, Any]:
+        """Governance taxonomy for ``name``, resolved before anything executes.
+
+        Untagged MCP / pool tools fall back to ``observe``, matching
+        ``execute_tool``. That keeps existing deployments working, but it means
+        the *category* rules only bite for tools an operator has actually
+        tagged — the kill switch and the audit trail apply either way, which is
+        the part that was missing.
+        """
+        if name in (getattr(self, "_mcp_by_name", None) or {}):
+            tool_row, _server = self._mcp_by_name[name]
+            return {"action_category": getattr(tool_row, "action_category", None),
+                    "risk_tier": getattr(tool_row, "risk_tier", None),
+                    "transport": "mcp"}
+        pool = getattr(self, "_pool_tools_by_name", None) or {}
+        if name in pool:
+            tool_row = pool[name]
+            return {"action_category": getattr(tool_row, "action_category", None),
+                    "risk_tier": getattr(tool_row, "risk_tier", None),
+                    "transport": "pool"}
+        # Synthetic read-only tools owned by this runner.
+        if name in ("kb_search", "web_search", "vuln_search", "load_skill"):
+            return {"action_category": "observe", "risk_tier": "low",
+                    "transport": "builtin"}
+        return {"action_category": None, "risk_tier": None, "transport": "unknown"}
+
+    async def _before_tool_call(self, ctx, args) -> Optional[BlockedResult]:
+        """Kill switch + gatekeeper for **every** tool, whatever its transport.
+
+        Previously only pool tools were gated, inside ``execute_tool``. MCP,
+        ``kb_search`` and ``web_search`` reached their executors directly, so
+        the one path carrying arbitrary external capability was also the one
+        with no kill switch, no gatekeeper and no audit row (audit #5).
+
+        Hanging this on ``before_tool_call`` rather than adding a second check
+        in ``_dispatch`` is what makes "every path is gated" statically
+        checkable (INV-28).
+        """
+        from app.core.audit import record_action
+        from app.services.gatekeeper import gatekeeper_check, Decision
+        from app.services.governance_config import load_governance
+        from app.services.kill_switch import is_halted
+
+        name = ctx.tool_name
+        meta = self._tool_meta(name)
+        governance = load_governance(self._governance_cfg)
+        governance.halted = await is_halted(agent_id=self.agent_id)
+        # confidence stays None until a real estimator lands; `escalate_to_human_below`
+        # is dead configuration until then (audit #10, tracked separately).
+        verdict = gatekeeper_check(meta, governance, confidence=None)
+
+        # INV-29: the audit emit is awaited and its failure is *not* swallowed.
+        # A refusal we cannot prove afterwards is not a control.
+        await record_action(
+            user_id=getattr(self, "_user_id", None) or None,
+            agent_id=self.agent_id, agent_name=self.agent_name,
+            action=f"gatekeeper:{verdict.decision.value}",
+            action_category=verdict.category, risk_tier=verdict.risk_tier,
+            input_data={"tool": name, "transport": meta["transport"], "args": args},
+            output_data={"decision": verdict.decision.value, "reason": verdict.reason},
+        )
+
+        if verdict.decision is Decision.DENY:
+            status = "halted" if governance.halted else "denied"
+            # INV-32: structured, not a string prefix the model has to parse.
+            return BlockedResult(
+                payload={"status": status, "is_error": True,
+                         "error": f"tool {name!r} was refused — {verdict.reason}"},
+                reason=status)
+        if verdict.decision is Decision.NEEDS_APPROVAL:
+            await self._request_approval(name, args, verdict.risk_tier)
+            return BlockedResult(
+                payload={"status": "needs_approval", "is_error": True,
+                         "error": (f"tool {name!r} requires human approval — "
+                                   f"{verdict.reason}")},
+                reason="needs_approval")
+        return None
+
+    async def _request_approval(self, name: str, args: Dict[str, Any],
+                                risk_tier: Optional[str]) -> None:
+        """Raise a human-approval request for a gated tool call.
+
+        INV-06 / INV-38: the record states which kind of approval this is. On
+        the server this is separation-of-duties (a different human decides);
+        recording it unmarked would let a self-approval later be read as one.
+        """
+        import uuid
+        from app.services.approval_service import ApprovalService
+
+        await ApprovalService.create_request(
+            request_id=str(uuid.uuid4()),
+            user_id=getattr(self, "_user_id", 0) or 0,
+            action_type="tool.execute",
+            action_description=f"Agent {self.agent_name!r} wants to run tool {name!r}",
+            agent_id=self.agent_id, agent_name=self.agent_name,
+            payload={"tool": name, "args": args, "approval_type": "separation_of_duties"},
+            risk_level=risk_tier or "high",
+        )
+
     # -------- Tool dispatch --------
 
     async def _dispatch(self, call) -> str:
@@ -460,27 +561,30 @@ class InternalAgentRunner:
                 except Exception as e:
                     return f"ERROR: {name} failed: {e}"
 
-            # 4. Executable pool Tool (inner pipeline: kill switch / gatekeeper / runner)
+            # 4. Executable pool Tool. `governance=None` skips execute_tool's own
+            # gatekeeper block: `before_tool_call` already rendered that verdict
+            # for every transport, and running it twice would double-audit and
+            # raise two approval requests for one call. execute_tool's RBAC,
+            # sandbox and runner checks still apply, as do its gates for the
+            # REST and broker callers that pass a governance context.
             if getattr(self, "_pool_tools_by_name", None) and name in self._pool_tools_by_name:
                 tool_row = self._pool_tools_by_name[name]
-                from app.services.governance_config import load_governance
-                governance = load_governance(self._governance_cfg) if self._governance_cfg else None
                 res = await execute_tool(tool_row, bound_args, user_id=getattr(self, "_user_id", 0),
-                                         governance=governance, confidence=None)
+                                         governance=None, confidence=None)
                 if res.get("status") == "completed":
                     return res.get("stdout", "") or "(no output)"
-                if res.get("status") == "needs_approval":
-                    return (f"NEEDS_APPROVAL: tool {name!r} is high-permission; "
-                            f"an approval request was created for a human to review.")
-                return f"ERROR: tool {name!r}: {res.get('error') or res.get('stderr') or res}"
+                return {"status": res.get("status") or "error", "is_error": True,
+                        "error": res.get("error") or res.get("stderr") or str(res)}
 
-            return f"ERROR: unknown tool {name!r}"
+            return {"status": "error", "is_error": True,
+                    "error": f"unknown tool {name!r}"}
 
         return await run_tool_call(
             tool_name=name,
             arguments=args,
             user_id=getattr(self, "_user_id", None),
             metadata={"backend": "internal_dispatch", "agent_name": self.agent_name},
+            before_tool_call=self._before_tool_call,
             execute=_execute,
         )
 
