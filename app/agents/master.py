@@ -17,6 +17,41 @@ from app.core.context_compressor import maybe_compress
 logger = logging.getLogger(__name__)
 
 
+# Structured risk tiers, ordered. Anything unrecognised contributes nothing
+# rather than defaulting high — an unknown tier is missing data, not evidence.
+_RISK_TIER_WEIGHT = {"low": 0.0, "medium": 0.15, "high": 0.3, "critical": 0.4}
+# Statuses that mean the sub-agent did not do its job.
+_FAILED_STATUSES = frozenset({"failed", "denied", "halted", "error"})
+
+
+def derive_risk_score(sub_results: Dict[str, Any]) -> float:
+    """Risk score in [0, 1] from **structured** sub-result fields only.
+
+    The node used to publish a literal 0.5, so a clean run and a run where
+    every agent was denied scored the same — the number looked meaningful in
+    the UI and the audit trail while carrying no information (audit #21).
+
+    Deliberately blind to ``output``. INV-13 forbids user-controllable input
+    from driving control flow and INV-39 classes tool output as hostile by
+    default, so scoring the text would let anything the agent read move a
+    number that a human uses to decide how hard to look.
+    """
+    results = [r for r in (sub_results or {}).values() if isinstance(r, dict)]
+    if not results:
+        return 0.0
+
+    failed = sum(1 for r in results
+                 if str(r.get("status") or "").lower() in _FAILED_STATUSES)
+    fail_ratio = failed / len(results)
+    worst_tier = max(
+        (_RISK_TIER_WEIGHT.get(
+            str(r.get("risk_tier") or r.get("risk_level") or "").lower(), 0.0)
+         for r in results),
+        default=0.0,
+    )
+    return round(min(1.0, 0.2 + 0.6 * fail_ratio + worst_tier), 3)
+
+
 class MasterAgent:
     """
     LangGraph-based Master Agent for task orchestration.
@@ -776,7 +811,7 @@ class MasterAgent:
             logger.debug("_summarizer_node: llm_router is None, returning fallback message")
             state["final_summary"] = "暂无 AI Provider 可用，请先在「AI Provider 配置」页面中添加一个 Provider。"
 
-        state["risk_score"] = 0.5
+        state["risk_score"] = derive_risk_score(state.get("sub_results") or {})
         state["action_items"] = ["Review agent outputs", "Validate findings"]
         state["current_state"] = AgentState.END
         return state
