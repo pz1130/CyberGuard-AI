@@ -21,6 +21,33 @@ from app.schemas.approval import (
 from app.services.approval_service import ApprovalService
 
 router = APIRouter()
+
+# Approvals raised by the master graph's approval node. Everything else — most
+# notably the internal agent's per-tool approvals — has no checkpointed graph
+# behind it, and asking to resume one only produces a failing Celery task.
+_GRAPH_APPROVAL_ACTION_TYPES = {"agent_execution"}
+
+
+def graph_resume_target(record) -> Optional[dict]:
+    """Resume arguments for *record*, or None if it is not a graph approval.
+
+    The thread_id must come from the payload: falling back to ``request_id``
+    invents a thread that was never suspended.
+    """
+    if getattr(record, "action_type", None) not in _GRAPH_APPROVAL_ACTION_TYPES:
+        return None
+    payload = getattr(record, "payload", None) or {}
+    thread_id = payload.get("thread_id")
+    if not thread_id:
+        return None
+    return {
+        "thread_id": thread_id,
+        "execution_id": payload.get("execution_id"),
+        "conversation_id": payload.get("conversation_id"),
+        "user_input": payload.get("user_input"),
+    }
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -176,6 +203,21 @@ async def decide_approval(
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    # Resume a master graph suspended via interrupt(). Only approvals raised by
+    # the graph's approval node have a checkpointed thread to resume.
+    target = graph_resume_target(record)
+    if target is not None:
+        try:
+            from app.workers.tasks import resume_master_agent_task
+            resume_master_agent_task.delay(
+                decision=body.decision,
+                comment=body.comment,
+                user_id=record.user_id,
+                **target,
+            )
+        except Exception as e:  # noqa: BLE001 - dispatch failure must not 500 the decision
+            logger.warning("[approval] resume dispatch failed: %s", e)
 
     # Send email notification to requester (best-effort, non-blocking)
     asyncio.create_task(_notify_decision(record, body.decision, body.comment))
