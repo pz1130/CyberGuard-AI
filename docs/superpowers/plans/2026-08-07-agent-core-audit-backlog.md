@@ -246,7 +246,45 @@ the whole request on a rate limit or a dropped connection
 - **#5 ops** tag existing MCP tools so category rules are not inert
 - **Evaluation** injection red-team corpus, prompt regression baseline
 - **Supply chain** pinned deps, minimum release age, lockfile commit gate
-- **UI** for interrupted runs / recovery report (backend sweep only today)
+- **UI** for interrupted runs / recovery report (the *recovery* report; the
+  `waiting_approval` state itself is surfaced as of 2026-08-08)
+
+### Verification debt (recorded 2026-08-08)
+
+Named separately from the feature backlog because these are gaps in what has
+been *proven*, not in what has been built.
+
+- **No end-to-end run of the approval path.** Every test of it is mocked. The
+  three layers never exercised together are a real LLM provider, a Celery
+  worker, and the `AsyncPostgresSaver` checkpointer. The manual pass worth
+  doing before this ships: submit a high-risk task → confirm the execution
+  reports `waiting_approval` → approve it in the UI → confirm the action
+  actually ran and the answer landed in the conversation. Then repeat with a
+  run that hits a *second* gate, which is the case the round-scoping fixed.
+- **No test runner in `webui/`.** No vitest/jest, no test files, no `test`
+  script. Frontend changes are verifiable only by `tsc -b` and `eslint`, so
+  the chat poller's `waiting_approval` handling has no regression test.
+  `eslint src/pages/Chat.tsx` currently reports 16 pre-existing problems —
+  that is the baseline to compare against, not a clean sheet.
+- **The commit split is not per-commit green.** The 2026-08-07 work was split
+  retroactively at file granularity and ordered by dependency; only the final
+  tree is verified. `internal_agent.py` (+742) and `master.py` (+630) each
+  span several phases and could not be split further without guessing which
+  hunk belonged to which change.
+- **`generate_summary` returns `str | dict`** with no annotation. One caller
+  (`master._summarizer_node`) handles both.
+
+### Repo hygiene (recorded 2026-08-08)
+
+- **`.git/hooks/post-commit` runs `git push origin main`.** It pushes `main`
+  regardless of the branch being committed, so it neither backs up the branch
+  you are working on nor stays out of the way. It currently fails because the
+  remote is ahead; if `main` ever becomes fast-forwardable it will start
+  pushing unreviewed local `main` to the public repo on every commit. Local
+  only — not in version control, so a fresh clone will not have it.
+- **`.gitignore` ends with a blanket `*.png`.** Existing tracked assets
+  (`webui/src/assets/hero.png`) are unaffected, but any *new* image asset is
+  silently ignored. Probably meant to catch agent debug screenshots only.
 
 ---
 
