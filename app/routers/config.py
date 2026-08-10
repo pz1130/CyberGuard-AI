@@ -256,7 +256,7 @@ async def import_config(
         Framework, Requirement, ComplianceAssessment, RequirementAssessment, Evidence,
         KnowledgeBase, Document
     )
-    import bcrypt
+    from app.core.auth import get_password_hash
 
     # Import agents
     from app.routers.agents import _validate_agent_payload
@@ -414,7 +414,7 @@ async def import_config(
                 continue
             # Create with default password "imported-user" - admin should reset
             default_pass = "imported-user"
-            hashed = bcrypt.hashpw(default_pass.encode(), bcrypt.gensalt()).decode()
+            hashed = get_password_hash(default_pass)
             user = User(
                 username=user_data.get("username"),
                 email=user_data.get("email"),

@@ -47,6 +47,19 @@ class AuditBus:
     def subscribe(self, handler: Subscriber) -> None:
         self._subscribers.append(handler)
 
+    def unsubscribe(self, handler: Subscriber) -> None:
+        """Detach a handler. No-op if it was never subscribed.
+
+        The process-default bus outlives any one application instance, so a
+        component that subscribes during startup must detach on shutdown or it
+        keeps receiving events — and keeps writing to a database it no longer
+        owns — for the rest of the process's life.
+        """
+        try:
+            self._subscribers.remove(handler)
+        except ValueError:
+            pass
+
     def clear(self) -> None:
         self._subscribers.clear()
 

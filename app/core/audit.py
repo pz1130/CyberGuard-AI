@@ -28,6 +28,11 @@ async def log_audit(
     input_data: Any,
     output_data: Any,
     request_id: Optional[str] = None,
+    *,
+    ip_address: Optional[str] = None,
+    user_agent: Optional[str] = None,
+    request_path: Optional[str] = None,
+    metadata: Optional[dict] = None,
 ) -> dict:
     """
     Log an audit event.
@@ -39,6 +44,13 @@ async def log_audit(
         input_data: Input data (will be hashed)
         output_data: Output data (will be hashed)
         request_id: Optional request tracking ID
+        ip_address / user_agent / request_path / metadata: stored verbatim
+
+    input_data and output_data are hashed, which makes them tamper-evidence
+    material rather than something you can query. The columns below are the
+    ones an investigator actually filters on ("what did this IP do", "which
+    calls 403'd"), so they are stored as-is. They already existed on the model
+    and were simply never written.
     """
     timestamp = datetime.now(timezone.utc)
     entry = {
@@ -49,6 +61,10 @@ async def log_audit(
         "output_hash": _hash_data(output_data),
         "timestamp": timestamp.isoformat(),
         "request_id": request_id or _generate_request_id(),
+        "ip_address": ip_address,
+        "user_agent": (user_agent or None) and str(user_agent)[:500],
+        "request_path": (request_path or None) and str(request_path)[:500],
+        "metadata": metadata,
     }
 
     # Store in Redis for real-time access (best-effort stream; DB is durable path)
@@ -101,6 +117,12 @@ async def _flush_audit_buffer():
                     input_hash=entry["input_hash"],
                     output_hash=entry["output_hash"],
                     request_id=entry.get("request_id"),
+                    # .get(): entries buffered by an older process may predate
+                    # these keys, and a flush must never fail on that.
+                    ip_address=entry.get("ip_address"),
+                    user_agent=entry.get("user_agent"),
+                    request_path=entry.get("request_path"),
+                    metadata_json=entry.get("metadata"),
                 )
                 session.add(log)
             await session.commit()

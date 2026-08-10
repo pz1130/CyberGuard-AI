@@ -1,8 +1,7 @@
 """Authentication router."""
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-import bcrypt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -19,15 +18,11 @@ bearer_scheme = HTTPBearer(auto_error=False)
 router = APIRouter()
 
 
-def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-
-
-def verify_password(password: str, hashed: str) -> bool:
-    try:
-        return bcrypt.checkpw(password.encode(), hashed.encode())
-    except Exception:
-        return False
+# Re-exported from app.core.auth so there is one bcrypt policy in the codebase
+# (72-byte limit handling in particular). Kept as module-level names because
+# other modules and tests import them from here.
+from app.core.auth import get_password_hash as hash_password  # noqa: E402
+from app.core.auth import verify_password  # noqa: E402
 
 
 class LoginResponse(BaseModel):
@@ -44,7 +39,9 @@ class RefreshResponse(BaseModel):
 
 
 @router.post("/auth/login", response_model=LoginResponse, tags=["Authentication"])
-async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(
+    request: Request, body: LoginRequest, db: AsyncSession = Depends(get_db)
+):
     """Authenticate user and return JWT access token."""
     from sqlalchemy import select
     from app.models.user import User
@@ -57,6 +54,14 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
 
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is disabled")
+
+    # Name the actor for the audit middleware. This request predates any
+    # get_current_user call, so without it the one row that matters most for
+    # spotting credential attacks — the login itself — has no user on it.
+    # Set only after the credentials check: a failed attempt has no actor,
+    # and its 401 plus source IP is the signal there.
+    request.state.user_id = user.id
+    request.state.username = user.username
 
     access_token = create_access_token(
         data={"sub": str(user.id), "username": user.username, "role": user.role},

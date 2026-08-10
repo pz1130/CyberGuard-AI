@@ -164,3 +164,26 @@ async def test_events_without_a_run_id_are_dropped_not_crashed():
     sink = RunEventSink(agent_id=9008)
     await sink.handle(AuditEvent(layer=AuditLayer.AGENT, phase=AuditPhase.START,
                                  name="orphan"))
+
+
+def test_the_default_bus_does_not_accumulate_subscribers_across_app_starts():
+    """The default bus is a process singleton; startup must undo itself.
+
+    Without unsubscribe-on-shutdown, every app instance created in a process
+    (each TestClient context, every worker reload) leaves a live DB-writing
+    sink behind, and later unrelated runs get written by a sink whose engine
+    has been disposed.
+    """
+    from fastapi.testclient import TestClient
+
+    from agent_core.events import get_default_audit_bus
+    import app.main as main_module
+
+    bus = get_default_audit_bus()
+    before = bus.subscriber_count
+
+    for _ in range(2):
+        with TestClient(main_module.app):
+            assert bus.subscriber_count == before + 1
+
+    assert bus.subscriber_count == before
