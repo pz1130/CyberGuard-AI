@@ -8,7 +8,10 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      # Loopback only. `"5432:5432"` binds 0.0.0.0 — this database
+      # holds encrypted provider keys and the audit trail, and the compose
+      # credentials are postgres/postgres.
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -21,7 +24,7 @@ services:
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-cyberguard-redis-pass}
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -50,6 +53,7 @@ services:
         condition: service_healthy
     volumes:
       - ./app:/app/app
+      - ./packages:/app/packages
       - evidence_data:/data/evidence
       - backup_data:/backups
 
@@ -81,6 +85,7 @@ services:
         condition: service_healthy
     volumes:
       - ./app:/app/app
+      - ./packages:/app/packages
 
   celery_beat:
     build:
@@ -99,19 +104,31 @@ services:
         condition: service_healthy
     volumes:
       - ./app:/app/app
+      - ./packages:/app/packages
       - celerybeat_data:/var/run/celerybeat
 
+  # Flower is the Celery admin UI: it lists task arguments and can revoke
+  # running tasks. It ships with no authentication of its own, so it is
+  # opt-in (`docker compose --profile monitoring up`) and refuses to start
+  # without credentials rather than coming up open.
   flower:
+    profiles: ["monitoring"]
     build:
       context: .
       dockerfile: Dockerfile
-    command: celery -A app.workers.celery_app flower --port=5555
+    command: >
+      sh -c 'if [ -z "$$FLOWER_BASIC_AUTH" ]; then
+        echo "flower: refusing to start without FLOWER_BASIC_AUTH (set it to user:password in .env)" >&2;
+        exit 1;
+      fi;
+      exec celery -A app.workers.celery_app flower --port=5555'
     env_file:
       - .env
     environment:
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      FLOWER_BASIC_AUTH: ${FLOWER_BASIC_AUTH:-}
     ports:
-      - "5555:5555"
+      - "127.0.0.1:5555:5555"
     depends_on:
       redis:
         condition: service_healthy

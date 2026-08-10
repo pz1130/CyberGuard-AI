@@ -15,6 +15,10 @@ tests/
 docs/
 k8s/
 *.md
+# .env holds the real secrets and is injected at runtime via env_file — it must
+# never enter the build context. .env.local / .env.example follow for the same
+# reason (and to keep the context small).
+.env
 .env.local
 .env.example
 .dockerignore
