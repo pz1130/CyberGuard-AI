@@ -25,6 +25,24 @@ class SeatbeltError(RuntimeError):
     pass
 
 
+def minimal_env(tmpdir: Optional[str] = None) -> dict:
+    """The environment a sandboxed child gets when the caller supplies none.
+
+    INV-01 · credentials never enter the sandbox. ``subprocess`` inherits the
+    whole parent environment when ``env=None``, and the sidecar holds
+    ``CYBERGUARD_LLM_API_KEY`` (provider.py) plus whatever launched it. Falling
+    back to a scrubbed environment rather than inheritance makes the invariant
+    hold by construction: a call site that forgets ``env=`` degrades to *less*
+    access, not more.
+    """
+    return {
+        "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+        "HOME": os.environ.get("HOME", "/var/empty"),
+        "LANG": os.environ.get("LANG", "en_US.UTF-8"),
+        "TMPDIR": tmpdir or "/tmp",
+    }
+
+
 def build_profile(
     policy: DualKnobPolicy,
     *,
@@ -122,7 +140,8 @@ def run_sandboxed(
             capture_output=True,
             text=True,
             cwd=cwd,
-            env=dict(env) if env is not None else None,
+            # Never None: that would inherit the sidecar's secrets (INV-01).
+            env=dict(env) if env is not None else minimal_env(cwd),
             timeout=timeout_seconds,
             check=False,
         )

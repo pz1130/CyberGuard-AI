@@ -12,6 +12,7 @@ from typing import Any, Mapping, Optional, Sequence
 
 from apps.desktop.sidecar.policy import DualKnobPolicy, always_readonly_paths
 from apps.desktop.sidecar.sandbox import SeatbeltError, detect_sandbox_impl, run_sandboxed
+from apps.desktop.sidecar.sandbox.seatbelt import minimal_env
 from apps.desktop.sidecar.sandbox.detect import SANDBOX_EXEC
 
 # Never hand these to the model via host tools (credential surface).
@@ -29,6 +30,26 @@ _BLOCKED_NAME_SUFFIXES = (
 
 class HostOpsError(RuntimeError):
     pass
+
+
+# INV-01 · credentials never enter the sandbox. run_sandboxed now falls back to
+# minimal_env() instead of inheriting, so forgetting `env=` fails safe; these
+# call sites still pass it explicitly so the intent is visible at the call.
+_ENV_PASSTHROUGH_KEYS = ("LANG", "LC_ALL", "TZ")
+
+
+def sandbox_env(
+    *, tmpdir: Optional[str] = None, overrides: Optional[Mapping[str, str]] = None
+) -> dict[str, str]:
+    """Minimal child environment, plus the few locale overrides a caller may set."""
+    env = minimal_env(tmpdir)
+    if overrides:
+        # Locale/timezone only — anything else is a credential-shaped risk.
+        for key in _ENV_PASSTHROUGH_KEYS:
+            value = overrides.get(key)
+            if isinstance(value, str):
+                env[key] = value
+    return env
 
 
 def _is_blocked_path(path: Path) -> bool:
@@ -91,6 +112,7 @@ class SandboxedReadOperations:
             argv,
             self.policy,
             readonly_paths=self.readonly_paths,
+            env=sandbox_env(),
             timeout_seconds=30,
             profile_dir=self.profile_dir,
         )
@@ -114,6 +136,7 @@ class SandboxedReadOperations:
             ["/bin/ls", "-1A", str(target)],
             self.policy,
             readonly_paths=self.readonly_paths,
+            env=sandbox_env(),
             timeout_seconds=30,
             profile_dir=self.profile_dir,
         )
@@ -211,6 +234,7 @@ class SandboxedEditOperations:
             ["/usr/bin/tee", str(target)],
             self.policy,
             readonly_paths=self.readonly_paths,
+            env=sandbox_env(),
             timeout_seconds=30,
             profile_dir=self.profile_dir,
             input_text=content if content is not None else "",
@@ -229,6 +253,7 @@ class SandboxedEditOperations:
             ["/bin/rm", "-f", str(target)],
             self.policy,
             readonly_paths=self.readonly_paths,
+            env=sandbox_env(),
             timeout_seconds=30,
             profile_dir=self.profile_dir,
         )
@@ -281,9 +306,46 @@ ALLOWED_EXEC_BINARIES = frozenset(
     }
 )
 
+# INV-35 · a binary allowlist alone does not close arbitrary execution: several
+# allowlisted tools can launch *other* programs through their own flags, which
+# re-opens exactly the path the allowlist exists to shut. `find -exec /bin/sh -c
+# ...` is the canonical case, and Seatbelt does not catch it — the generated
+# profile is `(allow default)` plus write denials (see sandbox/seatbelt.py), so
+# process-exec inside the sandbox is permitted and reads are unrestricted.
+# Flags that write to caller-chosen paths are denied for the same reason: they
+# sidestep the writable_roots contract that `_assert_writable_target` enforces.
+_DENIED_ARGS: dict[str, frozenset[str]] = {
+    "/usr/bin/find": frozenset(
+        {
+            "-exec", "-execdir", "-ok", "-okdir",   # spawn arbitrary programs
+            "-delete",                              # unlink outside the write contract
+            "-fprint", "-fprint0", "-fprintf",      # write to arbitrary paths
+        }
+    ),
+    "/usr/bin/sort": frozenset(
+        {"--compress-program", "-o", "--output"}    # --compress-program executes
+    ),
+    "/usr/bin/file": frozenset({"-C", "--compile"}),  # writes a compiled magic db
+}
+
 _MAX_ARGV = 32
 _MAX_ARG_LEN = 4096
 _MAX_TIMEOUT = 60
+
+
+def _assert_args_allowed(binary: str, resolved: str, args: Sequence[str]) -> None:
+    """Reject flags that let an allowlisted binary escape the allowlist."""
+    denied = _DENIED_ARGS.get(binary) or _DENIED_ARGS.get(resolved)
+    if not denied:
+        return
+    for a in args:
+        # `--flag=value` and `--flag value` are the same flag
+        flag = a.split("=", 1)[0]
+        if flag in denied:
+            raise HostOpsError(
+                f"argument {flag!r} is not permitted for {binary} "
+                "(it would execute or write outside the sandbox contract)"
+            )
 
 
 def _validate_exec_argv(argv: Sequence[str]) -> list[str]:
@@ -312,9 +374,11 @@ def _validate_exec_argv(argv: Sequence[str]) -> list[str]:
         raise HostOpsError(
             f"binary not on allowlist: {binary} (resolved {resolved})"
         )
+    # Never allow shell -c style via sh/bash (not on list). Extra: block python -c.
+    # Per-binary argument policy — the allowlist is necessary but not sufficient.
+    _assert_args_allowed(binary, resolved, out[1:])
     # Prefer the path that exists on disk for exec
     out[0] = resolved if Path(resolved).is_file() else binary
-    # Never allow shell -c style via sh/bash (not on list). Extra: block python -c.
     return out
 
 
@@ -361,18 +425,8 @@ class SandboxedExecOperations:
                 )
             cwd_path.mkdir(parents=True, exist_ok=True)
             work_cwd = str(cwd_path.resolve())
-        # Minimal env — do not inherit secrets from parent
-        safe_env = {
-            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
-            "HOME": os.environ.get("HOME", "/var/empty"),
-            "LANG": os.environ.get("LANG", "en_US.UTF-8"),
-            "TMPDIR": self.default_cwd or "/tmp",
-        }
-        if env:
-            # Only allow a few non-secret overrides
-            for k in ("LANG", "LC_ALL", "TZ"):
-                if k in env and isinstance(env[k], str):
-                    safe_env[k] = env[k]
+        # Minimal env — do not inherit secrets from parent (INV-01)
+        safe_env = sandbox_env(tmpdir=self.default_cwd, overrides=env)
 
         result = await asyncio.to_thread(
             run_sandboxed,
