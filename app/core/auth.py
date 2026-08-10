@@ -1,23 +1,56 @@
 """Authentication utilities and JWT handling."""
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from fastapi import HTTPException, status
 from app.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 ALGORITHM = settings.ALGORITHM
+
+# bcrypt hashes at most 72 bytes of input. Versions before 4.1 truncated
+# silently; bcrypt >= 5 raises ValueError instead, which surfaced as a 500 on
+# any long passphrase. We reject rather than truncate: truncating would mean a
+# 200-character passphrase is silently no stronger than its first 72 bytes,
+# which is exactly the kind of invisible downgrade P5 forbids. Pre-hashing
+# (bcrypt_sha256) would remove the limit but invalidates every stored hash, so
+# it belongs in a migration, not here.
+BCRYPT_MAX_BYTES = 72
+
+
+class PasswordTooLongError(ValueError):
+    """Raised when a password exceeds what bcrypt can actually hash."""
+
+    def __init__(self, length: int):
+        super().__init__(
+            f"password is {length} bytes; bcrypt accepts at most "
+            f"{BCRYPT_MAX_BYTES} bytes (UTF-8 encoded)"
+        )
+        self.length = length
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against its hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    """Verify a password against its bcrypt hash. Never raises."""
+    try:
+        encoded = plain_password.encode("utf-8")
+        if len(encoded) > BCRYPT_MAX_BYTES:
+            # No stored hash can correspond to an over-length input, and
+            # checkpw would raise rather than return False.
+            return False
+        return bcrypt.checkpw(encoded, hashed_password.encode("utf-8"))
+    except (ValueError, TypeError):
+        return False
 
 
 def get_password_hash(password: str) -> str:
-    """Hash a password using bcrypt."""
-    return pwd_context.hash(password)
+    """Hash a password using bcrypt.
+
+    Raises PasswordTooLongError so callers can return 400 instead of 500.
+    """
+    encoded = password.encode("utf-8")
+    if len(encoded) > BCRYPT_MAX_BYTES:
+        raise PasswordTooLongError(len(encoded))
+    return bcrypt.hashpw(encoded, bcrypt.gensalt()).decode("utf-8")
 
 
 def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:

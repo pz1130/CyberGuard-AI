@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from app.config import settings
 from app.core.database import engine, Base
 from app.core.audit import log_audit
+from app.core.auth import PasswordTooLongError
 from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
@@ -55,7 +56,7 @@ async def lifespan(app: FastAPI):
     # both modes so a fresh DB (e.g. `docker compose down -v`) is always usable.
     from app.core.database import get_db_context
     from app.models.user import User
-    import bcrypt
+    from app.core.auth import get_password_hash
     from sqlalchemy import select
     try:
         async with get_db_context() as session:
@@ -66,7 +67,7 @@ async def lifespan(app: FastAPI):
                 admin = User(
                     username="admin",
                     email="admin@cyberguard.local",
-                    hashed_password=bcrypt.hashpw(default_password.encode(), bcrypt.gensalt()).decode(),
+                    hashed_password=get_password_hash(default_password),
                     role="admin",
                     full_name="Administrator",
                     is_active=True,
@@ -134,7 +135,8 @@ async def lifespan(app: FastAPI):
     # evidence trail exists in shape only.
     from agent_core.events import get_default_audit_bus
     from app.services.run_event_log import RunEventSink
-    get_default_audit_bus().subscribe(RunEventSink().handle)
+    _run_event_handler = RunEventSink().handle
+    get_default_audit_bus().subscribe(_run_event_handler)
 
     # Report runs a previous crash left mid-flight. Read-only: replaying a
     # side-effecting tool is never automatic.
@@ -147,6 +149,10 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown
     _ks_task.cancel()
+    # The default audit bus is a process-level singleton that outlives this
+    # app instance. Leaving the sink attached means it keeps consuming events
+    # and writing to an engine we are about to dispose.
+    get_default_audit_bus().unsubscribe(_run_event_handler)
     try:
         from app.core.langfuse_tracing import flush_langfuse
         flush_langfuse()
@@ -179,19 +185,49 @@ app.add_middleware(
 
 @app.middleware("http")
 async def audit_middleware(request: Request, call_next):
-    """Log all HTTP requests to audit trail."""
-    if request.url.path not in ["/health", "/docs", "/openapi.json"]:
-        # Defer audit logging to avoid async Redis in sync middleware path
-        import asyncio
-        asyncio.create_task(log_audit(
-            user_id=None,
+    """Log all HTTP requests to the audit trail.
+
+    INV-29: the audit write is awaited, not dispatched fire-and-forget. The
+    previous `asyncio.create_task(...)` had three problems, all of which put
+    holes in the evidence trail rather than merely slowing it down: the task
+    could be garbage-collected before it ran (nothing held a reference), any
+    exception vanished into "Task exception was never retrieved", and a crash
+    between dispatch and completion lost the record silently. `log_audit`
+    already awaits its own DB flush for exactly this reason.
+
+    The cost is one Redis lpush per request; `log_audit` degrades to the DB
+    buffer (loudly) when Redis is unavailable, so a Redis stall cannot wedge
+    request handling.
+    """
+    if request.url.path in ["/health", "/docs", "/openapi.json"]:
+        return await call_next(request)
+
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        # After the request, not before: only here do we know who the caller
+        # was (get_current_user records it on request.state — the middleware
+        # runs before dependencies resolve) and how it ended. An audit row
+        # naming neither the actor nor the outcome answers no question anyone
+        # would ask of it. `finally` so a raised request is still recorded.
+        await log_audit(
+            user_id=getattr(request.state, "user_id", None),
             agent_id=None,
             action=f"{request.method} {request.url.path}",
             input_data={"method": request.method, "path": str(request.url.path)},
-            output_data=None,
-        ))
-    response = await call_next(request)
-    return response
+            output_data={"status_code": status_code},
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            request_path=str(request.url.path),
+            metadata={
+                "method": request.method,
+                "status_code": status_code,
+                "username": getattr(request.state, "username", None),
+            },
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -298,6 +334,20 @@ app.include_router(sso.router, prefix="/api/v1", tags=["SSO"])
 # ---------------------------------------------------------------------------
 # Global Exception Handler
 # ---------------------------------------------------------------------------
+@app.exception_handler(PasswordTooLongError)
+async def password_too_long_handler(request: Request, exc: PasswordTooLongError):
+    """A password bcrypt cannot hash is bad input, not a server fault.
+
+    Registered here rather than at each call site so any future code path that
+    hashes a password inherits the 400 instead of falling through to the
+    catch-all below and reporting an internal error.
+    """
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={"detail": str(exc)},
+    )
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler — hides internal error details in production."""

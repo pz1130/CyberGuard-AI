@@ -1,6 +1,6 @@
 """FastAPI dependency injection utilities."""
 from typing import Optional, AsyncGenerator
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
@@ -15,6 +15,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
 ) -> AuthenticatedUser:
     """
@@ -69,6 +70,15 @@ async def get_current_user(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="User account is disabled",
             )
+
+        # Record the actor on the request so the audit middleware can name it.
+        # The middleware runs before dependencies resolve, so it has no other
+        # way to know who made the call — every HTTP audit row used to say
+        # user_id=None, which is an audit trail with no actor in it.
+        # request.state is backed by the ASGI scope, which the middleware and
+        # the endpoint share.
+        request.state.user_id = user_row[0]
+        request.state.username = user_row[1]
 
         return AuthenticatedUser(
             user_id=user_row[0],
@@ -143,6 +153,7 @@ def require_permission(*permissions: Permission):
 
 
 async def get_optional_current_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
 ) -> Optional[AuthenticatedUser]:
     """
@@ -151,9 +162,9 @@ async def get_optional_current_user(
     """
     if not credentials:
         return None
-    
+
     try:
-        return await get_current_user(credentials)
+        return await get_current_user(request, credentials)
     except HTTPException:
         return None
 

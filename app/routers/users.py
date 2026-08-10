@@ -2,7 +2,6 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-import bcrypt
 
 from app.core.dependencies import get_db, get_current_user, require_role
 from app.core.auth import AuthenticatedUser
@@ -14,8 +13,8 @@ from sqlalchemy import select
 router = APIRouter()
 
 
-def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+# One bcrypt policy for the whole codebase — see app.core.auth.
+from app.core.auth import get_password_hash as hash_password  # noqa: E402
 
 
 @router.get("/users", response_model=UserListResponse, dependencies=[Depends(require_role(Role.ADMIN))])
