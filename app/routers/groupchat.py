@@ -23,6 +23,20 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+async def _load_owned_session(service, session_id: str, current_user):
+    """Load a session the caller is entitled to see, else 404.
+
+    Every endpoint below drives real agent execution or exposes the full
+    transcript, so authentication alone is not enough — a session belongs to the
+    user who created it. Non-owners get 404 rather than 403 so the API does not
+    confirm that a session id exists.
+    """
+    session = await service.load_session(session_id)
+    if not session or session.user_id != current_user.user_id:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session
+
+
 # --- Multi-Agent Group Chat Service Endpoints ---
 
 @router.post("/groupchat/sessions", response_model=GroupChatSessionResponse)
@@ -73,14 +87,15 @@ async def create_group_chat_session(
 
 
 @router.get("/groupchat/sessions/{session_id}", response_model=GroupChatSessionResponse)
-async def get_group_chat_session(session_id: str):
+async def get_group_chat_session(
+    session_id: str,
+    current_user=Depends(require_role(Role.ADMIN)),
+):
     """Get the current state of a group chat session."""
     from app.services.group_chat import get_group_chat_service
 
     service = get_group_chat_service()
-    session = await service.load_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await _load_owned_session(service, session_id, current_user)
 
     return GroupChatSessionResponse(
         session_id=session.session_id,
@@ -105,14 +120,16 @@ async def get_group_chat_session(session_id: str):
 
 
 @router.post("/groupchat/sessions/{session_id}/message", response_model=GroupChatSessionResponse)
-async def add_group_chat_message(session_id: str, body: GroupChatAddMessageRequest):
+async def add_group_chat_message(
+    session_id: str,
+    body: GroupChatAddMessageRequest,
+    current_user=Depends(require_role(Role.ADMIN)),
+):
     """Add a user message to an existing session (without running agents)."""
     from app.services.group_chat import get_group_chat_service
 
     service = get_group_chat_service()
-    session = await service.load_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    await _load_owned_session(service, session_id, current_user)
 
     await service.add_message(
         session_id=session_id,
@@ -144,7 +161,10 @@ async def add_group_chat_message(session_id: str, body: GroupChatAddMessageReque
 
 
 @router.post("/groupchat/sessions/{session_id}/round", response_model=GroupChatRoundResponse)
-async def run_group_chat_round(session_id: str):
+async def run_group_chat_round(
+    session_id: str,
+    current_user=Depends(require_role(Role.ADMIN)),
+):
     """
     Run one round of the group chat where each selected agent responds once.
 
@@ -153,9 +173,7 @@ async def run_group_chat_round(session_id: str):
     from app.services.group_chat import get_group_chat_service
 
     service = get_group_chat_service()
-    session = await service.load_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    await _load_owned_session(service, session_id, current_user)
 
     result = await service.run_round(session_id)
     return GroupChatRoundResponse(
@@ -166,7 +184,10 @@ async def run_group_chat_round(session_id: str):
 
 
 @router.post("/groupchat/sessions/{session_id}/complete", response_model=GroupChatSessionResponse)
-async def run_group_chat_to_completion(session_id: str):
+async def run_group_chat_to_completion(
+    session_id: str,
+    current_user=Depends(require_role(Role.ADMIN)),
+):
     """
     Start running the group chat to completion (all rounds or until consensus).
 
@@ -178,9 +199,7 @@ async def run_group_chat_to_completion(session_id: str):
     from app.services.group_chat import get_group_chat_service
 
     service = get_group_chat_service()
-    session = await service.load_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    await _load_owned_session(service, session_id, current_user)
 
     result = await service.start_completion(session_id)
     return GroupChatSessionResponse(
@@ -206,14 +225,15 @@ async def run_group_chat_to_completion(session_id: str):
 
 
 @router.delete("/groupchat/sessions/{session_id}")
-async def cancel_group_chat_session(session_id: str):
+async def cancel_group_chat_session(
+    session_id: str,
+    current_user=Depends(require_role(Role.ADMIN)),
+):
     """Cancel an active group chat session."""
     from app.services.group_chat import get_group_chat_service
 
     service = get_group_chat_service()
-    session = await service.load_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    await _load_owned_session(service, session_id, current_user)
 
     await service.cancel_session(session_id)
     return {"status": "ok", "session_id": session_id}

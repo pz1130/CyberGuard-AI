@@ -82,8 +82,12 @@ class Settings(BaseSettings):
     GROUPCHAT_JACCARD_THRESHOLD: float = 0.7    # lexical fallback threshold
 
     # Auto-approve approval requests without human intervention.
-    # NDB Std §B5: security actions must never auto-approve. Default off outside dev.
-    AUTO_APPROVE: bool = True
+    # NDB Std §B5 / P1 (default deny): security actions must never auto-approve.
+    # This is the master switch for the entire HITL boundary — when it is on,
+    # ApprovalService.wait_for_decision resolves every request as approved
+    # without a human. It therefore defaults OFF, and turning it on outside
+    # development is a hard configuration error (see validate_security_keys).
+    AUTO_APPROVE: bool = False
 
     # Kill switch file trigger (NDB Std §Kill Switch)
     KILL_SWITCH_FILE: str = "var/governance/kill_switch"
@@ -103,7 +107,7 @@ class Settings(BaseSettings):
         if self.ENCRYPTION_KEY == DEFAULT_KEY or self.SECRET_KEY == DEFAULT_KEY:
             errors.append(
                 "ENCRYPTION_KEY and SECRET_KEY must be configured with unique values. "
-                "Set the CYBERGUARD_ENCRYPTION_KEY and CYBERGUARD_SECRET_KEY environment variables."
+                "Set the ENCRYPTION_KEY and SECRET_KEY environment variables."
             )
         if self.ENCRYPTION_KEY == self.SECRET_KEY:
             errors.append(
@@ -113,18 +117,21 @@ class Settings(BaseSettings):
         if self.REDIS_PASSWORD == DEFAULT_REDIS_PASSWORD and self.ENVIRONMENT == "production":
             errors.append(
                 "REDIS_PASSWORD is using the default value. "
-                "Set the CYBERGUARD_REDIS_PASSWORD environment variable."
+                "Set the REDIS_PASSWORD environment variable."
+            )
+        # NDB Std §B5: never auto-approve security actions outside development.
+        # A warning is the wrong control here — it prints once, to stderr, and
+        # is invisible under a process manager, so the approval boundary could
+        # be off in production with nothing to show for it (INV-25: security
+        # degradation must be loud, never silent).
+        if self.ENVIRONMENT != "development" and self.AUTO_APPROVE:
+            errors.append(
+                f"AUTO_APPROVE must not be enabled when ENVIRONMENT={self.ENVIRONMENT!r}. "
+                "It bypasses every human approval gate. Unset AUTO_APPROVE "
+                "or set ENVIRONMENT=development."
             )
         if errors:
             raise ValueError("\n".join(errors))
-        # NDB Std §B5: never auto-approve security actions outside development.
-        if self.ENVIRONMENT != "development" and self.AUTO_APPROVE:
-            import warnings
-            warnings.warn(
-                "AUTO_APPROVE is enabled in non-development environment. "
-                "NDB Standard requires human approval for security actions.",
-                stacklevel=2,
-            )
         return self
 
     @property

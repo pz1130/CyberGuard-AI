@@ -52,12 +52,115 @@ def test_profile_danger_full_refused():
         build_profile(pol)
 
 
+# --- INV-01: credentials never enter the sandbox -------------------------------
+#
+# subprocess inherits the whole parent environment when env is None, and the
+# sidecar holds CYBERGUARD_LLM_API_KEY. The exec path scrubbed its environment;
+# read/list/write/delete did not, so /bin/ls ran with the provider key in its
+# environment. The fallback now scrubs, so forgetting `env=` fails safe.
+
+
+def test_minimal_env_carries_no_secrets():
+    from apps.desktop.sidecar.sandbox.seatbelt import minimal_env
+
+    env = minimal_env()
+    assert set(env) == {"PATH", "HOME", "LANG", "TMPDIR"}
+    joined = " ".join(env).upper()
+    for marker in ("API_KEY", "TOKEN", "SECRET", "PASSWORD", "CYBERGUARD"):
+        assert marker not in joined
+
+
+def test_sandbox_env_only_lets_locale_through():
+    from apps.desktop.sidecar.host_ops import sandbox_env
+
+    env = sandbox_env(
+        overrides={"TZ": "UTC", "CYBERGUARD_LLM_API_KEY": "sk-leak", "AWS_SECRET": "x"}
+    )
+    assert env["TZ"] == "UTC"
+    assert "CYBERGUARD_LLM_API_KEY" not in env
+    assert "AWS_SECRET" not in env
+
+
+@requires_seatbelt
+def test_a_sandboxed_child_cannot_see_the_provider_key(tmp_path, monkeypatch):
+    """End-to-end: the key is in the sidecar's env, never in the child's."""
+    monkeypatch.setenv("CYBERGUARD_LLM_API_KEY", "sk-must-not-leak")
+    pol = DualKnobPolicy(sandbox_mode="read-only", approval_policy="on-request")
+
+    # env omitted on purpose — this is the shape the read/list paths used to have
+    result = run_sandboxed(["/usr/bin/env"], pol, profile_dir=tmp_path)
+
+    assert "sk-must-not-leak" not in str(result.get("stdout") or "")
+    assert "CYBERGUARD_LLM_API_KEY" not in str(result.get("stdout") or "")
+
+
 def test_shell_and_curl_not_on_allowlist():
     assert "/bin/sh" not in ALLOWED_EXEC_BINARIES
     assert "/bin/bash" not in ALLOWED_EXEC_BINARIES
     assert "/usr/bin/curl" not in ALLOWED_EXEC_BINARIES
     assert "/usr/bin/nc" not in ALLOWED_EXEC_BINARIES
     assert "/usr/bin/python3" not in ALLOWED_EXEC_BINARIES
+
+
+# --- INV-35: allowlisted binaries must not be able to launch other programs ---
+#
+# The binary allowlist is necessary but not sufficient. `find` reaches any
+# executable on the box through -exec/-execdir/-ok, and Seatbelt does not stop
+# it: the generated profile is `(allow default)` plus write denials, so
+# process-exec is permitted and reads are unrestricted. Without an argument
+# policy the allowlist is decorative.
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["/usr/bin/find", "/tmp", "-exec", "/bin/sh", "-c", "id", "{}", ";"],
+        ["/usr/bin/find", "/tmp", "-execdir", "/usr/bin/curl", "http://x", "{}", ";"],
+        ["/usr/bin/find", "/tmp", "-ok", "/bin/rm", "{}", ";"],
+        ["/usr/bin/find", "/tmp", "-okdir", "/bin/rm", "{}", ";"],
+        ["/usr/bin/sort", "--compress-program", "/bin/sh", "/tmp/f"],
+        # `--flag=value` must not slip past a `--flag value` check
+        ["/usr/bin/sort", "--compress-program=/bin/sh", "/tmp/f"],
+    ],
+)
+def test_allowlisted_binary_cannot_spawn_another_program(argv):
+    from apps.desktop.sidecar.host_ops import _validate_exec_argv
+
+    with pytest.raises(HostOpsError) as ei:
+        _validate_exec_argv(argv)
+    assert "not permitted" in str(ei.value)
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["/usr/bin/find", "/tmp", "-delete"],
+        ["/usr/bin/find", "/tmp", "-fprintf", "/etc/passwd", "%p"],
+        ["/usr/bin/sort", "-o", "/etc/passwd", "/tmp/f"],
+    ],
+)
+def test_allowlisted_binary_cannot_write_outside_the_contract(argv):
+    """Writes must go through _assert_writable_target, not a tool's own flags."""
+    from apps.desktop.sidecar.host_ops import _validate_exec_argv
+
+    with pytest.raises(HostOpsError):
+        _validate_exec_argv(argv)
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["/usr/bin/find", "/tmp", "-name", "*.log"],
+        ["/usr/bin/find", "/tmp", "-type", "f", "-maxdepth", "2"],
+        ["/bin/ls", "-1A", "/tmp"],
+        ["/usr/bin/grep", "-r", "needle", "/tmp"],
+    ],
+)
+def test_benign_investigation_argv_still_allowed(argv):
+    """The policy must not cost us ordinary read-only investigation."""
+    from apps.desktop.sidecar.host_ops import _validate_exec_argv
+
+    assert _validate_exec_argv(argv)[0].endswith(Path(argv[0]).name)
 
 
 @requires_seatbelt
