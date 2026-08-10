@@ -50,3 +50,19 @@ async def put_settings(
     data = body.model_dump(exclude_unset=True)
     cfg = await update_security_settings(db, data)
     return SecuritySettingsResponse.model_validate(cfg)
+
+
+@router.get("/security/encryption-status")
+async def encryption_status(
+    _=Depends(require_permission(Permission.SETTINGS_READ)),
+):
+    """How many stored credentials still use the pre-AEAD format.
+
+    Surfaced so the WebUI can show it: the migration is lazy, so a deployment
+    can run indefinitely with malleable ciphertext and no other signal.
+    Returns the cached result of the startup scan (see
+    app/services/encryption_status.py) — it does not re-scan per request.
+    """
+    from app.services.encryption_status import get_encryption_status
+
+    return get_encryption_status().to_dict()

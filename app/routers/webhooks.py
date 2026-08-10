@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db, require_permission
 from app.core.rbac import Permission
-from app.core.security import encrypt_data
+from app.core.security import CredentialField, encrypt_data
 from app.models.webhook import Webhook
 from app.models.agent import AgentExecution
 from app.schemas.webhook import (
@@ -107,7 +107,7 @@ async def create_webhook(
         wh.outgoing_url = body.outgoing_url
         wh.outgoing_events = body.outgoing_events
         if body.outgoing_secret:
-            wh.outgoing_secret_encrypted = encrypt_data(body.outgoing_secret)
+            wh.outgoing_secret_encrypted = encrypt_data(body.outgoing_secret, CredentialField.WEBHOOK_OUTGOING_SECRET)
 
     db.add(wh)
     await db.commit()
@@ -150,7 +150,7 @@ async def update_webhook(
         if secret == "":
             wh.outgoing_secret_encrypted = None
         elif secret and secret != "******":
-            wh.outgoing_secret_encrypted = encrypt_data(secret)
+            wh.outgoing_secret_encrypted = encrypt_data(secret, CredentialField.WEBHOOK_OUTGOING_SECRET)
 
     for k, v in data.items():
         if hasattr(wh, k):

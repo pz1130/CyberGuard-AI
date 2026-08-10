@@ -9,7 +9,7 @@ from sqlalchemy import select, func
 
 from app.core.dependencies import get_db, require_permission
 from app.core.rbac import Permission
-from app.core.security import encrypt_data, decrypt_data
+from app.core.security import CredentialField, encrypt_data, decrypt_data
 from app.models.provider import Provider
 from app.schemas.provider import (
     ProviderCreate,
@@ -186,7 +186,7 @@ async def _seed_presets(db: AsyncSession):
         provider = Provider(
             name=preset.name,
             provider_type=preset.provider_type,
-            api_key_encrypted=encrypt_data(preset.api_key) if preset.api_key else None,
+            api_key_encrypted=encrypt_data(preset.api_key, CredentialField.PROVIDER_API_KEY) if preset.api_key else None,
             base_url=preset.base_url,
             api_version=preset.api_version,
             models=enrich_models_list([m.model_dump() for m in preset.models]),
@@ -445,7 +445,7 @@ async def create_provider(
     provider = Provider(
         name=body.name,
         provider_type=body.provider_type,
-        api_key_encrypted=encrypt_data(body.api_key) if body.api_key else None,
+        api_key_encrypted=encrypt_data(body.api_key, CredentialField.PROVIDER_API_KEY) if body.api_key else None,
         base_url=body.base_url,
         api_version=body.api_version,
         # Store as JSON-serializable dicts; the column can't hold ModelInfo objects.
@@ -474,7 +474,7 @@ async def test_provider_connection(
     api_key = None
     if provider.api_key_encrypted:
         try:
-            api_key = decrypt_data(provider.api_key_encrypted)
+            api_key = decrypt_data(provider.api_key_encrypted, CredentialField.PROVIDER_API_KEY)
         except Exception:
             api_key = None
 
@@ -535,7 +535,7 @@ async def discover_provider_models(
     api_key = None
     if provider.api_key_encrypted:
         try:
-            api_key = decrypt_data(provider.api_key_encrypted)
+            api_key = decrypt_data(provider.api_key_encrypted, CredentialField.PROVIDER_API_KEY)
         except Exception:
             api_key = None
 
@@ -676,7 +676,7 @@ async def update_provider(
         if key == "api_key":
             # Skip re-encryption if the client sends back the masked placeholder
             if value and value != "******":
-                setattr(provider, "api_key_encrypted", encrypt_data(value))
+                setattr(provider, "api_key_encrypted", encrypt_data(value, CredentialField.PROVIDER_API_KEY))
             # If value is None or "******", keep the existing encrypted key unchanged
         else:
             setattr(provider, key, value)

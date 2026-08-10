@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.core.dependencies import get_db, require_permission
 from app.core.rbac import Permission
-from app.core.security import encrypt_data, decrypt_data
+from app.core.security import CredentialField, encrypt_data, decrypt_data
 from app.models.envvar import EnvVar
 from app.schemas.envvar import EnvVarCreate, EnvVarUpdate, EnvVarRead, EnvVarListResponse
 
@@ -38,7 +38,7 @@ async def create_envvar(
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail=f"Env var '{body.key}' already exists")
 
-    encrypted_value = encrypt_data(body.value)
+    encrypted_value = encrypt_data(body.value, CredentialField.ENV_VAR_VALUE)
     env_var = EnvVar(
         key=body.key,
         value_encrypted=encrypted_value,
@@ -66,7 +66,7 @@ async def update_envvar(
         raise HTTPException(status_code=404, detail="Env var not found")
 
     if body.value is not None:
-        env_var.value_encrypted = encrypt_data(body.value)
+        env_var.value_encrypted = encrypt_data(body.value, CredentialField.ENV_VAR_VALUE)
     if body.value_type is not None:
         env_var.value_type = body.value_type
     if body.description is not None:
@@ -108,7 +108,7 @@ async def decrypt_envvar(
     env_var = result.scalar_one_or_none()
     if not env_var:
         raise HTTPException(status_code=404, detail="Env var not found")
-    plaintext = decrypt_data(env_var.value_encrypted)
+    plaintext = decrypt_data(env_var.value_encrypted, CredentialField.ENV_VAR_VALUE)
     return {"id": env_var.id, "key": env_var.key, "value": plaintext}
 
 
@@ -127,4 +127,4 @@ async def resolve_envvars(
         select(EnvVar).where(EnvVar.key.in_(keys), EnvVar.is_active.is_(True))
     )
     vars_ = result.scalars().all()
-    return {v.key: decrypt_data(v.value_encrypted) for v in vars_}
+    return {v.key: decrypt_data(v.value_encrypted, CredentialField.ENV_VAR_VALUE) for v in vars_}

@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import AsyncSessionLocal, get_db_session
 from app.core.dependencies import require_role
 from app.core.rbac import Role
-from app.core.security import encrypt_data, decrypt_data
+from app.core.security import CredentialField, encrypt_data, decrypt_data
 from app.config import settings
 from app.schemas.backup import BackupRequest, BackupResponse, RestoreRequest, RestoreResponse, BackupRecord
 from app.models.backup import BackupRecord as BackupRecordModel
@@ -76,14 +76,14 @@ def _encrypt_dump(data: bytes) -> bytes:
     import base64
     from app.core.security import encrypt_data
     encoded = base64.b64encode(data).decode("ascii")
-    return encrypt_data(encoded).encode("utf-8")
+    return encrypt_data(encoded, CredentialField.BACKUP_DUMP).encode("utf-8")
 
 
 def _decrypt_dump(data: bytes) -> bytes:
     """Decrypt AES-256 encrypted dump back to original binary."""
     import base64
     from app.core.security import decrypt_data
-    encoded = decrypt_data(data.decode("utf-8"))
+    encoded = decrypt_data(data.decode("utf-8"), CredentialField.BACKUP_DUMP)
     return base64.b64decode(encoded)
 
 
