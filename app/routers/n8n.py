@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from app.core.dependencies import get_db, require_permission
 from app.core.rbac import Permission
-from app.core.security import encrypt_data, decrypt_data
+from app.core.security import CredentialField, encrypt_data, decrypt_data
 from app.models.n8n import N8NConnection
 from app.services.n8n_service import (
     test_connection as test_n8n_connection,
@@ -85,7 +85,7 @@ def _decrypt_api_key(encrypted: Optional[str]) -> Optional[str]:
     if not encrypted:
         return None
     try:
-        return decrypt_data(encrypted)
+        return decrypt_data(encrypted, CredentialField.N8N_API_KEY)
     except Exception:
         return None
 
@@ -134,7 +134,7 @@ async def create_connection(
     connection = N8NConnection(
         name=body.name,
         base_url=body.base_url,
-        api_key_encrypted=encrypt_data(body.api_key) if body.api_key else None,
+        api_key_encrypted=encrypt_data(body.api_key, CredentialField.N8N_API_KEY) if body.api_key else None,
         is_active=body.is_active,
         is_default=body.is_default,
     )
@@ -180,7 +180,7 @@ async def update_connection(
     for key, value in update_data.items():
         if key == "api_key":
             if value and value != "******":
-                setattr(conn, "api_key_encrypted", encrypt_data(value))
+                setattr(conn, "api_key_encrypted", encrypt_data(value, CredentialField.N8N_API_KEY))
         else:
             setattr(conn, key, value)
 

@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 from app.config import settings
-from app.core.security import decrypt_data
+from app.core.security import CredentialField, decrypt_data
 from app.core.rbac import Permission
 from app.services.internal_agent import InternalAgentRunner
 
@@ -31,7 +31,7 @@ def _resolve_api_key(config: Dict[str, Any]) -> str:
     env_enc = config.get("env_vars_encrypted")
     if env_enc:
         try:
-            env_vars = json.loads(decrypt_data(env_enc))
+            env_vars = json.loads(decrypt_data(env_enc, CredentialField.AGENT_ENV_VARS))
             key = env_vars.get("OPENCLAW_API_KEY", "")
             if key:
                 return key
@@ -47,7 +47,7 @@ def _resolve_api_key(config: Dict[str, Any]) -> str:
     enc = meta.get("api_key_encrypted", "")
     if enc:
         try:
-            return decrypt_data(enc)
+            return decrypt_data(enc, CredentialField.AGENT_META_API_KEY)
         except Exception as e:  # noqa: BLE001
             logger.error(
                 "agent %s: failed to decrypt metadata api_key_encrypted: %s",
@@ -80,7 +80,7 @@ class SubAgentWrapper:
         self.env_vars = {}
         if self.env_vars_encrypted:
             try:
-                self.env_vars = json.loads(decrypt_data(self.env_vars_encrypted))
+                self.env_vars = json.loads(decrypt_data(self.env_vars_encrypted, CredentialField.AGENT_ENV_VARS))
             except Exception as e:  # noqa: BLE001
                 logger.error(
                     "agent %s: env_vars_encrypted decrypt failed — "

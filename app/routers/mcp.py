@@ -8,7 +8,7 @@ from sqlalchemy import select, text
 from app.core.dependencies import get_db, require_permission
 from app.core.rbac import Permission
 from app.core.auth import AuthenticatedUser
-from app.core.security import encrypt_data, decrypt_data
+from app.core.security import CredentialField, encrypt_data, decrypt_data
 from app.models.mcp import MCPServer, MCPTool
 from app.schemas.mcp import (
     MCPServerCreate, MCPServerUpdate, MCPServerRead,
@@ -66,11 +66,11 @@ async def create_mcp_server(
     # Encrypt sensitive fields
     env_vars_encrypted = None
     if body.env_vars:
-        env_vars_encrypted = encrypt_data(json.dumps(body.env_vars))
+        env_vars_encrypted = encrypt_data(json.dumps(body.env_vars), CredentialField.MCP_ENV_VARS)
 
     auth_token_encrypted = None
     if body.auth_token:
-        auth_token_encrypted = encrypt_data(body.auth_token)
+        auth_token_encrypted = encrypt_data(body.auth_token, CredentialField.MCP_AUTH_TOKEN)
 
     server = MCPServer(
         name=body.name,
@@ -117,13 +117,17 @@ async def update_mcp_server(
 
     # Encrypt env_vars if being updated
     if "env_vars" in update_data and update_data["env_vars"]:
-        update_data["env_vars_encrypted"] = encrypt_data(json.dumps(update_data.pop("env_vars")))
+        update_data["env_vars_encrypted"] = encrypt_data(
+            json.dumps(update_data.pop("env_vars")), CredentialField.MCP_ENV_VARS
+        )
     elif "env_vars" in update_data:
         update_data["env_vars_encrypted"] = None
 
     if "auth_token" in update_data:
         if update_data["auth_token"]:
-            update_data["auth_token_encrypted"] = encrypt_data(update_data.pop("auth_token"))
+            update_data["auth_token_encrypted"] = encrypt_data(
+                update_data.pop("auth_token"), CredentialField.MCP_AUTH_TOKEN
+            )
         else:
             update_data["auth_token_encrypted"] = None
 
@@ -230,7 +234,7 @@ async def _discover_tools_via_jsonrpc(server: MCPServer) -> list[dict]:
             raise RuntimeError(f"Disallowed host: {hostname}")
     headers = dict(server.headers_json or {})
     if server.auth_token_encrypted:
-        headers["Authorization"] = f"Bearer {decrypt_data(server.auth_token_encrypted)}"
+        headers["Authorization"] = f"Bearer {decrypt_data(server.auth_token_encrypted, CredentialField.MCP_AUTH_TOKEN)}"
     async with httpx.AsyncClient(timeout=server.timeout_seconds or 30,
                                  verify=(parsed.scheme == "https") if server.url else True) as client:
         r = await client.post(server.url, json=payload, headers=headers)

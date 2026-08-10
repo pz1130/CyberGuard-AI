@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional
 
 import httpx
 
-from app.core.security import decrypt_data
+from app.core.security import CredentialField, decrypt_data
 from app.models.mcp import MCPServer
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ def _decrypt_env(server: MCPServer) -> dict:
     if not server.env_vars_encrypted:
         return {}
     try:
-        return json.loads(decrypt_data(server.env_vars_encrypted))
+        return json.loads(decrypt_data(server.env_vars_encrypted, CredentialField.MCP_ENV_VARS))
     except Exception as e:
         name = getattr(server, "name", "?")
         logger.error("MCP server %s: env decrypt failed: %s", name, e)
@@ -127,7 +127,7 @@ async def execute_http_tool(server: MCPServer, tool_name: str, arguments: Dict[s
 
     headers = dict(server.headers_json or {})
     if server.auth_token_encrypted:
-        token = decrypt_data(server.auth_token_encrypted)
+        token = decrypt_data(server.auth_token_encrypted, CredentialField.MCP_AUTH_TOKEN)
         headers["Authorization"] = f"Bearer {token}"
 
     payload = {

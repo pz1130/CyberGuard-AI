@@ -23,7 +23,7 @@ import httpx
 from sqlalchemy import select, update
 
 from app.core.database import AsyncSessionLocal, get_sync_session
-from app.core.security import decrypt_data
+from app.core.security import CredentialField, decrypt_data
 from app.models.webhook import Webhook
 from app.schemas.webhook import SUPPORTED_EVENTS
 
@@ -87,7 +87,7 @@ def deliver_sync(
         secret_plain: Optional[str] = None
         if wh.outgoing_secret_encrypted:
             try:
-                secret_plain = decrypt_data(wh.outgoing_secret_encrypted)
+                secret_plain = decrypt_data(wh.outgoing_secret_encrypted, CredentialField.WEBHOOK_OUTGOING_SECRET)
             except Exception as e:
                 logger.warning("[webhook %s] secret decrypt failed: %s", webhook_id, e)
 

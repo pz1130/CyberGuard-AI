@@ -96,11 +96,11 @@ async def _get_secret(db: AsyncSession, cfg: SsoConfig) -> Optional[str]:
     # Prefer the DB EnvVar reference
     if cfg.secret_env_var_id:
         from app.models.envvar import EnvVar
-        from app.core.security import decrypt_data
+        from app.core.security import CredentialField, decrypt_data
         result = await db.execute(select(EnvVar).where(EnvVar.id == cfg.secret_env_var_id))
         env_var = result.scalar_one_or_none()
         if env_var and env_var.is_active:
-            return decrypt_data(env_var.value_encrypted)
+            return decrypt_data(env_var.value_encrypted, CredentialField.ENV_VAR_VALUE)
     # Fallback to environment variable
     return settings.AZURE_CLIENT_SECRET or None
 

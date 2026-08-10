@@ -138,6 +138,15 @@ async def lifespan(app: FastAPI):
     _run_event_handler = RunEventSink().handle
     get_default_audit_bus().subscribe(_run_event_handler)
 
+    # Count credentials still in the pre-AEAD format. The migration is lazy by
+    # design, so without this nothing would ever say that existing ciphertext
+    # is still malleable. Read-only, and never decrypts.
+    try:
+        from app.services.encryption_status import scan_legacy_credentials
+        await scan_legacy_credentials()
+    except Exception as e:  # noqa: BLE001 - a *report* is not a boundary
+        logger.warning(f"Credential encryption scan skipped: {e}")
+
     # Report runs a previous crash left mid-flight. Read-only: replaying a
     # side-effecting tool is never automatic.
     try:

@@ -13,7 +13,7 @@ from app.core.dependencies import get_db, require_permission
 from app.core.auth import AuthenticatedUser
 from app.core.database import AsyncSessionLocal
 from app.core.rbac import Permission
-from app.core.security import encrypt_data, decrypt_data
+from app.core.security import CredentialField, encrypt_data, decrypt_data
 from app.schemas.agent import (
     AgentConfigCreate, AgentConfigRead, AgentConfigUpdate,
     AgentConfigListResponse, AgentTestResponse,
@@ -102,7 +102,7 @@ def _build_metadata(fields: dict, existing: Optional[dict] = None) -> dict:
     if "api_key" in fields:
         raw = fields.pop("api_key") or ""
         if raw and raw != "******":
-            meta["api_key_encrypted"] = encrypt_data(raw)
+            meta["api_key_encrypted"] = encrypt_data(raw, CredentialField.AGENT_META_API_KEY)
     return meta
 
 
@@ -201,7 +201,7 @@ async def create_agent(
     agent = AgentConfig(
         **{k: v for k, v in body_dict.items() if hasattr(AgentConfig, k)},
         metadata_json=metadata or None,
-        env_vars_encrypted=encrypt_data(json.dumps(env_vars)) if env_vars else None,
+        env_vars_encrypted=encrypt_data(json.dumps(env_vars), CredentialField.AGENT_ENV_VARS) if env_vars else None,
     )
 
     # 所有 backend 生成 Gateway API Key（外部节点用此 key 调 /gateway/manifest 等接口）
@@ -249,13 +249,13 @@ async def update_agent(
 
     if "env_vars" in body_dict:
         ev = body_dict.pop("env_vars")
-        agent.env_vars_encrypted = encrypt_data(json.dumps(ev)) if ev else None
+        agent.env_vars_encrypted = encrypt_data(json.dumps(ev), CredentialField.AGENT_ENV_VARS) if ev else None
 
     if "api_key" in body_dict:
         meta = dict(agent.metadata_json or {})
         raw = body_dict.pop("api_key") or ""
         if raw and raw != "******":
-            meta["api_key_encrypted"] = encrypt_data(raw)
+            meta["api_key_encrypted"] = encrypt_data(raw, CredentialField.AGENT_META_API_KEY)
         agent.metadata_json = meta
 
     if "metadata_json" in body_dict:

@@ -271,8 +271,8 @@ class LLMRouter:
                 api_key = ""
                 if row[1]:
                     try:
-                        from app.core.security import decrypt_data
-                        api_key = decrypt_data(row[1])
+                        from app.core.security import CredentialField, decrypt_data
+                        api_key = decrypt_data(row[1], CredentialField.PROVIDER_API_KEY)
                     except Exception:
                         api_key = ""
 
@@ -346,8 +346,8 @@ class LLMRouter:
                 api_key = ""
                 if row[1]:
                     try:
-                        from app.core.security import decrypt_data
-                        api_key = decrypt_data(row[1])
+                        from app.core.security import CredentialField, decrypt_data
+                        api_key = decrypt_data(row[1], CredentialField.PROVIDER_API_KEY)
                     except Exception:
                         api_key = ""
 
