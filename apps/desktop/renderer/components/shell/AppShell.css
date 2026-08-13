@@ -12,3 +12,8 @@
   position: relative;
   z-index: 1;
 }
+
+.app-shell > .view-pane {
+  flex: 1;
+  min-height: 0;
+}

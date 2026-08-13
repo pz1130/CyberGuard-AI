@@ -38,3 +38,15 @@
 .session-list .session-main:hover {
   transform: translateY(-1px);
 }
+
+/* 全局兜底：任何遗漏的动画在 reduce 下一律关闭 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
