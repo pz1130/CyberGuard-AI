@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { DataPanel } from "../components/DataPanel";
 import { EmptyState, SAMPLE_TASKS } from "../components/EmptyState";
 import { EventCard } from "../components/EventCard";
 import { Markdown } from "../components/Markdown";
@@ -32,25 +31,11 @@ type Props = {
   onSteerTextChange: (v: string) => void;
   onSteer: () => void;
   caps: Caps | null;
-  dataRoot: string;
   mcpTools: string[];
   hasApi: boolean;
   providerMode: string;
   onOpenSettingsLlm: () => void;
   onOpenSettingsMcp: () => void;
-  showDataPanel: boolean;
-  onToggleDataPanel: () => void;
-  exportPass: string;
-  onExportPass: (v: string) => void;
-  exportBusy: boolean;
-  exportMsg: string | null;
-  onExport: () => void;
-  exportAvailable: boolean;
-  uninstallBusy: boolean;
-  uninstallPreview: string | null;
-  onUninstallInventory: () => void;
-  onUninstallDryRun: () => void;
-  onUninstallExecute: () => void;
 };
 
 export function WorkbenchView(props: Props) {
@@ -347,30 +332,8 @@ export function WorkbenchView(props: Props) {
                     ? `${props.sessionId.slice(0, 10)}…`
                     : "—"}
                 </span>
-                <span>data_root</span>
-                <span className="mono-xs" title={props.dataRoot}>
-                  …/{props.dataRoot.split("/").slice(-2).join("/") || "—"}
-                </span>
               </div>
             </div>
-          )}
-
-          {props.showDataPanel && (
-            <DataPanel
-              open={true}
-              onToggle={props.onToggleDataPanel}
-              exportPass={props.exportPass}
-              onExportPass={props.onExportPass}
-              exportBusy={props.exportBusy}
-              exportMsg={props.exportMsg}
-              onExport={props.onExport}
-              exportAvailable={props.exportAvailable}
-              uninstallBusy={props.uninstallBusy}
-              uninstallPreview={props.uninstallPreview}
-              onInventory={props.onUninstallInventory}
-              onDryRun={props.onUninstallDryRun}
-              onExecute={props.onUninstallExecute}
-            />
           )}
         </div>
       </div>

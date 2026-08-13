@@ -29,12 +29,6 @@ export function useDesktopRuntime() {
   const [runStatus, setRunStatus] = useState("idle");
   const [pausedRunId, setPausedRunId] = useState<string | null>(null);
   const [evidenceHint, setEvidenceHint] = useState("—");
-  const [exportPass, setExportPass] = useState("");
-  const [exportBusy, setExportBusy] = useState(false);
-  const [exportMsg, setExportMsg] = useState<string | null>(null);
-  const [uninstallPreview, setUninstallPreview] = useState<string | null>(null);
-  const [uninstallBusy, setUninstallBusy] = useState(false);
-  const [showDataPanel, setShowDataPanel] = useState(false);
   const taskRef = useRef(task);
   taskRef.current = task;
 
@@ -203,11 +197,6 @@ export function useDesktopRuntime() {
     });
   }, [api]);
 
-  useEffect(() => {
-    if (!api?.onOpenDataPanel) return;
-    return api.onOpenDataPanel(() => setShowDataPanel(true));
-  }, [api]);
-
   const onRun = useCallback(async () => {
     if (!api || running) return;
     const text = (taskRef.current || task).trim();
@@ -357,109 +346,6 @@ export function useDesktopRuntime() {
     }
   }, [api, pendingPlan]);
 
-  const onExport = useCallback(async () => {
-    if (!api?.exportEncrypted) {
-      setExportMsg("export API unavailable (open via Electron)");
-      return;
-    }
-    if (exportPass.trim().length < 8) {
-      setExportMsg("passphrase ≥ 8 characters");
-      return;
-    }
-    setExportBusy(true);
-    setExportMsg(null);
-    try {
-      const r = await api.exportEncrypted(exportPass);
-      if (r?.canceled) {
-        setExportMsg("export canceled");
-      } else if (r?.ok === false) {
-        setExportMsg(String(r.error || "export failed"));
-      } else {
-        const dest = r.dest || r.path || "file";
-        const hash = r.plaintext_sha256 || r.sha256;
-        setExportMsg(
-          `exported (${r.method || "encrypted"}) → ${dest}` +
-            (hash ? ` · sha256 ${String(hash).slice(0, 12)}…` : "")
-        );
-        setExportPass("");
-      }
-    } catch (e) {
-      setExportMsg(String(e));
-    } finally {
-      setExportBusy(false);
-    }
-  }, [api, exportPass]);
-
-  const onUninstallInventory = useCallback(async () => {
-    if (!api?.uninstallInventory) {
-      setUninstallPreview("uninstall API unavailable");
-      return;
-    }
-    setUninstallBusy(true);
-    try {
-      const inv = await api.uninstallInventory();
-      const del = (inv.will_delete || [])
-        .map((c) => `  - ${c.name} (${c.approx_bytes ?? "?"} B)`)
-        .join("\n");
-      const keep = (inv.will_not_delete?.evidence_outside_data_root || []).join(
-        "\n  - "
-      );
-      const manual = (inv.manual_steps || [])
-        .map((m) => `  - ${m.item}: ${m.action}`)
-        .join("\n");
-      setUninstallPreview(
-        `data_root: ${inv.data_root || "?"}\n` +
-          `will delete:\n${del || "  (empty)"}\n` +
-          `will NOT delete (external evidence):\n  - ${keep || "(none)"}\n` +
-          `manual steps:\n${manual || "  (none)"}`
-      );
-    } catch (e) {
-      setUninstallPreview(String(e));
-    } finally {
-      setUninstallBusy(false);
-    }
-  }, [api]);
-
-  const onUninstallDryRun = useCallback(async () => {
-    if (!api?.uninstallExecute) return;
-    setUninstallBusy(true);
-    try {
-      const r = await api.uninstallExecute({ confirm: true, dryRun: true });
-      setUninstallPreview(
-        (uninstallPreview ? uninstallPreview + "\n\n" : "") +
-          `dry_run result: executed=${String(r.executed)} ok=${String(r.ok)}`
-      );
-    } catch (e) {
-      setUninstallPreview(String(e));
-    } finally {
-      setUninstallBusy(false);
-    }
-  }, [api, uninstallPreview]);
-
-  const onUninstallExecute = useCallback(async () => {
-    if (!api?.uninstallExecute) return;
-    setUninstallBusy(true);
-    try {
-      const r = await api.uninstallExecute({ confirm: true, dryRun: false });
-      if (r?.canceled) {
-        setUninstallPreview("uninstall canceled");
-      } else {
-        setUninstallPreview(
-          `executed=${String(r.executed)} deleted=${(r.deleted || []).join(", ") || "—"}`
-        );
-        if (r.executed) {
-          setSessions([]);
-          setSessionId(null);
-          setEvents([]);
-        }
-      }
-    } catch (e) {
-      setUninstallPreview(String(e));
-    } finally {
-      setUninstallBusy(false);
-    }
-  }, [api]);
-
   const statusLabel = useMemo(() => {
     if (!api) return "no preload (open via Electron)";
     if (pingOk === null) return "connecting…";
@@ -501,14 +387,6 @@ export function useDesktopRuntime() {
     pausedRunId,
     evidenceHint,
     setEvidenceHint,
-    exportPass,
-    setExportPass,
-    exportBusy,
-    exportMsg,
-    uninstallPreview,
-    uninstallBusy,
-    showDataPanel,
-    setShowDataPanel,
     statusLabel,
     onRun,
     onSelectSession,
@@ -519,10 +397,6 @@ export function useDesktopRuntime() {
     onSteer,
     onPlanApprove,
     onPlanReject,
-    onExport,
-    onUninstallInventory,
-    onUninstallDryRun,
-    onUninstallExecute,
     refreshProviderStatus,
     refreshSessions,
   };
