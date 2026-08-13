@@ -1,4 +1,5 @@
 import "../components/workbench/WorkbenchLayout.css";
+import { ContextRail } from "../components/context/ContextRail";
 import { SessionRail } from "../components/session/SessionRail";
 import type { SettingsSection } from "../lib/types";
 
@@ -14,9 +15,10 @@ export function WorkbenchView(props: WorkbenchViewProps) {
       <div className="wb-main">
         {/* 时间线与 composer 在 Task 14 / 15 填入 */}
       </div>
-      <div className="wb-rail">
-        {/* 右栏在 Task 13 填入 */}
-      </div>
+      <ContextRail
+        onViewEvidence={props.onViewEvidence}
+        onOpenSettings={props.onOpenSettings}
+      />
     </div>
   );
 }
