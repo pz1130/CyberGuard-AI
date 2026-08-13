@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Tier } from "../../lib/types";
 import { useEnvironment, useRun } from "../../state";
 import { Button, Select } from "../../ui";
@@ -23,12 +23,19 @@ export function Composer() {
     running,
     runId,
   } = useRun();
-  const { pingOk } = useEnvironment();
+  const { pingOk, sandboxImpl } = useEnvironment();
   const [showSteer, setShowSteer] = useState(false);
 
   const hasApi = typeof window !== "undefined" && Boolean(window.cyberguard);
   const sidecarOffline = !hasApi || pingOk === false;
+  const sandboxLocked = sandboxImpl === "none";
   const runDisabled = sidecarOffline || running || !task.trim();
+
+  useEffect(() => {
+    if (sandboxImpl === "none" && tier !== "readonly") {
+      setTier("readonly");
+    }
+  }, [sandboxImpl, tier, setTier]);
 
   return (
     <div className="composer2">
@@ -55,7 +62,7 @@ export function Composer() {
           options={TIER_OPTIONS}
           ariaLabel="能力档位"
           size="sm"
-          disabled={running}
+          disabled={running || sandboxLocked}
         />
         <Button
           variant="primary"

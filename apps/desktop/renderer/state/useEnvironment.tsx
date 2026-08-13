@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -29,12 +30,16 @@ const EnvironmentContext = createContext<EnvironmentContextValue | null>(null);
 export function EnvironmentProvider({
   children,
   tier,
+  onPausedRuns,
 }: {
   children: ReactNode;
   tier: Tier;
+  onPausedRuns?: (runId: string) => void;
 }) {
   const [env, setEnv] = useState<EnvState>(initialEnvState);
   const api = typeof window !== "undefined" ? window.cyberguard : undefined;
+  const onPausedRunsRef = useRef(onPausedRuns);
+  onPausedRunsRef.current = onPausedRuns;
 
   const patch = useCallback((p: Partial<EnvState>) => {
     setEnv((prev) => ({ ...prev, ...p }));
@@ -84,6 +89,14 @@ export function EnvironmentProvider({
           evidenceCount:
             typeof r?.evidence_count === "number" ? r.evidence_count : 0,
         });
+
+        const pausedRuns = r.paused_runs;
+        if (Array.isArray(pausedRuns)) {
+          const first = pausedRuns[0] as { run_id?: unknown } | undefined;
+          if (typeof first?.run_id === "string") {
+            onPausedRunsRef.current?.(first.run_id);
+          }
+        }
 
         // 与 provider.get 对账（secrets 载入后的实际 live/mock）
         void api.providerGet?.().then((p) => {

@@ -47,6 +47,29 @@
   cursor: not-allowed;
 }
 
+.sessionrail-undo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--layer-2);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.sessionrail-error {
+  margin: var(--sp-2) 0 0;
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--danger);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sessionrail-sample { transition: none; }
 }

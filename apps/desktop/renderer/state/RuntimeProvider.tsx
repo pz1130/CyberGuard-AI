@@ -58,18 +58,23 @@ function SessionsBridge({ children }: { children: ReactNode }) {
   );
 }
 
-/** run 域需要在跑完后刷新会话列表，但 SessionsProvider 在其内层 —— 用事件回调桥接 */
+/** run 域需要在跑完后认领并刷新会话列表，但 SessionsProvider 在其内层 —— 用 ref 桥接 */
 function RunLayer({ children }: { children: ReactNode }) {
   const pendingRefresh = useRef<(() => void) | null>(null);
+  const pendingAdopt = useRef<((sid: string) => void) | null>(null);
 
-  const onRunSettled = useCallback(() => {
+  const onRunSettled = useCallback((sid: string | null) => {
+    if (typeof sid === "string") pendingAdopt.current?.(sid);
     pendingRefresh.current?.();
   }, []);
 
   return (
     <RunProvider onRunSettled={onRunSettled}>
       <SessionsBridge>
-        <RefreshRegistrar target={pendingRefresh} />
+        <RefreshRegistrar
+          refreshTarget={pendingRefresh}
+          adoptTarget={pendingAdopt}
+        />
         {children}
       </SessionsBridge>
     </RunProvider>
@@ -77,12 +82,15 @@ function RunLayer({ children }: { children: ReactNode }) {
 }
 
 function RefreshRegistrar({
-  target,
+  refreshTarget,
+  adoptTarget,
 }: {
-  target: React.MutableRefObject<(() => void) | null>;
+  refreshTarget: React.MutableRefObject<(() => void) | null>;
+  adoptTarget: React.MutableRefObject<((sid: string) => void) | null>;
 }) {
   const sessions = useSessions();
-  target.current = sessions.refresh;
+  refreshTarget.current = sessions.refresh;
+  adoptTarget.current = sessions.adopt;
   return null;
 }
 
@@ -97,7 +105,16 @@ function PlanLayer({ children }: { children: ReactNode }) {
 
 function EnvLayer({ children }: { children: ReactNode }) {
   const run = useRun();
-  return <EnvironmentProvider tier={run.tier}>{children}</EnvironmentProvider>;
+  return (
+    <EnvironmentProvider
+      tier={run.tier}
+      onPausedRuns={(id) =>
+        run.dispatch({ type: "event", ev: { type: "run_paused", run_id: id } })
+      }
+    >
+      {children}
+    </EnvironmentProvider>
+  );
 }
 
 export function RuntimeProvider({ children }: { children: ReactNode }) {

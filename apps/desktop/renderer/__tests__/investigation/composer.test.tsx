@@ -3,15 +3,23 @@ import { resolve } from "node:path";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const run = vi.fn();
+const mocks = vi.hoisted(() => ({
+  run: vi.fn(),
+  setTier: vi.fn(),
+  tier: "readonly" as "readonly" | "full",
+  sandboxImpl: "seatbelt",
+  pingOk: true as boolean | null,
+}));
 
 vi.mock("../../state", () => ({
   useRun: () => ({
     task: "分诊告警",
     setTask: vi.fn(),
-    tier: "readonly",
-    setTier: vi.fn(),
-    run,
+    get tier() {
+      return mocks.tier;
+    },
+    setTier: mocks.setTier,
+    run: mocks.run,
     abort: vi.fn(),
     steer: vi.fn(),
     steerText: "",
@@ -19,7 +27,14 @@ vi.mock("../../state", () => ({
     running: false,
     runId: null,
   }),
-  useEnvironment: () => ({ pingOk: true }),
+  useEnvironment: () => ({
+    get pingOk() {
+      return mocks.pingOk;
+    },
+    get sandboxImpl() {
+      return mocks.sandboxImpl;
+    },
+  }),
 }));
 
 import { Composer } from "../../components/investigation/Composer";
@@ -31,7 +46,11 @@ const SRC = resolve(
 
 describe("Composer ⌘↵ 不双发", () => {
   beforeEach(() => {
-    run.mockClear();
+    mocks.run.mockClear();
+    mocks.setTier.mockClear();
+    mocks.tier = "readonly";
+    mocks.sandboxImpl = "seatbelt";
+    mocks.pingOk = true;
     window.cyberguard = { run: vi.fn() } as unknown as typeof window.cyberguard;
   });
 
@@ -52,8 +71,20 @@ describe("Composer ⌘↵ 不双发", () => {
       key: "Enter",
       metaKey: true,
     });
-    expect(run).toHaveBeenCalledTimes(1);
+    expect(mocks.run).toHaveBeenCalledTimes(1);
     expect(onWindow).not.toHaveBeenCalled();
     window.removeEventListener("keydown", onWindow);
+  });
+
+  it("sandboxImpl=none 时强制只读并禁用档位选择（INV-16）", () => {
+    mocks.tier = "full";
+    mocks.sandboxImpl = "none";
+    render(<Composer />);
+    expect(mocks.setTier).toHaveBeenCalledWith("readonly");
+    expect(
+      screen.getByRole("combobox", { name: "能力档位" }).getAttribute(
+        "data-disabled"
+      )
+    ).not.toBe(null);
   });
 });

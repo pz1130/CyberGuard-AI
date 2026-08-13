@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppChrome } from "./components/shell/AppChrome";
 import { DegradationStrip } from "./components/shell/DegradationStrip";
 import "./components/shell/AppShell.css";
@@ -54,6 +54,12 @@ function AppInner() {
     setSettingsSection(section);
     setActiveView("settings");
   }, []);
+
+  useEffect(() => {
+    const api = typeof window !== "undefined" ? window.cyberguard : undefined;
+    if (!api?.onOpenDataPanel) return;
+    return api.onOpenDataPanel(() => openSettings("data"));
+  }, [openSettings]);
 
   const hotkeyHandlers = useMemo(
     () => ({

@@ -17,8 +17,11 @@ import {
 export type SessionsContextValue = SessionsState & {
   refresh: () => void;
   select: (id: string) => Promise<void>;
+  /** 只改选中，不拉历史——跑完后认领新会话，避免 loadEvents 冲掉刚看完的 run */
+  adopt: (sessionId: string) => void;
   create: () => void;
-  remove: (id: string) => Promise<void>;
+  /** 失败返回 false，不抛、不 dispatch removed */
+  remove: (id: string) => Promise<boolean>;
   clearAll: () => void;
 };
 
@@ -79,13 +82,22 @@ export function SessionsProvider({
     onReset();
   }, [onReset]);
 
+  const adopt = useCallback((sessionId: string) => {
+    dispatch({ type: "select", sessionId });
+  }, []);
+
   const remove = useCallback(
-    async (sid: string) => {
-      if (!api?.deleteSession) return;
-      await api.deleteSession(sid);
+    async (sid: string): Promise<boolean> => {
+      if (!api?.deleteSession) return false;
+      try {
+        await api.deleteSession(sid);
+      } catch {
+        return false;
+      }
       dispatch({ type: "removed", sessionId: sid });
       if (state.sessionId === sid) onReset();
       refresh();
+      return true;
     },
     [api, state.sessionId, onReset, refresh]
   );
@@ -96,8 +108,8 @@ export function SessionsProvider({
   }, [onReset]);
 
   const value = useMemo<SessionsContextValue>(
-    () => ({ ...state, refresh, select, create, remove, clearAll }),
-    [state, refresh, select, create, remove, clearAll]
+    () => ({ ...state, refresh, select, adopt, create, remove, clearAll }),
+    [state, refresh, select, adopt, create, remove, clearAll]
   );
 
   return (
