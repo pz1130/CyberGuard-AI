@@ -1,0 +1,26 @@
+.ui-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.ui-field-label {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.ui-field-msg {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-normal);
+  color: var(--text-faint);
+}
+
+.ui-field-msg--error {
+  color: var(--danger);
+}
+
+.ui-field--error .ui-field-control :is(input, textarea) {
+  border-color: var(--danger);
+}
