@@ -4,7 +4,19 @@ import { Button, Tooltip } from "../../ui";
 import { StatusBar } from "./StatusBar";
 import "./ContextRail.css";
 
-/** 从时间线事件里数出「发现」——工具返回的高危计数与证据登记数 */
+/**
+ * 从时间线事件里数出「发现」——工具返回的高危计数与证据登记数。
+ *
+ * ⚠️ 高危计数是**正则匹配工具摘要文本**的权宜做法，不严谨：
+ * 摘要文案一改就失效，中英文枚举也覆盖不全。
+ *
+ * 之所以这么写：当前事件流没有结构化的 findings 计数，而右栏「本次调查
+ * 的事实」区必须有内容。正确解法要 sidecar 发结构化 finding 事件，属
+ * 服务端侧改动。
+ *
+ * 决策登记在 docs/desktop/11-OPEN-QUESTIONS.md §I，M1.5 自用验证后收敛。
+ * **改动工具摘要文案前先看这里** —— 此处与文案有隐式耦合。
+ */
 function useFindings() {
   const { events } = useRun();
   const evidenceIds: string[] = [];
