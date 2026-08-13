@@ -1,0 +1,68 @@
+.invhead { flex: none; position: relative; }
+
+.invhead-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5) var(--sp-3);
+}
+
+.invhead-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invhead-status { flex: none; }
+
+.invhead-paused {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin: 0 var(--sp-5) var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--warn-muted);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--warn);
+}
+
+.invhead-resume {
+  background: var(--warn);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 2px var(--sp-3);
+  font-family: var(--font-ui);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* 2px 不确定态进度条 —— 比状态胶囊有存在感 */
+.invhead-bar { height: 2px; background: transparent; overflow: hidden; }
+
+.invhead-bar.is-active::after {
+  content: "";
+  display: block;
+  height: 100%;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, var(--info), transparent);
+  animation: invhead-slide 1.4s var(--ease-out) infinite;
+}
+
+@keyframes invhead-slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(350%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .invhead-bar.is-active::after { animation: none; width: 100%; opacity: 0.5; }
+}

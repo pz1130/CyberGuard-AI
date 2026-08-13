@@ -16,6 +16,7 @@ import type {
   SkillPublic,
   ThemeMode,
 } from "../lib/types";
+import { useDataLifecycle } from "../state/useDataLifecycle";
 
 type Props = {
   theme: ThemeMode;
@@ -28,19 +29,6 @@ type Props = {
   onSetFontSize: (size: FontSize) => void;
   focusSection?: SettingsSection;
   onProviderSaved?: (mode: string) => void;
-  showDataPanel: boolean;
-  onToggleDataPanel: () => void;
-  exportPass: string;
-  onExportPass: (v: string) => void;
-  exportBusy: boolean;
-  exportMsg: string | null;
-  onExport: () => void;
-  exportAvailable: boolean;
-  uninstallBusy: boolean;
-  uninstallPreview: string | null;
-  onUninstallInventory: () => void;
-  onUninstallDryRun: () => void;
-  onUninstallExecute: () => void;
 };
 
 const emptyMcp = (): McpServerPublic & { secret?: string } => ({
@@ -137,20 +125,8 @@ export function SettingsView({
   onSetFontSize,
   focusSection,
   onProviderSaved,
-  showDataPanel,
-  onToggleDataPanel,
-  exportPass,
-  onExportPass,
-  exportBusy,
-  exportMsg,
-  onExport,
-  exportAvailable,
-  uninstallBusy,
-  uninstallPreview,
-  onUninstallInventory,
-  onUninstallDryRun,
-  onUninstallExecute,
 }: Props) {
+  const data = useDataLifecycle();
   const api = typeof window !== "undefined" ? window.cyberguard : undefined;
 
   const [section, setSection] = useState<SettingsSection>(
@@ -1440,19 +1416,19 @@ export function SettingsView({
               <code className="mono mono-sm">{dataRoot || "—"}</code>
             </p>
             <DataPanel
-              open={showDataPanel || true}
-              onToggle={onToggleDataPanel}
-              exportPass={exportPass}
-              onExportPass={onExportPass}
-              exportBusy={exportBusy}
-              exportMsg={exportMsg}
-              onExport={onExport}
-              exportAvailable={exportAvailable}
-              uninstallBusy={uninstallBusy}
-              uninstallPreview={uninstallPreview}
-              onInventory={onUninstallInventory}
-              onDryRun={onUninstallDryRun}
-              onExecute={onUninstallExecute}
+              open={true}
+              onToggle={() => {}}
+              exportPass={data.exportPass}
+              onExportPass={data.setExportPass}
+              exportBusy={data.exportBusy}
+              exportMsg={data.exportMsg}
+              onExport={() => void data.runExport()}
+              exportAvailable={data.exportAvailable}
+              uninstallBusy={data.uninstallBusy}
+              uninstallPreview={data.uninstallPreview}
+              onInventory={() => void data.inventory()}
+              onDryRun={() => void data.dryRun()}
+              onExecute={() => void data.execute()}
             />
           </div>
         </div>
