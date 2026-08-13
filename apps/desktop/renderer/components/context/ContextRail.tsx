@@ -11,11 +11,15 @@ function useFindings() {
   let highCount = 0;
 
   for (const ev of events) {
-    if (ev.type === "evidence_registered" && typeof ev.evidence_id === "string") {
+    if (
+      (ev.type === "evidence_register" || ev.type === "evidence_registered") &&
+      typeof ev.evidence_id === "string"
+    ) {
       evidenceIds.push(ev.evidence_id);
     }
-    if (ev.type === "tool_call_end" && typeof ev.summary === "string") {
-      const m = /(\d+)\s*(?:条)?\s*(?:high|critical|高危)/i.exec(ev.summary);
+    if (ev.type === "tool_call_end") {
+      const text = String(ev.result_preview || ev.summary || "");
+      const m = /(\d+)\s*(?:条)?\s*(?:high|critical|高危)/i.exec(text);
       if (m) highCount += Number(m[1]);
     }
   }
