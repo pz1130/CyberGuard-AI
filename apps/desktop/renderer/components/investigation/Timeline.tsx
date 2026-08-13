@@ -9,6 +9,7 @@ import {
   StreamEvent,
   ToolEvent,
 } from "./events";
+import { TimelineEmpty } from "./TimelineEmpty";
 import "./Timeline.css";
 
 const SYSTEM_LABEL: Record<string, string> = {
@@ -41,6 +42,15 @@ export function Timeline({
   // 已提交但首包未到：显示骨架。正文流只给 StreamEvent 订阅。
   const awaitingFirstToken =
     status === "running" && !streaming && events.length <= 1;
+
+  // 未跑过任何事：中间栏是视线落点，不能空着
+  if (events.length === 0 && !streaming && status === "idle") {
+    return (
+      <div className="timeline2">
+        <TimelineEmpty />
+      </div>
+    );
+  }
 
   return (
     <div className="timeline2">

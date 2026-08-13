@@ -1,0 +1,98 @@
+.tlempty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  max-width: 620px;
+  padding: var(--sp-8) 0 var(--sp-4);
+}
+
+.tlempty-intro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.tlempty-title {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  color: var(--text);
+}
+
+.tlempty-sub {
+  margin: 0;
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  color: var(--text-muted);
+}
+
+.tlempty-samples {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+/* 卡片是 layer-2，中间栏是 layer-1 —— 差一级 */
+.tlempty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-1);
+  text-align: left;
+  background: var(--layer-2);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-md);
+  padding: var(--sp-4);
+  font-family: var(--font-ui);
+  cursor: pointer;
+  transition: border-color var(--motion-fast) var(--ease-out),
+    background var(--motion-fast) var(--ease-out);
+}
+
+.tlempty-card:hover:not(:disabled) {
+  background: var(--layer-3);
+  border-color: var(--border-2);
+}
+
+.tlempty-card:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tlempty-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.tlempty-card-label {
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--text);
+}
+
+.tlempty-card-blurb {
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--text-muted);
+}
+
+.tlempty-notready {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+}
+
+.tlempty-notready-k {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tlempty-card { transition: none; }
+}
