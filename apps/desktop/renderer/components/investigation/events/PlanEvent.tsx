@@ -6,6 +6,10 @@ export function PlanEvent({ ev }: { ev: Ev; onViewEvidence?: (id?: string) => vo
   const t = ev.type;
   const plan = (ev.plan || {}) as { summary?: string; steps?: string[] };
   const steps = Array.isArray(plan.steps) ? plan.steps : [];
+  const summary =
+    plan.summary ||
+    (typeof ev.plan_summary === "string" ? ev.plan_summary : "");
+  const reason = typeof ev.reason === "string" ? ev.reason : "";
 
   const decided =
     t === "plan_approved" ||
@@ -36,7 +40,8 @@ export function PlanEvent({ ev }: { ev: Ev; onViewEvidence?: (id?: string) => vo
         ) : null}
       </div>
 
-      {plan.summary ? <p className="ev2-summary">{plan.summary}</p> : null}
+      {summary ? <p className="ev2-summary">{summary}</p> : null}
+      {reason ? <p className="ev2-summary">{reason}</p> : null}
 
       {steps.length > 0 ? (
         <ol className="ev2-steps">

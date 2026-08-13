@@ -25,6 +25,26 @@ export function classify(ev: Ev): EventKind {
   return "system";
 }
 
+/** Live start/end identity. Sidecar uses `name`; some payloads use `tool_name`. */
+export function toolIdentity(ev: Ev): string {
+  return String(ev.tool_name || ev.name);
+}
+
+/**
+ * Append-only log: a start is closed if a later `tool_call_end` shares the name.
+ * Only the unmatched in-flight start (if any) should render as running.
+ */
+export function isClosedToolStart(events: Ev[], index: number): boolean {
+  const ev = events[index];
+  if (!ev || ev.type !== "tool_call_start") return false;
+  const id = toolIdentity(ev);
+  for (let j = index + 1; j < events.length; j++) {
+    const later = events[j];
+    if (later.type === "tool_call_end" && toolIdentity(later) === id) return true;
+  }
+  return false;
+}
+
 export { MessageEvent } from "./MessageEvent";
 export { PlanEvent } from "./PlanEvent";
 export { SkeletonLines, StreamEvent } from "./StreamEvent";

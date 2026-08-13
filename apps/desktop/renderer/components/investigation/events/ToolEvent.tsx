@@ -37,6 +37,11 @@ export function ToolEvent({ ev }: { ev: Ev; onViewEvidence?: (id?: string) => vo
   const hostile = String(ev.source_trust || "") === "hostile";
   // live events put the preview in result_preview (T13); summary is fallback
   const summary = String(ev.result_preview || ev.summary || "");
+  // live `error` is often boolean; the text lives in result_preview
+  const failMsg =
+    typeof ev.error === "boolean"
+      ? String(ev.result_preview || ev.error_type || "执行失败")
+      : String(ev.error || ev.result_preview || "");
   const args = fmtArgs(ev.args ?? ev.arguments);
   const startedAt =
     typeof ev.started_at === "number" ? ev.started_at * 1000 : Date.now();
@@ -65,7 +70,7 @@ export function ToolEvent({ ev }: { ev: Ev; onViewEvidence?: (id?: string) => vo
           <span className="ev2-fail-kind">
             {String(ev.error_type || "执行失败")}
           </span>
-          <span className="ev2-fail-msg">{String(ev.error || "")}</span>
+          <span className="ev2-fail-msg">{failMsg}</span>
           {ev.retryable === true ? (
             <span className="ev2-fail-retry">可重试</span>
           ) : null}

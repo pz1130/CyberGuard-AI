@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useRun, useStream } from "../../state";
 import {
   classify,
+  isClosedToolStart,
   MessageEvent,
   PlanEvent,
   SkeletonLines,
@@ -28,25 +29,27 @@ export function Timeline({
   onViewEvidence: (evidenceId?: string) => void;
 }) {
   const { events, status } = useRun();
-  const { streaming, streamText } = useStream();
+  const { streaming } = useStream();
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     bottomRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth" });
-  }, [events.length, streamText]);
+  }, [events.length, streaming]);
 
-  // 已提交但首包未到：显示骨架
+  // 已提交但首包未到：显示骨架。正文流只给 StreamEvent 订阅。
   const awaitingFirstToken =
-    status === "running" && !streaming && !streamText && events.length <= 1;
+    status === "running" && !streaming && events.length <= 1;
 
   return (
     <div className="timeline2">
       {events.map((ev, i) => {
         const kind = classify(ev);
         const key = `${i}-${ev.type}`;
-        if (kind === "tool")
+        if (kind === "tool") {
+          if (isClosedToolStart(events, i)) return null;
           return <ToolEvent key={key} ev={ev} onViewEvidence={onViewEvidence} />;
+        }
         if (kind === "plan")
           return <PlanEvent key={key} ev={ev} onViewEvidence={onViewEvidence} />;
         if (kind === "message")
