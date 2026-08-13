@@ -1,5 +1,6 @@
 import "../components/workbench/WorkbenchLayout.css";
 import { ContextRail } from "../components/context/ContextRail";
+import { Timeline } from "../components/investigation/Timeline";
 import { SessionRail } from "../components/session/SessionRail";
 import type { SettingsSection } from "../lib/types";
 
@@ -13,7 +14,9 @@ export function WorkbenchView(props: WorkbenchViewProps) {
     <div className="wb">
       <SessionRail />
       <div className="wb-main">
-        {/* 时间线与 composer 在 Task 14 / 15 填入 */}
+        <div className="wb-timeline">
+          <Timeline onViewEvidence={props.onViewEvidence} />
+        </div>
       </div>
       <ContextRail
         onViewEvidence={props.onViewEvidence}

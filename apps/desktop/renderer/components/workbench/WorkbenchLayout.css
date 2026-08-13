@@ -26,3 +26,9 @@
 @media (max-width: 1180px) {
   .wb { grid-template-columns: 220px minmax(0, 1fr) 260px; }
 }
+
+.wb-timeline {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
