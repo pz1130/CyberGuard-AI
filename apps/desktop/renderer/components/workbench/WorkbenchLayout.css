@@ -1,0 +1,28 @@
+.wb {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr) 300px;
+  background: var(--layer-0);
+}
+
+/* 中间栏抬起当主角，左右沉下当背景 —— 不用边框，靠层级色阶分割 */
+.wb-main {
+  background: var(--layer-1);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.wb-rail {
+  background: var(--layer-0);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+@media (max-width: 1180px) {
+  .wb { grid-template-columns: 220px minmax(0, 1fr) 260px; }
+}
