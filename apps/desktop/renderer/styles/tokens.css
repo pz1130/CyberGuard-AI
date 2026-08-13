@@ -51,11 +51,13 @@
 html[data-theme="dark"] {
   color-scheme: dark;
 
-  /* 层级阶 */
-  --layer-0: #07090d; /* 沉底 —— 左右栏 */
-  --layer-1: #0e1219; /* 基准 —— 中间栏 */
-  --layer-2: #161b25; /* 卡片 */
-  --layer-3: #1d2431; /* 浮层 */
+  /* 层级阶。
+   * 0→1 这一跳是三栏的主次分界，刻意拉得比其余两跳大：
+   * 深色下相邻明度差太小会被显示器和环境光吃掉，中间栏就"浮"不起来。 */
+  --layer-0: #05070b; /* 沉底 —— 左右栏 */
+  --layer-1: #121826; /* 基准 —— 中间栏 */
+  --layer-2: #1b2230; /* 卡片 */
+  --layer-3: #252d3d; /* 浮层 */
 
   --border-0: rgba(140, 160, 200, 0.08);
   --border-1: rgba(140, 160, 200, 0.14);
@@ -92,8 +94,9 @@ html[data-theme="dark"] {
 html[data-theme="light"] {
   color-scheme: light;
 
-  --layer-0: #e7ebf1;
-  --layer-1: #f4f6fa;
+  /* 同深色：0→1 拉开，让中间栏是主角 */
+  --layer-0: #dfe4ec;
+  --layer-1: #f8fafc;
   --layer-2: #ffffff;
   --layer-3: #ffffff;
 
