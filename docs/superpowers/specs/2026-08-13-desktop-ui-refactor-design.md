@@ -394,7 +394,10 @@ renderer/__tests__/
 
 ## 11. 出口判据
 
-1. `WorkbenchView` props 数 = 0；`useDesktopRuntime` 拆解完成，无单个 hook 超过 150 行
+1. `WorkbenchView` props ≤ 2，且**仅限跨视图导航回调**（`onViewEvidence` / `onOpenSettings`）；`useDesktopRuntime` 拆解完成，无单个 hook 文件超过 150 行
+
+   > 原判据写的是「props = 0」，过严。跨视图导航是 `App` 的职责而非调查页的状态，
+   > 把它塞进 context 只会让视图切换逻辑散进领域层。判据在实施后修订为 ≤ 2 并限定用途。
 2. 顶部常驻高度 ≤ 48px；无异常时不出现第二条横带
 3. 状态栏六项常显且不可折叠（§3.3），`sandbox_impl=none` 注入用例下转 danger 且顶部浮出
 4. `styles.css` 与 `views.css` 中 **Workbench 相关**规则清零（Settings / Evidence 的规则本轮保留，见 §2.1）
