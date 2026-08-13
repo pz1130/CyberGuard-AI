@@ -14,10 +14,18 @@ import {
   type SessionsState,
 } from "./sessionsReducer";
 
+/**
+ * 会话域只管「有哪些会话、当前选中哪个」，**不依赖 run 域**。
+ *
+ * 「按 sessionId 载入时间线」的职责归 run 域（时间线是它的状态），
+ * 由 run 侧订阅 sessionId 变化来做。方向因此是单向的 run → sessions，
+ * 不再需要 ref 桥接把两边的回调对穿。
+ */
 export type SessionsContextValue = SessionsState & {
   refresh: () => void;
-  select: (id: string) => Promise<void>;
-  /** 只改选中，不拉历史——跑完后认领新会话，避免 loadEvents 冲掉刚看完的 run */
+  /** 只改选中；载入历史由 run 域订阅 sessionId 完成 */
+  select: (id: string) => void;
+  /** 跑完后认领新会话。与 select 的区别由 run 域用「已应用的 id」来消解 */
   adopt: (sessionId: string) => void;
   create: () => void;
   /** 失败返回 false，不抛、不 dispatch removed */
@@ -27,19 +35,7 @@ export type SessionsContextValue = SessionsState & {
 
 const SessionsContext = createContext<SessionsContextValue | null>(null);
 
-export type SessionsProviderProps = {
-  children: ReactNode;
-  /** 选中会话后把历史事件交给 run 域 */
-  onEventsLoaded: (events: Ev[], lastTask: string | null) => void;
-  /** 新建调查时清空 run 域 */
-  onReset: () => void;
-};
-
-export function SessionsProvider({
-  children,
-  onEventsLoaded,
-  onReset,
-}: SessionsProviderProps) {
+export function SessionsProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(sessionsReducer, initialSessionsState);
   const api = typeof window !== "undefined" ? window.cyberguard : undefined;
 
@@ -55,32 +51,14 @@ export function SessionsProvider({
     refresh();
   }, [refresh]);
 
-  const select = useCallback(
-    async (sid: string) => {
-      if (!api) return;
-      dispatch({ type: "select", sessionId: sid });
-      try {
-        const r = await api.sessionEvents(sid);
-        const evs = r.events || [];
-        let lastTask: string | null = null;
-        for (let i = evs.length - 1; i >= 0; i--) {
-          if (evs[i].type === "user_task" && typeof evs[i].task === "string") {
-            lastTask = String(evs[i].task);
-            break;
-          }
-        }
-        onEventsLoaded(evs, lastTask);
-      } catch {
-        onEventsLoaded([], null);
-      }
-    },
-    [api, onEventsLoaded]
-  );
+  const select = useCallback((sid: string) => {
+    dispatch({ type: "select", sessionId: sid });
+  }, []);
 
+  // 选中置空即「新调查」；run 域订阅到 null 会自行清空时间线
   const create = useCallback(() => {
     dispatch({ type: "select", sessionId: null });
-    onReset();
-  }, [onReset]);
+  }, []);
 
   const adopt = useCallback((sessionId: string) => {
     dispatch({ type: "select", sessionId });
@@ -94,18 +72,18 @@ export function SessionsProvider({
       } catch {
         return false;
       }
+      // 删的是当前会话时，reducer 会把 sessionId 收敛为 null，
+      // run 域随之清空时间线，这里不需要再显式通知
       dispatch({ type: "removed", sessionId: sid });
-      if (state.sessionId === sid) onReset();
       refresh();
       return true;
     },
-    [api, state.sessionId, onReset, refresh]
+    [api, refresh]
   );
 
   const clearAll = useCallback(() => {
     dispatch({ type: "clearAll" });
-    onReset();
-  }, [onReset]);
+  }, []);
 
   const value = useMemo<SessionsContextValue>(
     () => ({ ...state, refresh, select, adopt, create, remove, clearAll }),

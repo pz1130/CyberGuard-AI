@@ -3,72 +3,63 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SessionsProvider, useSessions } from "../../state/useSessions";
 
-function wrapperFor(onEventsLoaded = vi.fn(), onReset = vi.fn()) {
-  return function Wrap({ children }: { children: ReactNode }) {
-    return (
-      <SessionsProvider onEventsLoaded={onEventsLoaded} onReset={onReset}>
-        {children}
-      </SessionsProvider>
-    );
-  };
+function Wrap({ children }: { children: ReactNode }) {
+  return <SessionsProvider>{children}</SessionsProvider>;
 }
 
-describe("SessionsProvider adopt / remove", () => {
+const rowA = {
+  session_id: "a",
+  title: "A",
+  tier: "readonly",
+  updated_at: 1,
+  event_count: 0,
+};
+
+describe("SessionsProvider", () => {
   afterEach(() => {
     delete (window as { cyberguard?: unknown }).cyberguard;
   });
 
-  it("adopt 只选中，不拉 sessionEvents / onEventsLoaded", async () => {
+  it("不依赖 run 域：select / adopt 都不拉 sessionEvents", async () => {
     const sessionEvents = vi.fn();
-    const onEventsLoaded = vi.fn();
     window.cyberguard = {
-      listSessions: vi.fn().mockResolvedValue({
-        sessions: [
-          {
-            session_id: "new-sid",
-            title: "新",
-            tier: "readonly",
-            updated_at: 1,
-            event_count: 0,
-          },
-        ],
-      }),
+      listSessions: vi.fn().mockResolvedValue({ sessions: [rowA] }),
       sessionEvents,
     } as unknown as typeof window.cyberguard;
 
-    const { result } = renderHook(() => useSessions(), {
-      wrapper: wrapperFor(onEventsLoaded),
-    });
+    const { result } = renderHook(() => useSessions(), { wrapper: Wrap });
     await waitFor(() => expect(result.current.sessions).toHaveLength(1));
 
-    act(() => {
-      result.current.adopt("new-sid");
-    });
+    act(() => result.current.select("a"));
+    expect(result.current.sessionId).toBe("a");
+
+    act(() => result.current.adopt("new-sid"));
     expect(result.current.sessionId).toBe("new-sid");
+
+    // 载入历史是 run 域的职责，会话域一次都不该碰这个 API
     expect(sessionEvents).not.toHaveBeenCalled();
-    expect(onEventsLoaded).not.toHaveBeenCalled();
+  });
+
+  it("create 把选中置空（run 域据此清时间线）", async () => {
+    window.cyberguard = {
+      listSessions: vi.fn().mockResolvedValue({ sessions: [rowA] }),
+    } as unknown as typeof window.cyberguard;
+
+    const { result } = renderHook(() => useSessions(), { wrapper: Wrap });
+    await waitFor(() => expect(result.current.sessions).toHaveLength(1));
+
+    act(() => result.current.select("a"));
+    act(() => result.current.create());
+    expect(result.current.sessionId).toBe(null);
   });
 
   it("remove 失败不 dispatch removed、返回 false", async () => {
-    const onReset = vi.fn();
     window.cyberguard = {
-      listSessions: vi.fn().mockResolvedValue({
-        sessions: [
-          {
-            session_id: "a",
-            title: "A",
-            tier: "readonly",
-            updated_at: 1,
-            event_count: 0,
-          },
-        ],
-      }),
+      listSessions: vi.fn().mockResolvedValue({ sessions: [rowA] }),
       deleteSession: vi.fn().mockRejectedValue(new Error("boom")),
     } as unknown as typeof window.cyberguard;
 
-    const { result } = renderHook(() => useSessions(), {
-      wrapper: wrapperFor(vi.fn(), onReset),
-    });
+    const { result } = renderHook(() => useSessions(), { wrapper: Wrap });
     await waitFor(() => expect(result.current.sessions).toHaveLength(1));
 
     let ok = true;
@@ -77,6 +68,21 @@ describe("SessionsProvider adopt / remove", () => {
     });
     expect(ok).toBe(false);
     expect(result.current.sessions).toHaveLength(1);
-    expect(onReset).not.toHaveBeenCalled();
+  });
+
+  it("删掉当前选中的会话后，sessionId 收敛为 null", async () => {
+    window.cyberguard = {
+      listSessions: vi.fn().mockResolvedValue({ sessions: [rowA] }),
+      deleteSession: vi.fn().mockResolvedValue({ ok: true }),
+    } as unknown as typeof window.cyberguard;
+
+    const { result } = renderHook(() => useSessions(), { wrapper: Wrap });
+    await waitFor(() => expect(result.current.sessions).toHaveLength(1));
+
+    act(() => result.current.select("a"));
+    await act(async () => {
+      await result.current.remove("a");
+    });
+    expect(result.current.sessionId).toBe(null);
   });
 });

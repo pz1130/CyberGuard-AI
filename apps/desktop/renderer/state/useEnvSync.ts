@@ -23,9 +23,12 @@ export function useEnvSync({
   patch: (p: Partial<EnvState>) => void;
   onPausedRuns?: (runId: string) => void;
 }) {
-  // 用 ref 持有回调，避免调用方传内联箭头导致 effect 反复重跑
+  // 用 ref 持有回调，避免调用方传内联箭头导致 effect 反复重跑。
+  // 只在 ping 的 .then 里被读，写入放 effect。
   const onPausedRunsRef = useRef(onPausedRuns);
-  onPausedRunsRef.current = onPausedRuns;
+  useEffect(() => {
+    onPausedRunsRef.current = onPausedRuns;
+  }, [onPausedRuns]);
 
   // ping：拉一次环境全貌
   useEffect(() => {
