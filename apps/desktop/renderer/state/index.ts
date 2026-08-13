@@ -18,4 +18,4 @@ export { useEnvironment } from "./useEnvironment";
 export { usePlan } from "./usePlan";
 export { useRun } from "./useRun";
 export { useSessions } from "./useSessions";
-export { useStream } from "./useStream";
+export { useStreamFlag, useStreamText } from "./useStream";

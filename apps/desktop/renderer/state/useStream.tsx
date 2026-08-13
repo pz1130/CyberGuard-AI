@@ -2,22 +2,32 @@ import {
   createContext,
   useCallback,
   useContext,
-  useMemo,
   useState,
   type ReactNode,
 } from "react";
 import type { Ev } from "../lib/types";
 
-type StreamValue = { streamText: string; streaming: boolean };
+/**
+ * 流式域拆成三个 context，刻意不合并：
+ *
+ *   StreamTextContext     每 token 变一次 —— 只有 StreamEvent 订阅
+ *   StreamFlagContext     只在 false↔true 时变 —— Timeline 等订阅
+ *   StreamDispatchContext 引用恒定 —— 写侧永不重渲染
+ *
+ * 合并 text 与 flag 会让「只关心在不在流」的消费者随每个 token 重渲染
+ * （Context 无选择性订阅，解构不减少订阅面），Timeline 会拖着全部事件卡
+ * 一起重渲染。这正是本域存在的理由，不要为了少一个 context 合回去。
+ */
 
-const StreamStateContext = createContext<StreamValue | null>(null);
+const StreamTextContext = createContext<string | null>(null);
+const StreamFlagContext = createContext<boolean | null>(null);
 const StreamDispatchContext = createContext<((ev: Ev) => void) | null>(null);
 
 export function StreamProvider({ children }: { children: ReactNode }) {
   const [streamText, setStreamText] = useState("");
   const [streaming, setStreaming] = useState(false);
 
-  // 引用恒定：不随 streamText 变化，故写侧消费者永不因流式更新重渲染
+  // 引用恒定：不依赖任何 state
   const ingest = useCallback((ev: Ev) => {
     if (ev.type === "token" && typeof ev.delta === "string") {
       setStreaming(true);
@@ -41,23 +51,33 @@ export function StreamProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const value = useMemo<StreamValue>(
-    () => ({ streamText, streaming }),
-    [streamText, streaming]
-  );
-
   return (
     <StreamDispatchContext.Provider value={ingest}>
-      <StreamStateContext.Provider value={value}>
-        {children}
-      </StreamStateContext.Provider>
+      <StreamFlagContext.Provider value={streaming}>
+        <StreamTextContext.Provider value={streamText}>
+          {children}
+        </StreamTextContext.Provider>
+      </StreamFlagContext.Provider>
     </StreamDispatchContext.Provider>
   );
 }
 
-export function useStream(): StreamValue {
-  const ctx = useContext(StreamStateContext);
-  if (!ctx) throw new Error("useStream must be used within StreamProvider");
+/** 只订阅「在不在流」。不会随 token 重渲染。 */
+export function useStreamFlag(): boolean {
+  const ctx = useContext(StreamFlagContext);
+  if (ctx === null)
+    throw new Error("useStreamFlag must be used within StreamProvider");
+  return ctx;
+}
+
+/**
+ * 订阅流式正文 —— 每个 token 都会重渲染调用方。
+ * 只有真正渲染正文的组件才允许用（目前仅 StreamEvent）。
+ */
+export function useStreamText(): string {
+  const ctx = useContext(StreamTextContext);
+  if (ctx === null)
+    throw new Error("useStreamText must be used within StreamProvider");
   return ctx;
 }
 

@@ -1,11 +1,12 @@
-import { useStream } from "../../../state";
+import { useStreamFlag, useStreamText } from "../../../state";
 import { Markdown } from "../../Markdown";
 import { Card } from "../../../ui";
 import "./events.css";
 
-/** 唯一消费流式 context 的组件 —— 高频重渲染被隔离在这里 */
+/** 唯一订阅流式正文的组件 —— 每 token 的重渲染被隔离在这里 */
 export function StreamEvent() {
-  const { streamText, streaming } = useStream();
+  const streamText = useStreamText();
+  const streaming = useStreamFlag();
   if (!streaming && !streamText) return null;
 
   return (

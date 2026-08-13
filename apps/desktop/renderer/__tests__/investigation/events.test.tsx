@@ -108,13 +108,33 @@ describe("PlanEvent live 字段", () => {
   });
 });
 
-describe("Timeline 流式隔离", () => {
-  it("Timeline 只读 streaming，不读 streamText", () => {
+/**
+ * 隔离的行为验证在 __tests__/state/useStream.test.tsx（实测重渲染次数）。
+ * 这里只做一条静态约束：除 StreamEvent 外，谁都不许订阅流式正文。
+ *
+ * 注意：本用例早先断言的是 `const { streaming } = useStream()`，
+ * 而那正是导致隔离失效的写法 —— 订阅合并后的 context 会让 Timeline
+ * 随每个 token 重渲染。文本断言锁住了缺陷本身，坏着也一直是绿的。
+ * 教训：护栏要断言行为，静态检查只用来防止订阅面扩散。
+ */
+describe("流式正文的订阅面", () => {
+  const consumers = [
+    "../../components/investigation/Timeline.tsx",
+    "../../components/investigation/Composer.tsx",
+    "../../components/context/ContextRail.tsx",
+  ];
+
+  // 匹配调用形式而非裸标识符，否则会误伤提到该名字的注释
+  it.each(consumers)("%s 不订阅 useStreamText", (rel) => {
+    const src = readFileSync(resolve(__dirname, rel), "utf8");
+    expect(src).not.toMatch(/useStreamText\s*\(/);
+  });
+
+  it("StreamEvent 是唯一订阅流式正文的组件", () => {
     const src = readFileSync(
-      resolve(__dirname, "../../components/investigation/Timeline.tsx"),
+      resolve(__dirname, "../../components/investigation/events/StreamEvent.tsx"),
       "utf8"
     );
-    expect(src).toMatch(/const \{ streaming \} = useStream\(\)/);
-    expect(src).not.toMatch(/\bstreamText\b/);
+    expect(src).toMatch(/useStreamText\(\)/);
   });
 });

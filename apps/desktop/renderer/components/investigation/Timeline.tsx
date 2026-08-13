@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useRun, useStream } from "../../state";
+import { useRun, useStreamFlag } from "../../state";
 import {
   classify,
   isClosedToolStart,
@@ -29,7 +29,8 @@ export function Timeline({
   onViewEvidence: (evidenceId?: string) => void;
 }) {
   const { events, status } = useRun();
-  const { streaming } = useStream();
+  // 只订阅布尔 —— 订阅 useStreamText 会让整条时间线随每个 token 重渲染
+  const streaming = useStreamFlag();
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
