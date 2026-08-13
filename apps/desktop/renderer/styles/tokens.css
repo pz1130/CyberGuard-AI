@@ -72,6 +72,7 @@ html[data-theme="dark"] {
 
   /* accent 只表示「主操作」与「当前选中」，不表示任何状态 */
   --accent: #3ee0c5;
+  --accent-2: #5b8cff; /* legacy alias — styles.css / views.css */
   --accent-muted: rgba(62, 224, 197, 0.12);
   --accent-glow: rgba(62, 224, 197, 0.28);
 
@@ -110,6 +111,7 @@ html[data-theme="light"] {
   --text-inverse: #f8fafc;
 
   --accent: #0d9488;
+  --accent-2: #2563eb; /* legacy alias — styles.css / views.css */
   --accent-muted: rgba(13, 148, 136, 0.1);
   --accent-glow: rgba(13, 148, 136, 0.18);
 
