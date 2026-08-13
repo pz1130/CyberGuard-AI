@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { PlanPanel } from "./components/PlanPanel";
 import { AppChrome } from "./components/shell/AppChrome";
 import { DegradationStrip } from "./components/shell/DegradationStrip";
+import "./components/shell/AppShell.css";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { useUiPrefs } from "./hooks/useUiPrefs";
 import type { ActiveView, SettingsSection } from "./lib/types";
@@ -85,7 +86,7 @@ function AppInner() {
         sessions.clearAll();
       }}
     >
-      <div className="app">
+      <div className="app-shell">
         <AppChrome
           activeView={activeView}
           onNavigate={setActiveView}
