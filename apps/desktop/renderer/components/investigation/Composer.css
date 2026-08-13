@@ -1,0 +1,59 @@
+.composer2 {
+  flex: none;
+  border-top: 1px solid var(--border-0);
+  padding: var(--sp-4) var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.composer2-input {
+  width: 100%;
+  resize: vertical;
+  background: var(--layer-2);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-md);
+  padding: var(--sp-3) var(--sp-4);
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  color: var(--text);
+  transition: border-color var(--motion-fast) var(--ease-out);
+}
+
+.composer2-input::placeholder { color: var(--text-faint); }
+
+.composer2-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.composer2-input:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.composer2-bar { display: flex; align-items: center; gap: var(--sp-2); }
+
+.composer2-hint {
+  margin-left: auto;
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+}
+
+.composer2-steer { display: flex; align-items: center; gap: var(--sp-2); }
+
+.composer2-steerinput {
+  flex: 1;
+  height: 26px;
+  background: var(--layer-2);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--sp-3);
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  color: var(--text);
+}
+
+.composer2-steerinput:focus { outline: none; border-color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .composer2-input { transition: none; }
+}

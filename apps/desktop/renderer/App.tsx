@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useState } from "react";
-import { PlanPanel } from "./components/PlanPanel";
 import { AppChrome } from "./components/shell/AppChrome";
 import { DegradationStrip } from "./components/shell/DegradationStrip";
 import "./components/shell/AppShell.css";
@@ -9,7 +8,6 @@ import type { ActiveView, SettingsSection } from "./lib/types";
 import {
   RuntimeProvider,
   useEnvironment,
-  usePlan,
   useRun,
   useSessions,
 } from "./state";
@@ -46,7 +44,6 @@ function AppInner() {
   const run = useRun();
   const sessions = useSessions();
   const env = useEnvironment();
-  const { pendingPlan, planEdit, setPlanEdit, approve, reject } = usePlan();
 
   const openEvidence = useCallback((evidenceId?: string) => {
     setHighlightEvidenceId(evidenceId);
@@ -68,7 +65,8 @@ function AppInner() {
       onWorkbench: () => setActiveView("workbench"),
       onEvidence: () => setActiveView("evidence"),
       onRun: () => {
-        if (activeView === "workbench") void run.run();
+        // Composer 在 sidecar 离线时禁用运行（INV-25）；全局 ⌘↵ 必须同一闸
+        if (activeView === "workbench" && env.pingOk !== false) void run.run();
       },
       onEscape: () => {
         if (document.activeElement instanceof HTMLElement) {
@@ -76,7 +74,7 @@ function AppInner() {
         }
       },
     }),
-    [activeView, openSettings, sessions.create, run.run]
+    [activeView, env.pingOk, openSettings, sessions.create, run.run]
   );
   useHotkeys(hotkeyHandlers);
 
@@ -95,16 +93,6 @@ function AppInner() {
           devTitle={DEV_TITLE}
         />
         <DegradationStrip />
-
-        {pendingPlan && activeView === "workbench" && (
-          <PlanPanel
-            pendingPlan={pendingPlan}
-            planEdit={planEdit}
-            onPlanEdit={setPlanEdit}
-            onApprove={() => void approve()}
-            onReject={() => void reject()}
-          />
-        )}
 
         {activeView === "workbench" && (
           <WorkbenchView
