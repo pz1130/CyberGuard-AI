@@ -1,10 +1,6 @@
 import { afterEach } from "vitest";
 import { cleanup } from "@testing-library/react";
 
-afterEach(() => {
-  cleanup();
-});
-
 /**
  * Node 22+/26 在未传 --localstorage-file 时把 globalThis.localStorage
  * 设成 undefined，并连带让 jsdom 的 window.localStorage 也不可用。
@@ -53,15 +49,29 @@ if (
 }
 
 // jsdom 不实现 matchMedia，主题与 reduced-motion 代码会用到
+const defaultMatchMedia = ((query: string) => ({
+  matches: false,
+  media: query,
+  onchange: null,
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  addListener: () => {},
+  removeListener: () => {},
+  dispatchEvent: () => false,
+})) as unknown as typeof window.matchMedia;
+
 if (!window.matchMedia) {
-  window.matchMedia = ((query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    addListener: () => {},
-    removeListener: () => {},
-    dispatchEvent: () => false,
-  })) as unknown as typeof window.matchMedia;
+  window.matchMedia = defaultMatchMedia;
 }
+
+afterEach(() => {
+  cleanup();
+  // 共享 Map 不随 jsdom 文档重置；不清会把折叠键泄漏到同 worker 后续文件
+  try {
+    localStorage.clear();
+  } catch {
+    /* ignore */
+  }
+  // responsive 等用例会覆盖 matchMedia；恢复恒 false 桩避免污染主题/断点
+  window.matchMedia = defaultMatchMedia;
+});
