@@ -52,3 +52,5 @@ apps/desktop/.vite/
 .claude/
 .playwright-mcp/
 *.png
+# 例外：文档里作为验收证据存档的截图（如出口判据 7 的两档目视）
+!docs/**/assets/**/*.png

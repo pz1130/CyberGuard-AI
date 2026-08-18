@@ -1385,7 +1385,7 @@ Prose 收拢原本散在 styles.css 里的 Markdown 排版，标题走 --font-se
 正文仍是无衬线 —— 衬线只用于标题（spec §1.4）。"
 ```
 
-- [ ] **Step 6: ⏸ 人工检查点（spec §7 的「停下来看比例」）** —— *未留证据。实现已合并，但两档窗口的目视核对没有截图或记录，与判据 7 一并挂着。*
+- [x] **Step 6: ⏸ 人工检查点（spec §7 的「停下来看比例」）** —— *2026-08-18 补做，截图见 `docs/desktop/assets/2026-08-18-visual-exit/`。查出并修掉一处比例问题：composer 只有 365px 宽。详见复核记录。*
 
 ```bash
 cd apps/desktop && npm run dev
@@ -1592,7 +1592,7 @@ cd apps/desktop && npx vitest run --config vitest.config.ts renderer/__tests__/s
 ```
 Expected: PASS
 
-- [ ] **Step 5: 核对全部七条出口判据** —— *判据 1–6 已核（见下方复核记录），**判据 7 未留证据**，故整步不勾。*
+- [x] **Step 5: 核对全部七条出口判据** —— *七条全部核过；判据 7 的截图见 `docs/desktop/assets/2026-08-18-visual-exit/`。*
 
 ```bash
 cd apps/desktop && npm run test && npm run typecheck
@@ -1712,7 +1712,7 @@ const degraded = env.securityDegradations.length > 0;
 | 判据 4 | `contrast.test.ts` | 两套主题 × 20 断言 |
 | 判据 5 | 上列四行 | 全绿 |
 | 判据 6 | `wc -l` | `styles.css 202 + views.css 276 = 478` ≤ 1000（起点 1844） |
-| 判据 7 | 1440×900 / 1024×768 目视 | **未留证据** —— 仓库内无当日截图，提交信息只写了「两档人工（控制器）」 |
+| 判据 7 | 1440×900 / 1024×768 目视 | 已补做：两档 × 三视图共 6 张，存 `docs/desktop/assets/2026-08-18-visual-exit/`。查出并修复一处比例问题（见下） |
 
 复核中修正的三处措辞与取值偏差：
 
@@ -1720,4 +1720,29 @@ const degraded = env.securityDegradations.length > 0;
 2. **`--measure` 实际落为 `736px` 而非 spec 原写的 `46rem`。** 这是刻意的（根字号随 `data-font` 变，rem 限宽会让列宽跟着字号伸缩），已把理由写进 spec §1 与 `tokens.css` 注释。
 3. **accent 实底按钮全局 5 个而非本计划 T11 Step 5 预期的 2 个。** 多出的三个是 Settings 三个分区各自的保存 / 批准键，偏离已在提交 `4da788b` 的信息里交代，判定为可接受。
 
-未了：判据 7 与 T7 Step 6 的两档目视，以及 T10 Step 2 的 `highlightId` 跳转手工验证。
+### 判据 7 补做（2026-08-18 晚）
+
+做法：给 Electron 加 `--remote-debugging-port`，用 CDP 驱动**真实应用**，
+`Emulation.setDeviceMetricsOverride` 把渲染视口锁成 1440×900 与 1024×768。
+两档各先清掉折叠偏好再重载 —— 断点只在初始化读一次（`useUiPrefs.ts:42` 的注释说明了
+为什么不监听 resize），不重载就测不到真实的自动收起。
+
+量到的外壳几何：
+
+| 视口 | 左栏 | 右侧板 | 状态栏 | 正文列 |
+|---|---|---|---|---|
+| 1440×900 | 260px | 300px（展开） | 0→1440 通栏 | 736px 居中 |
+| 1024×768 | 260px | **自动收起** | 0→1024 通栏 | 736px 居中 |
+
+1024 档右侧板自动收起，与 `responsive.test.tsx` 的 1180px 断点一致；状态栏两档都通栏贴底，
+六项区常显五项。
+
+**查出一处比例问题并修掉**：`.composer2` 实际只有 365px 宽，而它上方的正文列是 736px ——
+输入框比正文窄了将近一半。原因是 `margin: 0 auto` 的横向 auto 会关掉 flex 列的默认 stretch，
+盒子缩到内容宽，`max-width: var(--measure)` 没机会生效。补 `width: 100%` 后量到 736px，与正文列齐。
+**这正是判据 7 存在的理由 —— 自动化测试测不出「比例不对」。**
+
+截图为修复后的状态。`.gitignore` 全局忽略 `*.png`，为存这批证据加了
+`!docs/**/assets/**/*.png` 例外。
+
+未了：T10 Step 2 的 `highlightId` 跳转手工验证。
