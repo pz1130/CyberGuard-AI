@@ -40,7 +40,7 @@
 }
 
 .ui-listrow--active .ui-listrow-title {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .ui-listrow-meta {

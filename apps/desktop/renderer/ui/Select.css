@@ -71,10 +71,10 @@
 
 .ui-select-item[data-highlighted] {
   background: var(--accent-muted);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .ui-select-check {
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: var(--text-xs);
 }

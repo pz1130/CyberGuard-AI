@@ -58,6 +58,7 @@ export function SessionRail() {
             {visible.map((s) => (
               <ListRow
                 key={s.session_id}
+                variant="nav"
                 active={s.session_id === sessionId}
                 title={s.title || "未命名调查"}
                 meta={<Timestamp value={s.updated_at} />}

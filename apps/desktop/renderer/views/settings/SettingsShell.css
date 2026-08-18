@@ -44,9 +44,11 @@
 
 .settings-content-head h1 {
   margin: 0;
+  font-family: var(--font-serif);
   font-size: var(--text-xl);
   font-weight: 650;
   letter-spacing: -0.02em;
+  color: var(--text);
 }
 
 .settings-content-lede {

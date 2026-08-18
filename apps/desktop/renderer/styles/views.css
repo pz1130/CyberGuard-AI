@@ -1,31 +1,34 @@
 /* Shell + multi-view layout — finished ops console */
 
-/* —— Views —— */
+/* —— Views —— flush canvas on --layer-1（与 workbench 同面，无玻璃卡） */
 .view-pane {
+  flex: 1;
   min-height: 0;
+  width: 100%;
   overflow: auto;
-  padding: 22px 24px 32px;
-  margin: 0 10px 10px;
-  border: 1px solid var(--border-1);
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--layer-2) 60%, transparent);
-  box-shadow: var(--shadow-3);
-  backdrop-filter: blur(16px);
+  padding: var(--sp-6) var(--sp-6) var(--sp-8);
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: var(--layer-1);
+  box-shadow: none;
 }
 
 .view-pane h1 {
-  margin: 0 0 6px;
-  font-size: 22px;
-  letter-spacing: -0.04em;
-  font-weight: 750;
+  margin: 0 0 var(--sp-2);
+  font-family: var(--font-serif);
+  font-size: var(--text-xl);
+  letter-spacing: -0.02em;
+  font-weight: 600;
+  color: var(--text);
 }
 
 .view-pane .lede {
   color: var(--text-muted);
-  font-size: 13.5px;
-  margin: 0 0 20px;
+  font-size: var(--text-sm);
+  margin: 0 0 var(--sp-5);
   max-width: 58ch;
-  line-height: 1.55;
+  line-height: var(--leading-normal);
 }
 
 .view-pane-header {
@@ -246,7 +249,7 @@
 }
 
 .pill.accent {
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--accent-muted);
   border-color: color-mix(in srgb, var(--accent) 35%, transparent);
 }

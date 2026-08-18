@@ -10,8 +10,8 @@ body,
   background: var(--layer-0);
   color: var(--text);
   font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: 15px; /* 与 --text-base / data-font=medium 对齐 */
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   letter-spacing: -0.01em;

@@ -47,7 +47,34 @@
   font-weight: 500;
 }
 
-.statusbar-more { margin-left: auto; }
+.statusbar-more {
+  margin-left: auto;
+  position: relative;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+}
+
+/* 折叠条保持 26px；展开体上浮为 popover，避免被 .app-shell overflow 裁切 */
+.statusbar-more .ui-disclosure-summary {
+  padding: 0;
+  font-size: var(--text-2xs);
+  white-space: nowrap;
+}
+
+.statusbar-more[open] .ui-disclosure-body {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--sp-1));
+  min-width: 260px;
+  max-width: min(420px, 80vw);
+  padding: var(--sp-3);
+  background: var(--layer-3);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-3);
+  z-index: 40;
+}
 
 .statusbar-kv {
   display: grid;

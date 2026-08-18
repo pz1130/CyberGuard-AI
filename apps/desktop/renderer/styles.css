@@ -4,10 +4,10 @@ html[data-font="small"] {
   font-size: 13px;
 }
 html[data-font="medium"] {
-  font-size: 14px;
+  font-size: 15px;
 }
 html[data-font="large"] {
-  font-size: 16px;
+  font-size: 17px;
 }
 
 .mono-sm {

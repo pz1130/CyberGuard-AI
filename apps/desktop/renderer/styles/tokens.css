@@ -55,7 +55,7 @@
   --font-serif: ui-serif, "New York", "Iowan Old Style", Georgia, serif;
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 
-  --measure: 46rem; /* 主体内容限宽 */
+  --measure: 736px; /* ≈46rem @16px；根字号随 data-font，限宽用 px 锁规格 */
   --chrome-pad-left: 78px; /* macOS 交通灯留位 */
 }
 
