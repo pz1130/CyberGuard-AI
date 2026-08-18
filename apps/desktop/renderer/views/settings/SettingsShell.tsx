@@ -1,47 +1,35 @@
 import { useEffect, useState, type ReactElement } from "react";
-import type { FontSize } from "../../hooks/useUiPrefs";
-import type { SettingsSection, ThemeMode } from "../../lib/types";
+import type { SettingsSection } from "../../lib/types";
+import { useEnvironment, useUiPrefsCtx } from "../../state";
+import { ListRow } from "../../ui";
 import { AboutSection } from "./AboutSection";
 import { AppearanceSection } from "./AppearanceSection";
 import { DataSection } from "./DataSection";
-import { HUB_ITEMS, HubSection } from "./HubSection";
+import { HUB_GROUPS, HUB_ITEMS, HubSection } from "./HubSection";
 import { LlmSection } from "./LlmSection";
 import { McpSection } from "./McpSection";
 import { SkillsSection } from "./SkillsSection";
 import { useLlmSection } from "./useLlmSection";
 import { useMcpSection } from "./useMcpSection";
 import { useSkillsSection } from "./useSkillsSection";
+import "./SettingsShell.css";
 
 export type SettingsViewProps = {
-  theme: ThemeMode;
-  resolved: "dark" | "light";
-  fontSize: FontSize;
-  providerMode: string;
-  dataRoot: string;
-  onCycleTheme: () => void;
-  onSetTheme: (mode: ThemeMode) => void;
-  onSetFontSize: (size: FontSize) => void;
   focusSection?: SettingsSection;
-  onProviderSaved?: (mode: string) => void;
+  onProviderSaved: (mode: string) => void;
 };
 
 export function SettingsShell({
-  theme,
-  resolved,
-  fontSize,
-  providerMode,
-  dataRoot,
-  onCycleTheme,
-  onSetTheme,
-  onSetFontSize,
   focusSection,
   onProviderSaved,
 }: SettingsViewProps): ReactElement {
+  const { theme, fontSize } = useUiPrefsCtx();
+  const { providerMode } = useEnvironment();
   const [section, setSection] = useState<SettingsSection>(
     focusSection && focusSection !== "hub" ? focusSection : "hub"
   );
 
-  // Hooks stay mounted on the shell so hub↔detail does not reset editors.
+  // Hooks stay mounted on the shell so section switches do not reset editors.
   const llm = useLlmSection(onProviderSaved);
   const mcp = useMcpSection();
   const skills = useSkillsSection();
@@ -68,62 +56,68 @@ export function SettingsShell({
     return null;
   };
 
-  const header =
-    section === "hub" ? (
-      <div className="settings-hub-header">
-        <h1>设置</h1>
-        <p className="lede">
-          选择一项进入配置。当前 LLM：
-          <strong className="settings-hub-mode">{providerMode}</strong>
-        </p>
-      </div>
-    ) : (
-      <div className="settings-detail-head">
-        <button
-          type="button"
-          className="ghost-btn settings-back"
-          onClick={() => setSection("hub")}
-        >
-          ← 全部设置
-        </button>
-        <h1>
-          {HUB_ITEMS.find((t) => t.id === section)?.title || "设置"}
-        </h1>
-      </div>
-    );
+  const title =
+    section === "hub"
+      ? "设置"
+      : HUB_ITEMS.find((t) => t.id === section)?.title || "设置";
 
   return (
-    <div className="view-pane view-enter settings-view">
-      {header}
-
-      {section === "hub" && (
-        <HubSection
-          providerMode={providerMode}
-          hubStatus={hubStatus}
-          onSelect={(id) => setSection(id)}
+    <div className="view-pane view-enter settings-shell">
+      <nav className="settings-nav" aria-label="设置分区">
+        <ListRow
+          variant="nav"
+          active={section === "hub"}
+          title="概览"
+          onClick={() => setSection("hub")}
         />
-      )}
+        {HUB_GROUPS.map((group) => (
+          <div key={group.label}>
+            <div className="settings-nav-label">{group.label}</div>
+            {group.items.map((item) => (
+              <ListRow
+                key={item.id}
+                variant="nav"
+                active={section === item.id}
+                title={item.title}
+                meta={hubStatus(item.id) || undefined}
+                onClick={() => setSection(item.id)}
+              />
+            ))}
+          </div>
+        ))}
+      </nav>
 
-      {section === "llm" && <LlmSection {...llm} />}
+      <div className="settings-content">
+        <div className="settings-content-head">
+          <h1>{title}</h1>
+          {section === "hub" ? (
+            <p className="settings-content-lede">
+              选择左侧分区进入配置。当前 LLM：
+              <strong>{providerMode}</strong>
+            </p>
+          ) : null}
+        </div>
 
-      {section === "mcp" && <McpSection {...mcp} />}
+        {section === "hub" && (
+          <HubSection
+            providerMode={providerMode}
+            hubStatus={hubStatus}
+            onSelect={(id) => setSection(id)}
+          />
+        )}
 
-      {section === "skills" && <SkillsSection {...skills} />}
+        {section === "llm" && <LlmSection {...llm} />}
 
-      {section === "appearance" && (
-        <AppearanceSection
-          theme={theme}
-          resolved={resolved}
-          fontSize={fontSize}
-          onCycleTheme={onCycleTheme}
-          onSetTheme={onSetTheme}
-          onSetFontSize={onSetFontSize}
-        />
-      )}
+        {section === "mcp" && <McpSection {...mcp} />}
 
-      {section === "data" && <DataSection dataRoot={dataRoot} />}
+        {section === "skills" && <SkillsSection {...skills} />}
 
-      {section === "about" && <AboutSection />}
+        {section === "appearance" && <AppearanceSection />}
+
+        {section === "data" && <DataSection />}
+
+        {section === "about" && <AboutSection />}
+      </div>
     </div>
   );
 }

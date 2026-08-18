@@ -1,28 +1,16 @@
 import type { ReactElement } from "react";
 import type { FontSize } from "../../hooks/useUiPrefs";
 import type { ThemeMode } from "../../lib/types";
+import { useUiPrefsCtx } from "../../state";
+import { Button, Card, Field, Select } from "../../ui";
 
-export type AppearanceSectionProps = {
-  theme: ThemeMode;
-  resolved: "dark" | "light";
-  fontSize: FontSize;
-  onCycleTheme: () => void;
-  onSetTheme: (mode: ThemeMode) => void;
-  onSetFontSize: (size: FontSize) => void;
-};
-
-export function AppearanceSection({
-  theme,
-  resolved,
-  fontSize,
-  onCycleTheme,
-  onSetTheme,
-  onSetFontSize,
-}: AppearanceSectionProps): ReactElement {
+export function AppearanceSection(): ReactElement {
+  const { theme, resolved, fontSize, setTheme, setFontSize, cycleTheme } =
+    useUiPrefsCtx();
   const api = typeof window !== "undefined" ? window.cyberguard : undefined;
 
   const onThemeSelect = async (next: ThemeMode) => {
-    onSetTheme(next);
+    setTheme(next);
     try {
       await api?.prefsSet?.({ theme: next });
     } catch {
@@ -31,7 +19,7 @@ export function AppearanceSection({
   };
 
   const onFontSelect = async (next: FontSize) => {
-    onSetFontSize(next);
+    setFontSize(next);
     try {
       await api?.prefsSet?.({ font_size: next });
     } catch {
@@ -41,39 +29,41 @@ export function AppearanceSection({
 
   return (
     <div className="settings-detail">
-      <div className="settings-card">
-        <h3>主题与字号</h3>
-        <label className="field-label">
-          Theme
-          <select
+      <Card>
+        <h3 className="settings-card-title">主题与字号</h3>
+        <Field label="Theme">
+          <Select
+            ariaLabel="Theme"
             value={theme}
-            onChange={(e) => void onThemeSelect(e.target.value as ThemeMode)}
-          >
-            <option value="dark">dark</option>
-            <option value="light">light</option>
-            <option value="system">system</option>
-          </select>
-        </label>
-        <label className="field-label">
-          Font size
-          <select
+            onChange={(v) => void onThemeSelect(v)}
+            options={[
+              { value: "dark", label: "dark" },
+              { value: "light", label: "light" },
+              { value: "system", label: "system" },
+            ]}
+          />
+        </Field>
+        <Field label="Font size">
+          <Select
+            ariaLabel="Font size"
             value={fontSize}
-            onChange={(e) => void onFontSelect(e.target.value as FontSize)}
-          >
-            <option value="small">small</option>
-            <option value="medium">medium</option>
-            <option value="large">large</option>
-          </select>
-        </label>
-        <div className="empty-actions mt-10">
-          <button type="button" className="secondary" onClick={onCycleTheme}>
+            onChange={(v) => void onFontSelect(v)}
+            options={[
+              { value: "small", label: "small" },
+              { value: "medium", label: "medium" },
+              { value: "large", label: "large" },
+            ]}
+          />
+        </Field>
+        <div className="settings-actions">
+          <Button variant="secondary" onClick={cycleTheme}>
             循环主题
-          </button>
+          </Button>
         </div>
-        <p className="muted-copy mt-10">
+        <p className="settings-hint" style={{ marginTop: "var(--sp-3)" }}>
           resolved: {resolved} · ⌘1 Workbench · ⌘2 Evidence · ⌘, Settings
         </p>
-      </div>
+      </Card>
     </div>
   );
 }

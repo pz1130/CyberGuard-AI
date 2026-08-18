@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { Button, Card, Disclosure, Field, Select } from "../../ui";
 import type { SkillsSectionModel } from "./useSkillsSection";
 
 export type SkillsSectionProps = SkillsSectionModel;
@@ -31,57 +32,52 @@ export function SkillsSection({
 }: SkillsSectionProps): ReactElement {
   return (
     <div className="settings-detail">
-      <div className="settings-card">
-        <h3>技能 SOP</h3>
-        <p className="data-hint">
+      <Card>
+        <h3 className="settings-card-title">技能 SOP</h3>
+        <p className="settings-hint">
           流程：新建/导入 → 草稿 → <strong>批准</strong> 后进入 agent catalog。
           内置只读；运行时用 <code className="mono">load_skill</code> 拉正文。
         </p>
-        <div className="empty-actions">
-          <button
-            type="button"
-            className="primary"
+        <div className="settings-actions" style={{ marginTop: 0 }}>
+          <Button
+            variant="secondary"
             onClick={resetSkillEditor}
             disabled={skillBusy}
           >
             + 新建
-          </button>
-          <button
-            type="button"
-            className="secondary"
+          </Button>
+          <Button
+            variant="ghost"
             onClick={() => void onImportSkill()}
             disabled={skillBusy}
           >
             从 Markdown 导入…
-          </button>
-          <button
-            type="button"
-            className="secondary"
+          </Button>
+          <Button
+            variant="ghost"
             onClick={() => void onRevealSkillDir("drafts")}
           >
             打开草稿目录
-          </button>
-          <button
-            type="button"
-            className="secondary"
+          </Button>
+          <Button
+            variant="ghost"
             onClick={() => void onRevealSkillDir("approved")}
           >
             打开已批准
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
 
-      <div className="settings-card">
-        <h3>已生效（catalog）</h3>
-        <div className="mcp-list">
+      <Disclosure summary={`已生效（catalog）${skills.length ? ` · ${skills.length}` : ""}`} defaultOpen>
+        <div className="settings-list">
           {skills.length === 0 && (
-            <p className="muted-copy">暂无（sidecar 离线？）</p>
+            <p className="settings-hint">暂无（sidecar 离线？）</p>
           )}
           {skills.map((s) => (
             <button
               key={`${s.source}-${s.name}`}
               type="button"
-              className={`mcp-list-item${
+              className={`skill-list-item${
                 skillSelected === s.name && skillEditSource !== "draft"
                   ? " active"
                   : ""
@@ -89,7 +85,7 @@ export function SkillsSection({
               onClick={() => void openSkill(s.name, s.source)}
             >
               <strong>{s.name}</strong>
-              <span className="muted-copy">
+              <span className="settings-hint" style={{ margin: 0 }}>
                 {s.source || "?"}
                 {s.version ? ` · v${s.version}` : ""}
                 {s.readonly ? " · 只读" : ""}
@@ -98,22 +94,20 @@ export function SkillsSection({
             </button>
           ))}
         </div>
-      </div>
+      </Disclosure>
 
-      <div className="settings-card">
-        <h3>
-          草稿{" "}
-          <span className="pill warn">不参与装配</span>
-        </h3>
-        <div className="mcp-list">
+      <Disclosure
+        summary={`草稿 · 不参与装配${skillDrafts.length ? ` · ${skillDrafts.length}` : ""}`}
+      >
+        <div className="settings-list">
           {skillDrafts.length === 0 && (
-            <p className="muted-copy">无草稿</p>
+            <p className="settings-hint">无草稿</p>
           )}
           {skillDrafts.map((s) => (
             <button
               key={`draft-${s.name}`}
               type="button"
-              className={`mcp-list-item${
+              className={`skill-list-item${
                 skillSelected === s.name && skillEditSource === "draft"
                   ? " active"
                   : ""
@@ -121,36 +115,21 @@ export function SkillsSection({
               onClick={() => void openSkill(s.name, "draft")}
             >
               <strong>{s.name}</strong>
-              <span className="muted-copy">
+              <span className="settings-hint" style={{ margin: 0 }}>
                 draft{s.version ? ` · v${s.version}` : ""}
               </span>
               <div className="mono-xs">{s.description}</div>
             </button>
           ))}
         </div>
-      </div>
+      </Disclosure>
 
-      <div className="settings-card">
-        <h3>
+      <Card>
+        <h3 className="settings-card-title">
           编辑器{" "}
-          {skillEditSource !== "new" ? (
-            <span
-              className={`pill${
-                skillEditSource === "builtin"
-                  ? ""
-                  : skillEditSource === "approved"
-                    ? " ok"
-                    : " warn"
-              }`}
-            >
-              {skillEditSource}
-            </span>
-          ) : (
-            <span className="pill">new</span>
-          )}
+          <span className="pill">{skillEditSource}</span>
         </h3>
-        <label className="field-label">
-          Name（字母开头，a-z 0-9 _ -）
+        <Field label="Name（字母开头，a-z 0-9 _ -）">
           <input
             className="data-input"
             value={skillName}
@@ -158,9 +137,8 @@ export function SkillsSection({
             disabled={skillBusy || skillEditSource === "builtin"}
             placeholder="my_custom_sop"
           />
-        </label>
-        <label className="field-label">
-          Description（catalog 一行摘要）
+        </Field>
+        <Field label="Description（catalog 一行摘要）">
           <input
             className="data-input"
             value={skillDesc}
@@ -168,85 +146,80 @@ export function SkillsSection({
             disabled={skillBusy || skillEditSource === "builtin"}
             placeholder="When to use this SOP"
           />
-        </label>
-        <div className="row mt-8">
-          <label className="field-label" style={{ flex: 1, marginTop: 0 }}>
-            Version
+        </Field>
+        <div className="settings-row-pair">
+          <Field label="Version">
             <input
               className="data-input"
               value={skillVersion}
               onChange={(e) => setSkillVersion(e.target.value)}
               disabled={skillBusy || skillEditSource === "builtin"}
             />
-          </label>
-          <label className="field-label" style={{ flex: 1, marginTop: 0 }}>
-            Mode
-            <select
-              value={skillMode}
-              onChange={(e) => setSkillMode(e.target.value)}
+          </Field>
+          <Field label="Mode">
+            <Select
+              ariaLabel="Skill mode"
+              value={skillMode as "both" | "advisory" | "operator"}
+              onChange={setSkillMode}
               disabled={skillBusy || skillEditSource === "builtin"}
-            >
-              <option value="both">both</option>
-              <option value="advisory">advisory</option>
-              <option value="operator">operator</option>
-            </select>
-          </label>
+              options={[
+                { value: "both", label: "both" },
+                { value: "advisory", label: "advisory" },
+                { value: "operator", label: "operator" },
+              ]}
+            />
+          </Field>
         </div>
-        <label className="field-label">
-          Body（Markdown 规程正文）
+        <Field label="Body（Markdown 规程正文）">
           <textarea
-            className="plan-edit skill-body-edit"
+            className="skill-body-edit"
             rows={12}
             value={skillBody}
             onChange={(e) => setSkillBody(e.target.value)}
             disabled={skillBusy || skillEditSource === "builtin"}
             placeholder="# SOP …"
           />
-        </label>
-        <div className="empty-actions mt-10">
+        </Field>
+        <div className="settings-actions">
           {skillEditSource === "builtin" ? (
-            <button
-              type="button"
-              className="primary"
+            <Button
+              variant="secondary"
               onClick={() => void onForkSkill()}
               disabled={skillBusy}
             >
               复制到草稿编辑
-            </button>
+            </Button>
           ) : (
             <>
-              <button
-                type="button"
-                className="secondary"
+              <Button
+                variant="secondary"
                 onClick={() => void onSaveSkillDraft()}
                 disabled={skillBusy}
               >
                 保存草稿
-              </button>
-              <button
-                type="button"
-                className="primary"
+              </Button>
+              <Button
+                variant="primary"
                 onClick={() => void onApproveSkill()}
                 disabled={skillBusy}
               >
                 批准生效
-              </button>
+              </Button>
               {(skillEditSource === "draft" ||
                 skillEditSource === "approved") && (
-                <button
-                  type="button"
-                  className="btn-reject"
+                <Button
+                  variant="danger"
                   onClick={() => void onDeleteSkill()}
                   disabled={skillBusy}
                 >
                   删除
-                </button>
+                </Button>
               )}
             </>
           )}
         </div>
-        {skillMsg && <pre className="data-msg">{skillMsg}</pre>}
-      </div>
+        {skillMsg && <pre className="settings-msg">{skillMsg}</pre>}
+      </Card>
     </div>
   );
 }

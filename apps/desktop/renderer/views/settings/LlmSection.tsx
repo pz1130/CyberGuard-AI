@@ -4,6 +4,7 @@ import {
   PRESET_GROUPS,
   matchPresetByBaseUrl,
 } from "../../lib/llmPresets";
+import { Button, Card, Disclosure, Field, Select } from "../../ui";
 import type { LlmSectionModel } from "./useLlmSection";
 
 export type LlmSectionProps = LlmSectionModel;
@@ -32,33 +33,33 @@ export function LlmSection({
 }: LlmSectionProps): ReactElement {
   return (
     <div className="settings-detail">
-      <div className="settings-card">
-        <h3>模式</h3>
-        <p className="data-hint">
+      <Card>
+        <h3 className="settings-card-title">模式</h3>
+        <p className="settings-hint">
           mock 不连网；live 使用 OpenAI 兼容 Chat Completions。本地模型通常无需
           API key。
         </p>
-        <label className="field-label">
-          运行模式
-          <select
-            value={mode}
-            onChange={(e) => setMode(e.target.value)}
+        <Field label="运行模式">
+          <Select
+            ariaLabel="运行模式"
+            value={mode as "mock" | "live"}
+            onChange={setMode}
             disabled={llmBusy}
-          >
-            <option value="mock">mock（演示）</option>
-            <option value="live">live（云 / 本地）</option>
-          </select>
-        </label>
-      </div>
+            options={[
+              { value: "mock", label: "mock（演示）" },
+              { value: "live", label: "live（云 / 本地）" },
+            ]}
+          />
+        </Field>
+      </Card>
 
-      <div className="settings-card">
-        <h3>供应商预设</h3>
-        <p className="data-hint">
+      <Card>
+        <h3 className="settings-card-title">供应商预设</h3>
+        <p className="settings-hint">
           点选后自动填入 Base URL 与推荐模型，仍可手动改。
         </p>
-        {PRESET_GROUPS.map((g) => (
-          <div key={g.id} className="preset-group">
-            <div className="preset-group-label">{g.label}</div>
+        {PRESET_GROUPS.map((g, i) => (
+          <Disclosure key={g.id} summary={g.label} defaultOpen={i === 0}>
             <div className="preset-grid">
               {LLM_PRESETS.filter((p) => p.group === g.id).map((p) => (
                 <button
@@ -75,17 +76,14 @@ export function LlmSection({
                 </button>
               ))}
             </div>
-          </div>
+          </Disclosure>
         ))}
-      </div>
+      </Card>
 
-      <div className="settings-card">
-        <h3>连接参数</h3>
-        {preset?.hint ? (
-          <p className="data-hint">{preset.hint}</p>
-        ) : null}
-        <label className="field-label">
-          Base URL
+      <Card>
+        <h3 className="settings-card-title">连接参数</h3>
+        {preset?.hint ? <p className="settings-hint">{preset.hint}</p> : null}
+        <Field label="Base URL">
           <input
             className="data-input"
             value={baseUrl}
@@ -98,28 +96,23 @@ export function LlmSection({
             disabled={llmBusy || mode === "mock"}
             placeholder="https://api.openai.com/v1 或 http://127.0.0.1:11434/v1"
           />
-        </label>
-        <label className="field-label">
-          Model
+        </Field>
+        <Field label="Model">
           {preset && preset.models.length > 0 ? (
-            <select
+            <Select
+              ariaLabel="Model preset"
               value={
-                preset.models.includes(model) ? model : "__custom__"
+                (preset.models.includes(model) ? model : "__custom__") as string
               }
-              onChange={(e) => {
-                if (e.target.value !== "__custom__") {
-                  setModel(e.target.value);
-                }
+              onChange={(v) => {
+                if (v !== "__custom__") setModel(v);
               }}
               disabled={llmBusy || mode === "mock"}
-            >
-              {preset.models.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-              <option value="__custom__">自定义…</option>
-            </select>
+              options={[
+                ...preset.models.map((m) => ({ value: m, label: m })),
+                { value: "__custom__", label: "自定义…" },
+              ]}
+            />
           ) : null}
           <input
             className="data-input"
@@ -127,26 +120,27 @@ export function LlmSection({
             onChange={(e) => setModel(e.target.value)}
             disabled={llmBusy || mode === "mock"}
             placeholder="模型名"
+            style={{ marginTop: preset && preset.models.length > 0 ? 8 : 0 }}
           />
-        </label>
-        <label className="field-label">
-          Temperature
+        </Field>
+        <Field label="Temperature">
           <input
             className="data-input"
             value={temperature}
             onChange={(e) => setTemperature(e.target.value)}
             disabled={llmBusy || mode === "mock"}
           />
-        </label>
-        <label className="field-label">
-          API key{" "}
-          {!requiresKey ? (
-            <span className="pill accent">本地可选</span>
-          ) : hasKey ? (
-            <span className="pill ok">已配置</span>
-          ) : (
-            <span className="pill warn">未配置</span>
-          )}
+        </Field>
+        <Field
+          label="API key"
+          hint={
+            !requiresKey
+              ? "本地可选"
+              : hasKey
+                ? "已配置（留空保留原 key）"
+                : "未配置"
+          }
+        >
           <input
             className="data-input"
             type="password"
@@ -162,27 +156,25 @@ export function LlmSection({
             autoComplete="off"
             disabled={llmBusy || mode === "mock"}
           />
-        </label>
-        <div className="empty-actions mt-10">
-          <button
-            type="button"
-            className="primary"
+        </Field>
+        <div className="settings-actions">
+          <Button
+            variant="primary"
             onClick={() => void onSaveLlm()}
             disabled={llmBusy}
           >
             {llmBusy ? "…" : "保存"}
-          </button>
-          <button
-            type="button"
-            className="secondary"
+          </Button>
+          <Button
+            variant="secondary"
             onClick={() => void onTestLlm()}
             disabled={llmBusy || mode === "mock"}
           >
             测试连通
-          </button>
+          </Button>
         </div>
-        {llmMsg && <pre className="data-msg">{llmMsg}</pre>}
-      </div>
+        {llmMsg && <pre className="settings-msg">{llmMsg}</pre>}
+      </Card>
     </div>
   );
 }

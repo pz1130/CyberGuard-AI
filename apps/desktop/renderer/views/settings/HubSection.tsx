@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 import type { SettingsSection } from "../../lib/types";
+import { Card, ListRow } from "../../ui";
 
 const HUB_GROUPS: {
   label: string;
@@ -8,8 +9,6 @@ const HUB_GROUPS: {
     title: string;
     desc: string;
     badge: string;
-    /** Optional glyph inside the leading mark */
-    mark: string;
   }[];
 }[] = [
   {
@@ -20,14 +19,12 @@ const HUB_GROUPS: {
         title: "语言模型",
         desc: "云厂商 / 本地 Ollama · LM Studio · vLLM",
         badge: "LLM",
-        mark: "AI",
       },
       {
         id: "mcp",
         title: "数据源 MCP",
         desc: "告警 JSON/CSV、stdio 连接器",
         badge: "MCP",
-        mark: "MC",
       },
     ],
   },
@@ -39,7 +36,6 @@ const HUB_GROUPS: {
         title: "技能 SOP",
         desc: "内置分诊 / CVE / 取证 等 catalog",
         badge: "Skills",
-        mark: "SK",
       },
     ],
   },
@@ -51,21 +47,18 @@ const HUB_GROUPS: {
         title: "外观",
         desc: "主题与字号",
         badge: "UI",
-        mark: "Aa",
       },
       {
         id: "data",
         title: "数据与安全",
         desc: "加密导出 · 卸载",
         badge: "Data",
-        mark: "DB",
       },
       {
         id: "about",
         title: "关于",
         desc: "版本与开发版声明",
         badge: "Info",
-        mark: "i",
       },
     ],
   },
@@ -87,52 +80,34 @@ export function HubSection({
   onSelect,
 }: HubSectionProps): ReactElement {
   return (
-    <div className="settings-hub">
+    <div className="settings-detail">
       {HUB_GROUPS.map((group) => (
-        <section key={group.label} className="settings-hub-group">
-          <h2 className="settings-hub-group-label">{group.label}</h2>
-          <div className="settings-hub-list" role="list">
+        <Card key={group.label}>
+          <h3 className="settings-card-title">{group.label}</h3>
+          <div className="settings-list" role="list">
             {group.items.map((t) => {
               const status = hubStatus(t.id);
+              const metaParts = [t.desc];
+              if (status) {
+                const liveHint =
+                  t.id === "llm" && providerMode === "live"
+                    ? status
+                    : t.id === "llm" && providerMode === "mock"
+                      ? status
+                      : status;
+                metaParts.push(liveHint);
+              }
               return (
-                <button
+                <ListRow
                   key={t.id}
-                  type="button"
-                  className="settings-row"
-                  role="listitem"
+                  title={`${t.title} · ${t.badge}`}
+                  meta={metaParts.join(" · ")}
                   onClick={() => onSelect(t.id)}
-                >
-                  <span className="settings-row-mark" aria-hidden>
-                    {t.mark}
-                  </span>
-                  <span className="settings-row-body">
-                    <span className="settings-row-title-line">
-                      <span className="settings-row-title">{t.title}</span>
-                      <span className="settings-row-badge">{t.badge}</span>
-                    </span>
-                    <span className="settings-row-desc">{t.desc}</span>
-                  </span>
-                  {status ? (
-                    <span
-                      className={`settings-row-status${
-                        t.id === "llm" && providerMode === "live"
-                          ? " is-live"
-                          : t.id === "llm" && providerMode === "mock"
-                            ? " is-mock"
-                            : ""
-                      }`}
-                    >
-                      {status}
-                    </span>
-                  ) : null}
-                  <span className="settings-row-chevron" aria-hidden>
-                    ›
-                  </span>
-                </button>
+                />
               );
             })}
           </div>
-        </section>
+        </Card>
       ))}
     </div>
   );

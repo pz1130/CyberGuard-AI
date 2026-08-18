@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { Button, Card, Field } from "../../ui";
 import type { McpSectionModel } from "./useMcpSection";
 
 export type McpSectionProps = McpSectionModel;
@@ -23,49 +24,42 @@ export function McpSection({
 }: McpSectionProps): ReactElement {
   return (
     <div className="settings-detail">
-      <div className="settings-card">
-        <h3>快捷安装</h3>
-        <div className="empty-actions">
-          <button
-            type="button"
-            className="primary"
+      <Card>
+        <h3 className="settings-card-title">快捷安装</h3>
+        <div className="settings-actions" style={{ marginTop: 0 }}>
+          <Button
+            variant="secondary"
             onClick={() => void onInstallFileAlerts(false)}
             disabled={mcpBusy}
           >
             文件告警 MCP（样例）
-          </button>
-          <button
-            type="button"
-            className="secondary"
+          </Button>
+          <Button
+            variant="ghost"
             onClick={() => void onInstallFileAlerts(true)}
             disabled={mcpBusy}
           >
             从 JSON/CSV 安装…
-          </button>
-          <button
-            type="button"
-            className="secondary"
+          </Button>
+          <Button
+            variant="ghost"
             onClick={() => void onInstallDemo()}
             disabled={mcpBusy}
           >
             Echo 演示
-          </button>
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => void onDiscover()}
-          >
+          </Button>
+          <Button variant="ghost" onClick={() => void onDiscover()}>
             发现工具
-          </button>
+          </Button>
         </div>
-        {discoverMsg && <pre className="data-msg">{discoverMsg}</pre>}
-      </div>
+        {discoverMsg && <pre className="settings-msg">{discoverMsg}</pre>}
+      </Card>
 
-      <div className="settings-card">
-        <h3>已配置服务器</h3>
-        <div className="mcp-list">
+      <Card>
+        <h3 className="settings-card-title">已配置服务器</h3>
+        <div className="settings-list">
           {servers.length === 0 && (
-            <p className="muted-copy">尚未配置 MCP</p>
+            <p className="settings-hint">尚未配置 MCP</p>
           )}
           {servers.map((s) => (
             <button
@@ -75,7 +69,7 @@ export function McpSection({
               onClick={() => onSelectServer(s)}
             >
               <strong>{s.id}</strong>
-              <span className="muted-copy">
+              <span className="settings-hint" style={{ margin: 0 }}>
                 {s.enabled ? "on" : "off"} · {s.readonly ? "ro" : "rw"}
                 {s.has_secret ? " · secret" : ""}
               </span>
@@ -83,27 +77,25 @@ export function McpSection({
             </button>
           ))}
         </div>
-        <div className="empty-actions mt-10">
-          <button type="button" className="secondary" onClick={onNewServer}>
+        <div className="settings-actions">
+          <Button variant="secondary" onClick={onNewServer}>
             + 新建
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
 
-      <div className="settings-card">
-        <h3>编辑</h3>
-        <label className="field-label">
-          ID
+      <Card>
+        <h3 className="settings-card-title">编辑</h3>
+        <Field label="ID">
           <input
             className="data-input"
             value={edit.id}
             onChange={(e) => setEdit({ ...edit, id: e.target.value })}
             disabled={mcpBusy}
           />
-        </label>
-        <label className="field-label">
-          Command
-          <div className="row">
+        </Field>
+        <Field label="Command">
+          <div className="settings-row-pair">
             <input
               className="data-input"
               style={{ marginBottom: 0, flex: 1 }}
@@ -113,17 +105,15 @@ export function McpSection({
               }
               disabled={mcpBusy}
             />
-            <button
-              type="button"
-              className="secondary"
+            <Button
+              variant="ghost"
               onClick={() => void onBrowseCommand()}
             >
               Browse…
-            </button>
+            </Button>
           </div>
-        </label>
-        <label className="field-label">
-          Args（每行一个）
+        </Field>
+        <Field label="Args（每行一个）">
           <textarea
             className="plan-edit"
             rows={4}
@@ -131,9 +121,8 @@ export function McpSection({
             onChange={(e) => setArgsText(e.target.value)}
             disabled={mcpBusy}
           />
-        </label>
-        <label className="field-label">
-          Description
+        </Field>
+        <Field label="Description">
           <input
             className="data-input"
             value={edit.description || ""}
@@ -142,14 +131,11 @@ export function McpSection({
             }
             disabled={mcpBusy}
           />
-        </label>
-        <label className="field-label">
-          Secret{" "}
-          {edit.has_secret ? (
-            <span className="pill ok">已配置</span>
-          ) : (
-            <span className="pill warn">无</span>
-          )}
+        </Field>
+        <Field
+          label="Secret"
+          hint={edit.has_secret ? "已配置" : "无"}
+        >
           <input
             className="data-input"
             type="password"
@@ -159,8 +145,8 @@ export function McpSection({
             autoComplete="off"
             disabled={mcpBusy}
           />
-        </label>
-        <div className="row mt-8">
+        </Field>
+        <div className="check-row">
           <label className="check-label">
             <input
               type="checkbox"
@@ -182,26 +168,24 @@ export function McpSection({
             readonly
           </label>
         </div>
-        <div className="empty-actions mt-10">
-          <button
-            type="button"
-            className="primary"
+        <div className="settings-actions">
+          <Button
+            variant="primary"
             onClick={() => void onSaveMcp()}
             disabled={mcpBusy}
           >
             保存
-          </button>
-          <button
-            type="button"
-            className="btn-reject"
+          </Button>
+          <Button
+            variant="danger"
             onClick={() => void onDeleteMcp()}
             disabled={mcpBusy || !edit.id}
           >
             删除
-          </button>
+          </Button>
         </div>
-        {mcpMsg && <pre className="data-msg">{mcpMsg}</pre>}
-      </div>
+        {mcpMsg && <pre className="settings-msg">{mcpMsg}</pre>}
+      </Card>
     </div>
   );
 }

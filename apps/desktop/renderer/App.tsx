@@ -37,12 +37,6 @@ export function App() {
 
 function AppInner() {
   const {
-    theme,
-    setTheme,
-    cycleTheme,
-    resolved,
-    fontSize,
-    setFontSize,
     sidebarCollapsed,
     setSidebarCollapsed,
     railCollapsed,
@@ -153,14 +147,6 @@ function AppInner() {
 
             {activeView === "settings" && (
               <SettingsView
-                theme={theme}
-                resolved={resolved}
-                fontSize={fontSize}
-                providerMode={env.providerMode}
-                dataRoot={env.dataRoot}
-                onCycleTheme={cycleTheme}
-                onSetTheme={setTheme}
-                onSetFontSize={setFontSize}
                 focusSection={settingsSection}
                 onProviderSaved={(mode) => {
                   env.setProviderMode(mode);
