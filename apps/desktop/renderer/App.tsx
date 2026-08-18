@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { StatusBar } from "./components/context/StatusBar";
 import { AppChrome } from "./components/shell/AppChrome";
 import { DegradationStrip } from "./components/shell/DegradationStrip";
 import "./components/shell/AppShell.css";
@@ -135,6 +136,7 @@ function AppInner() {
             }}
           />
         )}
+        <StatusBar onOpenSettings={openSettings} />
       </div>
     </DataLifecycleProvider>
   );

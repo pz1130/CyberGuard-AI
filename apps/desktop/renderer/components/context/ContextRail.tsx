@@ -1,7 +1,6 @@
 import type { SettingsSection } from "../../lib/types";
 import { useEnvironment, useRun } from "../../state";
 import { Button, Tooltip } from "../../ui";
-import { StatusBar } from "./StatusBar";
 import "./ContextRail.css";
 
 /**
@@ -120,8 +119,6 @@ export function ContextRail({
           )}
         </section>
       </div>
-
-      <StatusBar onOpenSettings={onOpenSettings} />
     </div>
   );
 }

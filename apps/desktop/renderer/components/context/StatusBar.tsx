@@ -34,7 +34,7 @@ export function StatusBar({
     env.pingOk === null ? "idle" : env.pingOk ? "ok" : "danger";
 
   return (
-    <div className="statusbar">
+    <footer className="statusbar" aria-label="运行态">
       {/* 六项常显，不可折叠 —— INV-36 / M2 判据 10 */}
       <div className="statusbar-row">
         <Tooltip content={env.pingOk === false ? "sidecar 未连接" : "sidecar"}>
@@ -98,6 +98,6 @@ export function StatusBar({
           </dd>
         </dl>
       </Disclosure>
-    </div>
+    </footer>
   );
 }
