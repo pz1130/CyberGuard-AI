@@ -26,7 +26,7 @@ function readStored(): ThemeMode {
   } catch {
     /* ignore */
   }
-  return "dark";
+  return "system";
 }
 
 export function useTheme() {
