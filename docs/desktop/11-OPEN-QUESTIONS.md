@@ -154,7 +154,7 @@
 
 INV-36 要求节点状态栏常显**待上报数量**与暂停状态。暂停态已有（`paused` / `pausedRunId`）。**待上报数量渲染层拿不到**：`envParse.ts` 解析的 ping 响应里没有这个字段，`state/` 全目录搜不到 backlog / audit 相关状态。
 
-这是 2026-08-18 桌面视觉改造（`../superpowers/specs/2026-08-18-desktop-claude-visual-design.md` §8.1）之前就存在的缺口，不是那一轮造成的。当前状态栏六项是连接 / 沙箱 / 权限 / Provider / 档位 / 暂停，**没有待上报数**。
+这是 2026-08-18 桌面视觉改造（`../superpowers/specs/2026-08-18-desktop-claude-visual-design.md` §8.1）之前就存在的缺口，不是那一轮造成的。当前状态栏是**常显五项**（连接 / 沙箱 / 权限 / Provider / 档位）**加按需出现的暂停项**（`paused` 为真时才渲染），**没有待上报数**。
 
 补它要动 sidecar 的 ping 响应与 JSONL 协议，超出纯渲染层。在补上之前，**不得在任何文档或界面里宣称 INV-36 已完全满足**。
 
