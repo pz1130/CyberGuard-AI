@@ -208,3 +208,5 @@ export function useMcpSection() {
     onInstallFileAlerts,
   };
 }
+
+export type McpSectionModel = ReturnType<typeof useMcpSection>;

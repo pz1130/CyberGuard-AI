@@ -1,26 +1,26 @@
 import type { ReactElement } from "react";
-import { useMcpSection } from "./useMcpSection";
+import type { McpSectionModel } from "./useMcpSection";
 
-export function McpSection(): ReactElement {
-  const {
-    servers,
-    edit,
-    setEdit,
-    argsText,
-    setArgsText,
-    mcpMsg,
-    mcpBusy,
-    discoverMsg,
-    onSelectServer,
-    onNewServer,
-    onSaveMcp,
-    onDeleteMcp,
-    onBrowseCommand,
-    onDiscover,
-    onInstallDemo,
-    onInstallFileAlerts,
-  } = useMcpSection();
+export type McpSectionProps = McpSectionModel;
 
+export function McpSection({
+  servers,
+  edit,
+  setEdit,
+  argsText,
+  setArgsText,
+  mcpMsg,
+  mcpBusy,
+  discoverMsg,
+  onSelectServer,
+  onNewServer,
+  onSaveMcp,
+  onDeleteMcp,
+  onBrowseCommand,
+  onDiscover,
+  onInstallDemo,
+  onInstallFileAlerts,
+}: McpSectionProps): ReactElement {
   return (
     <div className="settings-detail">
       <div className="settings-card">

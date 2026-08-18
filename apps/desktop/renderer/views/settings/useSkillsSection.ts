@@ -297,3 +297,4 @@ export function useSkillsSection() {
     onRevealSkillDir,
   };
 }
+export type SkillsSectionModel = ReturnType<typeof useSkillsSection>;

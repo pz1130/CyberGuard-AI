@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactElement } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import type { FontSize } from "../../hooks/useUiPrefs";
 import type { SettingsSection, ThemeMode } from "../../lib/types";
 import { AboutSection } from "./AboutSection";
@@ -8,6 +8,9 @@ import { HUB_ITEMS, HubSection } from "./HubSection";
 import { LlmSection } from "./LlmSection";
 import { McpSection } from "./McpSection";
 import { SkillsSection } from "./SkillsSection";
+import { useLlmSection } from "./useLlmSection";
+import { useMcpSection } from "./useMcpSection";
+import { useSkillsSection } from "./useSkillsSection";
 
 export type SettingsViewProps = {
   theme: ThemeMode;
@@ -34,13 +37,14 @@ export function SettingsShell({
   focusSection,
   onProviderSaved,
 }: SettingsViewProps): ReactElement {
-  const api = typeof window !== "undefined" ? window.cyberguard : undefined;
-
   const [section, setSection] = useState<SettingsSection>(
     focusSection && focusSection !== "hub" ? focusSection : "hub"
   );
-  const [serverCount, setServerCount] = useState(0);
-  const [skillCount, setSkillCount] = useState(0);
+
+  // Hooks stay mounted on the shell so hub↔detail does not reset editors.
+  const llm = useLlmSection(onProviderSaved);
+  const mcp = useMcpSection();
+  const skills = useSkillsSection();
 
   useEffect(() => {
     if (focusSection) {
@@ -48,40 +52,14 @@ export function SettingsShell({
     }
   }, [focusSection]);
 
-  const loadHubCounts = useCallback(async () => {
-    if (!api) return;
-    try {
-      if (api.mcpConfigList) {
-        const r = await api.mcpConfigList();
-        setServerCount((r.servers || []).length);
-      }
-    } catch {
-      /* ignore — hub badge best-effort */
-    }
-    try {
-      if (api.skillsList) {
-        const r = await api.skillsList();
-        setSkillCount((r.skills || []).length);
-      }
-    } catch {
-      /* ignore */
-    }
-  }, [api]);
-
-  useEffect(() => {
-    if (section === "hub") {
-      void loadHubCounts();
-    }
-  }, [section, loadHubCounts]);
-
   const hubStatus = (id: Exclude<SettingsSection, "hub">): string | null => {
     if (id === "llm") return providerMode || "—";
     if (id === "mcp") {
-      const n = serverCount;
+      const n = mcp.servers.length;
       return n ? `${n} 台` : "未配置";
     }
     if (id === "skills") {
-      const n = skillCount;
+      const n = skills.skills.length;
       return n ? `${n}` : null;
     }
     if (id === "appearance") {
@@ -126,11 +104,11 @@ export function SettingsShell({
         />
       )}
 
-      {section === "llm" && <LlmSection onProviderSaved={onProviderSaved} />}
+      {section === "llm" && <LlmSection {...llm} />}
 
-      {section === "mcp" && <McpSection />}
+      {section === "mcp" && <McpSection {...mcp} />}
 
-      {section === "skills" && <SkillsSection />}
+      {section === "skills" && <SkillsSection {...skills} />}
 
       {section === "appearance" && (
         <AppearanceSection

@@ -1,34 +1,34 @@
 import type { ReactElement } from "react";
-import { useSkillsSection } from "./useSkillsSection";
+import type { SkillsSectionModel } from "./useSkillsSection";
 
-export function SkillsSection(): ReactElement {
-  const {
-    skills,
-    skillDrafts,
-    skillMsg,
-    skillBusy,
-    skillName,
-    setSkillName,
-    skillDesc,
-    setSkillDesc,
-    skillBody,
-    setSkillBody,
-    skillVersion,
-    setSkillVersion,
-    skillMode,
-    setSkillMode,
-    skillEditSource,
-    skillSelected,
-    resetSkillEditor,
-    openSkill,
-    onSaveSkillDraft,
-    onApproveSkill,
-    onDeleteSkill,
-    onImportSkill,
-    onForkSkill,
-    onRevealSkillDir,
-  } = useSkillsSection();
+export type SkillsSectionProps = SkillsSectionModel;
 
+export function SkillsSection({
+  skills,
+  skillDrafts,
+  skillMsg,
+  skillBusy,
+  skillName,
+  setSkillName,
+  skillDesc,
+  setSkillDesc,
+  skillBody,
+  setSkillBody,
+  skillVersion,
+  setSkillVersion,
+  skillMode,
+  setSkillMode,
+  skillEditSource,
+  skillSelected,
+  resetSkillEditor,
+  openSkill,
+  onSaveSkillDraft,
+  onApproveSkill,
+  onDeleteSkill,
+  onImportSkill,
+  onForkSkill,
+  onRevealSkillDir,
+}: SkillsSectionProps): ReactElement {
   return (
     <div className="settings-detail">
       <div className="settings-card">
