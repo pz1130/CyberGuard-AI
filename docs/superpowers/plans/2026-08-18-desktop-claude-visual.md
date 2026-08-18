@@ -1502,7 +1502,7 @@ git commit -m "feat(desktop-ui): Settings 套新 primitives，props 10→2
 
 证据列表每行用 `ListRow`（`title` 为文件名、`meta` 为 `Timestamp` + 短哈希）；选中项详情用 `Panel`；整体外层 `max-width: var(--measure); margin: 0 auto`。哈希与路径保持 `var(--font-mono)`。
 
-- [ ] **Step 2: 保留高亮跳转** —— *代码保留了（`EvidenceView.tsx:64-70`），但既无自动化测试也无手工验证记录。*
+- [x] **Step 2: 保留高亮跳转** —— *2026-08-18 补上自动化回归：`__tests__/shell/evidence-jump.test.tsx`，比一次性手工点更耐久。*
 
 `highlightId` 的滚动定位与高亮行为**不许丢** —— 它是 Workbench 右栏「证据」跳转的落点。改完手工验证：Workbench 右栏点任一证据 id → 证据页对应行高亮。
 
@@ -1745,4 +1745,16 @@ const degraded = env.securityDegradations.length > 0;
 截图为修复后的状态。`.gitignore` 全局忽略 `*.png`，为存这批证据加了
 `!docs/**/assets/**/*.png` 例外。
 
-未了：T10 Step 2 的 `highlightId` 跳转手工验证。
+### T10 Step 2 补做（2026-08-18 晚）
+
+原计划写的是「改完手工验证」。真机上验不成 —— 右栏的证据 id 来自本轮 run 的
+`evidence_register` 事件（`ContextRail.useFindings()`），扫过全部 17 个历史会话，
+没有一个带这类事件，也就没有链接可点。库里那 1 件证据是直接登记的，不挂在任何一次 run 上。
+
+改为自动化回归 `__tests__/shell/evidence-jump.test.tsx`：桩一个带 `evidence_register`
+事件的会话 + 两条证据，走完整链路 —— 选会话 → 右栏出现 id 链接 → 点它 → 断言证据页对应行
+拿到 `.evidence-row-hi`，另一行没有。红绿都验过：把 `EvidenceView.tsx` 的
+`const hi = highlightId === it.evidence_id` 改成 `false` 后该测试失败，改回即通过。
+
+顺带给 `__tests__/setup.ts` 补了 `scrollIntoView` 桩 —— jsdom 不实现它，时间线贴底与
+证据落点滚动都会调，之前是靠未捕获异常混过去的。
