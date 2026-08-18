@@ -1,4 +1,5 @@
 import React from "react";
+import { Prose } from "../ui";
 
 /** Minimal markdown → React nodes (headings, bold, lists, paragraphs, code). */
 export function Markdown({ text }: { text: string }) {
@@ -63,7 +64,11 @@ export function Markdown({ text }: { text: string }) {
     }
   }
   flushList();
-  return <div className="md-body">{blocks}</div>;
+  return (
+    <Prose>
+      <div className="md-body">{blocks}</div>
+    </Prose>
+  );
 }
 
 export default Markdown;

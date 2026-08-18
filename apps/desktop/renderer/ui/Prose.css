@@ -1,0 +1,31 @@
+.ui-prose {
+  max-width: var(--measure);
+  line-height: var(--leading-relaxed);
+  color: var(--text);
+}
+
+.ui-prose h1,
+.ui-prose h2,
+.ui-prose h3 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+}
+
+.ui-prose code {
+  background: var(--border-0);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+}
+
+.ui-prose table {
+  border-collapse: collapse;
+}
+
+.ui-prose th,
+.ui-prose td {
+  border: 1px solid var(--border-0);
+}
+
+.ui-prose pre {
+  overflow-x: auto;
+}

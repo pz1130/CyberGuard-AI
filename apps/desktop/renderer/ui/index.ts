@@ -10,6 +10,7 @@ export { ListRow } from "./ListRow";
 export type { ListRowProps, ListRowVariant } from "./ListRow";
 export { Panel } from "./Panel";
 export type { PanelProps } from "./Panel";
+export { Prose } from "./Prose";
 export { Select } from "./Select";
 export type { SelectOption, SelectProps } from "./Select";
 export { StatusDot } from "./StatusDot";

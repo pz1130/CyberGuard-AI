@@ -36,3 +36,9 @@
   min-height: 0;
   overflow-y: auto;
 }
+
+.wb-timeline > * {
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding: var(--sp-6) var(--sp-4);
+}
