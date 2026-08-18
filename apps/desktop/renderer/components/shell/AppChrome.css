@@ -1,5 +1,7 @@
 .chrome {
   height: 40px;
+  min-height: 40px;
+  max-height: 40px;
   flex: none;
   display: flex;
   align-items: center;
@@ -8,6 +10,7 @@
   background: var(--layer-0);
   border-bottom: 1px solid var(--border-0);
   -webkit-app-region: drag;
+  box-sizing: border-box;
 }
 
 .chrome > * {
