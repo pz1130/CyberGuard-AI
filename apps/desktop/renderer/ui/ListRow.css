@@ -66,6 +66,18 @@
   border-radius: var(--radius-sm);
 }
 
+.ui-listrow--nav > .ui-listrow-main {
+  border-radius: var(--radius-pill);
+  padding: var(--sp-2) var(--sp-3);
+}
+.ui-listrow--nav:hover > .ui-listrow-main {
+  background: var(--border-0);
+}
+.ui-listrow--nav.ui-listrow--active > .ui-listrow-main {
+  background: var(--accent-muted);
+  color: var(--accent-text);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ui-listrow,
   .ui-listrow-actions { transition: none; }

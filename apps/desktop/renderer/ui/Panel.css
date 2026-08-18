@@ -3,6 +3,10 @@
   flex-direction: column;
   min-height: 0;
   min-width: 0;
+  background: var(--layer-2);
+  border: 1px solid var(--border-0);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
 }
 
 .ui-panel--sunken { background: var(--layer-0); }

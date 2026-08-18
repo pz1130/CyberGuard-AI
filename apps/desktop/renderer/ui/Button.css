@@ -3,7 +3,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--sp-2);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   border: 1px solid transparent;
   font-family: var(--font-ui);
   font-weight: 500;
@@ -27,12 +27,20 @@
   font-size: var(--text-sm);
 }
 
+.ui-btn--icon {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-md);
+}
+
 .ui-btn--primary {
   background: var(--accent);
   color: var(--text-inverse);
 }
 .ui-btn--primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 88%, white);
+  background: var(--accent-hover);
 }
 
 .ui-btn--secondary {
@@ -50,7 +58,7 @@
   color: var(--text-muted);
 }
 .ui-btn--ghost:hover:not(:disabled) {
-  background: var(--layer-2);
+  background: var(--accent-muted);
   color: var(--text);
 }
 

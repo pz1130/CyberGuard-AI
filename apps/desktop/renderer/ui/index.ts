@@ -7,7 +7,7 @@ export type { DisclosureProps } from "./Disclosure";
 export { Field } from "./Field";
 export type { FieldProps } from "./Field";
 export { ListRow } from "./ListRow";
-export type { ListRowProps } from "./ListRow";
+export type { ListRowProps, ListRowVariant } from "./ListRow";
 export { Panel } from "./Panel";
 export type { PanelProps } from "./Panel";
 export { Select } from "./Select";

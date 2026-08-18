@@ -37,4 +37,13 @@ describe("Button", () => {
     render(<Button className="extra">x</Button>);
     expect(screen.getByRole("button").className).toContain("extra");
   });
+
+  it("size=icon 渲染 ui-btn--icon", () => {
+    render(
+      <Button size="icon" aria-label="切换侧栏">
+        ☰
+      </Button>
+    );
+    expect(screen.getByLabelText("切换侧栏").className).toContain("ui-btn--icon");
+  });
 });

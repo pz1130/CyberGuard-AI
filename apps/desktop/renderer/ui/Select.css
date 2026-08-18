@@ -5,7 +5,7 @@
   gap: var(--sp-2);
   background: var(--layer-2);
   border: 1px solid var(--border-1);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   color: var(--text);
   font-family: var(--font-ui);
   font-weight: 500;
