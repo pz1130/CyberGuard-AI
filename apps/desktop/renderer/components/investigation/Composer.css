@@ -1,5 +1,8 @@
 .composer2 {
   flex: none;
+  /* width:100% 不能省 —— margin 的横向 auto 会关掉 flex 列的默认 stretch，
+     没它的话这盒子缩到内容宽（≈365px），比上方 736px 的正文列窄一大截。 */
+  width: 100%;
   max-width: var(--measure);
   margin: 0 auto var(--sp-6);
   border-top: 1px solid var(--border-0);

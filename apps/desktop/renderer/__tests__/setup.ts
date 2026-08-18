@@ -48,6 +48,11 @@ if (
   installLocalStorage();
 }
 
+// jsdom 不实现 scrollIntoView；时间线贴底与证据落点高亮都会调它
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}
+
 // jsdom 不实现 matchMedia，主题与 reduced-motion 代码会用到
 const defaultMatchMedia = ((query: string) => ({
   matches: false,
