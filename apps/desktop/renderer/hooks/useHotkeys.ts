@@ -7,6 +7,7 @@ export type HotkeyHandlers = {
   onEvidence?: () => void;
   onRun?: () => void;
   onEscape?: () => void;
+  onToggleSidebar?: () => void;
 };
 
 function isEditableTarget(t: EventTarget | null): boolean {
@@ -38,7 +39,12 @@ export function useHotkeys(handlers: HotkeyHandlers) {
 
       if (isEditableTarget(e.target) && !(meta && key === "enter")) {
         // allow ⌘, and view switches even from inputs when using meta
-        if (!(meta && (key === "," || key === "1" || key === "2" || key === "n"))) {
+        if (
+          !(
+            meta &&
+            (key === "," || key === "1" || key === "2" || key === "n" || key === "\\")
+          )
+        ) {
           return;
         }
       }
@@ -57,6 +63,9 @@ export function useHotkeys(handlers: HotkeyHandlers) {
       } else if (key === "2") {
         e.preventDefault();
         handlers.onEvidence?.();
+      } else if (key === "\\") {
+        e.preventDefault();
+        handlers.onToggleSidebar?.();
       }
     };
 

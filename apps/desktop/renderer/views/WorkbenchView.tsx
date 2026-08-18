@@ -4,6 +4,7 @@ import { Composer } from "../components/investigation/Composer";
 import { PlanPanel } from "../components/investigation/PlanPanel";
 import { Timeline } from "../components/investigation/Timeline";
 import type { SettingsSection } from "../lib/types";
+import { useUiPrefsCtx } from "../state";
 
 export type WorkbenchViewProps = {
   onViewEvidence: (evidenceId?: string) => void;
@@ -11,8 +12,10 @@ export type WorkbenchViewProps = {
 };
 
 export function WorkbenchView(props: WorkbenchViewProps) {
+  const { railCollapsed } = useUiPrefsCtx();
+
   return (
-    <div className="wb">
+    <div className={`wb${railCollapsed ? " wb--norail" : ""}`}>
       <div className="wb-main">
         <PlanPanel />
         <div className="wb-timeline">
@@ -20,10 +23,12 @@ export function WorkbenchView(props: WorkbenchViewProps) {
         </div>
         <Composer />
       </div>
-      <ContextRail
-        onViewEvidence={props.onViewEvidence}
-        onOpenSettings={props.onOpenSettings}
-      />
+      {!railCollapsed && (
+        <ContextRail
+          onViewEvidence={props.onViewEvidence}
+          onOpenSettings={props.onOpenSettings}
+        />
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { App } from "../../App";
 
 /** 六项常显 —— INV-36 / INV-38 / M2 判据 10 */
@@ -23,6 +23,8 @@ function clickSidebarNav(label: string) {
 }
 
 describe("状态栏常显", () => {
+  beforeEach(() => localStorage.clear());
+
   it("调查页可见", () => {
     render(<App />);
     expectSixVisible();
@@ -44,5 +46,17 @@ describe("状态栏常显", () => {
     render(<App />);
     const bar = screen.getByRole("contentinfo", { name: "运行态" });
     expect(bar.closest(".ctxrail")).toBeNull();
+  });
+
+  it.each([
+    ["都展开", false, false],
+    ["只收左栏", true, false],
+    ["只收侧板", false, true],
+    ["都收起", true, true],
+  ])("%s 时六项仍常显", (_n, sidebar, rail) => {
+    localStorage.setItem("cg.sidebar_collapsed", sidebar ? "1" : "0");
+    localStorage.setItem("cg.rail_collapsed", rail ? "1" : "0");
+    render(<App />);
+    expectSixVisible();
   });
 });

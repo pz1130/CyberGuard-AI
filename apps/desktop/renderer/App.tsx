@@ -36,8 +36,18 @@ export function App() {
 }
 
 function AppInner() {
-  const { theme, setTheme, cycleTheme, resolved, fontSize, setFontSize } =
-    useUiPrefsCtx();
+  const {
+    theme,
+    setTheme,
+    cycleTheme,
+    resolved,
+    fontSize,
+    setFontSize,
+    sidebarCollapsed,
+    setSidebarCollapsed,
+    railCollapsed,
+    setRailCollapsed,
+  } = useUiPrefsCtx();
   const [activeView, setActiveView] = useState<ActiveView>("workbench");
   const [settingsSection, setSettingsSection] = useState<
     SettingsSection | undefined
@@ -89,8 +99,17 @@ function AppInner() {
           document.activeElement.blur();
         }
       },
+      onToggleSidebar: () => setSidebarCollapsed(!sidebarCollapsed),
     }),
-    [activeView, env.pingOk, openSettings, sessions.create, run.run]
+    [
+      activeView,
+      env.pingOk,
+      openSettings,
+      sessions.create,
+      run.run,
+      setSidebarCollapsed,
+      sidebarCollapsed,
+    ]
   );
   useHotkeys(hotkeyHandlers);
 
@@ -104,13 +123,15 @@ function AppInner() {
         <AppChrome
           title={title}
           devTitle={DEV_TITLE}
-          onToggleSidebar={() => {}}
-          onToggleRail={() => {}}
+          onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+          onToggleRail={() => setRailCollapsed(!railCollapsed)}
         />
         <DegradationStrip />
 
         <div className="app-body">
-          <Sidebar activeView={activeView} onNavigate={setActiveView} />
+          {!sidebarCollapsed && (
+            <Sidebar activeView={activeView} onNavigate={setActiveView} />
+          )}
           <div className="app-main">
             {activeView === "workbench" && (
               <WorkbenchView
