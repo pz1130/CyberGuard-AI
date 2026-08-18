@@ -397,39 +397,94 @@
   padding: 1px 5px;
 }
 
-.evidence-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 12.5px;
-  overflow: hidden;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border);
+/* Evidence — measure-centered ListRow + Panel layout */
+.evidence-view {
+  max-width: var(--measure);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
 }
 
-.evidence-table th,
-.evidence-table td {
-  text-align: left;
-  padding: 11px 13px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: color-mix(in srgb, var(--bg-elevated) 70%, transparent);
+.evidence-hint {
+  margin: 0 0 var(--sp-3);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 
-.evidence-table tr:last-child td {
-  border-bottom: none;
+.evidence-register-actions {
+  margin-top: var(--sp-3);
 }
 
-.evidence-table th {
+.evidence-msg {
+  margin: var(--sp-3) 0 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  background: var(--layer-0);
+  border: 1px solid var(--border-0);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.evidence-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.evidence-mono {
+  font-family: var(--font-mono);
+}
+
+.evidence-detail {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+  line-height: var(--leading-normal);
+  word-break: break-all;
+}
+
+.evidence-detail > div {
+  display: grid;
+  grid-template-columns: 7em 1fr;
+  gap: var(--sp-2);
+}
+
+.evidence-detail dt {
+  margin: 0;
   color: var(--text-faint);
-  font-weight: 700;
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  background: color-mix(in srgb, var(--bg-deep) 55%, transparent);
+  font-weight: 600;
 }
 
-.evidence-table tbody tr:hover td {
-  background: var(--surface-hover);
+.evidence-detail dd {
+  margin: 0;
+}
+
+.evidence-verify {
+  margin: var(--sp-3) 0 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.evidence-verify.ok {
+  color: var(--ok);
+}
+
+.evidence-verify.bad {
+  color: var(--danger);
+}
+
+/* Workbench context-rail landing highlight */
+.evidence-row-hi {
+  border-radius: var(--radius-sm);
+  outline: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  background: var(--accent-muted);
 }
 
 .empty-hero {
