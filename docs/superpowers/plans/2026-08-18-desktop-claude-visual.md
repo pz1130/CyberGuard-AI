@@ -19,7 +19,7 @@
 - **不做快照测试。**
 - **不动 `ContextRail.useFindings()` 的正则与其注释** —— 那条决策登记在 `docs/desktop/11-OPEN-QUESTIONS.md` §I，等 M1.5 真实数据，不在本轮范围。
 - **accent 只做填充，状态色只做「点 + 文字」**（spec §1.3）。唯一例外是降级浮出条与异常态状态栏，允许整条染 `*-muted` 底。
-- **状态栏六项常显**，不得随任何面板折叠而消失（INV-36 / INV-38 / M2 判据 10）。
+- **状态栏常显五项**（连接 / 沙箱 / 权限 / Provider / 档位）不得随任何面板折叠而消失（INV-36 / INV-38 / M2 判据 10）；第六项「暂停」按 `paused` 出现。
 - **对比度**：文本类 token 对 `--layer-0/1/2` 取最坏值须 ≥4.5:1；`--text-faint` 豁免但须 ≥3:1；`--accent` 实底配 `--text-inverse` 须 ≥4.5:1。两套主题各一遍。
 - 每个任务结束时全套必须绿：
   ```bash
@@ -36,7 +36,7 @@
 | 文件 | 职责 |
 |---|---|
 | `renderer/__tests__/styles/contrast.test.ts` | WCAG 对比度断言（判据 4） |
-| `renderer/__tests__/shell/statusbar.always.test.tsx` | 六项常显（判据 2） |
+| `renderer/__tests__/shell/statusbar.always.test.tsx` | 常显五项（判据 2；暂停项按 `paused` 出现） |
 | `renderer/__tests__/shell/degradation.test.tsx` | 降级显著告警（判据 3） |
 | `renderer/__tests__/shell/responsive.test.tsx` | 断点与折叠持久化 |
 | `renderer/components/shell/Sidebar.tsx` / `.css` | 左栏容器：新建 + 会话列表 + 底部视图导航 |
@@ -79,7 +79,7 @@
 - Consumes: 无
 - Produces: 新 token 名 `--accent-hover` / `--accent-text` / `--font-serif` / `--radius-pill` / `--sp-12` / `--sp-16` / `--measure`，供 T2 起所有任务使用。`--bg` / `--surface` 等旧别名**本任务保留**，T11 才删。
 
-- [ ] **Step 1: 写失败的对比度测试**
+- [x] **Step 1: 写失败的对比度测试**
 
 Create `renderer/__tests__/styles/contrast.test.ts`:
 
@@ -172,14 +172,14 @@ describe.each([
 });
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 ```bash
 cd apps/desktop && npx vitest run --config vitest.config.ts renderer/__tests__/styles/contrast.test.ts
 ```
 Expected: FAIL —— 现有冷色板里 `--accent-text` / `--accent-hover` 未定义（`undefined` 进 `luminance` 会命中 `不是 #rrggbb` 断言），且深色 `--text-muted` 等多项对 `--layer-2` 不足 4.5。
 
-- [ ] **Step 3: 全量重写 `renderer/styles/tokens.css`**
+- [x] **Step 3: 全量重写 `renderer/styles/tokens.css`**
 
 ```css
 /* CyberGuard desktop — 设计 token
@@ -239,7 +239,8 @@ Expected: FAIL —— 现有冷色板里 `--accent-text` / `--accent-hover` 未�
   --font-serif: ui-serif, "New York", "Iowan Old Style", Georgia, serif;
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 
-  --measure: 46rem; /* 主体内容限宽 */
+  --measure: 736px; /* 主体内容限宽。实现落为 px 而非 46rem —— 根字号随
+                        data-font 变，rem 会让列宽跟着字号伸缩。见 spec §1 */
   --chrome-pad-left: 78px; /* macOS 交通灯留位 */
 }
 
@@ -351,14 +352,14 @@ html[data-theme="light"] {
 }
 ```
 
-- [ ] **Step 4: 跑对比度测试确认通过**
+- [x] **Step 4: 跑对比度测试确认通过**
 
 ```bash
 cd apps/desktop && npx vitest run --config vitest.config.ts renderer/__tests__/styles/contrast.test.ts
 ```
 Expected: PASS（两套主题各 10 项）
 
-- [ ] **Step 5: 默认主题从 dark 改 system**
+- [x] **Step 5: 默认主题从 dark 改 system**
 
 `renderer/hooks/useTheme.ts:33`，`readStored()` 的兜底返回值：
 
@@ -368,14 +369,14 @@ Expected: PASS（两套主题各 10 项）
 
 理由：浅色升为主形态后，默认应跟随系统而非硬编码深色。
 
-- [ ] **Step 6: 跑全套**
+- [x] **Step 6: 跑全套**
 
 ```bash
 cd apps/desktop && npm run test && npm run typecheck
 ```
 Expected: 全绿。`styles/tokens.test.ts` 的既有断言（成对定义、无 `font-weight: 700`）应原样通过——新文件保留了全部被断言的 token 名。
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add renderer/styles/tokens.css renderer/hooks/useTheme.ts \
@@ -408,7 +409,7 @@ contrast.test.ts：文本类对三个面最坏值 ≥4.5，--text-faint 豁免
   - `ButtonSize = "sm" | "md" | "icon"` —— T5 顶栏两个开关消费
   - `ListRowProps.variant?: "default" | "nav"` —— T4 左栏会话行与视图导航消费
 
-- [ ] **Step 1: 写失败的测试**
+- [x] **Step 1: 写失败的测试**
 
 追加到 `renderer/__tests__/ui/Button.test.tsx`：
 
@@ -447,14 +448,14 @@ describe("ListRow", () => {
 });
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 ```bash
 cd apps/desktop && npx vitest run --config vitest.config.ts renderer/__tests__/ui/
 ```
 Expected: FAIL —— `size="icon"` 不在 `ButtonSize` 联合类型里、`variant` 不是 `ListRowProps` 的属性。
 
-- [ ] **Step 3: 扩类型**
+- [x] **Step 3: 扩类型**
 
 `renderer/ui/Button.tsx`：
 
@@ -518,14 +519,14 @@ export function ListRow({
 export type { ListRowProps, ListRowVariant } from "./ListRow";
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 ```bash
 cd apps/desktop && npx vitest run --config vitest.config.ts renderer/__tests__/ui/
 ```
 Expected: PASS
 
-- [ ] **Step 5: 调质感（纯 CSS）**
+- [x] **Step 5: 调质感（纯 CSS）**
 
 `Button.css`：`.ui-btn` 圆角改 `var(--radius-pill)`；`.ui-btn--primary` 用 `background: var(--accent); color: var(--text-inverse)`，hover 换 `--accent-hover`；`.ui-btn--ghost` 的 hover 从描边改为 `background: var(--accent-muted)`；新增
 
@@ -561,7 +562,7 @@ Expected: PASS
 
 > `StatusDot.css` **不要加底色** —— 状态色只做点 + 文字（Global Constraints）。
 
-- [ ] **Step 6: 跑全套并提交**
+- [x] **Step 6: 跑全套并提交**
 
 ```bash
 cd apps/desktop && npm run test && npm run typecheck
@@ -592,7 +593,7 @@ accent-muted 底。StatusDot 保持只有点+文字，不加底色。"
 - Consumes: T1 token
 - Produces: `<StatusBar onOpenSettings={…} />` 由 `App` 直接渲染，与 `activeView` 无关。T6 依赖这一点做四组合断言。
 
-- [ ] **Step 1: 写失败的测试**
+- [x] **Step 1: 写失败的测试**
 
 Create `renderer/__tests__/shell/statusbar.always.test.tsx`:
 
@@ -642,14 +643,14 @@ describe("状态栏常显", () => {
 });
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 ```bash
 cd apps/desktop && npx vitest run --config vitest.config.ts renderer/__tests__/shell/statusbar.always.test.tsx
 ```
 Expected: FAIL —— `getByRole("contentinfo")` 找不到（`StatusBar` 现在渲染的是无 role 的 `<div className="statusbar">`），且它长在 `.ctxrail` 里。
 
-- [ ] **Step 3: 给 StatusBar 加 landmark role**
+- [x] **Step 3: 给 StatusBar 加 landmark role**
 
 `renderer/components/context/StatusBar.tsx`，把最外层 `<div className="statusbar">` 换成：
 
@@ -659,11 +660,11 @@ Expected: FAIL —— `getByRole("contentinfo")` 找不到（`StatusBar` 现在�
 
 对应的闭合标签改为 `</footer>`。
 
-- [ ] **Step 4: 从 ContextRail 摘掉**
+- [x] **Step 4: 从 ContextRail 摘掉**
 
 `renderer/components/context/ContextRail.tsx`：删掉 `import { StatusBar } from "./StatusBar";` 与文件末尾的 `<StatusBar onOpenSettings={onOpenSettings} />` 一行。`onOpenSettings` 仍被「数据源」按钮使用，**不要删这个 prop**。
 
-- [ ] **Step 5: 在 App 挂上**
+- [x] **Step 5: 在 App 挂上**
 
 `renderer/App.tsx`，在三个 `activeView` 分支之后、`</div>` 之前插入：
 
@@ -677,7 +678,7 @@ Expected: FAIL —— `getByRole("contentinfo")` 找不到（`StatusBar` 现在�
 import { StatusBar } from "./components/context/StatusBar";
 ```
 
-- [ ] **Step 6: 改成全宽横条**
+- [x] **Step 6: 改成全宽横条**
 
 `renderer/components/context/StatusBar.css`：`.statusbar` 改为
 
@@ -700,7 +701,7 @@ import { StatusBar } from "./components/context/StatusBar";
 
 `renderer/components/shell/AppShell.css` 的 `.app-shell > .view-pane` 已是 `flex: 1; min-height: 0`，状态栏作为最后一个 flex 子项自然贴底，无需改动。
 
-- [ ] **Step 7: 跑测试确认通过**
+- [x] **Step 7: 跑测试确认通过**
 
 ```bash
 cd apps/desktop && npx vitest run --config vitest.config.ts renderer/__tests__/shell/
@@ -708,7 +709,7 @@ cd apps/desktop && npm run test && npm run typecheck
 ```
 Expected: 全绿。`ContextRail` 的既有测试若断言了状态栏文案，改为在 `App` 层断言。
 
-- [ ] **Step 8: 提交**
+- [x] **Step 8: 提交**
 
 ```bash
 git add renderer/App.tsx renderer/components/context renderer/__tests__/shell
@@ -739,7 +740,7 @@ landmark role=contentinfo + aria-label 便于断言，测试锁死它不再是
 - Consumes: T2 的 `ListRow variant="nav"`
 - Produces: `<Sidebar activeView onNavigate />`，T6 给它加 `collapsed` prop
 
-- [ ] **Step 1: 写 ViewNav 的失败测试**
+- [x] **Step 1: 写 ViewNav 的失败测试**
 
 Create `renderer/__tests__/shell/viewnav.test.tsx`:
 
@@ -766,14 +767,14 @@ describe("ViewNav", () => {
 });
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 ```bash
 cd apps/desktop && npx vitest run --config vitest.config.ts renderer/__tests__/shell/viewnav.test.tsx
 ```
 Expected: FAIL —— 模块不存在。
 
-- [ ] **Step 3: 写 ViewNav**
+- [x] **Step 3: 写 ViewNav**
 
 Create `renderer/components/shell/ViewNav.tsx`:
 
@@ -809,14 +810,14 @@ export function ViewNav({ activeView, onNavigate }: ViewNavProps) {
 }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 ```bash
 cd apps/desktop && npx vitest run --config vitest.config.ts renderer/__tests__/shell/viewnav.test.tsx
 ```
 Expected: PASS
 
-- [ ] **Step 5: 写 Sidebar 容器**
+- [x] **Step 5: 写 Sidebar 容器**
 
 Create `renderer/components/shell/Sidebar.tsx`:
 
@@ -883,11 +884,11 @@ Create `renderer/components/shell/Sidebar.css`:
 .sidebar-nav { display: flex; flex-direction: column; gap: var(--sp-1); }
 ```
 
-- [ ] **Step 6: SessionRail 去掉 Panel 外壳**
+- [x] **Step 6: SessionRail 去掉 Panel 外壳**
 
 `renderer/components/session/SessionRail.tsx`：`<Panel className="wb-rail sessionrail" tone="sunken" title="调查" actions={…}>` 换成 `<div className="sessionrail">`（闭合同改），删掉 `Panel` 与 `Button` 的 `+ 新建` —— 新建按钮已由 `Sidebar` 顶部承担，**留在这里会变成两个主操作**。`Panel` import 若无其他用处一并删除。
 
-- [ ] **Step 7: 从 WorkbenchView 摘掉，App 挂上**
+- [x] **Step 7: 从 WorkbenchView 摘掉，App 挂上**
 
 `renderer/views/WorkbenchView.tsx`：删掉 `<SessionRail />` 与其 import。
 
@@ -932,11 +933,11 @@ Create `renderer/components/shell/Sidebar.css`:
 }
 ```
 
-- [ ] **Step 8: 修既有测试的渲染入口**
+- [x] **Step 8: 修既有测试的渲染入口**
 
 `renderer/__tests__/session/sessionrail.test.tsx` 里若直接 `render(<SessionRail />)` 并断言「+ 新建」按钮，把该断言迁到新建的 `renderer/__tests__/shell/sidebar.test.tsx`，`SessionRail` 自身的测试只留列表 / 删除 / 撤销三项。
 
-- [ ] **Step 9: 跑全套并提交**
+- [x] **Step 9: 跑全套并提交**
 
 ```bash
 cd apps/desktop && npm run test && npm run typecheck
@@ -966,7 +967,7 @@ Claude 形态里导航在左栏、没有顶部 tab 栏。SessionRail 从 Workben
 - Consumes: T2 的 `Button size="icon"`
 - Produces: `useUiPrefsCtx()` 返回 `{ theme, setTheme, resolved, cycleTheme, fontSize, setFontSize }`，T6 在同一 provider 上追加折叠字段；T9 的 `AppearanceSection` 直接消费，不再走 props
 
-- [ ] **Step 1: 写失败的测试**
+- [x] **Step 1: 写失败的测试**
 
 Create `renderer/__tests__/shell/appchrome.test.tsx`:
 
@@ -995,14 +996,14 @@ describe("AppChrome", () => {
 });
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 ```bash
 cd apps/desktop && npx vitest run --config vitest.config.ts renderer/__tests__/shell/appchrome.test.tsx
 ```
 Expected: FAIL —— 顶栏里仍有 `<nav>`，也没有「切换侧栏」按钮。
 
-- [ ] **Step 3: 写 UiPrefsProvider**
+- [x] **Step 3: 写 UiPrefsProvider**
 
 Create `renderer/state/UiPrefsProvider.tsx`:
 
@@ -1028,7 +1029,7 @@ export function useUiPrefsCtx(): UiPrefsValue {
 
 `renderer/state/index.ts` 追加导出 `UiPrefsProvider` 与 `useUiPrefsCtx`。
 
-- [ ] **Step 4: 重写 AppChrome**
+- [x] **Step 4: 重写 AppChrome**
 
 `renderer/components/shell/AppChrome.tsx` 全量：
 
@@ -1074,7 +1075,7 @@ export function AppChrome({
 
 `AppChrome.css`：`.chrome` 高度 `40px`、`padding-left: var(--chrome-pad-left)`、`-webkit-app-region: drag`，`.chrome > *` 设 `-webkit-app-region: no-drag`；`.chrome-title` 用 `var(--text-sm)` + `var(--text-muted)`，居中靠 `margin: 0 auto`。删除 `.chrome2-nav` / `.chrome2-tab` 相关规则。
 
-- [ ] **Step 5: App 接线**
+- [x] **Step 5: App 接线**
 
 `renderer/App.tsx`：
 - `App()` 里在 `<TooltipProvider>` 与 `<RuntimeProvider>` 之间包一层 `<UiPrefsProvider>`
@@ -1082,7 +1083,7 @@ export function AppChrome({
 - `<AppChrome>` 改传 `title` / `devTitle` / `onToggleSidebar` / `onToggleRail`（后两个先传空函数，T6 接真实状态）
 - `title` 取自当前会话：与 `WorkbenchView` 同一套逻辑，抽成 `AppInner` 里的一行 `const title = sessions.find(s => s.session_id === sessionId)?.title || run.lastSubmitted || "新调查";`，并把 `InvestigationHeader` 从 `WorkbenchView` 删除（标题已上移顶栏，留着是重复）
 
-- [ ] **Step 6: 跑全套并提交**
+- [x] **Step 6: 跑全套并提交**
 
 ```bash
 cd apps/desktop && npm run test && npm run typecheck
@@ -1111,7 +1112,7 @@ useUiPrefs 升 context 不是顺带重构：nav 下放后主题与字号要穿�
 - Consumes: T5 的 `useUiPrefsCtx()`
 - Produces: `sidebarCollapsed` / `railCollapsed` / `setSidebarCollapsed` / `setRailCollapsed`
 
-- [ ] **Step 1: 写失败的测试**
+- [x] **Step 1: 写失败的测试**
 
 Create `renderer/__tests__/shell/responsive.test.tsx`:
 
@@ -1187,14 +1188,14 @@ describe("响应式与折叠持久化", () => {
   });
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 ```bash
 cd apps/desktop && npx vitest run --config vitest.config.ts renderer/__tests__/shell/
 ```
 Expected: FAIL —— 折叠能力不存在，两个 rail 也还没有 `role="complementary"` + `aria-label`。
 
-- [ ] **Step 3: useUiPrefs 加折叠状态**
+- [x] **Step 3: useUiPrefs 加折叠状态**
 
 `renderer/hooks/useUiPrefs.ts` 内新增（与 `FONT_KEY` 同样的 localStorage 模式）：
 
@@ -1243,7 +1244,7 @@ function mediaBelow(px: number): boolean {
 
 > 断点只在初始化时读一次（`useState` 的惰性初值）。**不监听 resize** —— 用户手动选择必须优先于窗口尺寸，加监听会在拖窗口时覆盖用户意图。
 
-- [ ] **Step 4: 两个 rail 加 landmark**
+- [x] **Step 4: 两个 rail 加 landmark**
 
 `renderer/components/shell/Sidebar.tsx` 的 `<aside className="sidebar" aria-label="会话与导航">` 已带 label，浏览器对 `<aside>` 自动给 `complementary` role —— 无需改动。
 
@@ -1255,7 +1256,7 @@ function mediaBelow(px: number): boolean {
 
 （闭合标签同改；内部原有的 `<h2 className="ctxrail-title">本次调查</h2>` 保留，视觉标题与 aria-label 一致。）
 
-- [ ] **Step 5: App 与 WorkbenchView 接线**
+- [x] **Step 5: App 与 WorkbenchView 接线**
 
 `renderer/App.tsx`：从 `useUiPrefsCtx()` 取四个新字段，`<AppChrome onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)} onToggleRail={() => setRailCollapsed(!railCollapsed)} />`，并 `{!sidebarCollapsed && <Sidebar … />}`。
 
@@ -1269,14 +1270,14 @@ function mediaBelow(px: number): boolean {
 
 `renderer/hooks/useHotkeys.ts`：新增 `⌘\` → `onToggleSidebar`，与既有快捷键同一套注册方式。
 
-- [ ] **Step 6: 跑测试确认通过**
+- [x] **Step 6: 跑测试确认通过**
 
 ```bash
 cd apps/desktop && npx vitest run --config vitest.config.ts renderer/__tests__/shell/
 ```
 Expected: PASS —— 含状态栏四组合。
 
-- [ ] **Step 7: 跑全套并提交**
+- [x] **Step 7: 跑全套并提交**
 
 ```bash
 cd apps/desktop && npm run test && npm run typecheck
@@ -1306,7 +1307,7 @@ git commit -m "feat(desktop-ui): 左栏/侧板可折叠，断点自动收起并�
 - Consumes: T1 的 `--measure` / `--radius-xl` / `--leading-relaxed`
 - Produces: `<Prose>{children}</Prose>`，T10 的证据详情复用
 
-- [ ] **Step 1: 写失败的测试**
+- [x] **Step 1: 写失败的测试**
 
 Create `renderer/__tests__/ui/Prose.test.tsx`:
 
@@ -1323,14 +1324,14 @@ describe("Prose", () => {
 });
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 ```bash
 cd apps/desktop && npx vitest run --config vitest.config.ts renderer/__tests__/ui/Prose.test.tsx
 ```
 Expected: FAIL —— 模块不存在。
 
-- [ ] **Step 3: 写 Prose**
+- [x] **Step 3: 写 Prose**
 
 Create `renderer/ui/Prose.tsx`:
 
@@ -1349,7 +1350,7 @@ Create `renderer/ui/Prose.css`：`.ui-prose` 设 `max-width: var(--measure); lin
 
 `renderer/components/Markdown.tsx`：把渲染结果包进 `<Prose>`。
 
-- [ ] **Step 4: 跑测试确认通过 + 主体限宽与 composer**
+- [x] **Step 4: 跑测试确认通过 + 主体限宽与 composer**
 
 ```bash
 cd apps/desktop && npx vitest run --config vitest.config.ts renderer/__tests__/ui/Prose.test.tsx
@@ -1370,7 +1371,7 @@ Expected: PASS
 
 `Composer.css`：外层加 `max-width: var(--measure); margin: 0 auto var(--sp-6);`，输入框 `background: var(--layer-2); border-radius: var(--radius-xl); box-shadow: var(--shadow-2); border: 1px solid var(--border-0);`，内边距用 `var(--sp-4)`。
 
-- [ ] **Step 5: 跑全套并提交**
+- [x] **Step 5: 跑全套并提交**
 
 ```bash
 cd apps/desktop && npm run test && npm run typecheck
@@ -1384,7 +1385,7 @@ Prose 收拢原本散在 styles.css 里的 Markdown 排版，标题走 --font-se
 正文仍是无衬线 —— 衬线只用于标题（spec §1.4）。"
 ```
 
-- [ ] **Step 6: ⏸ 人工检查点（spec §7 的「停下来看比例」）**
+- [ ] **Step 6: ⏸ 人工检查点（spec §7 的「停下来看比例」）** —— *未留证据。实现已合并，但两档窗口的目视核对没有截图或记录，与判据 7 一并挂着。*
 
 ```bash
 cd apps/desktop && npm run dev
@@ -1404,7 +1405,7 @@ cd apps/desktop && npm run dev
 - Consumes: 现有 `SettingsViewProps`（本任务**不改签名**）
 - Produces: 七个 `*Section` 组件，各自 props 与其原分区实际用到的字段一致
 
-- [ ] **Step 1: 记录基线**
+- [x] **Step 1: 记录基线**
 
 ```bash
 cd apps/desktop && npx vitest run --config vitest.config.ts 2>&1 | tail -5
@@ -1412,13 +1413,13 @@ wc -l renderer/views/SettingsView.tsx
 ```
 把测试数与行数记进提交信息。**本任务的验收是「行为零变化」**，与 M0a-1 同一个判据。
 
-- [ ] **Step 2: 逐个分区搬运**
+- [x] **Step 2: 逐个分区搬运**
 
 按 `SettingsView.tsx` 现有的 `{section === "llm" && (…)}` 等七处边界（`:760` hub、`:811` llm、`:967` mcp、`:1151` skills、`:1372` appearance、`:1410` data、`:1437` about），**原样**剪切进各自文件，只补 import 与 props 类型。**这一步不许改任何 JSX 结构、类名或文案。**
 
 `SettingsShell.tsx` 承接原文件 `:733` 起的分区切换逻辑与 `hubStatus`，分区导航先保持现有排布（改成左侧竖排是 T9 的事）。
 
-- [ ] **Step 3: SettingsView 缩成转发壳**
+- [x] **Step 3: SettingsView 缩成转发壳**
 
 ```tsx
 export function SettingsView(props: SettingsViewProps) {
@@ -1426,7 +1427,7 @@ export function SettingsView(props: SettingsViewProps) {
 }
 ```
 
-- [ ] **Step 4: 验证行为零变化**
+- [x] **Step 4: 验证行为零变化**
 
 ```bash
 cd apps/desktop && npm run test && npm run typecheck
@@ -1434,7 +1435,7 @@ wc -l renderer/views/SettingsView.tsx renderer/views/settings/*.tsx
 ```
 Expected: 测试数与 Step 1 一致且全绿；每个新文件 ≤300 行。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add renderer/views
@@ -1456,26 +1457,26 @@ git commit -m "refactor(desktop-ui): Settings 原样拆七文件，行为零变�
 - Consumes: T2 primitives、T5 的 `useUiPrefsCtx()`
 - Produces: `SettingsViewProps = { focusSection?: SettingsSection; onProviderSaved: (mode: string) => void }`
 
-- [ ] **Step 1: 分区导航改左侧竖排**
+- [x] **Step 1: 分区导航改左侧竖排**
 
 `SettingsShell.tsx` 的分区切换改用 `ListRow variant="nav"`（与 T4 的 `ViewNav` 同一形态），布局为左 200px 导航 + 右内容，内容区 `max-width: var(--measure)`。
 
-- [ ] **Step 2: 表单换 Field**
+- [x] **Step 2: 表单换 Field**
 
 七个分区里的裸 `<label>` + `<input>` 组合换成 `Field`；按钮换 `Button`（**只有保存类主操作用 `variant="primary"`，其余 ghost/secondary**）；折叠块换 `Disclosure`；卡片换 `Card`。
 
-- [ ] **Step 3: 收 props**
+- [x] **Step 3: 收 props**
 
 `AppearanceSection` 改为直接 `useUiPrefsCtx()` 取 `theme` / `fontSize` / `setTheme` / `setFontSize`；`DataSection` 与 `AboutSection` 从 `useEnvironment()` 取 `dataRoot` / `providerMode`。随后把 `SettingsViewProps` 收成两个字段，`App.tsx` 对应删掉 8 个传参。
 
-- [ ] **Step 4: 跑全套**
+- [x] **Step 4: 跑全套**
 
 ```bash
 cd apps/desktop && npm run test && npm run typecheck
 ```
 Expected: 全绿。`App.tsx` 里 `theme` / `resolved` / `fontSize` 若已无其他消费方，一并从解构里删除，否则 `tsc` 会报未使用变量。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add renderer/views/settings renderer/App.tsx
@@ -1497,15 +1498,15 @@ git commit -m "feat(desktop-ui): Settings 套新 primitives，props 10→2
 - Consumes: T2 primitives、T7 的 `Prose`
 - Produces: 无
 
-- [ ] **Step 1: 列表换 ListRow，详情换 Panel**
+- [x] **Step 1: 列表换 ListRow，详情换 Panel**
 
 证据列表每行用 `ListRow`（`title` 为文件名、`meta` 为 `Timestamp` + 短哈希）；选中项详情用 `Panel`；整体外层 `max-width: var(--measure); margin: 0 auto`。哈希与路径保持 `var(--font-mono)`。
 
-- [ ] **Step 2: 保留高亮跳转**
+- [ ] **Step 2: 保留高亮跳转** —— *代码保留了（`EvidenceView.tsx:64-70`），但既无自动化测试也无手工验证记录。*
 
 `highlightId` 的滚动定位与高亮行为**不许丢** —— 它是 Workbench 右栏「证据」跳转的落点。改完手工验证：Workbench 右栏点任一证据 id → 证据页对应行高亮。
 
-- [ ] **Step 3: 跑全套并提交**
+- [x] **Step 3: 跑全套并提交**
 
 ```bash
 cd apps/desktop && npm run test && npm run typecheck
@@ -1529,7 +1530,7 @@ git commit -m "feat(desktop-ui): Evidence 套新 primitives 并限宽居中
 - Consumes: T1–T10 全部
 - Produces: 无
 
-- [ ] **Step 1: 写失败的测试**
+- [x] **Step 1: 写失败的测试**
 
 `renderer/__tests__/styles/legacy.test.ts` 追加：
 
@@ -1567,14 +1568,14 @@ describe("token 兼容别名已删除", () => {
 
 > `--border:` 带冒号是为了不误伤 `--border-0/1/2`。
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 ```bash
 cd apps/desktop && npx vitest run --config vitest.config.ts renderer/__tests__/styles/legacy.test.ts
 ```
 Expected: FAIL —— 兼容块还在。
 
-- [ ] **Step 3: 删兼容块，改所有引用点**
+- [x] **Step 3: 删兼容块，改所有引用点**
 
 删掉 `tokens.css` 末尾整个兼容层。然后：
 
@@ -1584,14 +1585,14 @@ cd apps/desktop && grep -rn "var(--bg\|var(--surface\|var(--panel)\|var(--muted)
 
 逐个替换为对应新 token：`--bg`/`--bg-deep` → `--layer-0`，`--bg-elevated`/`--panel` → `--layer-1`，`--surface`/`--surface-solid` → `--layer-2`，`--surface-hover` → `--layer-3`，`--border` → `--border-1`，`--border-subtle` → `--border-0`，`--border-strong` → `--border-2`，`--muted` → `--text-muted`，`--shadow-panel` → `--shadow-3`，`--shadow-soft` → `none`。
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 ```bash
 cd apps/desktop && npx vitest run --config vitest.config.ts renderer/__tests__/styles/
 ```
 Expected: PASS
 
-- [ ] **Step 5: 核对全部七条出口判据**
+- [ ] **Step 5: 核对全部七条出口判据** —— *判据 1–6 已核（见下方复核记录），**判据 7 未留证据**，故整步不勾。*
 
 ```bash
 cd apps/desktop && npm run test && npm run typecheck
@@ -1612,7 +1613,7 @@ grep -n "background" renderer/ui/StatusDot.css
 
 判据 6 若未达标，**不许为凑数硬删** —— 在提交信息里交代剩余规则归属哪个组件、为什么没迁。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add renderer
@@ -1692,3 +1693,31 @@ const degraded = env.securityDegradations.length > 0;
 `<footer className={`statusbar${degraded ? " statusbar--danger" : ""}`} …>`；CSS `.statusbar--danger { background: var(--danger-muted); color: var(--danger); }` —— 这是 spec §1.3 允许的两处大面积染色例外之一。
 
 > **不要发明 `env.auditBacklog`**：渲染层没有审计积压的数据源（见 spec §8.1 的缺口登记）。降级态一律由既有的 `securityDegradations` 派生，它已覆盖离线 / 沙箱不可用 / FileVault / TCC 四类。
+
+---
+
+## 复核记录（2026-08-18，合并后）
+
+分支已合并进 `main`（`b43f16d`）。以下命令在复核当天重跑，结果如下：
+
+| 项 | 命令 / 依据 | 结果 |
+|---|---|---|
+| 渲染层测试 | `npm run test` | 27 文件 / 204 测试通过 |
+| 类型 | `npm run typecheck` | exit 0 |
+| sidecar 闸门 | `pytest -q tests/test_desktop_*.py` | 138 passed，**未改一字** |
+| 构建 | `npm run build:renderer` | 成功 |
+| 判据 1 | 兼容别名 grep + `legacy.test.ts` | 零命中 / 30 断言 |
+| 判据 2 | `statusbar.always.test.tsx` | 3 视图 + 4 折叠组合，**断言的是常显五项** |
+| 判据 3 | `degradation.test.tsx` | 2 测试 |
+| 判据 4 | `contrast.test.ts` | 两套主题 × 20 断言 |
+| 判据 5 | 上列四行 | 全绿 |
+| 判据 6 | `wc -l` | `styles.css 202 + views.css 276 = 478` ≤ 1000（起点 1844） |
+| 判据 7 | 1440×900 / 1024×768 目视 | **未留证据** —— 仓库内无当日截图，提交信息只写了「两档人工（控制器）」 |
+
+复核中修正的三处措辞与取值偏差：
+
+1. **「六项常显」改为「常显五项 + 按需暂停项」。** `paused` 为假时第六项不渲染（改造前即如此，非本轮引入）。测试断言的一直是五项，措辞比断言强。同步改了 `StatusBar.tsx`、`statusbar.always.test.tsx`、spec §2/§4.2/§5/§8.1、`11-OPEN-QUESTIONS.md` §J。
+2. **`--measure` 实际落为 `736px` 而非 spec 原写的 `46rem`。** 这是刻意的（根字号随 `data-font` 变，rem 限宽会让列宽跟着字号伸缩），已把理由写进 spec §1 与 `tokens.css` 注释。
+3. **accent 实底按钮全局 5 个而非本计划 T11 Step 5 预期的 2 个。** 多出的三个是 Settings 三个分区各自的保存 / 批准键，偏离已在提交 `4da788b` 的信息里交代，判定为可接受。
+
+未了：判据 7 与 T7 Step 6 的两档目视，以及 T10 Step 2 的 `highlightId` 跳转手工验证。
