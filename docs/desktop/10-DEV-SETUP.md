@@ -6,6 +6,25 @@
 
 ---
 
+## vite 必须绑 127.0.0.1，否则 `npm run dev` 起不来
+
+**现象**：`npm run dev` 里 vite 正常打印 `ready`，Electron 窗口却是空的，日志里一行
+`Failed to load URL: http://127.0.0.1:5173/ with error: ERR_CONNECTION_REFUSED`。
+
+**原因**：`electron/main.cjs` 与 `renderer/index.html` 的 CSP 都写死了 `http://127.0.0.1:5173`
+（IPv4 字面量，比 `localhost` 更收紧）。而 vite 默认按 `localhost` 解析监听地址——在把
+`localhost` 先解析成 `::1` 的机器上，它只监听 IPv6，壳去连 IPv4 自然被拒。
+`wait-on tcp:5173` 也解析到 `::1`，于是它先"等到了"，把竞态伪装成随机失败。
+
+**结论**：`vite.config.ts` 的 `server.host` 固定 `"127.0.0.1"`，`wait-on` 写成
+`tcp:127.0.0.1:5173`。两处都已改（2026-08-18）。**不要把它改回 `localhost`**——
+改的话得同时动 main.cjs 的 loadURL 与 index.html 的 CSP，等于为了省一行配置放宽 CSP。
+
+**排查口诀**：窗口空白 + vite 说 ready → 先 `lsof -nP -iTCP:5173 -sTCP:LISTEN` 看它绑的是
+IPv4 还是 IPv6，别查渲染层。
+
+---
+
 ## ⚠️ 头号大坑：TCC 授权会随签名变化而失效
 
 **现象**：昨天还好好的，今天重新构建之后，agent 读 `~/Downloads` 下的文件突然报"文件不存在"。检查代码没问题，检查路径没问题，怀疑人生。

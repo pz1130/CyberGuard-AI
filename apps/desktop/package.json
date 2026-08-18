@@ -8,7 +8,7 @@
     "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
     "dev:signed": "npm run codesign:dev && concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
     "dev:renderer": "vite --config vite.config.ts",
-    "dev:electron": "wait-on tcp:5173 && electron .",
+    "dev:electron": "wait-on tcp:127.0.0.1:5173 && electron .",
     "codesign:identity": "bash scripts/ensure-dev-codesign-identity.sh",
     "codesign:dev": "bash scripts/codesign-electron-dev.sh",
     "codesign:verify": "bash scripts/verify-dev-codesign.sh",
