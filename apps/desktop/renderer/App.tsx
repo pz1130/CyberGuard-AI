@@ -5,13 +5,14 @@ import { DegradationStrip } from "./components/shell/DegradationStrip";
 import { Sidebar } from "./components/shell/Sidebar";
 import "./components/shell/AppShell.css";
 import { useHotkeys } from "./hooks/useHotkeys";
-import { useUiPrefs } from "./hooks/useUiPrefs";
 import type { ActiveView, SettingsSection } from "./lib/types";
 import {
   RuntimeProvider,
+  UiPrefsProvider,
   useEnvironment,
   useRun,
   useSessions,
+  useUiPrefsCtx,
 } from "./state";
 import { DataLifecycleProvider } from "./state/useDataLifecycle";
 import { TooltipProvider } from "./ui";
@@ -25,16 +26,18 @@ const DEV_TITLE =
 export function App() {
   return (
     <TooltipProvider>
-      <RuntimeProvider>
-        <AppInner />
-      </RuntimeProvider>
+      <UiPrefsProvider>
+        <RuntimeProvider>
+          <AppInner />
+        </RuntimeProvider>
+      </UiPrefsProvider>
     </TooltipProvider>
   );
 }
 
 function AppInner() {
   const { theme, setTheme, cycleTheme, resolved, fontSize, setFontSize } =
-    useUiPrefs();
+    useUiPrefsCtx();
   const [activeView, setActiveView] = useState<ActiveView>("workbench");
   const [settingsSection, setSettingsSection] = useState<
     SettingsSection | undefined
@@ -46,6 +49,11 @@ function AppInner() {
   const run = useRun();
   const sessions = useSessions();
   const env = useEnvironment();
+
+  const title =
+    sessions.sessions.find((s) => s.session_id === sessions.sessionId)?.title ||
+    run.lastSubmitted ||
+    "新调查";
 
   const openEvidence = useCallback((evidenceId?: string) => {
     setHighlightEvidenceId(evidenceId);
@@ -94,11 +102,10 @@ function AppInner() {
     >
       <div className="app-shell">
         <AppChrome
-          activeView={activeView}
-          onNavigate={setActiveView}
-          themeLabel={resolved === "dark" ? "Dark" : "Light"}
-          onCycleTheme={cycleTheme}
+          title={title}
           devTitle={DEV_TITLE}
+          onToggleSidebar={() => {}}
+          onToggleRail={() => {}}
         />
         <DegradationStrip />
 

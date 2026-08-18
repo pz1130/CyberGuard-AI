@@ -50,10 +50,10 @@ export function ContextRail({
   const { evidenceIds, highCount } = useFindings();
 
   return (
-    <div className="wb-rail ctxrail">
-      <header className="ctxrail-head">
+    <aside className="wb-rail ctxrail">
+      <div className="ctxrail-head">
         <h2 className="ctxrail-title">本次调查</h2>
-      </header>
+      </div>
 
       <div className="ctxrail-body">
         <section className="ctxsec">
@@ -119,6 +119,6 @@ export function ContextRail({
           )}
         </section>
       </div>
-    </div>
+    </aside>
   );
 }
