@@ -4,7 +4,6 @@ import { Composer } from "../components/investigation/Composer";
 import { InvestigationHeader } from "../components/investigation/InvestigationHeader";
 import { PlanPanel } from "../components/investigation/PlanPanel";
 import { Timeline } from "../components/investigation/Timeline";
-import { SessionRail } from "../components/session/SessionRail";
 import type { SettingsSection } from "../lib/types";
 import { useRun, useSessions } from "../state";
 
@@ -22,7 +21,6 @@ export function WorkbenchView(props: WorkbenchViewProps) {
 
   return (
     <div className="wb">
-      <SessionRail />
       <div className="wb-main">
         <InvestigationHeader title={title} />
         <PlanPanel />

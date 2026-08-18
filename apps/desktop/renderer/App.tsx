@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { StatusBar } from "./components/context/StatusBar";
 import { AppChrome } from "./components/shell/AppChrome";
 import { DegradationStrip } from "./components/shell/DegradationStrip";
+import { Sidebar } from "./components/shell/Sidebar";
 import "./components/shell/AppShell.css";
 import { useHotkeys } from "./hooks/useHotkeys";
 import { useUiPrefs } from "./hooks/useUiPrefs";
@@ -101,41 +102,46 @@ function AppInner() {
         />
         <DegradationStrip />
 
-        {activeView === "workbench" && (
-          <WorkbenchView
-            onViewEvidence={openEvidence}
-            onOpenSettings={openSettings}
-          />
-        )}
+        <div className="app-body">
+          <Sidebar activeView={activeView} onNavigate={setActiveView} />
+          <div className="app-main">
+            {activeView === "workbench" && (
+              <WorkbenchView
+                onViewEvidence={openEvidence}
+                onOpenSettings={openSettings}
+              />
+            )}
 
-        {activeView === "evidence" && (
-          <EvidenceView
-            evidenceHint={
-              env.evidenceCount ? `evidence: ${env.evidenceCount}` : ""
-            }
-            highlightId={highlightEvidenceId}
-            onBackToWorkbench={() => setActiveView("workbench")}
-            onCountChange={(n) => env.setEvidenceCount(n)}
-          />
-        )}
+            {activeView === "evidence" && (
+              <EvidenceView
+                evidenceHint={
+                  env.evidenceCount ? `evidence: ${env.evidenceCount}` : ""
+                }
+                highlightId={highlightEvidenceId}
+                onBackToWorkbench={() => setActiveView("workbench")}
+                onCountChange={(n) => env.setEvidenceCount(n)}
+              />
+            )}
 
-        {activeView === "settings" && (
-          <SettingsView
-            theme={theme}
-            resolved={resolved}
-            fontSize={fontSize}
-            providerMode={env.providerMode}
-            dataRoot={env.dataRoot}
-            onCycleTheme={cycleTheme}
-            onSetTheme={setTheme}
-            onSetFontSize={setFontSize}
-            focusSection={settingsSection}
-            onProviderSaved={(mode) => {
-              env.setProviderMode(mode);
-              void env.refreshProvider();
-            }}
-          />
-        )}
+            {activeView === "settings" && (
+              <SettingsView
+                theme={theme}
+                resolved={resolved}
+                fontSize={fontSize}
+                providerMode={env.providerMode}
+                dataRoot={env.dataRoot}
+                onCycleTheme={cycleTheme}
+                onSetTheme={setTheme}
+                onSetFontSize={setFontSize}
+                focusSection={settingsSection}
+                onProviderSaved={(mode) => {
+                  env.setProviderMode(mode);
+                  void env.refreshProvider();
+                }}
+              />
+            )}
+          </div>
+        </div>
         <StatusBar onOpenSettings={openSettings} />
       </div>
     </DataLifecycleProvider>

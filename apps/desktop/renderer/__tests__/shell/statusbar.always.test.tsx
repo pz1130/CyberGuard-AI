@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { App } from "../../App";
 
@@ -17,6 +17,11 @@ function expectSixVisible() {
   expect(bar.textContent).toMatch(/只读|完整/);
 }
 
+function clickSidebarNav(label: string) {
+  const sidebar = screen.getByRole("complementary", { name: "会话与导航" });
+  within(sidebar).getByRole("button", { name: label }).click();
+}
+
 describe("状态栏常显", () => {
   it("调查页可见", () => {
     render(<App />);
@@ -25,13 +30,13 @@ describe("状态栏常显", () => {
 
   it("切到证据页仍可见", async () => {
     render(<App />);
-    screen.getByRole("button", { name: "证据" }).click();
+    clickSidebarNav("证据");
     expectSixVisible();
   });
 
   it("切到设置页仍可见", async () => {
     render(<App />);
-    screen.getByRole("button", { name: "设置" }).click();
+    clickSidebarNav("设置");
     expectSixVisible();
   });
 

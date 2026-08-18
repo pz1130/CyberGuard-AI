@@ -66,6 +66,11 @@
   border-radius: var(--radius-sm);
 }
 
+/* nav pill owns its chrome — neutralize default row hover/active fills */
+.ui-listrow--nav:hover,
+.ui-listrow--nav.ui-listrow--active {
+  background: transparent;
+}
 .ui-listrow--nav > .ui-listrow-main {
   border-radius: var(--radius-pill);
   padding: var(--sp-2) var(--sp-3);
