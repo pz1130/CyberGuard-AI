@@ -2,7 +2,7 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr) 300px;
   background: var(--layer-0);
 }
 
@@ -24,11 +24,21 @@
 }
 
 @media (max-width: 1180px) {
-  .wb { grid-template-columns: 220px minmax(0, 1fr) 260px; }
+  .wb { grid-template-columns: minmax(0, 1fr) 260px; }
+}
+
+.wb--norail {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .wb-timeline {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+}
+
+.wb-timeline > * {
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding: var(--sp-6) var(--sp-4);
 }

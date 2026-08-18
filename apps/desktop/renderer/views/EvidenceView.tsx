@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { EvidenceItem, EvidenceVerifyResult } from "../lib/types";
+import { Button, Field, ListRow, Panel, Prose, Timestamp } from "../ui";
 
 type Props = {
   evidenceHint: string;
@@ -13,15 +14,6 @@ function fmtSize(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(2)} MB`;
-}
-
-function fmtTime(ts: number): string {
-  if (!ts) return "—";
-  try {
-    return new Date(ts * 1000).toLocaleString();
-  } catch {
-    return String(ts);
-  }
 }
 
 function shortHash(h: string): string {
@@ -40,7 +32,7 @@ export function EvidenceView({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [note, setNote] = useState("");
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [verifyById, setVerifyById] = useState<
     Record<string, EvidenceVerifyResult>
   >({});
@@ -71,7 +63,7 @@ export function EvidenceView({
   useEffect(() => {
     if (!highlightId) return;
     // expand + scroll to linked evidence from Workbench
-    setExpanded((prev) => ({ ...prev, [highlightId]: true }));
+    setSelectedId(highlightId);
     requestAnimationFrame(() => {
       document
         .getElementById(`evidence-row-${highlightId}`)
@@ -100,6 +92,7 @@ export function EvidenceView({
           `Registered ${r.item.name} · sha256 ${shortHash(r.item.sha256)} · mount read-only`
         );
         setNote("");
+        setSelectedId(r.item.evidence_id);
         await refresh();
       } else {
         setMsg("register failed");
@@ -143,188 +136,192 @@ export function EvidenceView({
     }
   };
 
-  const toggleExpand = (id: string) => {
-    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
+  const selected = items.find((it) => it.evidence_id === selectedId) ?? null;
+  const selectedVerify = selected
+    ? verifyById[selected.evidence_id]
+    : undefined;
 
   return (
     <div className="view-pane view-enter">
-      <div className="view-pane-header">
-        <div>
-          <h1>证据</h1>
-          <p className="lede">
-            只读证据库：注册时算 sha256，校验时重算对比。正文不进模型上下文。
-            {" · "}
-            <span className="pill accent">{evidenceHint}</span>
-          </p>
-        </div>
-        <div className="empty-actions">
-          <button
-            type="button"
-            className="secondary"
-            onClick={onBackToWorkbench}
-          >
-            返回调查
-          </button>
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => void refresh()}
-            disabled={busy}
-          >
-            刷新
-          </button>
-        </div>
-      </div>
-
-      <div className="settings-card evidence-register">
-        <h3>登记文件</h3>
-        <p className="data-hint">
-          选择本机文件 → 只读哈希写入 catalog（mount: read-only）。
-        </p>
-        <label className="field-label">
-          备注（可选）
-          <input
-            className="data-input"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="工单 / 案件 / 上下文"
-            disabled={busy}
-          />
-        </label>
-        <div className="empty-actions mt-10">
-          <button
-            type="button"
-            className="primary"
-            onClick={() => void onRegister()}
-            disabled={busy || !api?.evidenceRegister}
-          >
-            {busy ? "…" : "选择文件并登记…"}
-          </button>
-        </div>
-        {msg && <pre className="data-msg">{msg}</pre>}
-      </div>
-
-      <div className="settings-card mt-12">
-        <h3>
-          目录{" "}
-          <span className="pill">
-            {items.length} 项
-          </span>
-        </h3>
-        {items.length === 0 ? (
-          <div className="evidence-empty">
-            <p className="evidence-empty-title">暂无证据</p>
-            <p className="muted-copy">
-              演示时可登记一份告警导出或 PDF；调查过程中 agent
-              工具也可能写入条目。
+      <div className="evidence-view">
+        <div className="view-pane-header">
+          <div>
+            <h1>证据</h1>
+            <p className="lede">
+              只读证据库：注册时算 sha256，校验时重算对比。正文不进模型上下文。
+              {" · "}
+              <span className="pill accent">{evidenceHint}</span>
             </p>
           </div>
-        ) : (
-          <table className="evidence-table">
-            <thead>
-              <tr>
-                <th>名称</th>
-                <th>sha256</th>
-                <th>大小</th>
-                <th>挂载</th>
-                <th>登记时间</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
+          <div className="empty-actions">
+            <Button variant="secondary" onClick={onBackToWorkbench}>
+              返回调查
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => void refresh()}
+              disabled={busy}
+            >
+              刷新
+            </Button>
+          </div>
+        </div>
+
+        <Panel title="登记文件">
+          <p className="evidence-hint">
+            选择本机文件 → 只读哈希写入 catalog（mount: read-only）。
+          </p>
+          <Field label="备注（可选）">
+            <input
+              className="data-input"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="工单 / 案件 / 上下文"
+              disabled={busy}
+            />
+          </Field>
+          <div className="empty-actions evidence-register-actions">
+            <Button
+              variant="secondary"
+              onClick={() => void onRegister()}
+              disabled={busy || !api?.evidenceRegister}
+            >
+              {busy ? "…" : "选择文件并登记…"}
+            </Button>
+          </div>
+          {msg ? <pre className="evidence-msg">{msg}</pre> : null}
+        </Panel>
+
+        <Panel
+          title={
+            <>
+              目录 <span className="pill">{items.length} 项</span>
+            </>
+          }
+        >
+          {items.length === 0 ? (
+            <Prose>
+              <p>
+                <strong>暂无证据</strong>
+              </p>
+              <p>
+                演示时可登记一份告警导出或 PDF；调查过程中 agent
+                工具也可能写入条目。
+              </p>
+            </Prose>
+          ) : (
+            <div className="evidence-list">
               {items.map((it) => {
-                const open = expanded[it.evidence_id];
-                const v = verifyById[it.evidence_id];
                 const hi = highlightId === it.evidence_id;
+                const active = selectedId === it.evidence_id;
                 return (
-                  <tr
+                  <div
                     key={it.evidence_id}
                     id={`evidence-row-${it.evidence_id}`}
                     className={hi ? "evidence-row-hi" : undefined}
                   >
-                    <td>
-                      <div className="evidence-name">{it.name}</div>
-                      {it.note ? (
-                        <div className="muted-copy">{it.note}</div>
-                      ) : null}
-                      {open ? (
-                        <div className="evidence-detail mono-xs">
-                          <div>id: {it.evidence_id}</div>
-                          <div>path: {it.path}</div>
-                          <div>sha256: {it.sha256}</div>
-                          <div>
-                            trusted_dir: {String(it.trusted_dir ?? false)} ·
-                            source: {it.source || "—"}
-                          </div>
-                        </div>
-                      ) : null}
-                      {v ? (
-                        <div
-                          className={`verify-result ${v.ok ? "ok" : "bad"}`}
-                        >
-                          {v.ok
-                            ? "✓ 完整性 OK"
-                            : `✗ ${v.error || "哈希不匹配"}`}
-                          {!v.ok && v.current_sha256 ? (
-                            <div className="mono-xs">
-                              now {shortHash(v.current_sha256)}
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className="hash-btn mono-xs"
-                        onClick={() => toggleExpand(it.evidence_id)}
-                        title={it.sha256}
-                      >
-                        {open ? it.sha256 : shortHash(it.sha256)}
-                      </button>
-                    </td>
-                    <td>{fmtSize(it.size)}</td>
-                    <td>
-                      <span className="pill ok">
-                        {it.mount || "read-only"}
-                      </span>
-                    </td>
-                    <td className="mono-xs">{fmtTime(it.registered_at)}</td>
-                    <td>
-                      <div className="empty-actions">
-                        <button
-                          type="button"
-                          className="secondary"
-                          onClick={() => void onVerify(it.evidence_id)}
-                          disabled={busy}
-                        >
-                          校验
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary"
-                          onClick={() => void onReveal(it.path)}
-                          disabled={busy || !it.path}
-                          title="在 Finder 中显示"
-                        >
-                          显示
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary"
-                          onClick={() => toggleExpand(it.evidence_id)}
-                        >
-                          {open ? "Collapse" : "Expand"}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                    <ListRow
+                      active={active || hi}
+                      title={it.name}
+                      meta={
+                        <>
+                          <Timestamp value={it.registered_at} />
+                          {" · "}
+                          <span className="evidence-mono">
+                            {shortHash(it.sha256)}
+                          </span>
+                        </>
+                      }
+                      onClick={() =>
+                        setSelectedId((prev) =>
+                          prev === it.evidence_id ? null : it.evidence_id
+                        )
+                      }
+                    />
+                  </div>
                 );
               })}
-            </tbody>
-          </table>
-        )}
+            </div>
+          )}
+        </Panel>
+
+        {selected ? (
+          <Panel
+            title={selected.name}
+            actions={
+              <div className="empty-actions">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => void onVerify(selected.evidence_id)}
+                  disabled={busy}
+                >
+                  校验
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => void onReveal(selected.path)}
+                  disabled={busy || !selected.path}
+                  title="在 Finder 中显示"
+                >
+                  显示
+                </Button>
+              </div>
+            }
+          >
+            {selected.note ? (
+              <Prose>
+                <p>{selected.note}</p>
+              </Prose>
+            ) : null}
+            <dl className="evidence-detail evidence-mono">
+              <div>
+                <dt>id</dt>
+                <dd>{selected.evidence_id}</dd>
+              </div>
+              <div>
+                <dt>path</dt>
+                <dd>{selected.path}</dd>
+              </div>
+              <div>
+                <dt>sha256</dt>
+                <dd>{selected.sha256}</dd>
+              </div>
+              <div>
+                <dt>size</dt>
+                <dd>{fmtSize(selected.size)}</dd>
+              </div>
+              <div>
+                <dt>mount</dt>
+                <dd>{selected.mount || "read-only"}</dd>
+              </div>
+              <div>
+                <dt>trusted_dir</dt>
+                <dd>{String(selected.trusted_dir ?? false)}</dd>
+              </div>
+              <div>
+                <dt>source</dt>
+                <dd>{selected.source || "—"}</dd>
+              </div>
+            </dl>
+            {selectedVerify ? (
+              <p
+                className={`evidence-verify ${selectedVerify.ok ? "ok" : "bad"}`}
+              >
+                {selectedVerify.ok
+                  ? "✓ 完整性 OK"
+                  : `✗ ${selectedVerify.error || "哈希不匹配"}`}
+                {!selectedVerify.ok && selectedVerify.current_sha256 ? (
+                  <span className="evidence-mono">
+                    {" "}
+                    · now {shortHash(selectedVerify.current_sha256)}
+                  </span>
+                ) : null}
+              </p>
+            ) : null}
+          </Panel>
+        ) : null}
       </div>
     </div>
   );

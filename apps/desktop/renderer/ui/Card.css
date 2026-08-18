@@ -1,8 +1,8 @@
 /* 卡片是 layer-2，必须放在 layer-1 容器里（层级差一级） */
 .ui-card {
   background: var(--layer-2);
-  border: 1px solid var(--border-1);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--border-0);
+  border-radius: var(--radius-lg);
   padding: var(--sp-4);
   box-shadow: var(--shadow-1);
 }

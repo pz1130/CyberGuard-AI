@@ -7,11 +7,11 @@ body,
 #root {
   height: 100%;
   margin: 0;
-  background: var(--bg);
+  background: var(--layer-0);
   color: var(--text);
   font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: 15px; /* 与 --text-base / data-font=medium 对齐 */
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   letter-spacing: -0.01em;
@@ -59,7 +59,6 @@ button.primary,
 button.secondary,
 button.btn-approve,
 button.btn-reject,
-.chrome-icon-btn,
 .nav-tab,
 select,
 .field-label select,
@@ -79,15 +78,15 @@ select,
 button.primary,
 button.secondary {
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--bg-elevated);
+  border: 1px solid var(--border-1);
+  background: var(--layer-1);
   color: var(--text);
   padding: 8px 14px;
   cursor: pointer;
   font-weight: 600;
   font-size: 12.5px;
   letter-spacing: -0.01em;
-  box-shadow: var(--shadow-soft);
+  box-shadow: none;
 }
 
 button.primary {
@@ -110,8 +109,8 @@ button.primary:hover:not(:disabled) {
 }
 
 button.secondary:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-  background: var(--surface-hover);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-1));
+  background: var(--layer-3);
   color: var(--text);
 }
 
@@ -125,8 +124,8 @@ button.secondary:disabled {
 
 select {
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--bg-elevated);
+  border: 1px solid var(--border-1);
+  background: var(--layer-1);
   color: var(--text);
   padding: 8px 12px;
   cursor: pointer;
@@ -138,8 +137,8 @@ input.data-input,
 .plan-edit,
 .field-label input {
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--bg-deep);
+  border: 1px solid var(--border-1);
+  background: var(--layer-0);
   color: var(--text);
   padding: 10px 12px;
 }
@@ -150,7 +149,7 @@ input.data-input:focus,
 .plan-edit:focus,
 .field-label input:focus,
 select:focus {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border-1));
   box-shadow: 0 0 0 3px var(--accent-muted);
   outline: none;
 }

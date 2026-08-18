@@ -19,3 +19,4 @@ export { usePlan } from "./usePlan";
 export { useRun } from "./useRun";
 export { useSessions } from "./useSessions";
 export { useStreamFlag, useStreamText } from "./useStream";
+export { UiPrefsProvider, useUiPrefsCtx } from "./UiPrefsProvider";

@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { StatusBar } from "./components/context/StatusBar";
 import { AppChrome } from "./components/shell/AppChrome";
 import { DegradationStrip } from "./components/shell/DegradationStrip";
+import { Sidebar } from "./components/shell/Sidebar";
 import "./components/shell/AppShell.css";
 import { useHotkeys } from "./hooks/useHotkeys";
-import { useUiPrefs } from "./hooks/useUiPrefs";
 import type { ActiveView, SettingsSection } from "./lib/types";
 import {
   RuntimeProvider,
+  UiPrefsProvider,
   useEnvironment,
   useRun,
   useSessions,
+  useUiPrefsCtx,
 } from "./state";
 import { DataLifecycleProvider } from "./state/useDataLifecycle";
 import { TooltipProvider } from "./ui";
@@ -23,16 +26,22 @@ const DEV_TITLE =
 export function App() {
   return (
     <TooltipProvider>
-      <RuntimeProvider>
-        <AppInner />
-      </RuntimeProvider>
+      <UiPrefsProvider>
+        <RuntimeProvider>
+          <AppInner />
+        </RuntimeProvider>
+      </UiPrefsProvider>
     </TooltipProvider>
   );
 }
 
 function AppInner() {
-  const { theme, setTheme, cycleTheme, resolved, fontSize, setFontSize } =
-    useUiPrefs();
+  const {
+    sidebarCollapsed,
+    setSidebarCollapsed,
+    railCollapsed,
+    setRailCollapsed,
+  } = useUiPrefsCtx();
   const [activeView, setActiveView] = useState<ActiveView>("workbench");
   const [settingsSection, setSettingsSection] = useState<
     SettingsSection | undefined
@@ -44,6 +53,11 @@ function AppInner() {
   const run = useRun();
   const sessions = useSessions();
   const env = useEnvironment();
+
+  const title =
+    sessions.sessions.find((s) => s.session_id === sessions.sessionId)?.title ||
+    run.lastSubmitted ||
+    "新调查";
 
   const openEvidence = useCallback((evidenceId?: string) => {
     setHighlightEvidenceId(evidenceId);
@@ -79,8 +93,17 @@ function AppInner() {
           document.activeElement.blur();
         }
       },
+      onToggleSidebar: () => setSidebarCollapsed(!sidebarCollapsed),
     }),
-    [activeView, env.pingOk, openSettings, sessions.create, run.run]
+    [
+      activeView,
+      env.pingOk,
+      openSettings,
+      sessions.create,
+      run.run,
+      setSidebarCollapsed,
+      sidebarCollapsed,
+    ]
   );
   useHotkeys(hotkeyHandlers);
 
@@ -92,49 +115,48 @@ function AppInner() {
     >
       <div className="app-shell">
         <AppChrome
-          activeView={activeView}
-          onNavigate={setActiveView}
-          themeLabel={resolved === "dark" ? "Dark" : "Light"}
-          onCycleTheme={cycleTheme}
+          title={title}
           devTitle={DEV_TITLE}
+          onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+          onToggleRail={() => setRailCollapsed(!railCollapsed)}
         />
         <DegradationStrip />
 
-        {activeView === "workbench" && (
-          <WorkbenchView
-            onViewEvidence={openEvidence}
-            onOpenSettings={openSettings}
-          />
-        )}
+        <div className="app-body">
+          {!sidebarCollapsed && (
+            <Sidebar activeView={activeView} onNavigate={setActiveView} />
+          )}
+          <div className="app-main">
+            {activeView === "workbench" && (
+              <WorkbenchView
+                onViewEvidence={openEvidence}
+                onOpenSettings={openSettings}
+              />
+            )}
 
-        {activeView === "evidence" && (
-          <EvidenceView
-            evidenceHint={
-              env.evidenceCount ? `evidence: ${env.evidenceCount}` : ""
-            }
-            highlightId={highlightEvidenceId}
-            onBackToWorkbench={() => setActiveView("workbench")}
-            onCountChange={(n) => env.setEvidenceCount(n)}
-          />
-        )}
+            {activeView === "evidence" && (
+              <EvidenceView
+                evidenceHint={
+                  env.evidenceCount ? `evidence: ${env.evidenceCount}` : ""
+                }
+                highlightId={highlightEvidenceId}
+                onBackToWorkbench={() => setActiveView("workbench")}
+                onCountChange={(n) => env.setEvidenceCount(n)}
+              />
+            )}
 
-        {activeView === "settings" && (
-          <SettingsView
-            theme={theme}
-            resolved={resolved}
-            fontSize={fontSize}
-            providerMode={env.providerMode}
-            dataRoot={env.dataRoot}
-            onCycleTheme={cycleTheme}
-            onSetTheme={setTheme}
-            onSetFontSize={setFontSize}
-            focusSection={settingsSection}
-            onProviderSaved={(mode) => {
-              env.setProviderMode(mode);
-              void env.refreshProvider();
-            }}
-          />
-        )}
+            {activeView === "settings" && (
+              <SettingsView
+                focusSection={settingsSection}
+                onProviderSaved={(mode) => {
+                  env.setProviderMode(mode);
+                  void env.refreshProvider();
+                }}
+              />
+            )}
+          </div>
+        </div>
+        <StatusBar onOpenSettings={openSettings} />
       </div>
     </DataLifecycleProvider>
   );

@@ -1,0 +1,62 @@
+import { render, screen, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it } from "vitest";
+import { App } from "../../App";
+
+/** 六项常显 —— INV-36 / INV-38 / M2 判据 10 */
+function expectSixVisible() {
+  const bar = screen.getByRole("contentinfo", { name: "运行态" });
+  expect(bar).toBeTruthy();
+  for (const label of ["沙箱", "权限"]) {
+    expect(bar.textContent).toContain(label);
+  }
+  // 连接态三选一
+  expect(bar.textContent).toMatch(/在线|离线|连接中/);
+  // Provider 档位二选一
+  expect(bar.textContent).toMatch(/live|mock/);
+  // 能力档位二选一
+  expect(bar.textContent).toMatch(/只读|完整/);
+}
+
+function clickSidebarNav(label: string) {
+  const sidebar = screen.getByRole("complementary", { name: "会话与导航" });
+  within(sidebar).getByRole("button", { name: label }).click();
+}
+
+describe("状态栏常显", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("调查页可见", () => {
+    render(<App />);
+    expectSixVisible();
+  });
+
+  it("切到证据页仍可见", async () => {
+    render(<App />);
+    clickSidebarNav("证据");
+    expectSixVisible();
+  });
+
+  it("切到设置页仍可见", async () => {
+    render(<App />);
+    clickSidebarNav("设置");
+    expectSixVisible();
+  });
+
+  it("不再是 ContextRail 的子节点", () => {
+    render(<App />);
+    const bar = screen.getByRole("contentinfo", { name: "运行态" });
+    expect(bar.closest(".ctxrail")).toBeNull();
+  });
+
+  it.each([
+    ["都展开", false, false],
+    ["只收左栏", true, false],
+    ["只收侧板", false, true],
+    ["都收起", true, true],
+  ])("%s 时六项仍常显", (_n, sidebar, rail) => {
+    localStorage.setItem("cg.sidebar_collapsed", sidebar ? "1" : "0");
+    localStorage.setItem("cg.rail_collapsed", rail ? "1" : "0");
+    render(<App />);
+    expectSixVisible();
+  });
+});

@@ -4,7 +4,6 @@ import type { SessionRow } from "../../lib/types";
 
 const remove = vi.fn().mockResolvedValue(true);
 const select = vi.fn();
-const create = vi.fn();
 
 const rows: SessionRow[] = [
   {
@@ -28,7 +27,7 @@ vi.mock("../../state", () => ({
     sessions: rows,
     sessionId: "a",
     select,
-    create,
+    create: vi.fn(),
     remove,
     refresh: vi.fn(),
     clearAll: vi.fn(),
@@ -45,7 +44,6 @@ describe("SessionRail 删除撤销", () => {
     remove.mockReset();
     remove.mockResolvedValue(true);
     select.mockReset();
-    create.mockReset();
   });
 
   afterEach(() => {

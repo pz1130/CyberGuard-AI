@@ -1,5 +1,7 @@
 .composer2 {
   flex: none;
+  max-width: var(--measure);
+  margin: 0 auto var(--sp-6);
   border-top: 1px solid var(--border-0);
   padding: var(--sp-4) var(--sp-5);
   display: flex;
@@ -11,9 +13,10 @@
   width: 100%;
   resize: vertical;
   background: var(--layer-2);
-  border: 1px solid var(--border-1);
-  border-radius: var(--radius-md);
-  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--border-0);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-2);
+  padding: var(--sp-4);
   font-family: var(--font-ui);
   font-size: var(--text-base);
   line-height: var(--leading-relaxed);

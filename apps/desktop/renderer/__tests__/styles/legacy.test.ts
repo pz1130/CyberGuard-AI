@@ -20,6 +20,10 @@ const RETIRED = [
   ".nav-tab",
   ".context-advanced",
   ".tool-chips",
+  /* T5: shell chrome 在 AppChrome.css；views.css 旧块会压过 40px */
+  ".chrome-brand",
+  ".chrome-icon-btn",
+  ".chrome-left",
 ];
 
 describe("遗留样式清理", () => {
@@ -27,5 +31,40 @@ describe("遗留样式清理", () => {
 
   it.each(RETIRED)("%s 已从遗留样式中移除", (sel) => {
     expect(legacy).not.toContain(sel);
+  });
+
+  it("views.css 不得再给 .chrome 设 min-height: 48px（会压过 AppChrome 40px）", () => {
+    const views = read("styles/views.css");
+    expect(views).not.toMatch(/\.chrome\s*\{[^}]*min-height:\s*48px/s);
+  });
+});
+
+/** T11 已删除的兼容别名，任何文件不得再引用（spec §1.6 / 判据 1） */
+const RETIRED_ALIASES = [
+  "--bg",
+  "--bg-elevated",
+  "--bg-deep",
+  "--surface",
+  "--surface-solid",
+  "--surface-hover",
+  "--border:",
+  "--border-subtle",
+  "--border-strong",
+  "--panel",
+  "--muted",
+  "--shadow-panel",
+  "--shadow-soft",
+];
+
+describe("token 兼容别名已删除", () => {
+  const all = [
+    read("styles.css"),
+    read("styles/views.css"),
+    read("styles/tokens.css"),
+    read("styles/base.css"),
+  ].join("\n");
+
+  it.each(RETIRED_ALIASES)("%s 不再出现", (alias) => {
+    expect(all).not.toContain(alias);
   });
 });

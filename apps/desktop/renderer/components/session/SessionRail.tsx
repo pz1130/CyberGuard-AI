@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { SessionRow } from "../../lib/types";
 import { useSessions } from "../../state";
-import { Button, ListRow, Panel, Timestamp } from "../../ui";
+import { Button, ListRow, Timestamp } from "../../ui";
 import "./SessionRail.css";
 
 // 示例任务已移至 lib/sampleTasks.ts，由中间栏空态 TimelineEmpty 消费
@@ -9,7 +9,7 @@ import "./SessionRail.css";
 const UNDO_MS = 5000;
 
 export function SessionRail() {
-  const { sessions, sessionId, select, create, remove } = useSessions();
+  const { sessions, sessionId, select, remove } = useSessions();
   const [pendingDelete, setPendingDelete] = useState<{
     row: SessionRow;
     timeoutId: ReturnType<typeof setTimeout>;
@@ -44,16 +44,7 @@ export function SessionRail() {
   };
 
   return (
-    <Panel
-      className="wb-rail sessionrail"
-      tone="sunken"
-      title="调查"
-      actions={
-        <Button size="sm" variant="ghost" onClick={create}>
-          + 新建
-        </Button>
-      }
-    >
+    <div className="sessionrail">
       {sessions.length === 0 ? (
         <div className="sessionrail-empty">
           {/* 示例任务在中间栏空态里，那儿有横向空间放完整描述；这里不重复 */}
@@ -67,6 +58,7 @@ export function SessionRail() {
             {visible.map((s) => (
               <ListRow
                 key={s.session_id}
+                variant="nav"
                 active={s.session_id === sessionId}
                 title={s.title || "未命名调查"}
                 meta={<Timestamp value={s.updated_at} />}
@@ -99,6 +91,6 @@ export function SessionRail() {
           ) : null}
         </>
       )}
-    </Panel>
+    </div>
   );
 }

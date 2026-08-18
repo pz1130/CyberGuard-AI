@@ -40,7 +40,7 @@
 }
 
 .ui-listrow--active .ui-listrow-title {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .ui-listrow-meta {
@@ -64,6 +64,23 @@
   outline: 2px solid var(--accent);
   outline-offset: -2px;
   border-radius: var(--radius-sm);
+}
+
+/* nav pill owns its chrome — neutralize default row hover/active fills */
+.ui-listrow--nav:hover,
+.ui-listrow--nav.ui-listrow--active {
+  background: transparent;
+}
+.ui-listrow--nav > .ui-listrow-main {
+  border-radius: var(--radius-pill);
+  padding: var(--sp-2) var(--sp-3);
+}
+.ui-listrow--nav:hover > .ui-listrow-main {
+  background: var(--border-0);
+}
+.ui-listrow--nav.ui-listrow--active > .ui-listrow-main {
+  background: var(--accent-muted);
+  color: var(--accent-text);
 }
 
 @media (prefers-reduced-motion: reduce) {

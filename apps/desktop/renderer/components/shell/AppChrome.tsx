@@ -1,53 +1,35 @@
-import type { ActiveView } from "../../lib/types";
 import { Button } from "../../ui";
+import { useUiPrefsCtx } from "../../state";
 import "./AppChrome.css";
 
-const TABS: Array<{ id: ActiveView; label: string }> = [
-  { id: "workbench", label: "调查" },
-  { id: "evidence", label: "证据" },
-  { id: "settings", label: "设置" },
-];
-
 export type AppChromeProps = {
-  activeView: ActiveView;
-  onNavigate: (v: ActiveView) => void;
-  themeLabel: string;
-  onCycleTheme: () => void;
+  title: string;
   devTitle: string;
+  onToggleSidebar: () => void;
+  onToggleRail: () => void;
 };
 
 export function AppChrome({
-  activeView,
-  onNavigate,
-  themeLabel,
-  onCycleTheme,
+  title,
   devTitle,
+  onToggleSidebar,
+  onToggleRail,
 }: AppChromeProps) {
+  const { cycleTheme, resolved } = useUiPrefsCtx();
+
   return (
-    <header className="chrome2">
-      <div className="chrome2-brand">
-        <span className="chrome2-mark" aria-hidden />
-        <span className="chrome2-name">CyberGuard</span>
-      </div>
-      <nav className="chrome2-nav" aria-label="主导航">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={`chrome2-tab${activeView === t.id ? " is-active" : ""}`}
-            aria-current={activeView === t.id || undefined}
-            onClick={() => onNavigate(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
-      <div className="chrome2-right">
-        <span className="chrome2-dev" title={devTitle}>
-          DEV
-        </span>
-        <Button variant="ghost" size="sm" onClick={onCycleTheme}>
-          {themeLabel}
+    <header className="chrome" role="banner">
+      <Button size="icon" variant="ghost" aria-label="切换侧栏" onClick={onToggleSidebar}>
+        ☰
+      </Button>
+      <h1 className="chrome-title">{title}</h1>
+      <div className="chrome-right">
+        <span className="chrome-dev" title={devTitle}>DEV</span>
+        <Button size="icon" variant="ghost" aria-label="切换主题" onClick={cycleTheme}>
+          {resolved === "dark" ? "◐" : "◑"}
+        </Button>
+        <Button size="icon" variant="ghost" aria-label="切换侧板" onClick={onToggleRail}>
+          ⌄
         </Button>
       </div>
     </header>

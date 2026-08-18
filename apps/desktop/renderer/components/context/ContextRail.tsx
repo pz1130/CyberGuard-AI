@@ -1,7 +1,6 @@
 import type { SettingsSection } from "../../lib/types";
 import { useEnvironment, useRun } from "../../state";
 import { Button, Tooltip } from "../../ui";
-import { StatusBar } from "./StatusBar";
 import "./ContextRail.css";
 
 /**
@@ -51,10 +50,10 @@ export function ContextRail({
   const { evidenceIds, highCount } = useFindings();
 
   return (
-    <div className="wb-rail ctxrail">
-      <header className="ctxrail-head">
+    <aside className="wb-rail ctxrail" aria-label="本次调查">
+      <div className="ctxrail-head">
         <h2 className="ctxrail-title">本次调查</h2>
-      </header>
+      </div>
 
       <div className="ctxrail-body">
         <section className="ctxsec">
@@ -120,8 +119,6 @@ export function ContextRail({
           )}
         </section>
       </div>
-
-      <StatusBar onOpenSettings={onOpenSettings} />
-    </div>
+    </aside>
   );
 }
