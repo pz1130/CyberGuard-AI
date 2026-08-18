@@ -39,7 +39,8 @@ export function StatusBar({
       className={`statusbar${degraded ? " statusbar--danger" : ""}`}
       aria-label="运行态"
     >
-      {/* 六项常显，不可折叠 —— INV-36 / M2 判据 10 */}
+      {/* 常显五项，不可折叠 —— INV-36 / M2 判据 10。
+          第六项「暂停」在下一组里按 paused 出现，未暂停时不占位。 */}
       <div className="statusbar-row">
         <Tooltip content={env.pingOk === false ? "sidecar 未连接" : "sidecar"}>
           <span>
