@@ -38,3 +38,33 @@ describe("遗留样式清理", () => {
     expect(views).not.toMatch(/\.chrome\s*\{[^}]*min-height:\s*48px/s);
   });
 });
+
+/** T11 已删除的兼容别名，任何文件不得再引用（spec §1.6 / 判据 1） */
+const RETIRED_ALIASES = [
+  "--bg",
+  "--bg-elevated",
+  "--bg-deep",
+  "--surface",
+  "--surface-solid",
+  "--surface-hover",
+  "--border:",
+  "--border-subtle",
+  "--border-strong",
+  "--panel",
+  "--muted",
+  "--shadow-panel",
+  "--shadow-soft",
+];
+
+describe("token 兼容别名已删除", () => {
+  const all = [
+    read("styles.css"),
+    read("styles/views.css"),
+    read("styles/tokens.css"),
+    read("styles/base.css"),
+  ].join("\n");
+
+  it.each(RETIRED_ALIASES)("%s 不再出现", (alias) => {
+    expect(all).not.toContain(alias);
+  });
+});

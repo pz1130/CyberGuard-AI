@@ -182,7 +182,7 @@ export function EvidenceView({
           </Field>
           <div className="empty-actions evidence-register-actions">
             <Button
-              variant="primary"
+              variant="secondary"
               onClick={() => void onRegister()}
               disabled={busy || !api?.evidenceRegister}
             >

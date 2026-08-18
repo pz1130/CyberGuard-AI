@@ -146,22 +146,3 @@ html[data-theme="dark"] {
   --plan-muted: rgba(167, 139, 250, 0.14);
 }
 
-/* 兼容层：旧组件仍引用的别名，T11 随 Settings/Evidence 迁完删除。
- * 新代码禁止使用这些别名。 */
-:root,
-html[data-theme="dark"],
-html[data-theme="light"] {
-  --bg: var(--layer-0);
-  --bg-elevated: var(--layer-1);
-  --bg-deep: var(--layer-0);
-  --surface: var(--layer-2);
-  --surface-solid: var(--layer-2);
-  --surface-hover: var(--layer-3);
-  --border: var(--border-1);
-  --border-subtle: var(--border-0);
-  --border-strong: var(--border-2);
-  --panel: var(--layer-1);
-  --muted: var(--text-muted);
-  --shadow-panel: var(--shadow-3);
-  --shadow-soft: none;
-}

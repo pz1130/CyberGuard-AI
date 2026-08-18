@@ -42,7 +42,7 @@ export function PlanPanel() {
 
       <div className="planpanel-actions">
         <Button
-          variant="primary"
+          variant="secondary"
           size="sm"
           onClick={() => void approve()}
           disabled={pendingPlan.local_approve_allowed === false}
