@@ -57,7 +57,7 @@ export function LlmSection({
         <h3 className="settings-card-title">{t("settings.llm.presetTitle")}</h3>
         <p className="settings-hint">{t("settings.llm.presetHint")}</p>
         {PRESET_GROUPS.map((g, i) => (
-          <Disclosure key={g.id} summary={g.label} defaultOpen={i === 0}>
+          <Disclosure key={g.id} summary={t(g.labelKey)} defaultOpen={i === 0}>
             <div className="preset-grid">
               {LLM_PRESETS.filter((p) => p.group === g.id).map((p) => (
                 <button
@@ -67,7 +67,7 @@ export function LlmSection({
                   onClick={() => applyPreset(p)}
                   disabled={llmBusy || mode === "mock"}
                 >
-                  {p.label}
+                  {t(p.labelKey)}
                   {!p.requiresKey ? (
                     <span className="preset-tag">{t("settings.llm.noKey")}</span>
                   ) : null}
@@ -80,7 +80,9 @@ export function LlmSection({
 
       <Card>
         <h3 className="settings-card-title">{t("settings.llm.connTitle")}</h3>
-        {preset?.hint ? <p className="settings-hint">{preset.hint}</p> : null}
+        {preset?.hintKey ? (
+          <p className="settings-hint">{t(preset.hintKey)}</p>
+        ) : null}
         <Field label="Base URL">
           <input
             className="data-input"

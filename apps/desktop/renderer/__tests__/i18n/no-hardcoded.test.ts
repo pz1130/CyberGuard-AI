@@ -8,19 +8,7 @@ const ROOT = path.resolve(__dirname, "../..");
  * 迁移白名单 —— 尚未抽 key 的文件。**每迁完一块删一行，最终必须清空**（判据 2）。
  * 不要往里加新文件：新写的界面从第一天就该用 t()。
  */
-const PENDING = new Set<string>([
-  "App.tsx",
-  // useFindings 正则含「条」「高危」是刻意的摘要匹配（不得改），UI 文案已抽 key
-  "components/context/ContextRail.tsx",
-  "components/session/SessionRail.tsx",
-  "components/shell/AppChrome.tsx",
-  "lib/llmPresets.ts",
-  "state/UiPrefsProvider.tsx",
-  "state/useExport.ts",
-  "state/usePlan.tsx",
-  "state/useUninstall.ts",
-  "ui/Timestamp.tsx",
-]);
+const PENDING = new Set<string>([]);
 
 const CJK = /[一-鿿]/;
 

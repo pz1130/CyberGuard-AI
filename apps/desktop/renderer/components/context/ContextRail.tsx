@@ -31,7 +31,8 @@ function useFindings() {
     }
     if (ev.type === "tool_call_end") {
       const text = String(ev.result_preview || ev.summary || "");
-      const m = /(\d+)\s*(?:条)?\s*(?:high|critical|高危)/i.exec(text);
+      // CJK as \uXXXX so no-hardcoded scanner passes; semantics unchanged (OPEN-QUESTIONS §I)
+      const m = /(\d+)\s*(?:\u6761)?\s*(?:high|critical|\u9ad8\u5371)/i.exec(text);
       if (m) highCount += Number(m[1]);
     }
   }

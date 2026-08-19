@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import zh from "../../i18n/zh.json";
 import { deriveTccSummary, extractPausedRunId, parsePing } from "../../state/envParse";
 import { formatExportResult } from "../../state/useExport";
 import { formatInventory } from "../../state/useUninstall";
@@ -84,20 +85,33 @@ describe("extractPausedRunId", () => {
 });
 
 describe("formatExportResult", () => {
+  // 钉中文词条，保持既有断言意图（成功路径 / 取消 / 失败）
+  const tZh = (k: string, params?: Record<string, string | number>) => {
+    const raw = String((zh as Record<string, string>)[k] ?? "");
+    return raw.replace(/\{(\w+)\}/g, (_, n: string) =>
+      params && n in params ? String(params[n]) : `{${n}}`
+    );
+  };
+
   it("成功时含目标路径与哈希前缀", () => {
-    const s = formatExportResult({
-      ok: true,
-      method: "age",
-      dest: "/tmp/out.age",
-      plaintext_sha256: "abcdef0123456789",
-    });
+    const s = formatExportResult(
+      {
+        ok: true,
+        method: "age",
+        dest: "/tmp/out.age",
+        plaintext_sha256: "abcdef0123456789",
+      },
+      tZh
+    );
     expect(s).toContain("/tmp/out.age");
     expect(s).toContain("abcdef012345");
   });
 
   it("取消与失败各自成文", () => {
-    expect(formatExportResult({ canceled: true })).toBe("已取消");
-    expect(formatExportResult({ ok: false, error: "磁盘满" })).toBe("磁盘满");
+    expect(formatExportResult({ canceled: true }, tZh)).toBe("已取消");
+    expect(formatExportResult({ ok: false, error: "磁盘满" }, tZh)).toBe(
+      "磁盘满"
+    );
   });
 });
 
