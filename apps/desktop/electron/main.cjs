@@ -341,11 +341,16 @@ ipcMain.handle("sidecar:ping", async () => rpc("ping", {}));
 ipcMain.handle("sidecar:capabilities", async (_e, tier) =>
   rpc("session.capabilities", { tier })
 );
-ipcMain.handle("sidecar:run", async (event, { task, tier, sessionId }) => {
+ipcMain.handle("sidecar:run", async (event, { task, tier, sessionId, systemPrompt }) => {
   const events = [];
   const result = await rpc(
     "agent.run",
-    { task, tier: tier || "readonly", session_id: sessionId || undefined },
+    {
+      task,
+      tier: tier || "readonly",
+      session_id: sessionId || undefined,
+      system_prompt: systemPrompt || undefined,
+    },
     (ev) => {
       events.push(ev);
       event.sender.send("sidecar:event", ev);

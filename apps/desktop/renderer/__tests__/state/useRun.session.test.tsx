@@ -1,14 +1,17 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { I18nProvider } from "../../i18n/I18nProvider";
 import { RunProvider, useRun } from "../../state/useRun";
 import { SessionsProvider, useSessions } from "../../state/useSessions";
 
 function Wrap({ children }: { children: ReactNode }) {
   return (
-    <SessionsProvider>
-      <RunProvider>{children}</RunProvider>
-    </SessionsProvider>
+    <I18nProvider>
+      <SessionsProvider>
+        <RunProvider>{children}</RunProvider>
+      </SessionsProvider>
+    </I18nProvider>
   );
 }
 

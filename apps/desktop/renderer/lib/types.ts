@@ -129,7 +129,8 @@ declare global {
       run: (
         task: string,
         tier: Tier,
-        sessionId?: string
+        sessionId?: string,
+        systemPrompt?: string
       ) => Promise<{ result: unknown; events: Ev[] }>;
       abort: (runId: string) => Promise<{ ok: boolean }>;
       steer: (runId: string, message: string) => Promise<{ ok: boolean }>;

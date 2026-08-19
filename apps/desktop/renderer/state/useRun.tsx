@@ -9,6 +9,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useI18n } from "../i18n/I18nProvider";
+import { languageDirective } from "../i18n/languageDirective";
 import type { Ev, Tier } from "../lib/types";
 import {
   initialRunState,
@@ -57,6 +59,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
   }, [task]);
 
   const { sessionId, refresh, adopt } = useSessions();
+  const { resolved } = useI18n();
 
   const api = typeof window !== "undefined" ? window.cyberguard : undefined;
   const running = state.status === "running";
@@ -111,7 +114,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
 
     dispatch({ type: "submit", text });
     try {
-      const res = await api.run(text, tier, undefined);
+      const res = await api.run(text, tier, undefined, languageDirective(resolved));
       const sid =
         (res?.result as { session_id?: string } | undefined)?.session_id || null;
       if (sid) {
@@ -124,7 +127,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       dispatch({ type: "failed", error: String(e) });
     }
-  }, [api, tier, running, adopt, refresh]);
+  }, [api, tier, running, adopt, refresh, resolved]);
 
   const abort = useCallback(async () => {
     if (!api || !state.runId) return;
