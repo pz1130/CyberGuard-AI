@@ -451,3 +451,25 @@ standalone-first 之后，任务由用户在本地发起，服务端不再是发
 - **不宣称任何安全属性** —— 不宣称就不算伪装，这是它能合法跳过安全工程的唯一理由。
 
 **关联**：DEC-027、INV-38、`03-ROADMAP.md` M1.5。
+
+---
+
+## ⚖️ DEC-029 · 桌面端 i18n：自建极简 `t()`，回答语言跟随界面语言
+
+**决策**：桌面端支持中英文切换，机制自建，不引入 i18n 库。
+
+| 项 | 结论 |
+|---|---|
+| 机制 | `renderer/i18n/` 两份 JSON + `I18nProvider` + `t()`，复数与插值自己写（约 120 行） |
+| 默认语言 | 跟随系统（`navigator.language`），中文兜底 |
+| 持久化 | 与 `theme` / `font_size` 同路：localStorage 缓存 + sidecar `ui_prefs.json` 权威源 |
+| 回答语言 | **跟随界面语言** —— 切 en 时经 `agent.run` 已有的 `system_prompt` 字段注入英文指令，协议零改动 |
+| 历史数据 | **不翻**。已存 JSONL 的会话标题与事件文本保持原文——翻译历史记录等于篡改证据 |
+
+**理由**：`webui/` 用的是 i18next，将来若做 `ui-shared` 合流本可零摩擦。但用户确认 **M0b 短期不做**，「省掉一次重写」的收益兑现不了；而这里要的能力只是静态词条查表加十几条复数，用不上 i18next 的大半功能。桌面端「不引入 UI 框架级依赖」是历次 spec 的 Global Constraints 里明确守着的东西，为此开第一道口子不划算。
+
+**实施中发现并修掉的一个安全缺陷**：sidecar 原本把 `system_prompt` 当**完整覆盖**（`prompt = system_prompt or default_prompt`）。语言指令一传，agent 的身份、授权边界、INV-39 敌对内容处理、skills、tools 会被整个替换掉——英文模式下每次运行都在裸奔。改为附加（`default_prompt + "\n\n" + system_prompt`），`tests/test_desktop_i18n_system_prompt.py` 挡回流。**这条缺陷与 i18n 无关，是 `system_prompt` 参数本身的问题，任何调用方传它都会中招。**
+
+**由 i18n 引出的一条硬要求**：预设任务的中英两版必须命中 `plan_mode.RISK_KEYWORDS` 同一组关键词，否则同一个按钮在两种语言下审批行为不一致（INV-06）。`tests/test_desktop_i18n_risk_parity.py` 挡着。
+
+**关联**：`docs/superpowers/specs/2026-08-19-desktop-i18n-design.md`、`11-OPEN-QUESTIONS.md` §K（本决策的来源）、INV-06 / INV-38 / INV-39、DEC-027。
