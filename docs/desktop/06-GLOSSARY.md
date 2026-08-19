@@ -242,3 +242,9 @@ agent 产出的结构化报告文件。带 sha256 与保留期，上报服务端
 | 提权申请 | Privilege request | `event.privilege` | |
 | 外部来源 | External source | `event.hostile` | INV-39 |
 | 开始一次调查 | Start an investigation | `empty.title` | 空态 |
+| 只读证据库：注册时算 sha256，校验时重算对比。正文不进模型上下文。 | Read-only evidence library: sha256 at register, recompute on verify. Body never enters model context. | `evidence.lede` | 正文不进模型（INV / 证据边界） |
+| 登记文件 | Register file | `evidence.register.title` | |
+| 返回调查 | Back to investigation | `evidence.back` | |
+| 目录 / {n} 项 | Catalog / {count} item(s) | `evidence.catalog.*` | 复数 `_one`/`_other` |
+| 校验 / 完整性 OK / 哈希不匹配 | Verify / Integrity OK / Hash mismatch | `evidence.verify*` | |
+| 在 Finder 中显示 | Show in Finder | `evidence.reveal.title` | macOS 首发 |

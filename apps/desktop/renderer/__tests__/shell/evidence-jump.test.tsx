@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../../App";
+import zh from "../../i18n/zh.json";
 
 /**
  * T10 Step 2：右栏「证据」链接是 Workbench 跳证据页的落点 —— 点它要选中
@@ -62,13 +63,17 @@ describe("右栏证据链接跳转并高亮", () => {
     render(<App />);
 
     // 选中那次调查，右栏才会列出本轮登记的证据 id
-    const sidebar = screen.getByRole("complementary", { name: "会话与导航" });
+    const sidebar = screen.getByRole("complementary", {
+      name: zh["nav.sidebar.aria"],
+    });
     await waitFor(() =>
       within(sidebar).getByText(/登记过证据的一次调查/)
     );
     within(sidebar).getByText(/登记过证据的一次调查/).click();
 
-    const rail = await screen.findByRole("complementary", { name: "本次调查" });
+    const rail = await screen.findByRole("complementary", {
+      name: zh["rail.aria"],
+    });
     const link = await waitFor(() =>
       within(rail).getByRole("button", { name: new RegExp(EVID.slice(0, 12)) })
     );

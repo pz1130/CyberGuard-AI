@@ -20,7 +20,6 @@ const PENDING = new Set<string>([
   "state/usePlan.tsx",
   "state/useUninstall.ts",
   "ui/Timestamp.tsx",
-  "views/EvidenceView.tsx",
   "views/settings/AboutSection.tsx",
   "views/settings/AppearanceSection.tsx",
   "views/settings/DataSection.tsx",

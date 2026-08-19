@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useI18n } from "../i18n/I18nProvider";
 import type { EvidenceItem, EvidenceVerifyResult } from "../lib/types";
 import { Button, Field, ListRow, Panel, Prose, Timestamp } from "../ui";
 
@@ -27,6 +28,7 @@ export function EvidenceView({
   onBackToWorkbench,
   onCountChange,
 }: Props) {
+  const { t } = useI18n();
   const api = typeof window !== "undefined" ? window.cyberguard : undefined;
   const [items, setItems] = useState<EvidenceItem[]>([]);
   const [busy, setBusy] = useState(false);
@@ -146,37 +148,35 @@ export function EvidenceView({
       <div className="evidence-view">
         <div className="view-pane-header">
           <div>
-            <h1>证据</h1>
+            <h1>{t("evidence.title")}</h1>
             <p className="lede">
-              只读证据库：注册时算 sha256，校验时重算对比。正文不进模型上下文。
+              {t("evidence.lede")}
               {" · "}
               <span className="pill accent">{evidenceHint}</span>
             </p>
           </div>
           <div className="empty-actions">
             <Button variant="secondary" onClick={onBackToWorkbench}>
-              返回调查
+              {t("evidence.back")}
             </Button>
             <Button
               variant="secondary"
               onClick={() => void refresh()}
               disabled={busy}
             >
-              刷新
+              {t("evidence.refresh")}
             </Button>
           </div>
         </div>
 
-        <Panel title="登记文件">
-          <p className="evidence-hint">
-            选择本机文件 → 只读哈希写入 catalog（mount: read-only）。
-          </p>
-          <Field label="备注（可选）">
+        <Panel title={t("evidence.register.title")}>
+          <p className="evidence-hint">{t("evidence.register.hint")}</p>
+          <Field label={t("evidence.register.note")}>
             <input
               className="data-input"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="工单 / 案件 / 上下文"
+              placeholder={t("evidence.register.notePlaceholder")}
               disabled={busy}
             />
           </Field>
@@ -186,7 +186,7 @@ export function EvidenceView({
               onClick={() => void onRegister()}
               disabled={busy || !api?.evidenceRegister}
             >
-              {busy ? "…" : "选择文件并登记…"}
+              {busy ? "…" : t("evidence.register.button")}
             </Button>
           </div>
           {msg ? <pre className="evidence-msg">{msg}</pre> : null}
@@ -195,19 +195,19 @@ export function EvidenceView({
         <Panel
           title={
             <>
-              目录 <span className="pill">{items.length} 项</span>
+              {t("evidence.catalog.title")}{" "}
+              <span className="pill">
+                {t("evidence.catalog.count", { count: items.length })}
+              </span>
             </>
           }
         >
           {items.length === 0 ? (
             <Prose>
               <p>
-                <strong>暂无证据</strong>
+                <strong>{t("evidence.empty.title")}</strong>
               </p>
-              <p>
-                演示时可登记一份告警导出或 PDF；调查过程中 agent
-                工具也可能写入条目。
-              </p>
+              <p>{t("evidence.empty.body")}</p>
             </Prose>
           ) : (
             <div className="evidence-list">
@@ -256,16 +256,16 @@ export function EvidenceView({
                   onClick={() => void onVerify(selected.evidence_id)}
                   disabled={busy}
                 >
-                  校验
+                  {t("evidence.verify")}
                 </Button>
                 <Button
                   size="sm"
                   variant="secondary"
                   onClick={() => void onReveal(selected.path)}
                   disabled={busy || !selected.path}
-                  title="在 Finder 中显示"
+                  title={t("evidence.reveal.title")}
                 >
-                  显示
+                  {t("evidence.reveal")}
                 </Button>
               </div>
             }
@@ -310,8 +310,8 @@ export function EvidenceView({
                 className={`evidence-verify ${selectedVerify.ok ? "ok" : "bad"}`}
               >
                 {selectedVerify.ok
-                  ? "✓ 完整性 OK"
-                  : `✗ ${selectedVerify.error || "哈希不匹配"}`}
+                  ? t("evidence.verify.ok")
+                  : `✗ ${selectedVerify.error || t("evidence.verify.mismatch")}`}
                 {!selectedVerify.ok && selectedVerify.current_sha256 ? (
                   <span className="evidence-mono">
                     {" "}
