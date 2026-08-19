@@ -18,6 +18,15 @@ export type PlanContextValue = {
   ingest: (ev: Ev) => void;
 };
 
+/**
+ * approval_type → 词条。取值集合的事实源在 sidecar/plan_mode.py，
+ * tests/test_desktop_approval_types.py 钉住它，新增类型时那条测试会红。
+ */
+const APPROVAL_LABEL_KEYS: Record<string, string> = {
+  self: "plan.selfApprove",
+  segregation: "plan.segregationApprove",
+};
+
 const PlanContext = createContext<PlanContextValue | null>(null);
 
 export type PlanProviderProps = {
@@ -40,12 +49,21 @@ export function PlanProvider({ children, onError }: PlanProviderProps) {
       ) {
         const plan = (ev.plan || {}) as PendingPlan["plan"];
         // approval_type 必须原样透传：standalone 下为 self，不得与职责分离审批混同（INV-06 / INV-38）
-        // 标题从 approval_type 映射；sidecar ui_label 恒为中文，仅作未知类型兜底
         const approvalType = String(ev.approval_type || "self");
-        const base =
-          approvalType === "self"
-            ? t("plan.selfApprove")
-            : String(ev.ui_label || t("plan.selfApprove"));
+        const labelKey = APPROVAL_LABEL_KEYS[approvalType];
+        // 未知类型才回落 sidecar 的成品文案（恒中文）。**不回落到自批准** ——
+        // 把未知审批类型标成自批准是 INV-06 意义上的错标，宁可显示中性的「计划待批」。
+        const base = labelKey
+          ? t(labelKey)
+          : String(ev.ui_label || t("plan.pending"));
+        // dev 期日志用英文：no-hardcoded.test.ts 扫非注释行的中文字面量
+        if (!labelKey && import.meta.env?.DEV) {
+          console.warn(
+            `[plan] unknown approval_type: ${approvalType} — sidecar added a new ` +
+              "type; sync APPROVAL_LABEL_KEYS and both locale files " +
+              "(11-OPEN-QUESTIONS section K.1)"
+          );
+        }
         setPendingPlan({
           plan_id: String(ev.plan_id),
           plan,
