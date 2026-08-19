@@ -1,3 +1,26 @@
 {
-  "app.name": "CyberGuard"
+  "app.name": "CyberGuard",
+  "statusbar.aria": "运行态",
+  "statusbar.online": "在线",
+  "statusbar.offline": "离线",
+  "statusbar.connecting": "连接中",
+  "statusbar.sandbox": "沙箱",
+  "statusbar.permission": "权限",
+  "statusbar.tierReadonly": "只读",
+  "statusbar.tierFull": "完整",
+  "statusbar.paused": "已暂停",
+  "statusbar.envDetails": "环境详情",
+  "statusbar.sidecarOffline": "sidecar 未连接",
+  "statusbar.sidecarOk": "sidecar",
+  "degradation.offline.label": "sidecar 离线",
+  "degradation.offline.detail": "本地执行进程未连接，运行已禁用",
+  "degradation.sandbox.label": "沙箱不可用",
+  "degradation.sandbox.detail": "仅允许只读档位（INV-16）",
+  "degradation.filevault.label": "FileVault 未开启",
+  "degradation.filevault.detail": "全盘加密未开启，本机数据在设备丢失时可被读取",
+  "degradation.tcc.label": "磁盘访问受限",
+  "degradation.tcc.detail": "部分目录读取会失败",
+  "degradation.mock.label": "模型为 mock",
+  "degradation.mock.detail": "未配置真实模型，输出不可用于结论",
+  "degradation.dismiss": "收起"
 }

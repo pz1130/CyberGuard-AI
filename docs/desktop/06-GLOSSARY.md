@@ -196,3 +196,34 @@ agent 产出的结构化报告文件。带 sha256 与保留期，上报服务端
 
 **分支摘要（branch summary）**
 切换分支时，对被放弃分支的工作产出的摘要，注入新分支上下文。
+
+---
+
+## 待确认 · 桌面端 i18n 安全面英译（T2 → T7 定稿）
+
+> 初译供人审。确认后的译法保留在此；T7 抽审阅表时以本区为准。
+
+| 中文 | 建议英文 | 出处 | 备注 |
+|---|---|---|---|
+| 运行态 | Runtime status | `statusbar.aria` | aria-label |
+| 在线 | Online | `statusbar.online` | |
+| 离线 | Offline | `statusbar.offline` | |
+| 连接中 | Connecting | `statusbar.connecting` | |
+| 沙箱 | Sandbox | `statusbar.sandbox` | |
+| 权限 | Permissions | `statusbar.permission` | |
+| 只读 | Read-only | `statusbar.tierReadonly` | |
+| 完整 | Full | `statusbar.tierFull` | |
+| 已暂停 | Paused | `statusbar.paused` | |
+| 环境详情 | Environment details | `statusbar.envDetails` | |
+| sidecar 未连接 | Sidecar not connected | `statusbar.sidecarOffline` | tooltip |
+| sidecar 离线 | Sidecar offline | `degradation.offline.label` | |
+| 本地执行进程未连接，运行已禁用 | Local execution process not connected; runs are disabled | `degradation.offline.detail` | |
+| 沙箱不可用 | Sandbox unavailable | `degradation.sandbox.label` | |
+| 仅允许只读档位（INV-16） | Read-only tier enforced (INV-16) | `degradation.sandbox.detail` | |
+| FileVault 未开启 | FileVault is off | `degradation.filevault.label` | |
+| 全盘加密未开启，本机数据在设备丢失时可被读取 | Full-disk encryption is off; local data may be readable if the device is lost | `degradation.filevault.detail` | 静态回落；sidecar `fvWarning` 走 `detailText` 不翻 |
+| 磁盘访问受限 | Disk access restricted | `degradation.tcc.label` | |
+| 部分目录读取会失败 | Some directories will fail to read | `degradation.tcc.detail` | sidecar `tccGuidance` 走 `detailText` 不翻 |
+| 模型为 mock | Model is mock | `degradation.mock.label` | |
+| 未配置真实模型，输出不可用于结论 | No real model configured; output must not be used as findings | `degradation.mock.detail` | 「不可用于结论」= 禁止，非提醒（INV-38） |
+| 收起 | Dismiss | `degradation.dismiss` | 降级浮出条 |

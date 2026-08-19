@@ -37,7 +37,8 @@ describe("deriveDegradations", () => {
     const item = d.find((x) => x.id === "filevault");
     expect(item?.level).toBe("danger");
     expect(item?.security).toBe(true);
-    expect(item?.detail).toContain("FileVault");
+    expect(item?.labelKey).toBe("degradation.filevault.label");
+    expect(item?.detailText).toContain("FileVault");
   });
 
   it("TCC 受限 → warn + security", () => {

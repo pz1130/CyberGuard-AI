@@ -9,17 +9,16 @@ import { App } from "../../App";
  * docs/desktop/11-OPEN-QUESTIONS.md §J。
  */
 function expectAlwaysOnVisible() {
-  const bar = screen.getByRole("contentinfo", { name: "运行态" });
+  const bar = screen.getByRole("contentinfo", { name: /runtime|运行态/i });
   expect(bar).toBeTruthy();
-  for (const label of ["沙箱", "权限"]) {
-    expect(bar.textContent).toContain(label);
-  }
+  expect(bar.textContent).toMatch(/sandbox|沙箱/i);
+  expect(bar.textContent).toMatch(/permission|权限/i);
   // 连接态三选一
-  expect(bar.textContent).toMatch(/在线|离线|连接中/);
+  expect(bar.textContent).toMatch(/online|offline|connecting|在线|离线|连接中/i);
   // Provider 档位二选一
   expect(bar.textContent).toMatch(/live|mock/);
   // 能力档位二选一
-  expect(bar.textContent).toMatch(/只读|完整/);
+  expect(bar.textContent).toMatch(/read-only|full|只读|完整/i);
 }
 
 function clickSidebarNav(label: string) {
@@ -49,7 +48,7 @@ describe("状态栏常显", () => {
 
   it("不再是 ContextRail 的子节点", () => {
     render(<App />);
-    const bar = screen.getByRole("contentinfo", { name: "运行态" });
+    const bar = screen.getByRole("contentinfo", { name: /runtime|运行态/i });
     expect(bar.closest(".ctxrail")).toBeNull();
   });
 

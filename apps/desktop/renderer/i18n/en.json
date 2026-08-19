@@ -1,3 +1,26 @@
 {
-  "app.name": "CyberGuard"
+  "app.name": "CyberGuard",
+  "statusbar.aria": "Runtime status",
+  "statusbar.online": "Online",
+  "statusbar.offline": "Offline",
+  "statusbar.connecting": "Connecting",
+  "statusbar.sandbox": "Sandbox",
+  "statusbar.permission": "Permissions",
+  "statusbar.tierReadonly": "Read-only",
+  "statusbar.tierFull": "Full",
+  "statusbar.paused": "Paused",
+  "statusbar.envDetails": "Environment details",
+  "statusbar.sidecarOffline": "Sidecar not connected",
+  "statusbar.sidecarOk": "sidecar",
+  "degradation.offline.label": "Sidecar offline",
+  "degradation.offline.detail": "Local execution process not connected; runs are disabled",
+  "degradation.sandbox.label": "Sandbox unavailable",
+  "degradation.sandbox.detail": "Read-only tier enforced (INV-16)",
+  "degradation.filevault.label": "FileVault is off",
+  "degradation.filevault.detail": "Full-disk encryption is off; local data may be readable if the device is lost",
+  "degradation.tcc.label": "Disk access restricted",
+  "degradation.tcc.detail": "Some directories will fail to read",
+  "degradation.mock.label": "Model is mock",
+  "degradation.mock.detail": "No real model configured; output must not be used as findings",
+  "degradation.dismiss": "Dismiss"
 }

@@ -26,12 +26,12 @@ describe("降级显著告警", () => {
     stubSandboxNone();
     render(<App />);
     await waitFor(() => {
-      const bar = screen.getByRole("contentinfo", { name: "运行态" });
+      const bar = screen.getByRole("contentinfo", { name: /runtime|运行态/i });
       expect(bar.className).toContain("statusbar--danger");
     });
     expect(
-      screen.getByRole("contentinfo", { name: "运行态" }).textContent
-    ).toContain("沙箱");
+      screen.getByRole("contentinfo", { name: /runtime|运行态/i }).textContent
+    ).toMatch(/sandbox|沙箱/i);
   });
 
   it("用户收起降级浮出条后，状态栏仍保持降级态", async () => {
@@ -40,10 +40,24 @@ describe("降级显著告警", () => {
     await waitFor(() => screen.getByRole("alert"));
     // 浮出条可收起；状态栏不可 —— 可收起的提示条不是安全边界（INV-38）
     // jsdom + React 19：原生 HTMLElement.click() 不触发该按钮的 onClick，改用 fireEvent
-    fireEvent.click(screen.getAllByRole("button", { name: "收起" })[0]);
+    fireEvent.click(
+      screen.getAllByRole("button", { name: /dismiss|收起/i })[0]
+    );
     expect(screen.queryByRole("alert")).toBeNull();
     expect(
-      screen.getByRole("contentinfo", { name: "运行态" }).className
+      screen.getByRole("contentinfo", { name: /runtime|运行态/i }).className
     ).toContain("statusbar--danger");
+  });
+
+  it("切 en 后降级条与状态栏出英文", async () => {
+    localStorage.setItem("cg.language", "en");
+    stubSandboxNone();
+    render(<App />);
+    await waitFor(() => {
+      const bar = screen.getByRole("contentinfo", { name: /runtime|运行态/i });
+      expect(bar.className).toContain("statusbar--danger");
+      expect(bar.textContent).toMatch(/sandbox/i);
+      expect(bar.textContent).not.toMatch(/[一-鿿]/);
+    });
   });
 });
