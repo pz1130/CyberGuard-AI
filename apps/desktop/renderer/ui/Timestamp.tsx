@@ -1,32 +1,45 @@
+import { useI18n, type TFunc } from "../i18n/I18nProvider";
+import type { Resolved } from "../i18n/plural";
 import "./Timestamp.css";
 
-/** 把毫秒时间戳格式化成中文相对时间。now 可注入以便测试。 */
-export function formatRelative(ms: number, now: number = Date.now()): string {
+function localeOf(resolved: Resolved): string {
+  return resolved === "zh" ? "zh-CN" : "en-US";
+}
+
+/** Relative time; `now` injectable for tests. */
+export function formatRelative(
+  ms: number,
+  t: TFunc,
+  resolved: Resolved = "zh",
+  now: number = Date.now()
+): string {
   const diff = Math.max(0, now - ms);
   const min = Math.floor(diff / 60000);
-  if (min < 1) return "刚刚";
-  if (min < 60) return `${min} 分钟前`;
+  if (min < 1) return t("time.justNow");
+  if (min < 60) return t("time.minutesAgo", { n: min });
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr} 小时前`;
+  if (hr < 24) return t("time.hoursAgo", { n: hr });
   const day = Math.floor(hr / 24);
-  if (day < 30) return `${day} 天前`;
-  return new Date(ms).toLocaleDateString("zh-CN");
+  if (day < 30) return t("time.daysAgo", { n: day });
+  return new Date(ms).toLocaleDateString(localeOf(resolved));
 }
 
 export type TimestampProps = {
-  /** 毫秒时间戳；秒级时间戳会被自动放大 */
+  /** Milliseconds; second-scale values are scaled up */
   value: number | string;
   relative?: boolean;
 };
 
 export function Timestamp({ value, relative = true }: TimestampProps) {
+  const { t, resolved } = useI18n();
   const raw = typeof value === "string" ? Number(value) : value;
   if (!Number.isFinite(raw)) return <span className="ui-ts">—</span>;
   const ms = raw < 1e12 ? raw * 1000 : raw;
   const iso = new Date(ms).toISOString();
+  const loc = localeOf(resolved);
   return (
-    <time className="ui-ts" dateTime={iso} title={new Date(ms).toLocaleString("zh-CN")}>
-      {relative ? formatRelative(ms) : new Date(ms).toLocaleTimeString("zh-CN")}
+    <time className="ui-ts" dateTime={iso} title={new Date(ms).toLocaleString(loc)}>
+      {relative ? formatRelative(ms, t, resolved) : new Date(ms).toLocaleTimeString(loc)}
     </time>
   );
 }

@@ -1,13 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Tier } from "../../lib/types";
+import { useI18n } from "../../i18n/I18nProvider";
 import { useEnvironment, useRun } from "../../state";
 import { Button, Select } from "../../ui";
 import "./Composer.css";
-
-const TIER_OPTIONS: Array<{ value: Tier; label: string }> = [
-  { value: "readonly", label: "只读" },
-  { value: "full", label: "完整" },
-];
 
 export function Composer() {
   const {
@@ -24,7 +20,16 @@ export function Composer() {
     runId,
   } = useRun();
   const { pingOk, sandboxImpl } = useEnvironment();
+  const { t } = useI18n();
   const [showSteer, setShowSteer] = useState(false);
+
+  const tierOptions = useMemo(
+    (): Array<{ value: Tier; label: string }> => [
+      { value: "readonly", label: t("composer.tier.readonly") },
+      { value: "full", label: t("composer.tier.full") },
+    ],
+    [t]
+  );
 
   const hasApi = typeof window !== "undefined" && Boolean(window.cyberguard);
   const sidecarOffline = !hasApi || pingOk === false;
@@ -50,7 +55,7 @@ export function Composer() {
             if (!runDisabled) void run();
           }
         }}
-        placeholder="描述任务… 例如：分诊 high/critical 告警，给出优先级与建议动作"
+        placeholder={t("composer.placeholder")}
         disabled={running}
         rows={3}
       />
@@ -59,8 +64,8 @@ export function Composer() {
         <Select
           value={tier}
           onChange={setTier}
-          options={TIER_OPTIONS}
-          ariaLabel="能力档位"
+          options={tierOptions}
+          ariaLabel={t("composer.tier.aria")}
           size="sm"
           disabled={running || sandboxLocked}
         />
@@ -70,7 +75,7 @@ export function Composer() {
           onClick={() => void run()}
           disabled={runDisabled}
         >
-          {running ? "运行中…" : "运行"}
+          {running ? t("composer.running") : t("composer.run")}
         </Button>
         <Button
           variant="secondary"
@@ -78,7 +83,7 @@ export function Composer() {
           onClick={() => void abort()}
           disabled={!running || !runId}
         >
-          中止
+          {t("composer.abort")}
         </Button>
         <Button
           variant="ghost"
@@ -86,10 +91,10 @@ export function Composer() {
           onClick={() => setShowSteer((v) => !v)}
           disabled={!running || !runId}
         >
-          中途补充
+          {t("composer.steer")}
         </Button>
         <span className="composer2-hint">
-          {sidecarOffline ? "sidecar 未连接，运行已禁用" : "⌘↵ 运行"}
+          {sidecarOffline ? t("composer.hint.offline") : t("composer.hint.run")}
         </span>
       </div>
 
@@ -99,7 +104,7 @@ export function Composer() {
             className="composer2-steerinput"
             value={steerText}
             onChange={(e) => setSteerText(e.target.value)}
-            placeholder="运行中途补充说明…"
+            placeholder={t("composer.steer.placeholder")}
             disabled={!running || !runId}
           />
           <Button
@@ -108,7 +113,7 @@ export function Composer() {
             onClick={() => void steer()}
             disabled={!running || !runId || !steerText.trim()}
           >
-            发送
+            {t("composer.steer.send")}
           </Button>
         </div>
       ) : null}

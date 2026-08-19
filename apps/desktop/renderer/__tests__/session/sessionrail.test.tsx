@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { I18nProvider } from "../../i18n/I18nProvider";
 import type { SessionRow } from "../../lib/types";
 
 const remove = vi.fn().mockResolvedValue(true);
@@ -38,9 +39,20 @@ vi.mock("../../state", () => ({
 
 import { SessionRail } from "../../components/session/SessionRail";
 
+function renderRail() {
+  // jsdom navigator.language 为 en-US；钉 zh 以保持中文 aria / 撤销文案查询
+  localStorage.setItem("cg.language", "zh");
+  return render(
+    <I18nProvider>
+      <SessionRail />
+    </I18nProvider>
+  );
+}
+
 describe("SessionRail 删除撤销", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    localStorage.clear();
     remove.mockReset();
     remove.mockResolvedValue(true);
     select.mockReset();
@@ -51,7 +63,7 @@ describe("SessionRail 删除撤销", () => {
   });
 
   it("点击删除不立刻调 API，5 秒后才提交", async () => {
-    render(<SessionRail />);
+    renderRail();
     fireEvent.click(screen.getByRole("button", { name: "删除 会话 A" }));
     expect(screen.queryByText("会话 A")).toBeNull();
     expect(screen.getByText("已删除 · 撤销")).toBeTruthy();
@@ -65,7 +77,7 @@ describe("SessionRail 删除撤销", () => {
   });
 
   it("撤销则恢复行且不调 API", async () => {
-    render(<SessionRail />);
+    renderRail();
     fireEvent.click(screen.getByRole("button", { name: "删除 会话 A" }));
     fireEvent.click(screen.getByRole("button", { name: "撤销" }));
     expect(screen.getByText("会话 A")).toBeTruthy();
@@ -79,7 +91,7 @@ describe("SessionRail 删除撤销", () => {
 
   it("API 失败时恢复行并就地报错", async () => {
     remove.mockResolvedValue(false);
-    render(<SessionRail />);
+    renderRail();
     fireEvent.click(screen.getByRole("button", { name: "删除 会话 A" }));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(5000);

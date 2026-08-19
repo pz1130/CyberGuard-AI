@@ -12,6 +12,6 @@ export function UiPrefsProvider({ children }: { children: ReactNode }) {
 
 export function useUiPrefsCtx(): UiPrefsValue {
   const v = useContext(Ctx);
-  if (!v) throw new Error("useUiPrefsCtx 必须在 UiPrefsProvider 内使用");
+  if (!v) throw new Error("useUiPrefsCtx must be used within UiPrefsProvider");
   return v;
 }

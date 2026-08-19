@@ -1,5 +1,6 @@
 import { useEnvironment, useRun } from "../../state";
 import type { SettingsSection } from "../../lib/types";
+import { useI18n } from "../../i18n/I18nProvider";
 import { Disclosure, StatusDot, Tooltip } from "../../ui";
 import type { StatusLevel } from "../../ui";
 import "./StatusBar.css";
@@ -16,10 +17,10 @@ function tccLevel(summary: string): StatusLevel {
   return "idle";
 }
 
-function connectionLabel(pingOk: boolean | null): string {
-  if (pingOk === true) return "在线";
-  if (pingOk === false) return "离线";
-  return "连接中";
+function connectionKey(pingOk: boolean | null): string {
+  if (pingOk === true) return "statusbar.online";
+  if (pingOk === false) return "statusbar.offline";
+  return "statusbar.connecting";
 }
 
 export function StatusBar({
@@ -27,6 +28,7 @@ export function StatusBar({
 }: {
   onOpenSettings: (s?: SettingsSection) => void;
 }) {
+  const { t } = useI18n();
   const env = useEnvironment();
   const { tier, paused, pausedRunId } = useRun();
 
@@ -37,24 +39,39 @@ export function StatusBar({
   return (
     <footer
       className={`statusbar${degraded ? " statusbar--danger" : ""}`}
-      aria-label="运行态"
+      aria-label={t("statusbar.aria")}
     >
       {/* 常显五项，不可折叠 —— INV-36 / M2 判据 10。
           第六项「暂停」在下一组里按 paused 出现，未暂停时不占位。 */}
       <div className="statusbar-row">
-        <Tooltip content={env.pingOk === false ? "sidecar 未连接" : "sidecar"}>
+        <Tooltip
+          content={
+            env.pingOk === false
+              ? t("statusbar.sidecarOffline")
+              : t("statusbar.sidecarOk")
+          }
+        >
           <span>
-            <StatusDot level={online} label={connectionLabel(env.pingOk)} />
+            <StatusDot
+              level={online}
+              label={t(connectionKey(env.pingOk))}
+            />
           </span>
         </Tooltip>
         <Tooltip content={`sandbox_impl: ${env.sandboxImpl}`}>
           <span>
-            <StatusDot level={sandboxLevel(env.sandboxImpl)} label="沙箱" />
+            <StatusDot
+              level={sandboxLevel(env.sandboxImpl)}
+              label={t("statusbar.sandbox")}
+            />
           </span>
         </Tooltip>
         <Tooltip content={env.tccGuidance || `tcc: ${env.tccSummary}`}>
           <span>
-            <StatusDot level={tccLevel(env.tccSummary)} label="权限" />
+            <StatusDot
+              level={tccLevel(env.tccSummary)}
+              label={t("statusbar.permission")}
+            />
           </span>
         </Tooltip>
       </div>
@@ -71,17 +88,22 @@ export function StatusBar({
         </button>
         <span className="statusbar-sep">·</span>
         <span className="statusbar-tier">
-          {tier === "readonly" ? "只读" : "完整"}
+          {tier === "readonly"
+            ? t("statusbar.tierReadonly")
+            : t("statusbar.tierFull")}
         </span>
         {paused ? (
           <span className="statusbar-paused">
-            ⏸ 已暂停
+            ⏸ {t("statusbar.paused")}
             {pausedRunId ? ` ${pausedRunId.slice(0, 8)}` : ""}
           </span>
         ) : null}
       </div>
 
-      <Disclosure summary="环境详情" className="statusbar-more">
+      <Disclosure
+        summary={t("statusbar.envDetails")}
+        className="statusbar-more"
+      >
         <dl className="statusbar-kv">
           <dt>read</dt>
           <dd>

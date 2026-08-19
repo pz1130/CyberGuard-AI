@@ -20,7 +20,11 @@ function setViewport(width: number) {
 }
 
 describe("响应式与折叠持久化", () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => {
+    localStorage.clear();
+    // jsdom navigator.language 为 en-US；钉 zh，使 aria-label 查询保持中文
+    localStorage.setItem("cg.language", "zh");
+  });
 
   it("窄于 1180px 自动收右侧板", () => {
     setViewport(1100);

@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { useI18n } from "../../i18n/I18nProvider";
 import { Button, Card, Field } from "../../ui";
 import type { McpSectionModel } from "./useMcpSection";
 
@@ -22,44 +23,46 @@ export function McpSection({
   onInstallDemo,
   onInstallFileAlerts,
 }: McpSectionProps): ReactElement {
+  const { t } = useI18n();
+
   return (
     <div className="settings-detail">
       <Card>
-        <h3 className="settings-card-title">快捷安装</h3>
+        <h3 className="settings-card-title">{t("settings.mcp.quickTitle")}</h3>
         <div className="settings-actions" style={{ marginTop: 0 }}>
           <Button
             variant="secondary"
             onClick={() => void onInstallFileAlerts(false)}
             disabled={mcpBusy}
           >
-            文件告警 MCP（样例）
+            {t("settings.mcp.fileAlerts")}
           </Button>
           <Button
             variant="ghost"
             onClick={() => void onInstallFileAlerts(true)}
             disabled={mcpBusy}
           >
-            从 JSON/CSV 安装…
+            {t("settings.mcp.installFile")}
           </Button>
           <Button
             variant="ghost"
             onClick={() => void onInstallDemo()}
             disabled={mcpBusy}
           >
-            Echo 演示
+            {t("settings.mcp.echoDemo")}
           </Button>
           <Button variant="ghost" onClick={() => void onDiscover()}>
-            发现工具
+            {t("settings.mcp.discover")}
           </Button>
         </div>
         {discoverMsg && <pre className="settings-msg">{discoverMsg}</pre>}
       </Card>
 
       <Card>
-        <h3 className="settings-card-title">已配置服务器</h3>
+        <h3 className="settings-card-title">{t("settings.mcp.serversTitle")}</h3>
         <div className="settings-list">
           {servers.length === 0 && (
-            <p className="settings-hint">尚未配置 MCP</p>
+            <p className="settings-hint">{t("settings.mcp.none")}</p>
           )}
           {servers.map((s) => (
             <button
@@ -79,13 +82,13 @@ export function McpSection({
         </div>
         <div className="settings-actions">
           <Button variant="secondary" onClick={onNewServer}>
-            + 新建
+            {t("settings.mcp.new")}
           </Button>
         </div>
       </Card>
 
       <Card>
-        <h3 className="settings-card-title">编辑</h3>
+        <h3 className="settings-card-title">{t("settings.mcp.editTitle")}</h3>
         <Field label="ID">
           <input
             className="data-input"
@@ -113,7 +116,7 @@ export function McpSection({
             </Button>
           </div>
         </Field>
-        <Field label="Args（每行一个）">
+        <Field label={t("settings.mcp.args")}>
           <textarea
             className="plan-edit"
             rows={4}
@@ -134,14 +137,18 @@ export function McpSection({
         </Field>
         <Field
           label="Secret"
-          hint={edit.has_secret ? "已配置" : "无"}
+          hint={
+            edit.has_secret
+              ? t("settings.mcp.secretConfigured")
+              : t("settings.mcp.secretNone")
+          }
         >
           <input
             className="data-input"
             type="password"
             value={edit.secret || ""}
             onChange={(e) => setEdit({ ...edit, secret: e.target.value })}
-            placeholder="留空保留"
+            placeholder={t("settings.mcp.secretPh")}
             autoComplete="off"
             disabled={mcpBusy}
           />
@@ -174,14 +181,14 @@ export function McpSection({
             onClick={() => void onSaveMcp()}
             disabled={mcpBusy}
           >
-            保存
+            {t("settings.mcp.save")}
           </Button>
           <Button
             variant="danger"
             onClick={() => void onDeleteMcp()}
             disabled={mcpBusy || !edit.id}
           >
-            删除
+            {t("settings.mcp.delete")}
           </Button>
         </div>
         {mcpMsg && <pre className="settings-msg">{mcpMsg}</pre>}

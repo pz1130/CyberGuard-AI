@@ -1,25 +1,29 @@
+import { useI18n } from "../../i18n/I18nProvider";
 import { usePlan } from "../../state";
 import { Button } from "../../ui";
 import "./PlanPanel.css";
 
 export function PlanPanel() {
   const { pendingPlan, planEdit, setPlanEdit, approve, reject } = usePlan();
+  const { t } = useI18n();
   if (!pendingPlan) return null;
 
   const steps = pendingPlan.plan?.steps || [];
   const localOnly = pendingPlan.approval_type === "self";
 
   return (
-    <div className="planpanel" role="dialog" aria-label="计划审阅">
+    <div className="planpanel" role="dialog" aria-label={t("plan.aria")}>
       <div className="planpanel-head">
-        <span className="planpanel-label">{pendingPlan.ui_label || "计划待批"}</span>
+        <span className="planpanel-label">
+          {pendingPlan.ui_label || t("plan.pending")}
+        </span>
         {/* 本地确认 ≠ 职责分离审批，必须显式标注（INV-38） */}
         {localOnly ? (
-          <span className="planpanel-self">approval_type: self · 本地自批准</span>
+          <span className="planpanel-self">{t("plan.self")}</span>
         ) : null}
         {pendingPlan.timeout_seconds ? (
           <span className="planpanel-timeout">
-            超时 {pendingPlan.timeout_seconds}s = 拒绝
+            {t("plan.timeout", { seconds: pendingPlan.timeout_seconds })}
           </span>
         ) : null}
       </div>
@@ -29,7 +33,7 @@ export function PlanPanel() {
         value={planEdit}
         onChange={(e) => setPlanEdit(e.target.value)}
         rows={3}
-        aria-label="计划摘要（可修改）"
+        aria-label={t("plan.summary.aria")}
       />
 
       {steps.length > 0 ? (
@@ -47,10 +51,10 @@ export function PlanPanel() {
           onClick={() => void approve()}
           disabled={pendingPlan.local_approve_allowed === false}
         >
-          批准
+          {t("plan.approve")}
         </Button>
         <Button variant="danger" size="sm" onClick={() => void reject()}>
-          拒绝
+          {t("plan.reject")}
         </Button>
       </div>
     </div>

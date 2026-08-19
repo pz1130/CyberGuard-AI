@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { useI18n, type TFunc } from "../i18n/I18nProvider";
 
 export type ExportSlice = {
   exportPass: string;
@@ -9,7 +10,7 @@ export type ExportSlice = {
   runExport: () => Promise<void>;
 };
 
-/** 口令下限，与 sidecar 侧保持一致 */
+/** Passphrase floor; keep in sync with sidecar */
 export const MIN_PASSPHRASE = 8;
 
 type ExportResult = {
@@ -23,19 +24,20 @@ type ExportResult = {
   error?: string;
 };
 
-/** 把导出结果格式化成就地显示的一行（不做 toast，结果需可追溯） */
-export function formatExportResult(r: ExportResult): string {
-  if (r?.canceled) return "已取消";
-  if (r?.ok === false) return String(r.error || "导出失败");
+/** Format export result as one in-place line (no toast; must stay auditable) */
+export function formatExportResult(r: ExportResult, t: TFunc): string {
+  if (r?.canceled) return t("export.canceled");
+  if (r?.ok === false) return String(r.error || t("export.failed"));
   const dest = r.dest || r.path || "file";
   const hash = r.plaintext_sha256 || r.sha256;
   return (
-    `已导出（${r.method || "encrypted"}）→ ${dest}` +
+    t("export.done", { method: r.method || "encrypted", dest }) +
     (hash ? ` · sha256 ${String(hash).slice(0, 12)}…` : "")
   );
 }
 
 export function useExport(): ExportSlice {
+  const { t } = useI18n();
   const [exportPass, setExportPass] = useState("");
   const [exportBusy, setExportBusy] = useState(false);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
@@ -44,25 +46,25 @@ export function useExport(): ExportSlice {
 
   const runExport = useCallback(async () => {
     if (!api?.exportEncrypted) {
-      setExportMsg("导出 API 不可用（请在 Electron 中打开）");
+      setExportMsg(t("export.apiUnavailable"));
       return;
     }
     if (exportPass.trim().length < MIN_PASSPHRASE) {
-      setExportMsg(`口令至少 ${MIN_PASSPHRASE} 位`);
+      setExportMsg(t("export.passphraseMin", { n: MIN_PASSPHRASE }));
       return;
     }
     setExportBusy(true);
     setExportMsg(null);
     try {
       const r = await api.exportEncrypted(exportPass);
-      setExportMsg(formatExportResult(r));
+      setExportMsg(formatExportResult(r, t));
       if (!r?.canceled && r?.ok !== false) setExportPass("");
     } catch (e) {
       setExportMsg(String(e));
     } finally {
       setExportBusy(false);
     }
-  }, [api, exportPass]);
+  }, [api, exportPass, t]);
 
   return useMemo(
     () => ({

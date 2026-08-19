@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useI18n } from "../../i18n/I18nProvider";
 import type { McpServerPublic } from "../../lib/types";
 
 const emptyMcp = (): McpServerPublic & { secret?: string } => ({
@@ -13,6 +14,7 @@ const emptyMcp = (): McpServerPublic & { secret?: string } => ({
 });
 
 export function useMcpSection() {
+  const { t } = useI18n();
   const api = typeof window !== "undefined" ? window.cyberguard : undefined;
 
   const [servers, setServers] = useState<McpServerPublic[]>([]);
@@ -143,7 +145,9 @@ export function useMcpSection() {
     try {
       const r = await api.mcpConfigInstallDemo();
       setMcpMsg(
-        r.ok === false ? "install demo failed" : "已安装 echo 演示 MCP"
+        r.ok === false
+          ? "install demo failed"
+          : t("settings.mcp.installedEcho")
       );
       await loadMcp();
       if (r.server) onSelectServer(r.server);
@@ -178,7 +182,9 @@ export function useMcpSection() {
       setMcpMsg(
         r.ok === false
           ? "install file-alerts failed"
-          : `已安装 file-alerts · ${r.server?.description || "sample"}`
+          : t("settings.mcp.installedFile", {
+              desc: r.server?.description || "sample",
+            })
       );
       await loadMcp();
       if (r.server) onSelectServer(r.server);

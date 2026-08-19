@@ -5,6 +5,7 @@ import { DegradationStrip } from "./components/shell/DegradationStrip";
 import { Sidebar } from "./components/shell/Sidebar";
 import "./components/shell/AppShell.css";
 import { useHotkeys } from "./hooks/useHotkeys";
+import { I18nProvider, useI18n } from "./i18n/I18nProvider";
 import type { ActiveView, SettingsSection } from "./lib/types";
 import {
   RuntimeProvider,
@@ -20,22 +21,22 @@ import { EvidenceView } from "./views/EvidenceView";
 import { SettingsView } from "./views/SettingsView";
 import { WorkbenchView } from "./views/WorkbenchView";
 
-const DEV_TITLE =
-  "Development build · not notarized · not for distribution. Plan Mode = 自批准 (approval_type=self), timeout=reject. Local hash chain ≠ WORM.";
-
 export function App() {
   return (
     <TooltipProvider>
-      <UiPrefsProvider>
-        <RuntimeProvider>
-          <AppInner />
-        </RuntimeProvider>
-      </UiPrefsProvider>
+      <I18nProvider>
+        <UiPrefsProvider>
+          <RuntimeProvider>
+            <AppInner />
+          </RuntimeProvider>
+        </UiPrefsProvider>
+      </I18nProvider>
     </TooltipProvider>
   );
 }
 
 function AppInner() {
+  const { t } = useI18n();
   const {
     sidebarCollapsed,
     setSidebarCollapsed,
@@ -57,7 +58,7 @@ function AppInner() {
   const title =
     sessions.sessions.find((s) => s.session_id === sessions.sessionId)?.title ||
     run.lastSubmitted ||
-    "新调查";
+    t("app.newInvestigation");
 
   const openEvidence = useCallback((evidenceId?: string) => {
     setHighlightEvidenceId(evidenceId);
@@ -116,7 +117,7 @@ function AppInner() {
       <div className="app-shell">
         <AppChrome
           title={title}
-          devTitle={DEV_TITLE}
+          devTitle={t("app.devTitle")}
           onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
           onToggleRail={() => setRailCollapsed(!railCollapsed)}
         />

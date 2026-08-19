@@ -1,11 +1,16 @@
 import { useEffect, useState, type ReactElement } from "react";
+import { useI18n } from "../../i18n/I18nProvider";
 import type { SettingsSection } from "../../lib/types";
 import { useEnvironment, useUiPrefsCtx } from "../../state";
 import { ListRow } from "../../ui";
 import { AboutSection } from "./AboutSection";
 import { AppearanceSection } from "./AppearanceSection";
 import { DataSection } from "./DataSection";
-import { HUB_GROUPS, HUB_ITEMS, HubSection } from "./HubSection";
+import {
+  HUB_GROUPS,
+  HubSection,
+  hubSectionTitle,
+} from "./HubSection";
 import { LlmSection } from "./LlmSection";
 import { McpSection } from "./McpSection";
 import { SkillsSection } from "./SkillsSection";
@@ -23,6 +28,7 @@ export function SettingsShell({
   focusSection,
   onProviderSaved,
 }: SettingsViewProps): ReactElement {
+  const { t } = useI18n();
   const { theme, fontSize } = useUiPrefsCtx();
   const { providerMode } = useEnvironment();
   const [section, setSection] = useState<SettingsSection>(
@@ -44,7 +50,9 @@ export function SettingsShell({
     if (id === "llm") return providerMode || "—";
     if (id === "mcp") {
       const n = mcp.servers.length;
-      return n ? `${n} 台` : "未配置";
+      return n
+        ? t("settings.hub.mcpCount", { count: n })
+        : t("settings.hub.mcpNone");
     }
     if (id === "skills") {
       const n = skills.skills.length;
@@ -56,29 +64,26 @@ export function SettingsShell({
     return null;
   };
 
-  const title =
-    section === "hub"
-      ? "设置"
-      : HUB_ITEMS.find((t) => t.id === section)?.title || "设置";
+  const title = hubSectionTitle(t, section);
 
   return (
     <div className="view-pane view-enter settings-shell">
-      <nav className="settings-nav" aria-label="设置分区">
+      <nav className="settings-nav" aria-label={t("settings.nav.aria")}>
         <ListRow
           variant="nav"
           active={section === "hub"}
-          title="概览"
+          title={t("settings.nav.overview")}
           onClick={() => setSection("hub")}
         />
         {HUB_GROUPS.map((group) => (
-          <div key={group.label}>
-            <div className="settings-nav-label">{group.label}</div>
+          <div key={group.labelKey}>
+            <div className="settings-nav-label">{t(group.labelKey)}</div>
             {group.items.map((item) => (
               <ListRow
                 key={item.id}
                 variant="nav"
                 active={section === item.id}
-                title={item.title}
+                title={t(item.titleKey)}
                 meta={hubStatus(item.id) || undefined}
                 onClick={() => setSection(item.id)}
               />
@@ -92,7 +97,7 @@ export function SettingsShell({
           <h1>{title}</h1>
           {section === "hub" ? (
             <p className="settings-content-lede">
-              选择左侧分区进入配置。当前 LLM：
+              {t("settings.hub.lede")}
               <strong>{providerMode}</strong>
             </p>
           ) : null}

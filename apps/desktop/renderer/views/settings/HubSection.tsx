@@ -1,72 +1,80 @@
 import type { ReactElement } from "react";
+import { useI18n, type TFunc } from "../../i18n/I18nProvider";
 import type { SettingsSection } from "../../lib/types";
 import { Card, ListRow } from "../../ui";
 
-const HUB_GROUPS: {
-  label: string;
-  items: {
-    id: Exclude<SettingsSection, "hub">;
-    title: string;
-    desc: string;
-    badge: string;
-  }[];
-}[] = [
+type HubItem = {
+  id: Exclude<SettingsSection, "hub">;
+  titleKey: string;
+  descKey: string;
+  badge: string;
+};
+
+type HubGroup = { labelKey: string; items: HubItem[] };
+
+const HUB_GROUPS_DEF: HubGroup[] = [
   {
-    label: "核心",
+    labelKey: "settings.group.core",
     items: [
       {
         id: "llm",
-        title: "语言模型",
-        desc: "云厂商 / 本地 Ollama · LM Studio · vLLM",
+        titleKey: "settings.section.llm",
+        descKey: "settings.section.llm.desc",
         badge: "LLM",
       },
       {
         id: "mcp",
-        title: "数据源 MCP",
-        desc: "告警 JSON/CSV、stdio 连接器",
+        titleKey: "settings.section.mcp",
+        descKey: "settings.section.mcp.desc",
         badge: "MCP",
       },
     ],
   },
   {
-    label: "工作流",
+    labelKey: "settings.group.workflow",
     items: [
       {
         id: "skills",
-        title: "技能 SOP",
-        desc: "内置分诊 / CVE / 取证 等 catalog",
+        titleKey: "settings.section.skills",
+        descKey: "settings.section.skills.desc",
         badge: "Skills",
       },
     ],
   },
   {
-    label: "偏好",
+    labelKey: "settings.group.prefs",
     items: [
       {
         id: "appearance",
-        title: "外观",
-        desc: "主题与字号",
+        titleKey: "settings.section.appearance",
+        descKey: "settings.section.appearance.desc",
         badge: "UI",
       },
       {
         id: "data",
-        title: "数据与安全",
-        desc: "加密导出 · 卸载",
+        titleKey: "settings.section.data",
+        descKey: "settings.section.data.desc",
         badge: "Data",
       },
       {
         id: "about",
-        title: "关于",
-        desc: "版本与开发版声明",
+        titleKey: "settings.section.about",
+        descKey: "settings.section.about.desc",
         badge: "Info",
       },
     ],
   },
 ];
 
-const HUB_ITEMS = HUB_GROUPS.flatMap((g) => g.items);
+const HUB_ITEMS = HUB_GROUPS_DEF.flatMap((g) => g.items);
 
-export { HUB_GROUPS, HUB_ITEMS };
+export { HUB_GROUPS_DEF as HUB_GROUPS, HUB_ITEMS };
+
+export function hubSectionTitle(t: TFunc, section: SettingsSection): string {
+  if (section === "hub") return t("settings.title");
+  const item = HUB_ITEMS.find((x) => x.id === section);
+  return item ? t(item.titleKey) : t("settings.title");
+}
 
 export type HubSectionProps = {
   providerMode: string;
@@ -75,34 +83,27 @@ export type HubSectionProps = {
 };
 
 export function HubSection({
-  providerMode,
   hubStatus,
   onSelect,
 }: HubSectionProps): ReactElement {
+  const { t } = useI18n();
+
   return (
     <div className="settings-detail">
-      {HUB_GROUPS.map((group) => (
-        <Card key={group.label}>
-          <h3 className="settings-card-title">{group.label}</h3>
+      {HUB_GROUPS_DEF.map((group) => (
+        <Card key={group.labelKey}>
+          <h3 className="settings-card-title">{t(group.labelKey)}</h3>
           <div className="settings-list" role="list">
-            {group.items.map((t) => {
-              const status = hubStatus(t.id);
-              const metaParts = [t.desc];
-              if (status) {
-                const liveHint =
-                  t.id === "llm" && providerMode === "live"
-                    ? status
-                    : t.id === "llm" && providerMode === "mock"
-                      ? status
-                      : status;
-                metaParts.push(liveHint);
-              }
+            {group.items.map((item) => {
+              const status = hubStatus(item.id);
+              const metaParts = [t(item.descKey)];
+              if (status) metaParts.push(status);
               return (
                 <ListRow
-                  key={t.id}
-                  title={`${t.title} · ${t.badge}`}
+                  key={item.id}
+                  title={`${t(item.titleKey)} · ${item.badge}`}
                   meta={metaParts.join(" · ")}
-                  onClick={() => onSelect(t.id)}
+                  onClick={() => onSelect(item.id)}
                 />
               );
             })}

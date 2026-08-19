@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useI18n } from "../../i18n/I18nProvider";
 import {
   findPreset,
   isLocalBaseUrl,
@@ -8,6 +9,7 @@ import {
 import type { ProviderPublic } from "../../lib/types";
 
 export function useLlmSection(onProviderSaved?: (mode: string) => void) {
+  const { t } = useI18n();
   const api = typeof window !== "undefined" ? window.cyberguard : undefined;
 
   const [mode, setMode] = useState("mock");
@@ -69,7 +71,7 @@ export function useLlmSection(onProviderSaved?: (mode: string) => void) {
       return;
     }
     if (mode === "live" && requiresKey && !hasKey && !apiKey.trim()) {
-      setLlmMsg("该供应商需要 API key，请先填写");
+      setLlmMsg(t("settings.llm.needKey"));
       return;
     }
     setLlmBusy(true);
@@ -94,10 +96,19 @@ export function useLlmSection(onProviderSaved?: (mode: string) => void) {
       setHasKey(Boolean(r.has_api_key));
       setApiKey("");
       const eff = r.effective?.mode || r.mode || mode;
+      const keyPart = r.has_api_key
+        ? t("settings.llm.savedKeyOk")
+        : requiresKey
+          ? t("settings.llm.savedNoKey")
+          : t("settings.llm.savedKeyNA");
       setLlmMsg(
         r.ok === false
           ? "save failed"
-          : `已保存 · ${eff}${r.local ? " · 本地" : ""}${r.has_api_key ? " · key ✓" : requiresKey ? " · 无 key" : " · 无需 key"}`
+          : t("settings.llm.saved", {
+              mode: String(eff),
+              local: r.local ? t("settings.llm.savedLocal") : "",
+              key: keyPart,
+            })
       );
       onProviderSaved?.(String(eff));
     } catch (e) {
@@ -120,11 +131,16 @@ export function useLlmSection(onProviderSaved?: (mode: string) => void) {
       const r = await api.providerTest();
       if (r.ok) {
         setLlmMsg(
-          `连通 OK · ${r.mode || "?"} · ${r.latency_ms ?? "?"}ms` +
-            (r.message ? ` · ${r.message}` : "")
+          t("settings.llm.testOk", {
+            mode: r.mode || "?",
+            ms: r.latency_ms ?? "?",
+            extra: r.message ? ` · ${r.message}` : "",
+          })
         );
       } else {
-        setLlmMsg(`连通失败 · ${r.error || "unknown"}`);
+        setLlmMsg(
+          t("settings.llm.testFail", { error: r.error || "unknown" })
+        );
       }
     } catch (e) {
       setLlmMsg(String(e));

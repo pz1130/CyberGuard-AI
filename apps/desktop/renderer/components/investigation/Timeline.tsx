@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useI18n } from "../../i18n/I18nProvider";
 import { useRun, useStreamFlag } from "../../state";
 import {
   classify,
@@ -12,16 +13,16 @@ import {
 import { TimelineEmpty } from "./TimelineEmpty";
 import "./Timeline.css";
 
-const SYSTEM_LABEL: Record<string, string> = {
-  start: "会话开始",
-  run_started: "运行开始",
-  run_paused: "已暂停",
-  run_resumed: "已恢复",
-  episodic_recall: "召回经验",
-  episodic_recorded: "已写入经验库",
-  auth_bounds_check: "授权边界校验",
-  policy_event: "策略事件",
-  token_done: "流式完成",
+const SYSTEM_LABEL_KEY: Record<string, string> = {
+  start: "timeline.system.start",
+  run_started: "timeline.system.runStarted",
+  run_paused: "timeline.system.runPaused",
+  run_resumed: "timeline.system.runResumed",
+  episodic_recall: "timeline.system.episodicRecall",
+  episodic_recorded: "timeline.system.episodicRecorded",
+  auth_bounds_check: "timeline.system.authBounds",
+  policy_event: "timeline.system.policyEvent",
+  token_done: "timeline.system.tokenDone",
 };
 
 export function Timeline({
@@ -33,6 +34,7 @@ export function Timeline({
   // 只订阅布尔 —— 订阅 useStreamText 会让整条时间线随每个 token 重渲染
   const streaming = useStreamFlag();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const { t } = useI18n();
 
   useEffect(() => {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -67,9 +69,10 @@ export function Timeline({
           return (
             <MessageEvent key={key} ev={ev} onViewEvidence={onViewEvidence} />
           );
+        const labelKey = SYSTEM_LABEL_KEY[ev.type];
         return (
           <p key={key} className="timeline2-system">
-            {SYSTEM_LABEL[ev.type] || ev.type}
+            {labelKey ? t(labelKey) : ev.type}
           </p>
         );
       })}

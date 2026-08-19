@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
+import { useI18n } from "../../i18n/I18nProvider";
 import type { SkillPublic } from "../../lib/types";
 
 export function useSkillsSection() {
+  const { t } = useI18n();
   const api = typeof window !== "undefined" ? window.cyberguard : undefined;
 
   const [skills, setSkills] = useState<SkillPublic[]>([]);
@@ -92,7 +94,7 @@ export function useSkillsSection() {
       return;
     }
     if (!skillName.trim() || !skillBody.trim()) {
-      setSkillMsg("name 与 body 必填");
+      setSkillMsg(t("settings.skills.needNameBody"));
       return;
     }
     setSkillBusy(true);
@@ -112,8 +114,10 @@ export function useSkillsSection() {
       setSkillEditSource("draft");
       setSkillSelected(r.skill?.name || skillName.trim());
       setSkillMsg(
-        `草稿已保存 · ${r.skill?.name}` +
-          (r.warning ? ` · ⚠ ${r.warning}` : " · 批准后才会进 agent catalog")
+        t("settings.skills.draftSaved", { name: r.skill?.name || "" }) +
+          (r.warning
+            ? t("settings.skills.draftSavedWarn", { warning: r.warning })
+            : t("settings.skills.draftSavedHint"))
       );
       await loadSkills();
     } catch (e) {
@@ -148,7 +152,9 @@ export function useSkillsSection() {
         return;
       }
       setSkillEditSource("approved");
-      setSkillMsg(r.message || `已批准 · ${skillName}`);
+      setSkillMsg(
+        r.message || t("settings.skills.approved", { name: skillName })
+      );
       await loadSkills();
     } catch (e) {
       setSkillMsg(String(e));
@@ -166,10 +172,15 @@ export function useSkillsSection() {
           ? "draft"
           : null;
     if (!src) {
-      setSkillMsg("内置技能不可删除");
+      setSkillMsg(t("settings.skills.builtinNoDelete"));
       return;
     }
-    if (!window.confirm(`删除 ${src} skill「${skillName}」？`)) return;
+    if (
+      !window.confirm(
+        t("settings.skills.confirmDelete", { src, name: skillName })
+      )
+    )
+      return;
     setSkillBusy(true);
     setSkillMsg(null);
     try {
@@ -178,7 +189,9 @@ export function useSkillsSection() {
         setSkillMsg(r.error || "delete failed");
         return;
       }
-      setSkillMsg(`已删除 · ${skillName} (${src})`);
+      setSkillMsg(
+        t("settings.skills.deleted", { name: skillName, src })
+      );
       resetSkillEditor();
       await loadSkills();
     } catch (e) {
@@ -217,8 +230,10 @@ export function useSkillsSection() {
       setSkillEditSource("draft");
       setSkillSelected(r.skill.name);
       setSkillMsg(
-        `已导入为草稿 · ${r.skill.name}` +
-          (r.warning ? ` · ⚠ ${r.warning}` : " · 请检查后批准")
+        t("settings.skills.imported", { name: r.skill.name }) +
+          (r.warning
+            ? t("settings.skills.draftSavedWarn", { warning: r.warning })
+            : t("settings.skills.importedHint"))
       );
       await loadSkills();
     } catch (e) {
@@ -246,8 +261,10 @@ export function useSkillsSection() {
       setSkillEditSource("draft");
       setSkillSelected(r.skill.name);
       setSkillMsg(
-        `已复制到草稿 · ${r.skill.name}` +
-          (r.warning ? ` · ⚠ ${r.warning}` : " · 改名后批准可覆盖流程")
+        t("settings.skills.forked", { name: r.skill.name }) +
+          (r.warning
+            ? t("settings.skills.draftSavedWarn", { warning: r.warning })
+            : t("settings.skills.forkedHint"))
       );
       await loadSkills();
     } catch (e) {

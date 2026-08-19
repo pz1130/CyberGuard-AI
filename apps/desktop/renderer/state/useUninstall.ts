@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { useI18n } from "../i18n/I18nProvider";
 
 export type UninstallSlice = {
   uninstallBusy: boolean;
@@ -16,10 +17,11 @@ type Inventory = {
 };
 
 /**
- * 把卸载清单渲染成可读文本。
+ * Render uninstall inventory as readable text.
  *
- * 「不会删的外部证据」必须显式列出：证据可能落在 data_root 之外，
- * 用户需要知道卸载不会带走它们，否则会误以为已清理干净。
+ * External evidence that will NOT be deleted must be listed explicitly:
+ * evidence may live outside data_root; users need to know uninstall will
+ * not take it away.
  */
 export function formatInventory(inv: Inventory): string {
   const del = (inv.will_delete || [])
@@ -40,6 +42,7 @@ export function formatInventory(inv: Inventory): string {
 }
 
 export function useUninstall(onUninstalled?: () => void): UninstallSlice {
+  const { t } = useI18n();
   const [uninstallPreview, setUninstallPreview] = useState<string | null>(null);
   const [uninstallBusy, setUninstallBusy] = useState(false);
 
@@ -47,7 +50,7 @@ export function useUninstall(onUninstalled?: () => void): UninstallSlice {
 
   const inventory = useCallback(async () => {
     if (!api?.uninstallInventory) {
-      setUninstallPreview("卸载 API 不可用");
+      setUninstallPreview(t("uninstall.apiUnavailable"));
       return;
     }
     setUninstallBusy(true);
@@ -58,7 +61,7 @@ export function useUninstall(onUninstalled?: () => void): UninstallSlice {
     } finally {
       setUninstallBusy(false);
     }
-  }, [api]);
+  }, [api, t]);
 
   const dryRun = useCallback(async () => {
     if (!api?.uninstallExecute) return;
@@ -83,7 +86,7 @@ export function useUninstall(onUninstalled?: () => void): UninstallSlice {
     try {
       const r = await api.uninstallExecute({ confirm: true, dryRun: false });
       if (r?.canceled) {
-        setUninstallPreview("已取消");
+        setUninstallPreview(t("uninstall.canceled"));
       } else {
         setUninstallPreview(
           `executed=${String(r.executed)} deleted=${
@@ -97,7 +100,7 @@ export function useUninstall(onUninstalled?: () => void): UninstallSlice {
     } finally {
       setUninstallBusy(false);
     }
-  }, [api, onUninstalled]);
+  }, [api, onUninstalled, t]);
 
   return useMemo(
     () => ({ uninstallBusy, uninstallPreview, inventory, dryRun, execute }),

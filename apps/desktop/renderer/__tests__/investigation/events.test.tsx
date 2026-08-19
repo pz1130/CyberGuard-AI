@@ -1,14 +1,21 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import type { ReactElement } from "react";
+import { beforeEach, describe, expect, it } from "vitest";
 import { PlanEvent } from "../../components/investigation/events/PlanEvent";
 import { ToolEvent } from "../../components/investigation/events/ToolEvent";
 import {
   isClosedToolStart,
   toolIdentity,
 } from "../../components/investigation/events";
+import { I18nProvider } from "../../i18n/I18nProvider";
 import type { Ev } from "../../lib/types";
+
+function renderI18n(ui: ReactElement) {
+  // 事件正文来自 sidecar，不翻；Provider 只为 kind 标签。默认 system→en-US 即可
+  return render(<I18nProvider>{ui}</I18nProvider>);
+}
 
 describe("isClosedToolStart（append-only 起止配对）", () => {
   it("同名 start+end：跳过 start，end 不算 closed start", () => {
@@ -54,8 +61,10 @@ describe("isClosedToolStart（append-only 起止配对）", () => {
 });
 
 describe("ToolEvent 失败文案", () => {
+  beforeEach(() => localStorage.clear());
+
   it("error 为 boolean 时展示 result_preview，不展示 true", () => {
-    render(
+    renderI18n(
       <ToolEvent
         ev={{
           type: "tool_call_end",
@@ -70,7 +79,7 @@ describe("ToolEvent 失败文案", () => {
   });
 
   it("error 为字符串时仍展示 error 文本", () => {
-    render(
+    renderI18n(
       <ToolEvent
         ev={{
           type: "tool_call_end",
@@ -84,8 +93,10 @@ describe("ToolEvent 失败文案", () => {
 });
 
 describe("PlanEvent live 字段", () => {
+  beforeEach(() => localStorage.clear());
+
   it("plan_approved 用 plan_summary（无 plan 对象）", () => {
-    render(
+    renderI18n(
       <PlanEvent
         ev={{
           type: "plan_approved",
@@ -99,7 +110,7 @@ describe("PlanEvent live 字段", () => {
   });
 
   it("plan_rejected 展示 reason", () => {
-    render(
+    renderI18n(
       <PlanEvent
         ev={{ type: "plan_rejected", reason: "超时=拒绝", status: "timeout" }}
       />

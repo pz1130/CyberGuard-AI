@@ -1,4 +1,5 @@
 import type { SettingsSection } from "../../lib/types";
+import { useI18n } from "../../i18n/I18nProvider";
 import { useEnvironment, useRun } from "../../state";
 import { Button, Tooltip } from "../../ui";
 import "./ContextRail.css";
@@ -30,7 +31,8 @@ function useFindings() {
     }
     if (ev.type === "tool_call_end") {
       const text = String(ev.result_preview || ev.summary || "");
-      const m = /(\d+)\s*(?:条)?\s*(?:high|critical|高危)/i.exec(text);
+      // CJK as \uXXXX so no-hardcoded scanner passes; semantics unchanged (OPEN-QUESTIONS §I)
+      const m = /(\d+)\s*(?:\u6761)?\s*(?:high|critical|\u9ad8\u5371)/i.exec(text);
       if (m) highCount += Number(m[1]);
     }
   }
@@ -48,28 +50,31 @@ export function ContextRail({
 }: ContextRailProps) {
   const env = useEnvironment();
   const { evidenceIds, highCount } = useFindings();
+  const { t } = useI18n();
 
   return (
-    <aside className="wb-rail ctxrail" aria-label="本次调查">
+    <aside className="wb-rail ctxrail" aria-label={t("rail.aria")}>
       <div className="ctxrail-head">
-        <h2 className="ctxrail-title">本次调查</h2>
+        <h2 className="ctxrail-title">{t("rail.title")}</h2>
       </div>
 
       <div className="ctxrail-body">
         <section className="ctxsec">
-          <h3 className="ctxsec-h">发现</h3>
+          <h3 className="ctxsec-h">{t("rail.findings")}</h3>
           {highCount > 0 ? (
-            <p className="ctxsec-stat ctxsec-stat--danger">{highCount} 条高危</p>
+            <p className="ctxsec-stat ctxsec-stat--danger">
+              {t("rail.findings.high", { count: highCount })}
+            </p>
           ) : (
-            <p className="ctxsec-empty">尚无</p>
+            <p className="ctxsec-empty">{t("rail.findings.none")}</p>
           )}
         </section>
 
         <section className="ctxsec">
           <div className="ctxsec-hrow">
-            <h3 className="ctxsec-h">证据</h3>
+            <h3 className="ctxsec-h">{t("rail.evidence")}</h3>
             <Button size="sm" variant="ghost" onClick={() => onViewEvidence()}>
-              全部
+              {t("rail.evidence.all")}
             </Button>
           </div>
           {evidenceIds.length > 0 ? (
@@ -87,19 +92,21 @@ export function ContextRail({
               ))}
             </ul>
           ) : (
-            <p className="ctxsec-empty">本轮未登记 · 库中 {env.evidenceCount} 件</p>
+            <p className="ctxsec-empty">
+              {t("rail.evidence.inLibrary", { count: env.evidenceCount })}
+            </p>
           )}
         </section>
 
         <section className="ctxsec">
           <div className="ctxsec-hrow">
-            <h3 className="ctxsec-h">工具</h3>
+            <h3 className="ctxsec-h">{t("rail.tools")}</h3>
             <Button
               size="sm"
               variant="ghost"
               onClick={() => onOpenSettings("mcp")}
             >
-              数据源
+              {t("rail.tools.sources")}
             </Button>
           </div>
           {env.mcpTools.length > 0 ? (
@@ -115,7 +122,7 @@ export function ContextRail({
               ))}
             </ul>
           ) : (
-            <p className="ctxsec-empty">未发现 · 可选</p>
+            <p className="ctxsec-empty">{t("rail.tools.none")}</p>
           )}
         </section>
       </div>

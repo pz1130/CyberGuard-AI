@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useEnvironment } from "../../state";
+import { useI18n } from "../../i18n/I18nProvider";
 import "./DegradationStrip.css";
 
 export function DegradationStrip() {
+  const { t } = useI18n();
   const { securityDegradations } = useEnvironment();
   const [dismissed, setDismissed] = useState<string[]>([]);
 
@@ -16,16 +18,18 @@ export function DegradationStrip() {
           <span className="degstrip-lock" aria-hidden>
             🔒
           </span>
-          <span className="degstrip-label">{d.label}</span>
-          {d.detail ? (
-            <span className="degstrip-detail">· {d.detail}</span>
+          <span className="degstrip-label">{t(d.labelKey)}</span>
+          {d.detailText || d.detailKey ? (
+            <span className="degstrip-detail">
+              · {d.detailText ?? t(d.detailKey)}
+            </span>
           ) : null}
           <button
             type="button"
             className="degstrip-dismiss"
             onClick={() => setDismissed((prev) => [...prev, d.id])}
           >
-            收起
+            {t("degradation.dismiss")}
           </button>
         </div>
       ))}

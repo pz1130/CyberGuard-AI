@@ -129,7 +129,8 @@ declare global {
       run: (
         task: string,
         tier: Tier,
-        sessionId?: string
+        sessionId?: string,
+        systemPrompt?: string
       ) => Promise<{ result: unknown; events: Ev[] }>;
       abort: (runId: string) => Promise<{ ok: boolean }>;
       steer: (runId: string, message: string) => Promise<{ ok: boolean }>;
@@ -221,11 +222,19 @@ declare global {
         error?: string;
         message?: string;
       }>;
-      prefsGet?: () => Promise<{ theme?: string; font_size?: string }>;
+      prefsGet?: () => Promise<{
+        theme?: string;
+        font_size?: string;
+        language?: string;
+      }>;
       prefsSet?: (params: {
         theme?: string;
         font_size?: string;
-      }) => Promise<{ ok?: boolean; prefs?: { theme?: string; font_size?: string } }>;
+        language?: string;
+      }) => Promise<{
+        ok?: boolean;
+        prefs?: { theme?: string; font_size?: string; language?: string };
+      }>;
       mcpConfigList?: () => Promise<{ servers: McpServerPublic[] }>;
       mcpConfigUpsert?: (
         params: Record<string, unknown>

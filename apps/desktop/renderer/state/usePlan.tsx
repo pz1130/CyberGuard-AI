@@ -6,6 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useI18n } from "../i18n/I18nProvider";
 import type { Ev, PendingPlan } from "../lib/types";
 
 export type PlanContextValue = {
@@ -26,39 +27,52 @@ export type PlanProviderProps = {
 };
 
 export function PlanProvider({ children, onError }: PlanProviderProps) {
+  const { t } = useI18n();
   const [pendingPlan, setPendingPlan] = useState<PendingPlan | null>(null);
   const [planEdit, setPlanEdit] = useState("");
   const api = typeof window !== "undefined" ? window.cyberguard : undefined;
 
-  const ingest = useCallback((ev: Ev) => {
-    if (
-      (ev.type === "plan_ready" || ev.type === "privilege_required") &&
-      typeof ev.plan_id === "string"
-    ) {
-      const plan = (ev.plan || {}) as PendingPlan["plan"];
-      // approval_type 必须原样透传：standalone 下为 self，不得与职责分离审批混同（INV-06 / INV-38）
-      const approvalType = String(ev.approval_type || "self");
-      const base = String(ev.ui_label || "自批准");
-      setPendingPlan({
-        plan_id: String(ev.plan_id),
-        plan,
-        approval_type: approvalType,
-        ui_label: ev.type === "privilege_required" ? `${base} · 提权` : base,
-        local_approve_allowed: ev.local_approve_allowed !== false,
-        timeout_seconds:
-          typeof ev.timeout_seconds === "number" ? ev.timeout_seconds : undefined,
-      });
-      setPlanEdit(String(plan?.summary || ""));
-      return;
-    }
-    if (
-      ev.type === "plan_approved" ||
-      ev.type === "plan_rejected" ||
-      ev.type === "privilege_decided"
-    ) {
-      setPendingPlan(null);
-    }
-  }, []);
+  const ingest = useCallback(
+    (ev: Ev) => {
+      if (
+        (ev.type === "plan_ready" || ev.type === "privilege_required") &&
+        typeof ev.plan_id === "string"
+      ) {
+        const plan = (ev.plan || {}) as PendingPlan["plan"];
+        // approval_type 必须原样透传：standalone 下为 self，不得与职责分离审批混同（INV-06 / INV-38）
+        // 标题从 approval_type 映射；sidecar ui_label 恒为中文，仅作未知类型兜底
+        const approvalType = String(ev.approval_type || "self");
+        const base =
+          approvalType === "self"
+            ? t("plan.selfApprove")
+            : String(ev.ui_label || t("plan.selfApprove"));
+        setPendingPlan({
+          plan_id: String(ev.plan_id),
+          plan,
+          approval_type: approvalType,
+          ui_label:
+            ev.type === "privilege_required"
+              ? t("plan.privilegeLabel", { base })
+              : base,
+          local_approve_allowed: ev.local_approve_allowed !== false,
+          timeout_seconds:
+            typeof ev.timeout_seconds === "number"
+              ? ev.timeout_seconds
+              : undefined,
+        });
+        setPlanEdit(String(plan?.summary || ""));
+        return;
+      }
+      if (
+        ev.type === "plan_approved" ||
+        ev.type === "plan_rejected" ||
+        ev.type === "privilege_decided"
+      ) {
+        setPendingPlan(null);
+      }
+    },
+    [t]
+  );
 
   const approve = useCallback(async () => {
     if (!api?.planApprove || !pendingPlan) return;

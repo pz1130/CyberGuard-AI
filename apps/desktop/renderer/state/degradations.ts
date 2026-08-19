@@ -42,8 +42,10 @@ export type DegradationId =
 export type Degradation = {
   id: DegradationId;
   level: DegradationLevel;
-  label: string;
-  detail?: string;
+  labelKey: string;
+  detailKey: string;
+  /** sidecar 回传原文；有则优先显示，不翻（spec §2.2） */
+  detailText?: string;
   /** true = 安全边界降级，必须顶部浮出且用专属视觉（INV-38） */
   security: boolean;
 };
@@ -51,6 +53,7 @@ export type Degradation = {
 /**
  * 从环境状态派生降级清单。
  * 纯函数，便于测试；顺序为 danger 在前、warn 在后。
+ * 只产出 key；渲染侧用 t() 取文案。
  */
 export function deriveDegradations(env: EnvState): Degradation[] {
   const out: Degradation[] = [];
@@ -59,8 +62,8 @@ export function deriveDegradations(env: EnvState): Degradation[] {
     out.push({
       id: "offline",
       level: "danger",
-      label: "sidecar 离线",
-      detail: "本地执行进程未连接，运行已禁用",
+      labelKey: "degradation.offline.label",
+      detailKey: "degradation.offline.detail",
       security: true,
     });
   }
@@ -69,8 +72,8 @@ export function deriveDegradations(env: EnvState): Degradation[] {
     out.push({
       id: "sandbox",
       level: "danger",
-      label: "沙箱不可用",
-      detail: "仅允许只读档位（INV-16）",
+      labelKey: "degradation.sandbox.label",
+      detailKey: "degradation.sandbox.detail",
       security: true,
     });
   }
@@ -79,8 +82,9 @@ export function deriveDegradations(env: EnvState): Degradation[] {
     out.push({
       id: "filevault",
       level: "danger",
-      label: "FileVault 未开启",
-      detail: env.fvWarning,
+      labelKey: "degradation.filevault.label",
+      detailKey: "degradation.filevault.detail",
+      detailText: env.fvWarning,
       security: true,
     });
   }
@@ -89,8 +93,10 @@ export function deriveDegradations(env: EnvState): Degradation[] {
     out.push({
       id: "tcc",
       level: "warn",
-      label: "磁盘访问受限",
-      detail: env.tccGuidance || env.tccWarning || "部分目录读取会失败",
+      labelKey: "degradation.tcc.label",
+      detailKey: "degradation.tcc.detail",
+      // sidecar 回传的原文，有就优先显示——它不是 UI 文案，不翻（spec §2.2）
+      detailText: env.tccGuidance || env.tccWarning || undefined,
       security: true,
     });
   }
@@ -99,8 +105,8 @@ export function deriveDegradations(env: EnvState): Degradation[] {
     out.push({
       id: "mock",
       level: "warn",
-      label: "模型为 mock",
-      detail: "未配置真实模型，输出不可用于结论",
+      labelKey: "degradation.mock.label",
+      detailKey: "degradation.mock.detail",
       security: false,
     });
   }
