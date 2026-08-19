@@ -5,6 +5,7 @@ import { DegradationStrip } from "./components/shell/DegradationStrip";
 import { Sidebar } from "./components/shell/Sidebar";
 import "./components/shell/AppShell.css";
 import { useHotkeys } from "./hooks/useHotkeys";
+import { I18nProvider } from "./i18n/I18nProvider";
 import type { ActiveView, SettingsSection } from "./lib/types";
 import {
   RuntimeProvider,
@@ -26,11 +27,13 @@ const DEV_TITLE =
 export function App() {
   return (
     <TooltipProvider>
-      <UiPrefsProvider>
-        <RuntimeProvider>
-          <AppInner />
-        </RuntimeProvider>
-      </UiPrefsProvider>
+      <I18nProvider>
+        <UiPrefsProvider>
+          <RuntimeProvider>
+            <AppInner />
+          </RuntimeProvider>
+        </UiPrefsProvider>
+      </I18nProvider>
     </TooltipProvider>
   );
 }
