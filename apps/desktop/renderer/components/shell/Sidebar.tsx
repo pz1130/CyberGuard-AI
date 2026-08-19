@@ -1,4 +1,5 @@
 import type { ActiveView } from "../../lib/types";
+import { useI18n } from "../../i18n/I18nProvider";
 import { useSessions } from "../../state";
 import { Button } from "../../ui";
 import { SessionRail } from "../session/SessionRail";
@@ -12,9 +13,10 @@ export type SidebarProps = {
 
 export function Sidebar({ activeView, onNavigate }: SidebarProps) {
   const { create } = useSessions();
+  const { t } = useI18n();
 
   return (
-    <aside className="sidebar" aria-label="会话与导航">
+    <aside className="sidebar" aria-label={t("nav.sidebar.aria")}>
       <div className="sidebar-top">
         <Button
           variant="primary"
@@ -24,7 +26,7 @@ export function Sidebar({ activeView, onNavigate }: SidebarProps) {
             onNavigate("workbench");
           }}
         >
-          ＋ 新建
+          {t("nav.sidebar.new")}
         </Button>
       </div>
       <div className="sidebar-sessions">

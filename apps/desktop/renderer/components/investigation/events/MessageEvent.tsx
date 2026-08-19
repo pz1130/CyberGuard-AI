@@ -1,4 +1,5 @@
 import type { Ev } from "../../../lib/types";
+import { useI18n } from "../../../i18n/I18nProvider";
 import { Markdown } from "../../Markdown";
 import { Button, Card } from "../../../ui";
 import "./events.css";
@@ -10,10 +11,12 @@ export function MessageEvent({
   ev: Ev;
   onViewEvidence?: (id?: string) => void;
 }) {
+  const { t } = useI18n();
+
   if (ev.type === "user_task") {
     return (
       <div className="ev2-user">
-        <span className="ev2-user-label">我</span>
+        <span className="ev2-user-label">{t("event.user")}</span>
         <p className="ev2-user-text">{String(ev.task || "")}</p>
       </div>
     );
@@ -24,7 +27,7 @@ export function MessageEvent({
     return (
       <Card tone="info" className="ev2">
         <div className="ev2-head">
-          <span className="ev2-kind">证据</span>
+          <span className="ev2-kind">{t("event.evidence")}</span>
           <code className="ev2-name">{String(ev.name || id || "—")}</code>
         </div>
         {typeof ev.sha256 === "string" ? (
@@ -32,7 +35,7 @@ export function MessageEvent({
         ) : null}
         {onViewEvidence ? (
           <Button size="sm" variant="ghost" onClick={() => onViewEvidence(id)}>
-            在证据库中查看
+            {t("event.evidence.view")}
           </Button>
         ) : null}
       </Card>
@@ -43,9 +46,11 @@ export function MessageEvent({
     return (
       <Card tone="danger" className="ev2">
         <div className="ev2-head">
-          <span className="ev2-kind">错误</span>
+          <span className="ev2-kind">{t("event.error")}</span>
         </div>
-        <p className="ev2-summary">{String(ev.error || "未知错误")}</p>
+        <p className="ev2-summary">
+          {String(ev.error || t("event.error.unknown"))}
+        </p>
       </Card>
     );
   }
@@ -58,7 +63,7 @@ export function MessageEvent({
   return (
     <Card tone="default" className="ev2 ev2--report">
       <div className="ev2-head">
-        <span className="ev2-kind">报告</span>
+        <span className="ev2-kind">{t("event.report")}</span>
       </div>
       <Markdown text={text} />
     </Card>

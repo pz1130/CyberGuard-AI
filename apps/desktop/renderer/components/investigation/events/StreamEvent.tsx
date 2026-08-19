@@ -1,3 +1,4 @@
+import { useI18n } from "../../../i18n/I18nProvider";
 import { useStreamFlag, useStreamText } from "../../../state";
 import { Markdown } from "../../Markdown";
 import { Card } from "../../../ui";
@@ -7,12 +8,15 @@ import "./events.css";
 export function StreamEvent() {
   const streamText = useStreamText();
   const streaming = useStreamFlag();
+  const { t } = useI18n();
   if (!streaming && !streamText) return null;
 
   return (
     <Card tone="info" className="ev2 ev2--report">
       <div className="ev2-head">
-        <span className="ev2-kind">{streaming ? "生成中" : "草稿"}</span>
+        <span className="ev2-kind">
+          {streaming ? t("event.streaming") : t("event.draft")}
+        </span>
         {streaming ? (
           <span className="ev2-cursor" aria-hidden>
             ▍
@@ -26,8 +30,9 @@ export function StreamEvent() {
 
 /** 首包之前的三条脉冲骨架 */
 export function SkeletonLines() {
+  const { t } = useI18n();
   return (
-    <div className="ev2-skeleton" aria-label="等待模型首包">
+    <div className="ev2-skeleton" aria-label={t("event.waitingFirst")}>
       <span className="ev2-skel-line" />
       <span className="ev2-skel-line" />
       <span className="ev2-skel-line" />

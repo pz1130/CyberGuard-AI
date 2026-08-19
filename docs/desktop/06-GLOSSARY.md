@@ -227,3 +227,18 @@ agent 产出的结构化报告文件。带 sha256 与保留期，上报服务端
 | 模型为 mock | Model is mock | `degradation.mock.label` | |
 | 未配置真实模型，输出不可用于结论 | No real model configured; output must not be used as findings | `degradation.mock.detail` | 「不可用于结论」= 禁止，非提醒（INV-38） |
 | 收起 | Dismiss | `degradation.dismiss` | 降级浮出条 |
+| 调查 | Investigate | `nav.workbench` | 主入口，非 "Investigate view" |
+| 证据 | Evidence | `nav.evidence` / `rail.evidence` | |
+| 设置 | Settings | `nav.settings` | |
+| 本次调查 | This investigation | `rail.title` | 右栏 |
+| 发现 | Findings | `rail.findings` | |
+| 高危 | high-severity | `rail.findings.high_*` | 复数 finding(s) |
+| 能力档位 | Capability tier | `composer.tier.aria` | |
+| 中止 | Abort | `composer.abort` | |
+| 中途补充 | Add mid-run | `composer.steer` | steer |
+| 计划审阅 | Plan review | `plan.aria` | |
+| 批准 / 拒绝 | Approve / Reject | `plan.approve` / `plan.reject` | |
+| 本地自批准 | local self-approve | `plan.self` | INV-38；保留 `approval_type: self` 原文 |
+| 提权申请 | Privilege request | `event.privilege` | |
+| 外部来源 | External source | `event.hostile` | INV-39 |
+| 开始一次调查 | Start an investigation | `empty.title` | 空态 |

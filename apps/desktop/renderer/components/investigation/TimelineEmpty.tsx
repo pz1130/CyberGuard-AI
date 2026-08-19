@@ -1,3 +1,4 @@
+import { useI18n } from "../../i18n/I18nProvider";
 import { SAMPLE_TASKS } from "../../lib/sampleTasks";
 import { useEnvironment, useRun } from "../../state";
 import "./TimelineEmpty.css";
@@ -14,20 +15,18 @@ import "./TimelineEmpty.css";
 export function TimelineEmpty() {
   const { setTask, running } = useRun();
   const { providerMode, mcpTools, pingOk } = useEnvironment();
+  const { t } = useI18n();
 
   const notReady: string[] = [];
-  if (pingOk === false) notReady.push("sidecar 未连接");
-  if (providerMode !== "live") notReady.push("模型为 mock");
-  if (mcpTools.length === 0) notReady.push("未接入数据源（可选）");
+  if (pingOk === false) notReady.push(t("empty.notReady.sidecar"));
+  if (providerMode !== "live") notReady.push(t("empty.notReady.mock"));
+  if (mcpTools.length === 0) notReady.push(t("empty.notReady.mcp"));
 
   return (
     <div className="tlempty">
       <div className="tlempty-intro">
-        <h2 className="tlempty-title">开始一次调查</h2>
-        <p className="tlempty-sub">
-          描述你要查的事，agent 会自己拟计划、调工具、留证据。
-          计划在执行前会给你过目。
-        </p>
+        <h2 className="tlempty-title">{t("empty.title")}</h2>
+        <p className="tlempty-sub">{t("empty.sub")}</p>
       </div>
 
       <div className="tlempty-samples">
@@ -37,17 +36,17 @@ export function TimelineEmpty() {
             type="button"
             className="tlempty-card"
             disabled={running}
-            onClick={() => setTask(s.text)}
+            onClick={() => setTask(t(s.textKey))}
           >
-            <span className="tlempty-card-label">{s.label}</span>
-            <span className="tlempty-card-blurb">{s.blurb}</span>
+            <span className="tlempty-card-label">{t(s.labelKey)}</span>
+            <span className="tlempty-card-blurb">{t(s.blurbKey)}</span>
           </button>
         ))}
       </div>
 
       {notReady.length > 0 ? (
         <p className="tlempty-notready">
-          <span className="tlempty-notready-k">当前状态</span>
+          <span className="tlempty-notready-k">{t("empty.status")}</span>
           {notReady.join(" · ")}
         </p>
       ) : null}

@@ -22,12 +22,19 @@ function expectAlwaysOnVisible() {
 }
 
 function clickSidebarNav(label: string) {
-  const sidebar = screen.getByRole("complementary", { name: "会话与导航" });
+  // 双语：system→en-US 时为 Sessions and navigation
+  const sidebar = screen.getByRole("complementary", {
+    name: /会话与导航|Sessions and navigation/i,
+  });
   within(sidebar).getByRole("button", { name: label }).click();
 }
 
 describe("状态栏常显", () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => {
+    localStorage.clear();
+    // jsdom navigator.language 为 en-US；钉 zh，使侧栏入口名保持中文
+    localStorage.setItem("cg.language", "zh");
+  });
 
   it("调查页可见", () => {
     render(<App />);

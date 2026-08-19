@@ -10,21 +10,11 @@ const ROOT = path.resolve(__dirname, "../..");
  */
 const PENDING = new Set<string>([
   "App.tsx",
+  // useFindings 正则含「条」「高危」是刻意的摘要匹配（不得改），UI 文案已抽 key
   "components/context/ContextRail.tsx",
-  "components/investigation/Composer.tsx",
-  "components/investigation/PlanPanel.tsx",
-  "components/investigation/Timeline.tsx",
-  "components/investigation/TimelineEmpty.tsx",
-  "components/investigation/events/MessageEvent.tsx",
-  "components/investigation/events/PlanEvent.tsx",
-  "components/investigation/events/StreamEvent.tsx",
-  "components/investigation/events/ToolEvent.tsx",
   "components/session/SessionRail.tsx",
   "components/shell/AppChrome.tsx",
-  "components/shell/Sidebar.tsx",
-  "components/shell/ViewNav.tsx",
   "lib/llmPresets.ts",
-  "lib/sampleTasks.ts",
   "state/UiPrefsProvider.tsx",
   "state/useExport.ts",
   "state/usePlan.tsx",

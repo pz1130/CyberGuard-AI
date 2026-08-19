@@ -53,6 +53,8 @@ function stubApi() {
 describe("右栏证据链接跳转并高亮", () => {
   beforeEach(() => {
     localStorage.clear();
+    // jsdom navigator.language 为 en-US；钉 zh，使侧栏/右栏 aria 保持中文
+    localStorage.setItem("cg.language", "zh");
     stubApi();
   });
 
