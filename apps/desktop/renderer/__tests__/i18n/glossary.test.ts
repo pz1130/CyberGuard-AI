@@ -43,4 +43,11 @@ describe("英文词条与 06-GLOSSARY 术语一致", () => {
       );
     expect(offenders).toEqual([]);
   });
+
+  it("沙箱 / mock 禁止语用表定英文整句", () => {
+    expect(en["degradation.sandbox.label"]).toBe("Sandbox unavailable");
+    expect(en["degradation.mock.detail"]).toBe(
+      "No real model configured; output must not be used as findings"
+    );
+  });
 });

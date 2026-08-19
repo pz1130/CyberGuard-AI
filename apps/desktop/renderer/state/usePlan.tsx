@@ -40,8 +40,12 @@ export function PlanProvider({ children, onError }: PlanProviderProps) {
       ) {
         const plan = (ev.plan || {}) as PendingPlan["plan"];
         // approval_type 必须原样透传：standalone 下为 self，不得与职责分离审批混同（INV-06 / INV-38）
+        // 标题从 approval_type 映射；sidecar ui_label 恒为中文，仅作未知类型兜底
         const approvalType = String(ev.approval_type || "self");
-        const base = String(ev.ui_label || t("plan.selfApprove"));
+        const base =
+          approvalType === "self"
+            ? t("plan.selfApprove")
+            : String(ev.ui_label || t("plan.selfApprove"));
         setPendingPlan({
           plan_id: String(ev.plan_id),
           plan,

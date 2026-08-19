@@ -375,12 +375,11 @@ class MockAgentHost:
                 default_prompt += "\n\n" + section
         except Exception:  # noqa: BLE001
             recalled = []
-        prompt = system_prompt or default_prompt
-        if system_prompt and recalled:
-            # Still append recall when caller supplies custom system prompt
-            section = format_recall_section(recalled)
-            if section:
-                prompt = prompt + "\n\n" + section
+        # system_prompt 是附加指令（如 UI 语言），不得替换 default_prompt
+        # （身份 / 授权边界 / INV-39 / skills / tools 均在 default_prompt）
+        prompt = default_prompt
+        if system_prompt:
+            prompt = default_prompt + "\n\n" + system_prompt
 
         tool_name_list = [
             (t.get("function") or {}).get("name") or ""
