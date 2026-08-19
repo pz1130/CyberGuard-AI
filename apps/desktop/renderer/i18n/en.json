@@ -126,7 +126,7 @@
   "settings.title": "Settings",
   "settings.nav.aria": "Settings sections",
   "settings.nav.overview": "Overview",
-  "settings.hub.lede": "Pick a section on the left. Current LLM:",
+  "settings.hub.lede": "Pick a section on the left. Current LLM: ",
   "settings.hub.mcpCount_one": "{count} server",
   "settings.hub.mcpCount_other": "{count} servers",
   "settings.hub.mcpNone": "Not configured",
