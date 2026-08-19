@@ -171,13 +171,20 @@ INV-36 要求节点状态栏常显**待上报数量**与暂停状态。暂停态
 
 **下面两条是这轮之后仍开着的，不随本条一起关：**
 
-### K.1 · connected 模式的审批标题仍是中文
+### K.1 · ~~connected 模式的审批标题仍是中文~~ → **已解决**（2026-08-19）
 
-`usePlan.tsx` 只对 `approval_type === "self"` 用词条，其余回落 sidecar 的 `ui_label` —— 那个字段恒为中文。
-当前 standalone 只产生 `self`，M6 connected 未排期，所以不影响使用；**做 connected 时必须一并处理**，
-否则英文用户走到职责分离审批会看到中文标题。
+渲染层 `usePlan.tsx` 改为按 `approval_type` 全量映射词条（`APPROVAL_LABEL_KEYS`），
+新增 `plan.segregationApprove`。**协议零改动。**
 
-**选项**：sidecar 改发语义键而非成品文案（干净，要动协议）／渲染层按 `approval_type` 全量映射（快，但每加一种审批类型要同步改两处）。倾向前者。
+**原先倾向的「sidecar 改发语义键」被否掉**：读代码发现 `ui_label` 完全是 `approval_type` 的函数
+（`plan_mode.py:223` 一行三元表达式，`privilege.py` 只透传），取值只有 `self` / `segregation`。
+它不携带渲染层不知道的信息，改协议是零信息增益。
+
+顺手修掉一处错标：原代码在未知 `approval_type` 且无 `ui_label` 时回落「自批准」——
+**把未知审批类型标成自批准是 INV-06 意义上的错标**，现改为中性的「计划待批」并在 dev 下告警。
+
+防漂移：`tests/test_desktop_approval_types.py` 钉住取值集合与渲染层映射表，sidecar 加第三种类型即红。
+**验证限于桩事件** —— connected 未排期，`segregation` 真机产生不出来。
 
 ### K.2 · `episodic.py` 注入模型上下文的文案仍是中文
 
@@ -187,5 +194,5 @@ INV-36 要求节点状态栏常显**待上报数量**与暂停状态。暂停态
 本轮明确不动（spec §2.3）：它不影响用户所见界面，而「给 sidecar 传 locale」是另一个决定 ——
 一旦传了，sidecar 就要按语言生成内容，这与 DEC-029 里「sidecar 只存不用」的边界冲突，要重新想。
 
-**阻塞**：都不阻塞 M1.5。K.1 阻塞 M6 connected 的英文可用性。
+**阻塞**：K.2 不阻塞 M1.5。（K.1 已解决。）
 

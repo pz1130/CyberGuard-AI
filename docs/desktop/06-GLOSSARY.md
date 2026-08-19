@@ -247,3 +247,5 @@ agent 产出的结构化报告文件。带 sha256 与保留期，上报服务端
 | 调查 | Investigate | `nav.workbench` |
 | 批准生效（技能启用） | Approve & activate | `settings.skills.approve` |
 | 批准（放行本次运行） | Approve | `plan.approve` |
+| 自批准 | Self-approve | `plan.selfApprove` |
+| 职责分离审批 | Segregation-of-duties approval | `plan.segregationApprove` |
