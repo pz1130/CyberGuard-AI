@@ -25,6 +25,34 @@ IPv4 还是 IPv6，别查渲染层。
 
 ---
 
+## git worktree 里跑 pytest 会假失败：缺 `.env`
+
+**现象**：在 `.worktrees/<name>/` 里跑 `pytest -q tests/test_desktop_*.py`，出现 1 个 ERROR：
+
+```
+pydantic_core._pydantic_core.ValidationError: 1 validation error for Settings
+  Value error, ENCRYPTION_KEY and SECRET_KEY must be configured with unique values.
+```
+
+**原因**：`.env` 被 `.gitignore` 忽略，**只存在于主 checkout**，`git worktree add` 不会带过去。
+而 pydantic-settings 是从**当前工作目录**读 `.env` 的，于是 worktree 里读不到密钥，
+`Settings` 校验失败。它以 ERROR 而非 FAIL 出现（发生在 fixture 阶段），很容易被误判成
+teardown 问题或测试代码 bug。
+
+**修法**：把主 checkout 的 `.env` 软链进 worktree。
+
+```bash
+ln -sf "$(git rev-parse --show-toplevel)/.env" .worktrees/<name>/.env
+```
+
+链完 146 个桌面测试全过、零 error。**注意 `.venv` 不需要这么做** —— `git worktree add`
+之后它通常已经是软链或能被找到；只有 `.env` 这类被忽略的配置文件会漏。
+
+**排查口诀**：worktree 里测试比主目录多出 error、且报的是 pydantic/Settings/密钥 →
+先看 `ls -l .env`，别查测试代码。
+
+---
+
 ## ⚠️ 头号大坑：TCC 授权会随签名变化而失效
 
 **现象**：昨天还好好的，今天重新构建之后，agent 读 `~/Downloads` 下的文件突然报"文件不存在"。检查代码没问题，检查路径没问题，怀疑人生。
