@@ -20,17 +20,6 @@ const PENDING = new Set<string>([
   "state/usePlan.tsx",
   "state/useUninstall.ts",
   "ui/Timestamp.tsx",
-  "views/settings/AboutSection.tsx",
-  "views/settings/AppearanceSection.tsx",
-  "views/settings/DataSection.tsx",
-  "views/settings/HubSection.tsx",
-  "views/settings/LlmSection.tsx",
-  "views/settings/McpSection.tsx",
-  "views/settings/SettingsShell.tsx",
-  "views/settings/SkillsSection.tsx",
-  "views/settings/useLlmSection.ts",
-  "views/settings/useMcpSection.ts",
-  "views/settings/useSkillsSection.ts",
 ]);
 
 const CJK = /[一-鿿]/;

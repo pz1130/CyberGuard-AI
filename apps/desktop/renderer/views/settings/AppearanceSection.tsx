@@ -1,12 +1,23 @@
 import type { ReactElement } from "react";
+import type { Language } from "../../i18n/I18nProvider";
+import { useI18n } from "../../i18n/I18nProvider";
 import type { FontSize } from "../../hooks/useUiPrefs";
 import type { ThemeMode } from "../../lib/types";
 import { useUiPrefsCtx } from "../../state";
 import { Button, Card, Field, Select } from "../../ui";
 
 export function AppearanceSection(): ReactElement {
-  const { theme, resolved, fontSize, setTheme, setFontSize, cycleTheme } =
-    useUiPrefsCtx();
+  const { t } = useI18n();
+  const {
+    theme,
+    resolved,
+    fontSize,
+    setTheme,
+    setFontSize,
+    cycleTheme,
+    language,
+    setLanguage,
+  } = useUiPrefsCtx();
   const api = typeof window !== "undefined" ? window.cyberguard : undefined;
 
   const onThemeSelect = async (next: ThemeMode) => {
@@ -30,10 +41,10 @@ export function AppearanceSection(): ReactElement {
   return (
     <div className="settings-detail">
       <Card>
-        <h3 className="settings-card-title">主题与字号</h3>
-        <Field label="Theme">
+        <h3 className="settings-card-title">{t("settings.appearance.title")}</h3>
+        <Field label={t("settings.appearance.theme")}>
           <Select
-            ariaLabel="Theme"
+            ariaLabel={t("settings.appearance.theme")}
             value={theme}
             onChange={(v) => void onThemeSelect(v)}
             options={[
@@ -43,9 +54,9 @@ export function AppearanceSection(): ReactElement {
             ]}
           />
         </Field>
-        <Field label="Font size">
+        <Field label={t("settings.appearance.fontSize")}>
           <Select
-            ariaLabel="Font size"
+            ariaLabel={t("settings.appearance.fontSize")}
             value={fontSize}
             onChange={(v) => void onFontSelect(v)}
             options={[
@@ -55,13 +66,29 @@ export function AppearanceSection(): ReactElement {
             ]}
           />
         </Field>
+        <Field label={t("settings.appearance.language")}>
+          <Select
+            ariaLabel={t("settings.appearance.language")}
+            value={language}
+            onChange={(v) => setLanguage(v as Language)}
+            options={[
+              // 语言名用母语写法，两端 locale 词条相同，不随界面语言翻
+              { value: "zh", label: t("settings.appearance.langZh") },
+              { value: "en", label: t("settings.appearance.langEn") },
+              {
+                value: "system",
+                label: t("settings.appearance.followSystem"),
+              },
+            ]}
+          />
+        </Field>
         <div className="settings-actions">
           <Button variant="secondary" onClick={cycleTheme}>
-            循环主题
+            {t("settings.appearance.cycleTheme")}
           </Button>
         </div>
         <p className="settings-hint" style={{ marginTop: "var(--sp-3)" }}>
-          resolved: {resolved} · ⌘1 Workbench · ⌘2 Evidence · ⌘, Settings
+          {t("settings.appearance.hint", { resolved })}
         </p>
       </Card>
     </div>

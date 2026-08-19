@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { useI18n } from "../../i18n/I18nProvider";
 import {
   LLM_PRESETS,
   PRESET_GROUPS,
@@ -31,33 +32,30 @@ export function LlmSection({
   onSaveLlm,
   onTestLlm,
 }: LlmSectionProps): ReactElement {
+  const { t } = useI18n();
+
   return (
     <div className="settings-detail">
       <Card>
-        <h3 className="settings-card-title">模式</h3>
-        <p className="settings-hint">
-          mock 不连网；live 使用 OpenAI 兼容 Chat Completions。本地模型通常无需
-          API key。
-        </p>
-        <Field label="运行模式">
+        <h3 className="settings-card-title">{t("settings.llm.modeTitle")}</h3>
+        <p className="settings-hint">{t("settings.llm.modeHint")}</p>
+        <Field label={t("settings.llm.modeLabel")}>
           <Select
-            ariaLabel="运行模式"
+            ariaLabel={t("settings.llm.modeLabel")}
             value={mode as "mock" | "live"}
             onChange={setMode}
             disabled={llmBusy}
             options={[
-              { value: "mock", label: "mock（演示）" },
-              { value: "live", label: "live（云 / 本地）" },
+              { value: "mock", label: t("settings.llm.modeMock") },
+              { value: "live", label: t("settings.llm.modeLive") },
             ]}
           />
         </Field>
       </Card>
 
       <Card>
-        <h3 className="settings-card-title">供应商预设</h3>
-        <p className="settings-hint">
-          点选后自动填入 Base URL 与推荐模型，仍可手动改。
-        </p>
+        <h3 className="settings-card-title">{t("settings.llm.presetTitle")}</h3>
+        <p className="settings-hint">{t("settings.llm.presetHint")}</p>
         {PRESET_GROUPS.map((g, i) => (
           <Disclosure key={g.id} summary={g.label} defaultOpen={i === 0}>
             <div className="preset-grid">
@@ -71,7 +69,7 @@ export function LlmSection({
                 >
                   {p.label}
                   {!p.requiresKey ? (
-                    <span className="preset-tag">无 key</span>
+                    <span className="preset-tag">{t("settings.llm.noKey")}</span>
                   ) : null}
                 </button>
               ))}
@@ -81,7 +79,7 @@ export function LlmSection({
       </Card>
 
       <Card>
-        <h3 className="settings-card-title">连接参数</h3>
+        <h3 className="settings-card-title">{t("settings.llm.connTitle")}</h3>
         {preset?.hint ? <p className="settings-hint">{preset.hint}</p> : null}
         <Field label="Base URL">
           <input
@@ -94,7 +92,7 @@ export function LlmSection({
               );
             }}
             disabled={llmBusy || mode === "mock"}
-            placeholder="https://api.openai.com/v1 或 http://127.0.0.1:11434/v1"
+            placeholder={t("settings.llm.baseUrlPh")}
           />
         </Field>
         <Field label="Model">
@@ -110,7 +108,7 @@ export function LlmSection({
               disabled={llmBusy || mode === "mock"}
               options={[
                 ...preset.models.map((m) => ({ value: m, label: m })),
-                { value: "__custom__", label: "自定义…" },
+                { value: "__custom__", label: t("settings.llm.customModel") },
               ]}
             />
           ) : null}
@@ -119,7 +117,7 @@ export function LlmSection({
             value={model}
             onChange={(e) => setModel(e.target.value)}
             disabled={llmBusy || mode === "mock"}
-            placeholder="模型名"
+            placeholder={t("settings.llm.modelPh")}
             style={{ marginTop: preset && preset.models.length > 0 ? 8 : 0 }}
           />
         </Field>
@@ -135,10 +133,10 @@ export function LlmSection({
           label="API key"
           hint={
             !requiresKey
-              ? "本地可选"
+              ? t("settings.llm.keyLocalOpt")
               : hasKey
-                ? "已配置（留空保留原 key）"
-                : "未配置"
+                ? t("settings.llm.keyConfigured")
+                : t("settings.llm.keyMissing")
           }
         >
           <input
@@ -148,9 +146,9 @@ export function LlmSection({
             onChange={(e) => setApiKey(e.target.value)}
             placeholder={
               !requiresKey
-                ? "本地一般可留空"
+                ? t("settings.llm.keyLocalPh")
                 : hasKey
-                  ? "••••••••  （留空保留原 key）"
+                  ? t("settings.llm.keyKeepPh")
                   : "sk-…"
             }
             autoComplete="off"
@@ -163,14 +161,14 @@ export function LlmSection({
             onClick={() => void onSaveLlm()}
             disabled={llmBusy}
           >
-            {llmBusy ? "…" : "保存"}
+            {llmBusy ? "…" : t("settings.llm.save")}
           </Button>
           <Button
             variant="secondary"
             onClick={() => void onTestLlm()}
             disabled={llmBusy || mode === "mock"}
           >
-            测试连通
+            {t("settings.llm.test")}
           </Button>
         </div>
         {llmMsg && <pre className="settings-msg">{llmMsg}</pre>}

@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { useI18n } from "../../i18n/I18nProvider";
 import { Button, Card, Disclosure, Field, Select } from "../../ui";
 import type { SkillsSectionModel } from "./useSkillsSection";
 
@@ -30,13 +31,25 @@ export function SkillsSection({
   onForkSkill,
   onRevealSkillDir,
 }: SkillsSectionProps): ReactElement {
+  const { t } = useI18n();
+
+  const catalogSummary =
+    t("settings.skills.catalog") +
+    (skills.length ? ` · ${skills.length}` : "");
+  const draftsSummary =
+    t("settings.skills.drafts") +
+    (skillDrafts.length ? ` · ${skillDrafts.length}` : "");
+
   return (
     <div className="settings-detail">
       <Card>
-        <h3 className="settings-card-title">技能 SOP</h3>
+        <h3 className="settings-card-title">{t("settings.skills.title")}</h3>
         <p className="settings-hint">
-          流程：新建/导入 → 草稿 → <strong>批准</strong> 后进入 agent catalog。
-          内置只读；运行时用 <code className="mono">load_skill</code> 拉正文。
+          {t("settings.skills.hintLead")}
+          <strong>{t("settings.skills.approveWord")}</strong>
+          {t("settings.skills.hintMid")}
+          <code className="mono">load_skill</code>
+          {t("settings.skills.hintTail")}
         </p>
         <div className="settings-actions" style={{ marginTop: 0 }}>
           <Button
@@ -44,34 +57,34 @@ export function SkillsSection({
             onClick={resetSkillEditor}
             disabled={skillBusy}
           >
-            + 新建
+            {t("settings.skills.new")}
           </Button>
           <Button
             variant="ghost"
             onClick={() => void onImportSkill()}
             disabled={skillBusy}
           >
-            从 Markdown 导入…
+            {t("settings.skills.importMd")}
           </Button>
           <Button
             variant="ghost"
             onClick={() => void onRevealSkillDir("drafts")}
           >
-            打开草稿目录
+            {t("settings.skills.openDrafts")}
           </Button>
           <Button
             variant="ghost"
             onClick={() => void onRevealSkillDir("approved")}
           >
-            打开已批准
+            {t("settings.skills.openApproved")}
           </Button>
         </div>
       </Card>
 
-      <Disclosure summary={`已生效（catalog）${skills.length ? ` · ${skills.length}` : ""}`} defaultOpen>
+      <Disclosure summary={catalogSummary} defaultOpen>
         <div className="settings-list">
           {skills.length === 0 && (
-            <p className="settings-hint">暂无（sidecar 离线？）</p>
+            <p className="settings-hint">{t("settings.skills.catalogEmpty")}</p>
           )}
           {skills.map((s) => (
             <button
@@ -88,7 +101,7 @@ export function SkillsSection({
               <span className="settings-hint" style={{ margin: 0 }}>
                 {s.source || "?"}
                 {s.version ? ` · v${s.version}` : ""}
-                {s.readonly ? " · 只读" : ""}
+                {s.readonly ? t("settings.skills.readonly") : ""}
               </span>
               <div className="mono-xs">{s.description}</div>
             </button>
@@ -96,12 +109,10 @@ export function SkillsSection({
         </div>
       </Disclosure>
 
-      <Disclosure
-        summary={`草稿 · 不参与装配${skillDrafts.length ? ` · ${skillDrafts.length}` : ""}`}
-      >
+      <Disclosure summary={draftsSummary}>
         <div className="settings-list">
           {skillDrafts.length === 0 && (
-            <p className="settings-hint">无草稿</p>
+            <p className="settings-hint">{t("settings.skills.draftsEmpty")}</p>
           )}
           {skillDrafts.map((s) => (
             <button
@@ -126,10 +137,10 @@ export function SkillsSection({
 
       <Card>
         <h3 className="settings-card-title">
-          编辑器{" "}
+          {t("settings.skills.editor")}{" "}
           <span className="pill">{skillEditSource}</span>
         </h3>
-        <Field label="Name（字母开头，a-z 0-9 _ -）">
+        <Field label={t("settings.skills.nameLabel")}>
           <input
             className="data-input"
             value={skillName}
@@ -138,7 +149,7 @@ export function SkillsSection({
             placeholder="my_custom_sop"
           />
         </Field>
-        <Field label="Description（catalog 一行摘要）">
+        <Field label={t("settings.skills.descLabel")}>
           <input
             className="data-input"
             value={skillDesc}
@@ -170,7 +181,7 @@ export function SkillsSection({
             />
           </Field>
         </div>
-        <Field label="Body（Markdown 规程正文）">
+        <Field label={t("settings.skills.bodyLabel")}>
           <textarea
             className="skill-body-edit"
             rows={12}
@@ -187,7 +198,7 @@ export function SkillsSection({
               onClick={() => void onForkSkill()}
               disabled={skillBusy}
             >
-              复制到草稿编辑
+              {t("settings.skills.fork")}
             </Button>
           ) : (
             <>
@@ -196,14 +207,14 @@ export function SkillsSection({
                 onClick={() => void onSaveSkillDraft()}
                 disabled={skillBusy}
               >
-                保存草稿
+                {t("settings.skills.saveDraft")}
               </Button>
               <Button
                 variant="primary"
                 onClick={() => void onApproveSkill()}
                 disabled={skillBusy}
               >
-                批准生效
+                {t("settings.skills.approve")}
               </Button>
               {(skillEditSource === "draft" ||
                 skillEditSource === "approved") && (
@@ -212,7 +223,7 @@ export function SkillsSection({
                   onClick={() => void onDeleteSkill()}
                   disabled={skillBusy}
                 >
-                  删除
+                  {t("settings.skills.delete")}
                 </Button>
               )}
             </>

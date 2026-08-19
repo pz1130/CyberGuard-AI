@@ -13,7 +13,8 @@ logger = logging.getLogger("cyberguard.desktop.ui_prefs")
 
 ALLOWED_THEMES = frozenset({"dark", "light", "system"})
 ALLOWED_FONT = frozenset({"small", "medium", "large"})
-DEFAULTS: Dict[str, Any] = {"theme": "dark", "font_size": "medium"}
+ALLOWED_LANGUAGE = frozenset({"zh", "en", "system"})
+DEFAULTS: Dict[str, Any] = {"theme": "dark", "font_size": "medium", "language": "system"}
 
 
 def _path() -> Path:
@@ -27,7 +28,7 @@ def get_prefs() -> Dict[str, Any]:
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
             if isinstance(raw, dict):
-                data.update({k: v for k, v in raw.items() if k in DEFAULTS or k in ("theme", "font_size")})
+                data.update({k: v for k, v in raw.items() if k in DEFAULTS or k in ("theme", "font_size", "language")})
         except Exception as exc:  # noqa: BLE001
             logger.warning("ui_prefs read failed: %s", type(exc).__name__)
     theme = str(data.get("theme") or "dark")
@@ -36,7 +37,10 @@ def get_prefs() -> Dict[str, Any]:
     font = str(data.get("font_size") or "medium")
     if font not in ALLOWED_FONT:
         font = "medium"
-    return {"theme": theme, "font_size": font}
+    language = str(data.get("language") or "system")
+    if language not in ALLOWED_LANGUAGE:
+        language = "system"
+    return {"theme": theme, "font_size": font, "language": language}
 
 
 def set_prefs(partial: Dict[str, Any]) -> Dict[str, Any]:
@@ -49,6 +53,10 @@ def set_prefs(partial: Dict[str, Any]) -> Dict[str, Any]:
         font = str(partial["font_size"]).strip().lower()
         if font in ALLOWED_FONT:
             current["font_size"] = font
+    if "language" in partial and partial["language"] is not None:
+        language = str(partial["language"]).strip().lower()
+        if language in ALLOWED_LANGUAGE:
+            current["language"] = language
     path = _path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(

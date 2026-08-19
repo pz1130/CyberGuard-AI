@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useI18n, type Language } from "../i18n/I18nProvider";
 import { useTheme } from "./useTheme";
 
 export type FontSize = "small" | "medium" | "large";
@@ -38,6 +39,7 @@ function mediaBelow(px: number): boolean {
 
 export function useUiPrefs() {
   const { theme, setTheme, resolved, cycleTheme } = useTheme();
+  const { language, setLanguage: setLanguageI18n } = useI18n();
   const [fontSize, setFontSizeState] = useState<FontSize>(() => readFont());
   // 断点只在初始化读一次；不监听 resize，否则拖窗口会覆盖用户手动选择
   const [sidebarCollapsed, setSidebarCollapsedState] = useState(() =>
@@ -71,9 +73,13 @@ export function useUiPrefs() {
           }
           applyFont(f);
         }
+        const lang = p?.language;
+        if (lang === "zh" || lang === "en" || lang === "system") {
+          setLanguageI18n(lang);
+        }
       })
       .catch(() => undefined);
-  }, [setTheme]);
+  }, [setTheme, setLanguageI18n]);
 
   const setFontSize = useCallback((size: FontSize) => {
     setFontSizeState(size);
@@ -84,6 +90,15 @@ export function useUiPrefs() {
     }
     applyFont(size);
   }, []);
+
+  const setLanguage = useCallback(
+    (l: Language) => {
+      setLanguageI18n(l);
+      const api = typeof window !== "undefined" ? window.cyberguard : undefined;
+      void api?.prefsSet?.({ language: l }).catch(() => undefined);
+    },
+    [setLanguageI18n]
+  );
 
   const setSidebarCollapsed = useCallback((v: boolean) => {
     setSidebarCollapsedState(v);
@@ -108,6 +123,8 @@ export function useUiPrefs() {
     setTheme,
     resolved,
     cycleTheme,
+    language,
+    setLanguage,
     fontSize,
     setFontSize,
     sidebarCollapsed,
