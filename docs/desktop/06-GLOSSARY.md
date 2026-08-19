@@ -199,9 +199,9 @@ agent 产出的结构化报告文件。带 sha256 与保留期，上报服务端
 
 ---
 
-## 界面用语 · 2026-08-19 i18n 草案，待用户定稿
+## 界面用语 · 2026-08-19 i18n（已定稿）
 
-> 来源：`docs/desktop/i18n-term-review.md`（四列表，含 ☐ 勾选栏）。**判据 3 在用户逐条确认前保持 open**；下列为已落入 `en.json` 的草案，供 `glossary.test.ts` 挡漂移。
+> 来源：`docs/desktop/i18n-term-review.md`（43 条，分五组，含裁决记录）。**定稿人是 controller** —— 用户把六条待决项交给它拍板，其余 37 条随之确认。下列已落入 `en.json`，`glossary.test.ts` 挡漂移。
 >
 > 完整逐条理由见审阅表。本节只收安全面高频术语（降级 / 状态栏 / 审批 / 档位）。
 
@@ -218,6 +218,7 @@ agent 产出的结构化报告文件。带 sha256 与保留期，上报服务端
 | 已暂停 | Paused | `statusbar.paused` |
 | 环境详情 | Environment details | `statusbar.envDetails` |
 | sidecar 未连接 | Sidecar not connected | `statusbar.sidecarOffline` |
+| sidecar（正常态） | Sidecar | `statusbar.sidecarOk` |
 | sidecar 离线 | Sidecar offline | `degradation.offline.label` |
 | 本地执行进程未连接，运行已禁用 | Local execution process not connected; runs are disabled | `degradation.offline.detail` |
 | 沙箱不可用 | Sandbox unavailable | `degradation.sandbox.label` |
@@ -226,7 +227,7 @@ agent 产出的结构化报告文件。带 sha256 与保留期，上报服务端
 | 全盘加密未开启，本机数据在设备丢失时可被读取 | Full-disk encryption is off; local data may be readable if the device is lost | `degradation.filevault.detail` |
 | 磁盘访问受限 | Disk access restricted | `degradation.tcc.label` |
 | 部分目录读取会失败 | Some directories will fail to read | `degradation.tcc.detail` |
-| 模型为 mock | Model is mock | `degradation.mock.label` |
+| 模型为 mock | Mock model | `degradation.mock.label` |
 | 未配置真实模型，输出不可用于结论 | No real model configured; output must not be used as findings | `degradation.mock.detail` |
 | 收起 | Dismiss | `degradation.dismiss` |
 | 降级 | degradation（告警语境；界面用 label 直述，不写 soft "degraded mode"） | `degradation.*` |
@@ -244,3 +245,5 @@ agent 产出的结构化报告文件。带 sha256 与保留期，上报服务端
 | 证据 | Evidence | `nav.evidence` / `rail.evidence` |
 | 高危 | high-severity | `rail.findings.high_*` |
 | 调查 | Investigate | `nav.workbench` |
+| 批准生效（技能启用） | Approve & activate | `settings.skills.approve` |
+| 批准（放行本次运行） | Approve | `plan.approve` |
