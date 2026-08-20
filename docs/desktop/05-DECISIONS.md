@@ -472,4 +472,8 @@ standalone-first 之后，任务由用户在本地发起，服务端不再是发
 
 **由 i18n 引出的一条硬要求**：预设任务的中英两版必须命中 `plan_mode.RISK_KEYWORDS` 同一组关键词，否则同一个按钮在两种语言下审批行为不一致（INV-06）。`tests/test_desktop_i18n_risk_parity.py` 挡着。
 
+**后续（2026-08-20）**：§K.1（connected 审批标题）与 §K.2（episodic 注入文案）均已收敛，**边界未放宽** ——
+locale 始终没有传给 sidecar。K.2 尤其说明了这条边界立得住：那段中文的正解是统一成英文（系统提示词其余部分
+本就全英文），而不是让 sidecar 按语言生成内容。
+
 **关联**：`docs/superpowers/specs/2026-08-19-desktop-i18n-design.md`、`11-OPEN-QUESTIONS.md` §K（本决策的来源）、INV-06 / INV-38 / INV-39、DEC-027。
