@@ -67,6 +67,72 @@ async def test_chat_returns_string_when_no_tools(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_chat_uses_master_provider_and_exact_model(monkeypatch):
+    router = llm_router_module.LLMRouter()
+    fake_msg = MagicMock(content="reply", tool_calls=None)
+    fake_resp = MagicMock()
+    fake_resp.choices = [MagicMock(message=fake_msg, finish_reason="stop")]
+    fake_resp.usage = None
+    fake_client = MagicMock()
+    fake_client.chat.completions.create = AsyncMock(return_value=fake_resp)
+    get_client = AsyncMock(return_value=fake_client)
+
+    monkeypatch.setattr(router, "get_client_async", get_client)
+    monkeypatch.setattr(router, "_load_master_config", AsyncMock(return_value={
+        "provider_id": 42,
+        "model": "Case-Sensitive-Model",
+    }))
+    monkeypatch.setattr(router, "get_provider_config_async", AsyncMock(return_value={
+        "provider_type": "openai",
+        "models": [{"name": "Case-Sensitive-Model"}],
+    }))
+    monkeypatch.setattr(router, "_should_strip_think", AsyncMock(return_value=False))
+    monkeypatch.setattr(router, "_record_token_usage", AsyncMock())
+    monkeypatch.setattr(llm_router_module.settings, "MOCK_MODE", False)
+
+    assert await router.chat([{"role": "user", "content": "hi"}]) == "reply"
+    get_client.assert_awaited_once_with(provider_id=42)
+    assert fake_client.chat.completions.create.await_args.kwargs["model"] == "Case-Sensitive-Model"
+
+
+@pytest.mark.asyncio
+async def test_explicit_unconfigured_provider_does_not_fall_back(monkeypatch):
+    router = llm_router_module.LLMRouter()
+    monkeypatch.setattr(router, "get_provider_config_async", AsyncMock(return_value=None))
+    fallback = AsyncMock(return_value={"api_key": "unexpected", "base_url": "https://example.com/v1"})
+    monkeypatch.setattr(router, "_get_first_active_provider", fallback)
+
+    with pytest.raises(RuntimeError, match="selected AI provider"):
+        await router.get_client_async(provider_id=999)
+    fallback.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_automatic_provider_skips_empty_openai_placeholder(monkeypatch):
+    router = llm_router_module.LLMRouter()
+    router.providers = [{
+        "name": "openai",
+        "api_key": "",
+        "base_url": "https://api.openai.com/v1",
+        "models": ["gpt-4o"],
+    }]
+    monkeypatch.setattr(router, "_get_first_active_provider", AsyncMock(return_value={
+        "name": "configured",
+        "api_key": "configured-key",
+        "base_url": "https://configured.example/v1",
+        "models": ["configured-model"],
+    }))
+    client_factory = MagicMock(return_value=MagicMock())
+    monkeypatch.setattr(llm_router_module, "AsyncOpenAI", client_factory)
+
+    await router.get_client_async()
+
+    client_factory.assert_called_once_with(
+        api_key="configured-key", base_url="https://configured.example/v1"
+    )
+
+
+@pytest.mark.asyncio
 async def test_chat_records_langfuse_generation(monkeypatch):
     """When a trace_run is active and Langfuse is configured, chat records one
     generation carrying the call's input/output."""

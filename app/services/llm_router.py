@@ -45,7 +45,7 @@ class LLMRouter:
 
     def __init__(self):
         self.providers = []
-        self._client_cache: dict[int, AsyncOpenAI] = {}
+        self._client_cache: dict[int | str, AsyncOpenAI] = {}
         self._master_config: Optional[dict] = None
         self._load_providers()
 
@@ -59,15 +59,6 @@ class LLMRouter:
                 "models": provider.get("models", ["gpt-4o"]),
             })
 
-        # Default to OpenAI if no providers configured
-        if not self.providers:
-            self.providers = [{
-                "name": "openai",
-                "api_key": "",
-                "base_url": "https://api.openai.com/v1",
-                "models": ["gpt-4o"],
-            }]
-
     async def _load_master_config(self) -> dict:
         """Load master agent config from DB (cached)."""
         if self._master_config is not None:
@@ -78,6 +69,7 @@ class LLMRouter:
             async with get_db_context() as session:
                 config = await get_master_config(session)
                 self._master_config = {
+                    "provider_id": getattr(config, "llm_provider_id", None),
                     "model": getattr(config, "llm_model", None) or getattr(config, "model", None),
                     "temperature": config.temperature,
                     "system_prompt": config.system_prompt,
@@ -201,6 +193,9 @@ class LLMRouter:
             self._client_cache.clear()
         else:
             self._client_cache.pop(provider_id, None)
+            # The deterministic automatic selection may resolve to this same
+            # provider, so its cached client must be refreshed as well.
+            self._client_cache.pop("__default__", None)
 
     @staticmethod
     def _strip_think_blocks(text: str) -> str:
@@ -275,6 +270,8 @@ class LLMRouter:
                         api_key = decrypt_data(row[1], CredentialField.PROVIDER_API_KEY)
                     except Exception:
                         api_key = ""
+                if not api_key:
+                    return None
 
                 base_url = row[2] or "https://api.openai.com/v1"
                 try:
@@ -336,7 +333,12 @@ class LLMRouter:
                 result = await session.execute(
                     text(
                         "SELECT name, api_key_encrypted, base_url, models, metadata_json "
-                        "FROM providers WHERE is_active = true LIMIT 1"
+                        "FROM providers "
+                        "WHERE is_active = true "
+                        "AND api_key_encrypted IS NOT NULL "
+                        "AND base_url IS NOT NULL AND base_url <> '' "
+                        "AND json_array_length(COALESCE(models, '[]'::json)) > 0 "
+                        "ORDER BY updated_at DESC, id ASC LIMIT 1"
                     )
                 )
                 row = result.fetchone()
@@ -352,6 +354,8 @@ class LLMRouter:
                         api_key = ""
 
                 base_url = row[2] or "https://api.openai.com/v1"
+                if not api_key:
+                    return None
                 try:
                     validate_outbound_url(base_url)
                 except SSRFError as e:
@@ -397,8 +401,10 @@ class LLMRouter:
             if provider:
                 return AsyncOpenAI(api_key=provider["api_key"], base_url=provider["base_url"])
 
-        # 2. Fall back to first configured provider
-        provider = self.providers[0]
+        # 2. Fall back to first configured environment provider
+        provider = next((item for item in self.providers if item.get("api_key")), None)
+        if provider is None:
+            raise RuntimeError("No environment-configured AI provider is available.")
         return AsyncOpenAI(api_key=provider["api_key"], base_url=provider["base_url"])
 
     async def get_client_async(self, provider_id: Optional[int] = None, provider_name: Optional[str] = None) -> AsyncOpenAI:
@@ -412,10 +418,13 @@ class LLMRouter:
         # 1. Try by provider_id (DB)
         if provider_id:
             config = await self.get_provider_config_async(provider_id)
-            if config:
+            if config and config.get("api_key"):
                 client = AsyncOpenAI(api_key=config["api_key"], base_url=config["base_url"])
                 self._client_cache[cache_key] = client
                 return client
+            raise RuntimeError(
+                "The selected AI provider is inactive, missing, or has no usable API key."
+            )
 
         # 2. Try by provider_name (config)
         if provider_name:
@@ -425,24 +434,25 @@ class LLMRouter:
                 self._client_cache[cache_key] = client
                 return client
 
-        # 3. Try first litellm provider if available
-        if self.providers:
-            provider = self.providers[0]
-            client = AsyncOpenAI(api_key=provider["api_key"], base_url=provider["base_url"])
-            self._client_cache[cache_key] = client
-            return client
-
-        # 4. Fall back to first active DB provider (no specific provider_id)
+        # 3. Prefer a configured DB provider. Selection is deterministic and
+        # excludes seeded placeholders with no credential.
         default_provider = await self._get_first_active_provider()
         if default_provider:
             client = AsyncOpenAI(api_key=default_provider["api_key"], base_url=default_provider["base_url"])
             self._client_cache[cache_key] = client
             return client
 
-        # 5. Last resort — use a placeholder that will fail with a clear error
-        client = AsyncOpenAI(api_key="no-api-key-configured", base_url="https://api.openai.com/v1")
-        self._client_cache[cache_key] = client
-        return client
+        # 4. Environment-configured providers are a deployment fallback, but
+        # empty placeholder keys are never considered configured.
+        provider = next((item for item in self.providers if item.get("api_key")), None)
+        if provider:
+            client = AsyncOpenAI(api_key=provider["api_key"], base_url=provider["base_url"])
+            self._client_cache[cache_key] = client
+            return client
+
+        raise RuntimeError(
+            "No configured AI provider is available. Configure and verify a provider first."
+        )
 
     async def _record_token_usage(self, model_name: str, provider_id: Optional[int], response: Any) -> None:
         """Record token usage from an LLM response."""
@@ -506,9 +516,9 @@ class LLMRouter:
                 "reasoning": "Mock mode — intent parsed via keyword matching",
             }
 
-        client = await self.get_client_async(provider_id=provider_id)
-
         master_config = await self._load_master_config()
+        active_provider_id = provider_id or master_config.get("provider_id")
+        client = await self.get_client_async(provider_id=active_provider_id)
         active_model = _model_name(model_override or model or master_config.get("model") or settings.MASTER_AGENT_MODEL)
 
         # Load available sub-agents from DB to include in prompt
@@ -563,7 +573,7 @@ Examples:
             "llm.user_input_length": len(user_input),
         }) as span:
             try:
-                await rate_limit(provider_id, await self._provider_rpm(provider_id))
+                await rate_limit(active_provider_id, await self._provider_rpm(active_provider_id))
                 _pi_messages = self._guard_messages([
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_input},
@@ -579,12 +589,12 @@ Examples:
                 span.set_attribute("llm.finish_reason", response.choices[0].finish_reason)
 
                 # Record token usage
-                await self._record_token_usage(active_model, provider_id, response)
+                await self._record_token_usage(active_model, active_provider_id, response)
                 _record_generation(
                     "parse_intent", active_model,
                     [{"role": "system", "content": system_prompt},
                      {"role": "user", "content": user_input}],
-                    content, response, provider_id)
+                    content, response, active_provider_id)
 
                 parsed = self._extract_json_object(content)
                 if parsed is not None:
@@ -616,17 +626,17 @@ Examples:
             lines = [f"**{r.get('agent_name', 'Agent')}**:\n{r.get('output', 'No output')}" for r in results]
             return "📊 **CyberGuard 分析报告**\n\n" + "\n\n".join(lines) + "\n\n_此结果为 Mock 模式输出，配置真实 AI Provider 后可获得更智能的分析。_"
 
-        client = await self.get_client_async(provider_id=provider_id)
-
         # Get model from config (before span so active_model is defined)
         master_config = await self._load_master_config()
+        active_provider_id = provider_id or master_config.get("provider_id")
+        client = await self.get_client_async(provider_id=active_provider_id)
         active_model = (
             model_override
             or master_config.get("model")
             or settings.MASTER_AGENT_MODEL
         )
-        if provider_id:
-            provider_config = await self.get_provider_config_async(provider_id)
+        if not active_model and active_provider_id:
+            provider_config = await self.get_provider_config_async(active_provider_id)
             if provider_config and provider_config.get("models"):
                 active_model = provider_config["models"][0]
         active_model = _model_name(active_model)
@@ -642,7 +652,7 @@ Examples:
                 "llm.model": active_model,
                 "llm.operation": "chat",
                 "llm.num_results": len(results),
-                "llm.provider_id": provider_id,
+                "llm.provider_id": active_provider_id,
             },
         ) as span:
             summarizer_prompt = (
@@ -651,7 +661,7 @@ Examples:
                 or "You are CyberGuard's summarizer. Create a concise summary of agent results."
             )
 
-            await rate_limit(provider_id, await self._provider_rpm(provider_id))
+            await rate_limit(active_provider_id, await self._provider_rpm(active_provider_id))
             _gs_messages = self._guard_messages([
                 {"role": "system", "content": summarizer_prompt},
                 {"role": "user", "content": f"Results:\n{results_text}"},
@@ -662,19 +672,20 @@ Examples:
                 temperature=temperature_override if temperature_override is not None else (master_config.get("temperature") or 0.3),
             ), label="generate_summary")
             raw_content = response.choices[0].message.content or ""
-            # Always strip internal reasoning blocks (<think>/<reasoning>), even if
-            # the provider has preserve_think=true. preserve_think is reserved for
-            # future "keep other markup" cases — internal CoT is never user-facing.
-            content = self._strip_think_blocks(raw_content)
+            content = (
+                self._strip_think_blocks(raw_content)
+                if await self._should_strip_think(active_provider_id)
+                else raw_content
+            )
             span.set_attribute("llm.response_length", len(content))
 
             # Record token usage
-            await self._record_token_usage(active_model, provider_id, response)
+            await self._record_token_usage(active_model, active_provider_id, response)
             _record_generation(
                 "generate_summary", active_model,
                 [{"role": "system", "content": summarizer_prompt},
                  {"role": "user", "content": f"Results:\n{results_text}"}],
-                content, response, provider_id)
+                content, response, active_provider_id)
 
             return content
 
@@ -710,17 +721,18 @@ Examples:
 
         tracer = get_tracer()
 
-        # Determine active model
-        active_model = model_override or model
-        active_provider_id = provider_id
+        master_config = await self._load_master_config()
+
+        # Determine active provider/model. Explicit conversation or request
+        # values win; otherwise use the validated Master Agent selection.
+        active_provider_id = provider_id or master_config.get("provider_id")
+        active_model = model_override or model or master_config.get("model")
         provider_config = None
-        if not active_model and provider_id:
-            provider_config = await self.get_provider_config_async(provider_id)
+        if not active_model and active_provider_id:
+            provider_config = await self.get_provider_config_async(active_provider_id)
             if provider_config and provider_config.get("models"):
                 active_model = provider_config["models"][0]
         active_model = _model_name(active_model or settings.MASTER_AGENT_MODEL)
-
-        master_config = await self._load_master_config()
 
         # Drop exclude_from_context before any provider call (M0a-2)
         messages = messages_for_model(messages)
@@ -733,9 +745,9 @@ Examples:
                 return SimpleNamespace(content=mock_text, tool_calls=None)
             return mock_text
 
-        client = await self.get_client_async(provider_id=provider_id)
-        if provider_config is None and provider_id:
-            provider_config = await self.get_provider_config_async(provider_id)
+        client = await self.get_client_async(provider_id=active_provider_id)
+        if provider_config is None and active_provider_id:
+            provider_config = await self.get_provider_config_async(active_provider_id)
         provider_type = (provider_config or {}).get("provider_type") or (
             provider_config or {}
         ).get("name")
@@ -773,15 +785,16 @@ Examples:
             )
             kwargs = apply_prompt_cache_key(kwargs, cache_key=prompt_cache_key)
 
-            await rate_limit(provider_id, await self._provider_rpm(provider_id))
+            await rate_limit(active_provider_id, await self._provider_rpm(active_provider_id))
             response = await acall_with_retry(
                 lambda: client.chat.completions.create(**kwargs), label="chat")
             message = response.choices[0].message
             raw_content = message.content or ""
-            # Always strip internal reasoning blocks (<think>/<reasoning>), even if
-            # the provider has preserve_think=true. preserve_think is reserved for
-            # future "keep other markup" cases — internal CoT is never user-facing.
-            content = self._strip_think_blocks(raw_content)
+            content = (
+                self._strip_think_blocks(raw_content)
+                if await self._should_strip_think(active_provider_id)
+                else raw_content
+            )
             span.set_attribute("llm.response_length", len(content))
             span.set_attribute("llm.finish_reason", response.choices[0].finish_reason)
             await self._record_token_usage(active_model, active_provider_id, response)
@@ -809,14 +822,14 @@ Examples:
                 yield f"data: {chunk}\\n\\n"
         """
         messages = self._guard_messages(messages, pii_policy)
-        active_model = model_override or model
-        if not active_model and provider_id:
-            config = await self.get_provider_config_async(provider_id)
+        master_config = await self._load_master_config()
+        active_provider_id = provider_id or master_config.get("provider_id")
+        active_model = model_override or model or master_config.get("model")
+        if not active_model and active_provider_id:
+            config = await self.get_provider_config_async(active_provider_id)
             if config and config.get("models"):
                 active_model = config["models"][0]
         active_model = _model_name(active_model or settings.MASTER_AGENT_MODEL)
-
-        master_config = await self._load_master_config()
 
         if settings.MOCK_MODE:
             last_msg = messages[-1]["content"] if messages else ""
@@ -830,7 +843,7 @@ Examples:
                 await asyncio.sleep(0.02)
             return
 
-        client = await self.get_client_async(provider_id=provider_id)
+        client = await self.get_client_async(provider_id=active_provider_id)
         temperature = (
             temperature_override
             if temperature_override is not None
@@ -840,7 +853,7 @@ Examples:
         accumulated = []
         usage_response = None
         try:
-            await rate_limit(provider_id, await self._provider_rpm(provider_id))
+            await rate_limit(active_provider_id, await self._provider_rpm(active_provider_id))
             # Retry only the connection/handshake; mid-stream failures are not retried.
             stream_kwargs = {
                 "model": active_model,
@@ -880,17 +893,11 @@ Examples:
             yield f"\n\n[错误: {e}]"
             return
 
-        # Strip think tags from final accumulated response (best-effort)
         full = "".join(accumulated)
         if usage_response is not None:
-            await self._record_token_usage(active_model, provider_id, usage_response)
+            await self._record_token_usage(active_model, active_provider_id, usage_response)
         _record_generation("stream_chat", active_model, messages, full,
-                           usage_response, provider_id)
-        strip = await self._should_strip_think(provider_id)
-        if strip and "<think>" in full.lower():
-            # We already streamed the raw content — emit a replacement signal
-            # so the client knows to strip think blocks from display
-            pass  # client-side stripping for streamed content
+                           usage_response, active_provider_id)
 
     async def embed(
         self,

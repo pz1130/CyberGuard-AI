@@ -327,7 +327,8 @@
     "normalModeTip": "NORMAL: Default LLM parses intent to decide sub-agents | FAST: Skip intent parsing, use only Master Agent | EXPERT: Dispatch to all active sub-agents in parallel",
     "lockedSubAgent": "Locked to specific Sub-Agent, bypassing intent parsing",
     "masterRoute": "Routed by Master Agent after intent parsing",
-    "maxFiles": "Max upload {{max}} files"
+    "maxFiles": "Max upload {{max}} files",
+    "reasoning": "Thinking process"
   },
   "tools": {
     "title": "Tool Pool",
@@ -431,6 +432,7 @@
     "saveFailedPrefix": "Save failed: ",
     "logoTooLarge": "Logo max 2MB",
     "modelLoadFail": "Failed to load Provider",
+    "selectProviderModel": "Select a configured Provider and model",
     "aboutVersion": "Version 1.0.0-rc.1",
     "aboutPlatform": "Enterprise Security Operations Platform",
     "aboutDesc": "Governed AI for security operations · MCP tool protocol · Knowledge base RAG · Full audit trail"

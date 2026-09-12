@@ -93,6 +93,72 @@ interface AttachmentFile {
   previewUrl: string
 }
 
+interface ReasoningContent {
+  reasoning: string[]
+  answer: string
+}
+
+/** Split provider reasoning tags without exposing the raw XML-like markers. */
+export function splitReasoningContent(content: string): ReasoningContent {
+  const reasoning: string[] = []
+  let answer = ''
+  let cursor = 0
+  const openingTag = /<(think|reasoning)>/gi
+  let match: RegExpExecArray | null
+
+  while ((match = openingTag.exec(content)) !== null) {
+    answer += content.slice(cursor, match.index)
+    const bodyStart = match.index + match[0].length
+    const closingTag = new RegExp(`</${match[1]}>`, 'i')
+    const closingMatch = closingTag.exec(content.slice(bodyStart))
+    if (!closingMatch) {
+      const partial = content.slice(bodyStart).trim()
+      if (partial) reasoning.push(partial)
+      cursor = content.length
+      break
+    }
+
+    const body = content.slice(bodyStart, bodyStart + closingMatch.index).trim()
+    if (body) reasoning.push(body)
+    cursor = bodyStart + closingMatch.index + closingMatch[0].length
+    openingTag.lastIndex = cursor
+  }
+
+  answer += content.slice(cursor)
+  return { reasoning, answer: answer.replace(/<\/(?:think|reasoning)>/gi, '') }
+}
+
+function AssistantMessage({ content }: { content: string }) {
+  const { t } = useTranslation()
+  const { reasoning, answer } = splitReasoningContent(content)
+  const safeUrl = (url: string) => /^https?:\/\//i.test(url) ? url : '#'
+
+  return (
+    <div className="chat-markdown">
+      {reasoning.map((part, index) => (
+        <details
+          key={index}
+          style={{
+            marginBottom: 12,
+            padding: '8px 12px',
+            border: '1px solid var(--border)',
+            background: 'var(--bg-base)',
+            color: 'var(--text-muted)',
+          }}
+        >
+          <summary style={{ cursor: 'pointer', fontSize: 12, letterSpacing: '0.04em' }}>
+            {t('chat.reasoning')}
+          </summary>
+          <div style={{ marginTop: 8, fontSize: 13 }}>
+            <ReactMarkdown urlTransform={safeUrl}>{part}</ReactMarkdown>
+          </div>
+        </details>
+      ))}
+      {answer && <ReactMarkdown urlTransform={safeUrl}>{answer}</ReactMarkdown>}
+    </div>
+  )
+}
+
 export default function Chat() {
   const { t } = useTranslation()
   const [input, setInput] = useState('')
@@ -377,7 +443,6 @@ export default function Chat() {
       else if (raw?.content) output = raw.content
       else if (raw?.text) output = raw.text
       else output = JSON.stringify(raw, null, 2)
-      output = output.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
       const assistantMsg = { role: 'assistant' as const, content: output, created_at: new Date().toISOString() }
       setMessages(prev => [...prev, assistantMsg])
       // Backend handles conversation persistence + auto-title
@@ -899,11 +964,7 @@ export default function Chat() {
                 </div>
                 <div className={`chat-msg-bubble ${msg.role}`}>
                   {msg.role === 'assistant' ? (
-                    <div className="chat-markdown">
-                      <ReactMarkdown
-                        urlTransform={(url) => /^https?:\/\//i.test(url) ? url : '#'}
-                      >{msg.content}</ReactMarkdown>
-                    </div>
+                    <AssistantMessage content={msg.content} />
                   ) : (
                     <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span>
                   )}

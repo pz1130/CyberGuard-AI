@@ -17,6 +17,11 @@ First IFI workgroup release candidate of the Docker reference implementation.
   bootstrap with no built-in password.
 - Provider-reported token accounting for standard, streaming, and embedding
   calls, with administrator-configured per-model cost estimates.
+- Durable PostgreSQL LangGraph checkpoints for task execution and approval
+  resume across API and worker processes.
+- Provider-bound Master Agent model selection with server-side validation and
+  deterministic fallback that excludes providers without credentials.
+- Collapsed rendering for provider `<think>` and `<reasoning>` output in chat.
 - Disposable integration-test stack, CI gate, delivery runbook, evaluation
   framework, responsible-AI statement, architecture, and operations guidance.
 

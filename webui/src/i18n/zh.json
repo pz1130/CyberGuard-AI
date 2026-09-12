@@ -327,7 +327,8 @@
     "normalModeTip": "NORMAL: 默认 LLM 解析意图决定是否调用子 agent | FAST: 跳过意图解析，只用 Master Agent | EXPERT: 并行派发给所有 active sub-agent",
     "lockedSubAgent": "已锁定到指定 Sub-Agent，绕过意图解析",
     "masterRoute": "由 Master Agent 解析意图后路由",
-    "maxFiles": "最多上传 {{max}} 个文件"
+    "maxFiles": "最多上传 {{max}} 个文件",
+    "reasoning": "思考过程"
   },
   "tools": {
     "title": "工具池",
@@ -431,6 +432,7 @@
     "saveFailedPrefix": "保存失败: ",
     "logoTooLarge": "Logo 最大 2MB",
     "modelLoadFail": "无法加载 Provider",
+    "selectProviderModel": "请选择已配置的 Provider 和模型",
     "aboutVersion": "Version 1.0.0-rc.1",
     "aboutPlatform": "Enterprise Security Operations Platform",
     "aboutDesc": "面向安全运营的受治理 AI · MCP 工具协议 · 知识库 RAG · 完整审计轨迹"

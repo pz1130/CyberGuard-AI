@@ -2,15 +2,22 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db, require_permission
 from app.core.rbac import Permission
 from app.services.master_config import get_master_config, update_master_config
+from app.models.provider import Provider
 
 
 class MasterConfigResponse(BaseModel):
     id: int
+    provider_id: Optional[int] = Field(
+        default=None,
+        validation_alias='llm_provider_id',
+        serialization_alias='provider_id',
+    )
     model: str = Field(validation_alias='llm_model', serialization_alias='model')
     temperature: float
     system_prompt: str
@@ -26,6 +33,7 @@ class MasterConfigResponse(BaseModel):
 
 
 class MasterConfigUpdate(BaseModel):
+    provider_id: Optional[int] = None
     model: Optional[str] = Field(default=None, validation_alias='model', serialization_alias='model')
     temperature: Optional[float] = None
     system_prompt: Optional[str] = None
@@ -69,7 +77,38 @@ async def put_config(
 ):
     """Update master agent configuration."""
     from app.services.master_config import invalidate_cache
+    current = await get_master_config(db)
     update_data = body.model_dump(exclude_unset=True)
+    selected_provider_id = update_data.get('provider_id', current.llm_provider_id)
+    selected_model = update_data.get('model', current.llm_model)
+    selection_supplied = 'provider_id' in update_data or 'model' in update_data
+    if selection_supplied:
+        if not selected_provider_id or not selected_model:
+            raise HTTPException(
+                status_code=400,
+                detail="Master Agent provider and model must be selected together",
+            )
+        result = await db.execute(
+            select(Provider).where(
+                Provider.id == selected_provider_id,
+                Provider.is_active.is_(True),
+            )
+        )
+        provider = result.scalar_one_or_none()
+        if provider is None:
+            raise HTTPException(status_code=400, detail="Selected provider is not active")
+        model_names = {
+            model.get("name") if isinstance(model, dict) else str(model)
+            for model in (provider.models or [])
+        }
+        if selected_model not in model_names:
+            raise HTTPException(
+                status_code=400,
+                detail="Selected model does not belong to the selected provider",
+            )
+
+    if 'provider_id' in update_data:
+        update_data['llm_provider_id'] = update_data.pop('provider_id')
     if 'model' in update_data:
         update_data['llm_model'] = update_data.pop('model')
     config = await update_master_config(db, update_data)

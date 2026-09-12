@@ -5,6 +5,7 @@ import { Save, RotateCcw } from 'lucide-react'
 
 interface MasterConfig {
   id: number
+  provider_id: number | null
   model: string
   temperature: number
   system_prompt: string
@@ -31,7 +32,8 @@ interface ProviderModel {
 
 const DEFAULTS: MasterConfig = {
   id: 1,
-  model: 'MiniMax-m2.7',
+  provider_id: null,
+  model: '',
   temperature: 0.7,
   system_prompt: `You are CyberGuard, a security operations assistant. You help users with threat analysis, vulnerability assessment, log analysis, and incident response. Be precise and actionable.`,
   intent_parser_prompt: `You are CyberGuard's intent parser. Analyze user input and create a task plan.
@@ -241,16 +243,25 @@ export default function Settings() {
             <div style={{ marginBottom: 20 }}>
               <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase' }}>{t('settings.modelLabel')}</label>
               <select
-                value={config.model}
-                onChange={e => setConfig(c => ({ ...c, model: e.target.value }))}
+                value={config.provider_id ? `${config.provider_id}:${config.model}` : ''}
+                onChange={e => {
+                  const separator = e.target.value.indexOf(':')
+                  if (separator < 0) return
+                  setConfig(c => ({
+                    ...c,
+                    provider_id: Number(e.target.value.slice(0, separator)),
+                    model: e.target.value.slice(separator + 1),
+                  }))
+                }}
                 style={{
                   width: '100%', height: 36, padding: '0 12px',
                   background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
                   color: 'var(--text-primary)', fontSize: 14,
                                   }}>
-                {availableModels.length === 0 && <option value={config.model}>{config.model} ({t('settings.modelLoadFail')})</option>}
+                {!config.provider_id && <option value="" disabled>{t('settings.selectProviderModel')}</option>}
+                {availableModels.length === 0 && config.provider_id && <option value={`${config.provider_id}:${config.model}`}>{config.model} ({t('settings.modelLoadFail')})</option>}
                 {availableModels.map(m => (
-                  <option key={`${m.provider_id}:${m.model}`} value={m.model}>
+                  <option key={`${m.provider_id}:${m.model}`} value={`${m.provider_id}:${m.model}`}>
                     {m.provider_name} / {m.model}
                   </option>
                 ))}
