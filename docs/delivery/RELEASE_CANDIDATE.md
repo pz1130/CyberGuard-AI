@@ -2,10 +2,11 @@
 
 ## Positioning
 
-CyberGuard demonstrates one joined workstream: **AI for Security**, with
-cybersecurity operations as the execution plane and GRC as the governance and
-assurance plane. The release is a Docker reference implementation rather than
-a managed service or endpoint application.
+CyberGuard demonstrates **AI for Security Operations** with runtime controls
+that keep agent actions observable and interruptible. GRC framework and
+assessment management remains in the companion GRC product. This release is a
+Docker reference implementation rather than a managed service or endpoint
+application.
 
 ## Included outcomes
 
@@ -13,7 +14,6 @@ a managed service or endpoint application.
 |---|---|---|
 | Alert triage | Chat, agents, tools/MCP, knowledge | Review evidence; approve risky tools |
 | Vulnerability prioritisation | Agents, search, knowledge, remediation | Validate impact and remediation |
-| GRC assessment | Frameworks, assessments, evidence, reports | Own control status and final report |
 | Demonstrable governance | RBAC, approval, audit, kill switch, PII and egress policy | Admin sets policy and decides exceptions |
 
 ## Explicit exclusions
@@ -24,6 +24,7 @@ a managed service or endpoint application.
 - N8N generation or management
 - User-configurable scheduled tasks
 - Incoming or outgoing webhooks
+- GRC framework catalogs, compliance assessments, evidence workspaces, and certification reports
 - Claims of autonomous remediation, regulatory compliance, or certification
 
 ## Release acceptance
@@ -35,7 +36,7 @@ A release candidate is acceptable only when all boxes below are evidenced:
 - [x] An isolated `docker compose up -d --wait` reaches a healthy state with
       non-default smoke-test secrets.
 - [x] A fresh database migrates to the single current Alembic head.
-- [ ] The three demonstration paths complete with their expected artifacts.
+- [ ] The two demonstration paths complete with their expected artifacts.
 - [ ] A high-risk action pauses, is approved by an authorised user, and then
       executes exactly once; rejection executes nothing.
 - [ ] Audit-chain verification succeeds after the demonstrations.

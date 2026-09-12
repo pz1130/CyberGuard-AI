@@ -31,7 +31,7 @@ const TAB_LABELS: Record<string, string> = {
   envvars: 'ENV VARS', security: 'SECURITY', token: 'TOKEN USAGE',
   backup: 'BACKUP', audit: 'AUDIT LOGS', users: 'USERS',
   settings: 'SETTINGS',
-  prompts: 'PROMPTS', governance: 'GOVERNANCE',
+  prompts: 'PROMPTS', govDashboard: 'AGENT GOVERNANCE',
 }
 
 export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Props) {
@@ -57,11 +57,9 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
       api.getTools(),
       api.getKnowledgeBases(),
       api.getMCPServers(),
-      api.getFrameworks(),
-      api.getAssessments(),
       api.getPromptTemplates(),
       api.getConversations(),
-    ]).then(([agents, providers, skills, tools, knowledge, mcp, frameworks, assessments, prompts, convos]) => {
+    ]).then(([agents, providers, skills, tools, knowledge, mcp, prompts, convos]) => {
       const items: SearchItem[] = []
 
       if (agents.status === 'fulfilled') {
@@ -126,28 +124,6 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
           id: m.id, name: m.name,
           subtitle: m.url || 'MCP SERVER',
           tab: 'mcp', category: 'MCP', icon: '◎',
-        }))
-      }
-
-      if (frameworks.status === 'fulfilled') {
-        const d = frameworks.value as any
-        const list = Array.isArray(d) ? d : []
-        list.forEach((f: any) => items.push({
-          id: f.id, name: f.name,
-          subtitle: f.version ? `v${f.version}` : 'FRAMEWORK',
-          tab: 'governance', category: 'FRAMEWORKS', icon: '▦',
-          subview: 'frameworks',
-        }))
-      }
-
-      if (assessments.status === 'fulfilled') {
-        const d = assessments.value as any
-        const list = Array.isArray(d) ? d : []
-        list.forEach((a: any) => items.push({
-          id: a.id, name: a.name,
-          subtitle: a.framework_name || 'ASSESSMENT',
-          tab: 'governance', category: 'ASSESSMENTS', icon: '▧',
-          subview: 'list',
         }))
       }
 
@@ -332,7 +308,7 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
 
           {!loadingData && !q && recentTabs.length === 0 && (
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-dim)', fontSize: 12, letterSpacing: '0.1em' }}>
-              TYPE TO SEARCH ACROSS AGENTS, PROVIDERS, SKILLS, TOOLS, KNOWLEDGE, MCP, PROMPTS, GOVERNANCE
+              TYPE TO SEARCH ACROSS AGENTS, PROVIDERS, SKILLS, TOOLS, KNOWLEDGE, MCP, PROMPTS
             </div>
           )}
 

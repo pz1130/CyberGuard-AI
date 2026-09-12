@@ -60,7 +60,6 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - evidence_data:/data/evidence
       - backup_data:/backups
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=5)"]
@@ -162,5 +161,4 @@ volumes:
   postgres_data:
   redis_data:
   celerybeat_data:
-  evidence_data:
   backup_data:

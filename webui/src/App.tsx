@@ -22,7 +22,6 @@ import Approvals from './pages/Approvals'
 import Users from './pages/Users'
 import Settings from './pages/Settings'
 import Prompts from './pages/Prompts'
-import Governance from './pages/Governance'
 import GovernanceDashboard from './pages/GovernanceDashboard'
 import Login from './pages/Login'
 
@@ -43,7 +42,6 @@ const PAGES: Record<Tab, { labelKey: string; component: React.ReactNode }> = {
   users: { labelKey: 'nav.users', component: <Users /> },
   settings: { labelKey: 'nav.settings', component: <Settings /> },
   prompts: { labelKey: 'nav.prompts', component: <Prompts /> },
-  governance: { labelKey: 'nav.governance', component: <Governance /> },
   govDashboard: { labelKey: 'nav.govDashboard', component: <GovernanceDashboard /> },
 }
 

@@ -27,10 +27,6 @@ AGENT_TYPE_KEYWORDS = {
         "fix", "remediate", "patch", "remediate", "mitigate",
         "block", "quarantine", "isolate", "修复", "封禁", "隔离",
     ],
-    "compliance": [
-        "compliance", "policy", "audit", "gdpr", "iso27001", "pci-dss",
-        "合规", "审计", "策略检查",
-    ],
     "osint": [
         "osint", "recon", " footprint", "whois", "dns lookup",
         "子域名", "信息收集", "侦察",
@@ -63,11 +59,6 @@ FALLBACK_SYSTEM_PROMPTS: Dict[str, str] = {
 2. 事件遏制步骤
 3. 根因分析框架
 4. 后续加固建议""",
-    "compliance": """你是一个合规检查 Agent。
-对照 ISO 27001 / GDPR / PCI-DSS 等框架：
-1. 识别控制项差距
-2. 评估当前合规状态
-3. 提供整改建议""",
     "osint": """你是一个 OSINT 侦察 Agent。
 对目标进行开源情报收集：
 1. WHOIS / DNS 信息

@@ -9,7 +9,7 @@
 import {
   MessageSquare, Cpu, Plug, Wrench, Terminal, BookOpen,
   Settings, Shield, Coins, Database, FileText, UserCog,
-  ScrollText, ClipboardCheck, ShieldCheck, ShieldAlert,
+  ScrollText, ShieldCheck, ShieldAlert,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -17,7 +17,7 @@ export type Tab =
   | 'chat' | 'agents' | 'providers' | 'skills' | 'tools'
   | 'knowledge' | 'mcp' | 'envvars'
   | 'security' | 'token' | 'backup' | 'audit' | 'approvals'
-  | 'users' | 'settings' | 'prompts' | 'governance' | 'govDashboard'
+  | 'users' | 'settings' | 'prompts' | 'govDashboard'
 
 type NavItem = {
   key: Tab
@@ -55,7 +55,6 @@ const NAV_GROUPS: NavGroup[] = [
       { key: 'tools', labelKey: 'nav.tools', icon: <Terminal size={16} /> },
       { key: 'prompts', labelKey: 'nav.prompts', icon: <ScrollText size={16} /> },
       { key: 'knowledge', labelKey: 'nav.knowledge', icon: <BookOpen size={16} /> },
-      { key: 'governance', labelKey: 'nav.governance', icon: <ClipboardCheck size={16} /> },
     ],
   },
   {

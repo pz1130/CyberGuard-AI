@@ -29,17 +29,6 @@ execution, and audit verification result.
 Expected evidence: prioritised findings, assumptions, remediation plan,
 rejection record, and zero execution events for the rejected action.
 
-## 3. GRC assessment
-
-1. Create an assessment from ISO 27001 or NIST CSF.
-2. Upload `demo/grc-access-control-policy.md` as synthetic evidence.
-3. Generate evidence suggestions and AI-assisted control observations.
-4. Have a human change at least one suggested status and record the reason.
-5. Generate the assessment report and show coverage metrics.
-
-Expected evidence: requirement statuses, source evidence, AI recommendation,
-human override, coverage metrics, and report.
-
 ## Failure demonstrations
 
 Show at least one denied prompt-injection sample, one blocked outbound target,

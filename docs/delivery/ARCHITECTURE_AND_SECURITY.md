@@ -3,8 +3,8 @@
 ## Trust boundaries
 
 The browser is untrusted input. FastAPI authenticates users and applies RBAC.
-PostgreSQL stores configuration, evidence metadata, assessments, conversations,
-and audit data. Redis provides coordination and rate-limit state. Celery runs
+PostgreSQL stores configuration, conversations, and audit data. Redis provides
+coordination and rate-limit state. Celery runs
 background agent work. The tool-runner is isolated on the Compose network and
 accepts only authenticated, structured execution requests.
 

@@ -45,7 +45,6 @@
     "users": "User Management",
     "settings": "Settings",
     "prompts": "Prompt Templates",
-    "governance": "Governance",
     "govDashboard": "Agent Governance",
     "search": "Search",
     "empty": "No matches",
@@ -308,7 +307,6 @@
     "logAnomaly": "Log Anomaly",
     "vulnScan": "Vulnerability Scan",
     "remediation": "Remediation",
-    "compliance": "Compliance Check",
     "selectOrCreateFirst": "Please create or select a conversation first",
     "attachments": "attachments",
     "normalModeTip": "NORMAL: Default LLM parses intent to decide sub-agents | FAST: Skip intent parsing, use only Master Agent | EXPERT: Dispatch to all active sub-agents in parallel",
@@ -376,27 +374,6 @@
     "contentPlaceholder": "The full prompt text. It will be applied verbatim.",
     "activeInChat": "Active (shown in Chat picker)"
   },
-  "governance": {
-    "title": "Governance & Compliance",
-    "newAssessment": "New Assessment",
-    "notAssessed": "Not Assessed",
-    "compliant": "Compliant",
-    "partial": "Partial",
-    "nonCompliant": "Non-Compliant",
-    "planning": "Planning",
-    "inProgress": "In Progress",
-    "completed": "Completed",
-    "archived": "Archived",
-    "all": "All",
-    "noAssessments": "No assessments — click \"New Assessment\" to start an audit",
-    "thinking": "Thinking...",
-    "aiSuggest": "AI: More Ideas",
-    "assess": "Assess (Preview)",
-    "judging": "Judging...",
-    "saving": "Saving...",
-    "add": "Add",
-    "subtitle": "Compliance frameworks · Audits · Evidence · AI assessments"
-  },
   "approvals": {
     "title": "Approvals",
     "subtitle": "Human approval queue · Admin only",
@@ -441,7 +418,7 @@
     "modelLoadFail": "Failed to load Provider",
     "aboutVersion": "Version 1.0.0-rc.1",
     "aboutPlatform": "Enterprise Security Operations Platform",
-    "aboutDesc": "Governed AI for security operations and GRC · MCP tool protocol · Knowledge base RAG · Full audit trail"
+    "aboutDesc": "Governed AI for security operations · MCP tool protocol · Knowledge base RAG · Full audit trail"
   },
   "govDash": {
     "subtitle": "Runtime governance: metrics, kill switch, rollbacks, audit integrity",

@@ -249,22 +249,6 @@ DEFAULT_TEMPLATES: list[dict] = [
         ),
     },
     {
-        "name": "Compliance Reviewer (ISO 27001 / NIST CSF)",
-        "category": "system",
-        "description": "Assesses controls against ISO 27001 Annex A and NIST CSF.",
-        "content": (
-            "You are a compliance reviewer for ISO 27001 (Annex A) and NIST "
-            "CSF 2.0. For each control or evidence artefact provided:\n"
-            "- Identify mapped controls (e.g. A.8.16, GV.PO-01).\n"
-            "- Rate maturity: Initial / Managed / Defined / Quantitatively "
-            "Managed / Optimising.\n"
-            "- List gaps with concrete remediation actions and owner role "
-            "suggestions.\n"
-            "- Cite the source paragraph rather than paraphrasing standards.\n"
-            "Never claim certification readiness from incomplete evidence."
-        ),
-    },
-    {
         "name": "Secure Code Reviewer (OWASP)",
         "category": "general",
         "description": "Secure code review mapped to the OWASP Top 10 and CWE.",
@@ -321,12 +305,31 @@ LEGACY_DEFAULT_DESCRIPTIONS = {
     "SOC Analyst (L2)": "二级 SOC 分析师，按事件优先级分级响应。",
     "Incident Responder": "事件响应协调员，遵循 NIST SP 800-61 流程。",
     "Vulnerability Triage": "对漏洞按可利用性 / 暴露面 / 业务影响排序。",
-    "Compliance Reviewer (ISO 27001 / NIST CSF)": (
-        "对照 ISO 27001 Annex A 与 NIST CSF 评估控制项。"
-    ),
     "Secure Code Reviewer (OWASP)": "代码安全审查，对照 OWASP Top 10 + CWE。",
     "Concise Bullet Summarizer": "把多轮对话压缩为 3–5 条要点。",
     "Intent Router (Cyber Ops)": "把用户消息路由到合适的 sub-agent。",
+}
+
+
+RETIRED_DEFAULT_TEMPLATES = {
+    "Compliance Reviewer (ISO 27001 / NIST CSF)": {
+        "category": "system",
+        "descriptions": {
+            "Assesses controls against ISO 27001 Annex A and NIST CSF.",
+            "对照 ISO 27001 Annex A 与 NIST CSF 评估控制项。",
+        },
+        "content": (
+            "You are a compliance reviewer for ISO 27001 (Annex A) and NIST "
+            "CSF 2.0. For each control or evidence artefact provided:\n"
+            "- Identify mapped controls (e.g. A.8.16, GV.PO-01).\n"
+            "- Rate maturity: Initial / Managed / Defined / Quantitatively "
+            "Managed / Optimising.\n"
+            "- List gaps with concrete remediation actions and owner role "
+            "suggestions.\n"
+            "- Cite the source paragraph rather than paraphrasing standards.\n"
+            "Never claim certification readiness from incomplete evidence."
+        ),
+    },
 }
 
 
@@ -342,6 +345,7 @@ async def seed_prompt_templates_on_startup() -> None:
         by_name = {row.name: row for row in existing.scalars().all()}
         inserted = 0
         migrated = 0
+        retired = 0
         for tpl in DEFAULT_TEMPLATES:
             current = by_name.get(tpl["name"])
             if current is not None:
@@ -352,10 +356,21 @@ async def seed_prompt_templates_on_startup() -> None:
                 continue
             session.add(PromptTemplate(**tpl))
             inserted += 1
-        if inserted or migrated:
+        for name, retired_tpl in RETIRED_DEFAULT_TEMPLATES.items():
+            current = by_name.get(name)
+            if (
+                current is not None
+                and current.category == retired_tpl["category"]
+                and current.description in retired_tpl["descriptions"]
+                and current.content == retired_tpl["content"]
+            ):
+                await session.delete(current)
+                retired += 1
+        if inserted or migrated or retired:
             await session.commit()
             logger.info(
-                "Prompt templates ready: inserted=%d, migrated=%d",
+                "Prompt templates ready: inserted=%d, migrated=%d, retired=%d",
                 inserted,
                 migrated,
+                retired,
             )

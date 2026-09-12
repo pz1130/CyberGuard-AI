@@ -1,34 +1,31 @@
 # CyberGuard
 
 CyberGuard is a Docker-based reference implementation for governed AI in
-cybersecurity operations and GRC. It is prepared as an IFI workgroup
+cybersecurity operations. It is prepared as an IFI workgroup
 deliverable: demonstrable, inspectable, and explicit about where a human must
 remain in control.
 
 ## Release scope
 
-The release candidate supports three end-to-end paths:
+The release candidate supports two end-to-end paths:
 
 1. **Security alert triage** — investigate alerts with agents, knowledge, and
    approved tools; retain the evidence and audit trail.
 2. **Vulnerability prioritisation** — assess technical and business impact,
    propose remediation, and gate higher-risk actions on human approval.
-3. **GRC assessment** — assess ISO 27001 or NIST CSF requirements, collect
-   evidence, record findings, and generate a reviewable report.
-
 Included capabilities:
 
 - Master Agent plus internal or explicitly configured external agents
 - LLM provider routing, prompt templates, skills, governed tools, and MCP
 - Knowledge bases, document ingestion, pgvector retrieval, and OCR
-- GRC frameworks, assessments, evidence, dashboards, and AI-assisted reports
 - RBAC, optional Entra ID SSO, human approval, kill switch, audit chain, PII
   handling, egress controls, encrypted credentials, token usage, and backup
 - React WebUI, FastAPI API, Celery worker, PostgreSQL/pgvector, Redis, and an
   isolated tool-runner, all deployed with Docker Compose
 
-Out of scope for this release: desktop clients, Kubernetes, group-chat rooms,
-N8N workflow generation, user-configurable scheduled jobs, and webhooks.
+Out of scope for this release: GRC framework/assessment management, desktop
+clients, Kubernetes, group-chat rooms, N8N workflow generation,
+user-configurable scheduled jobs, and webhooks.
 Historical migrations keep legacy tables readable during upgrades, but those
 features have no API or UI surface in this release.
 
@@ -142,8 +139,8 @@ are written to `artifacts/` for release evidence.
   require human review.
 - External LLM and MCP data handling is governed by the operator's selected
   providers and network policy.
-- The included frameworks accelerate an assessment; they do not constitute
-  legal, regulatory, or audit advice.
+- Runtime governance controls do not constitute legal, regulatory, or audit
+  advice.
 
 ## License
 

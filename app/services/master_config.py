@@ -20,10 +20,10 @@ Output JSON with:
 - task_plan: array of {"agent_type": str, "task": "description", "requires_approval": bool}
 - reasoning: brief explanation
 
-Agent types: threat_intel, log_anomaly, vuln_scanner, remediation, compliance, osint, general
+Agent types: threat_intel, log_anomaly, vuln_scanner, remediation, osint, general
 """
         default_summary = "You are CyberGuard's summarizer. Create a concise summary of agent results for the user."
-        default_system = "You are CyberGuard, a security operations assistant. You help users with threat analysis, vulnerability assessment, log analysis, and security compliance. Be precise and actionable."
+        default_system = "You are CyberGuard, a security operations assistant. You help users with threat analysis, vulnerability assessment, log analysis, and incident response. Be precise and actionable."
         config = MasterAgentConfig(
             id=1,
             llm_model="MiniMax-m2.7",

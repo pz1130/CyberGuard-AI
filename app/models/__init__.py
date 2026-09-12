@@ -11,10 +11,6 @@ from app.models.backup import BackupRecord
 from app.models.approval import ApprovalRequest
 from app.models.token_usage import TokenUsageLog
 from app.models.prompt_template import PromptTemplate
-from app.models.governance import (
-    Framework, Requirement, ComplianceAssessment,
-    RequirementAssessment, Evidence,
-)
 from app.models.conversation import Conversation
 from app.models.security_settings import SecuritySettings
 from app.models.ocr import OcrConfig
@@ -36,8 +32,6 @@ __all__ = [
     "ApprovalRequest",
     "TokenUsageLog",
     "PromptTemplate",
-    "Framework", "Requirement", "ComplianceAssessment",
-    "RequirementAssessment", "Evidence",
     "Conversation",
     "SecuritySettings",
     "OcrConfig",

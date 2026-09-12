@@ -538,7 +538,6 @@ agent_type options (fallback when no specific agent is mentioned):
 - log_anomaly: log parsing, anomaly detection, SIEM alerts
 - vuln_scanner: vulnerability scanning, CVE assessment, exploit analysis
 - remediation: fix/remediate/mute/isolate/quarantine actions
-- compliance: policy audit, framework compliance (ISO27001, GDPR, PCI-DSS)
 - osint: open-source intelligence, recon, footprinting
 - general: anything not matching above categories
 

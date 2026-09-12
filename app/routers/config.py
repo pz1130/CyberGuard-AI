@@ -17,14 +17,12 @@ async def export_config(
     Export full system configuration as JSON (excluding chat history, audit logs, executions, approvals, token usage, backups).
     Includes: providers, users (no passwords), agents, skills, tools, prompt_templates, knowledge_bases (with documents),
     mcp_servers, mcp_tools, env_vars, security_settings,
-    master_agent_config, ocr_config, sso_config, sso_role_mapping, gov_frameworks, gov_requirements,
-    gov_assessments, gov_req_assessments, gov_evidences.
+    master_agent_config, ocr_config, sso_config, and sso_role_mapping.
     """
     from app.models import (
         User, AgentConfig, Skill, Tool, KnowledgeBase, Document, PromptTemplate,
         MCPServer, MCPTool, EnvVar,
         SecuritySettings, MasterAgentConfig, OcrConfig, SsoConfig, SsoRoleMapping,
-        Framework, Requirement, ComplianceAssessment, RequirementAssessment, Evidence,
         Provider
     )
 
@@ -142,33 +140,6 @@ async def export_config(
         for s in sso_role_result.scalars().all()
     ]
 
-    # Export governance
-    frameworks_result = await db.execute(select(Framework))
-    gov_frameworks = [
-        {k: v for k, v in f.__dict__.items() if not k.startswith("_")}
-        for f in frameworks_result.scalars().all()
-    ]
-    requirements_result = await db.execute(select(Requirement))
-    gov_requirements = [
-        {k: v for k, v in r.__dict__.items() if not k.startswith("_")}
-        for r in requirements_result.scalars().all()
-    ]
-    assessments_result = await db.execute(select(ComplianceAssessment))
-    gov_assessments = [
-        {k: v for k, v in a.__dict__.items() if not k.startswith("_")}
-        for a in assessments_result.scalars().all()
-    ]
-    req_assessments_result = await db.execute(select(RequirementAssessment))
-    gov_req_assessments = [
-        {k: v for k, v in r.__dict__.items() if not k.startswith("_")}
-        for r in req_assessments_result.scalars().all()
-    ]
-    evidences_result = await db.execute(select(Evidence))
-    gov_evidences = [
-        {k: v for k, v in e.__dict__.items() if not k.startswith("_")}
-        for e in evidences_result.scalars().all()
-    ]
-
     from datetime import datetime, timezone
     config = {
         "version": "1.0.0-rc.1",
@@ -189,11 +160,6 @@ async def export_config(
         "ocr_config": ocr_config,
         "sso_config": sso_config,
         "sso_role_mapping": sso_role_mapping,
-        "gov_frameworks": gov_frameworks,
-        "gov_requirements": gov_requirements,
-        "gov_assessments": gov_assessments,
-        "gov_req_assessments": gov_req_assessments,
-        "gov_evidences": gov_evidences,
     }
     return config
 
@@ -218,8 +184,6 @@ async def import_config(
         "prompt_templates": 0, "knowledge_bases": 0, "documents": 0,
         "mcp_servers": 0, "mcp_tools": 0, "env_vars": 0, "security_settings": 0,
         "master_agent_config": 0, "ocr_config": 0, "sso_config": 0, "sso_role_mapping": 0,
-        "gov_frameworks": 0, "gov_requirements": 0, "gov_assessments": 0,
-        "gov_req_assessments": 0, "gov_evidences": 0,
     }
     errors = []
 
@@ -228,7 +192,6 @@ async def import_config(
         Provider, User, AgentConfig, Skill, Tool, PromptTemplate,
         MCPServer, MCPTool, EnvVar, SecuritySettings,
         MasterAgentConfig, OcrConfig, SsoConfig, SsoRoleMapping,
-        Framework, Requirement, ComplianceAssessment, RequirementAssessment, Evidence,
         KnowledgeBase, Document
     )
     from app.core.auth import get_password_hash
@@ -590,110 +553,6 @@ async def import_config(
             imported["sso_role_mapping"] += 1
         except Exception as e:
             errors.append(f"sso_role_mapping: {e}")
-
-    # Import governance
-    for fw_data in config.get("gov_frameworks", []):
-        try:
-            existing = await db.execute(select(Framework).where(Framework.urn == fw_data.get("urn")))
-            if existing.scalar_one_or_none():
-                continue
-            fw = Framework(
-                urn=fw_data.get("urn"),
-                name=fw_data.get("name"),
-                version=fw_data.get("version"),
-                description=fw_data.get("description"),
-                is_active=fw_data.get("is_active", True),
-                metadata_json=fw_data.get("metadata_json"),
-            )
-            db.add(fw)
-            imported["gov_frameworks"] += 1
-        except Exception as e:
-            errors.append(f"gov_framework {fw_data.get('urn')}: {e}")
-
-    for req_data in config.get("gov_requirements", []):
-        try:
-            existing = await db.execute(
-                select(Requirement).where(Requirement.urn == req_data.get("urn"))
-            )
-            if existing.scalar_one_or_none():
-                continue
-            req = Requirement(
-                framework_id=req_data.get("framework_id"),
-                urn=req_data.get("urn"),
-                name=req_data.get("name"),
-                description=req_data.get("description"),
-                category=req_data.get("category"),
-                priority=req_data.get("priority", "medium"),
-                evidence_types=req_data.get("evidence_types"),
-                metadata_json=req_data.get("metadata_json"),
-            )
-            db.add(req)
-            imported["gov_requirements"] += 1
-        except Exception as e:
-            errors.append(f"gov_requirement {req_data.get('urn')}: {e}")
-
-    for ass_data in config.get("gov_assessments", []):
-        try:
-            existing = await db.execute(
-                select(ComplianceAssessment).where(ComplianceAssessment.name == ass_data.get("name"))
-            )
-            if existing.scalar_one_or_none():
-                continue
-            ass = ComplianceAssessment(
-                framework_id=ass_data.get("framework_id"),
-                name=ass_data.get("name"),
-                description=ass_data.get("description"),
-                scope=ass_data.get("scope"),
-                status=ass_data.get("status", "draft"),
-                metadata_json=ass_data.get("metadata_json"),
-            )
-            db.add(ass)
-            imported["gov_assessments"] += 1
-        except Exception as e:
-            errors.append(f"gov_assessment {ass_data.get('name')}: {e}")
-
-    for ra_data in config.get("gov_req_assessments", []):
-        try:
-            existing = await db.execute(
-                select(RequirementAssessment).where(
-                    RequirementAssessment.assessment_id == ra_data.get("assessment_id"),
-                    RequirementAssessment.requirement_id == ra_data.get("requirement_id"),
-                )
-            )
-            if existing.scalar_one_or_none():
-                continue
-            ra = RequirementAssessment(
-                assessment_id=ra_data.get("assessment_id"),
-                requirement_id=ra_data.get("requirement_id"),
-                status=ra_data.get("status", "pending"),
-                score=ra_data.get("score"),
-                notes=ra_data.get("notes"),
-                metadata_json=ra_data.get("metadata_json"),
-            )
-            db.add(ra)
-            imported["gov_req_assessments"] += 1
-        except Exception as e:
-            errors.append(f"gov_req_assessment: {e}")
-
-    for ev_data in config.get("gov_evidences", []):
-        try:
-            existing = await db.execute(
-                select(Evidence).where(Evidence.name == ev_data.get("name"))
-            )
-            if existing.scalar_one_or_none():
-                continue
-            ev = Evidence(
-                req_assessment_id=ev_data.get("req_assessment_id"),
-                name=ev_data.get("name"),
-                description=ev_data.get("description"),
-                content_type=ev_data.get("content_type"),
-                content=ev_data.get("content"),
-                metadata_json=ev_data.get("metadata_json"),
-            )
-            db.add(ev)
-            imported["gov_evidences"] += 1
-        except Exception as e:
-            errors.append(f"gov_evidence {ev_data.get('name')}: {e}")
 
     await db.commit()
 

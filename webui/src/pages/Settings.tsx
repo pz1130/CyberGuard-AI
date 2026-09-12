@@ -33,7 +33,7 @@ const DEFAULTS: MasterConfig = {
   id: 1,
   model: 'MiniMax-m2.7',
   temperature: 0.7,
-  system_prompt: `You are CyberGuard, a security operations assistant. You help users with threat analysis, vulnerability assessment, log analysis, and security compliance. Be precise and actionable.`,
+  system_prompt: `You are CyberGuard, a security operations assistant. You help users with threat analysis, vulnerability assessment, log analysis, and incident response. Be precise and actionable.`,
   intent_parser_prompt: `You are CyberGuard's intent parser. Analyze user input and create a task plan.
 
 Output JSON with:
@@ -51,7 +51,6 @@ agent_type options:
 - log_anomaly: log parsing, anomaly detection, SIEM alerts
 - vuln_scanner: vulnerability scanning, CVE assessment, exploit analysis
 - remediation: fix/remediate/mute/isolate/quarantine actions
-- compliance: policy audit, framework compliance (ISO27001, GDPR, PCI-DSS)
 - osint: open-source intelligence, recon, footprinting
 - general: anything not matching above categories
 

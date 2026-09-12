@@ -6,10 +6,10 @@ First IFI workgroup release candidate of the Docker reference implementation.
 
 ### Included
 
-- Joined AI-for-Security scope covering security operations and GRC.
+- Focused AI-for-Security scope covering governed security operations.
 - WebUI, API, worker, PostgreSQL/pgvector, Redis, and isolated tool-runner in
   Docker Compose.
-- Alert triage, vulnerability prioritisation, and GRC assessment demo paths.
+- Alert triage and vulnerability-prioritisation demo paths.
 - Structured tool risk and confidence decisions, human approval with
   suspend/resume, RBAC, kill switch, rollback registration, PII and egress
   controls, and tamper-evident audit events.
@@ -22,11 +22,12 @@ First IFI workgroup release candidate of the Docker reference implementation.
 
 - Desktop application and desktop-only documentation.
 - Kubernetes deployment manifests.
-- Group-chat rooms, N8N management, user-defined scheduled jobs, webhooks, and
-  Flower monitoring.
+- GRC framework/assessment management, group-chat rooms, N8N management,
+  user-defined scheduled jobs, webhooks, and Flower monitoring.
 
-Historical migrations for removed modules remain so an existing database can
-be upgraded safely. They do not expose API routes or WebUI pages.
+Historical migrations remain for upgrade continuity. Migration 033 removes
+the duplicated GRC tables; export any required GRC records before upgrading.
+Removed modules expose no API routes or WebUI pages.
 
 ### Known limitations
 

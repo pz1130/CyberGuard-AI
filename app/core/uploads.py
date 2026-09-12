@@ -1,8 +1,7 @@
 """Shared validation for multipart file uploads.
 
 Single source of truth for allowed MIME types, the per-file size cap, and
-magic-byte anti-spoofing. Used by chat attachments and governance evidence
-file uploads so the rules can't drift apart.
+magic-byte anti-spoofing for chat attachments.
 """
 from fastapi import HTTPException, UploadFile, status
 

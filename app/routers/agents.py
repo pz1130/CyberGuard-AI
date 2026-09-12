@@ -38,10 +38,10 @@ async def seed_example_internal_agents() -> None:
 
     async with AsyncSessionLocal() as s:
         existing = await s.execute(select(AgentConfig).where(
-            AgentConfig.agent_name.in_(["triage_analyst", "policy_writer"])
+            AgentConfig.agent_name == "triage_analyst"
         ))
         already = {r.agent_name for r in existing.scalars().all()}
-        if len(already) >= 2:
+        if "triage_analyst" in already:
             return
 
         providers = await s.execute(select(AgentConfig).where(
@@ -62,17 +62,6 @@ async def seed_example_internal_agents() -> None:
                 backend_type="openclaw",
                 system_prompt="You are a SOC triage analyst. Use available tools to gather threat intelligence, enrich alerts with CVE data, and produce concise incident summaries.",
                 permission_level="medium",
-                llm_provider_id=provider_id,
-                tool_loop_max_steps=8,
-                memory_window=20,
-            ))
-        if "policy_writer" not in already:
-            to_create.append(AgentConfig(
-                agent_name="policy_writer",
-                kind="internal",
-                backend_type="openclaw",
-                system_prompt="You are a security policy writer. Help draft and review security policies, map controls to frameworks (ISO 27001, NIST), and ensure policies are actionable and measurable.",
-                permission_level="low",
                 llm_provider_id=provider_id,
                 tool_loop_max_steps=8,
                 memory_window=20,

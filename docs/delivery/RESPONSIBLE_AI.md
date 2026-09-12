@@ -2,22 +2,22 @@
 
 ## Intended use
 
-CyberGuard assists authorised security and GRC professionals with analysis,
-evidence organisation, prioritisation, and controlled tool use.
+CyberGuard assists authorised security professionals with analysis,
+prioritisation, and controlled tool use.
 
 ## Human accountability
 
-- A named human owns every assessment conclusion and operational decision.
+- A named human owns every operational decision.
 - High-risk actions require an authorised approval unless a development-only
   bypass is explicitly enabled; that bypass is rejected outside development.
-- AI-generated evidence summaries never replace examination of the source.
+- AI-generated summaries never replace examination of the source.
 - Kill-switch and audit facilities support intervention and investigation.
 
 ## Prohibited or unsupported use
 
 - Unauthorised access, scanning, surveillance, or remediation
 - Fully autonomous destructive or irreversible actions
-- Treating generated GRC status as legal advice or audit certification
+- Treating generated output as legal advice or audit certification
 - Processing data through an external provider without an approved data-flow
   and retention assessment
 

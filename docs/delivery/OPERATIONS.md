@@ -29,6 +29,8 @@ curl --fail http://localhost:8000/health/ready
 ## Upgrade
 
 1. Create and verify a backup.
+   Before migration 033, export any GRC assessment records that must be moved
+   to the companion GRC product; the migration removes the duplicated tables.
 2. Record the running image digests and Alembic revision.
 3. Pull/build the new immutable version.
 4. Run migrations as a one-off command.
@@ -52,5 +54,5 @@ relevant run events before changing affected records.
 
 Export required records, revoke provider/MCP credentials, stop the stack, and
 remove volumes only after retention owners approve deletion. `docker compose
-down -v` irreversibly deletes local database, Redis, evidence, and backup
+down -v` irreversibly deletes local database, Redis, and backup
 volumes.

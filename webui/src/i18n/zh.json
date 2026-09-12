@@ -45,7 +45,6 @@
     "users": "用户管理",
     "settings": "设置",
     "prompts": "Prompt 模板",
-    "governance": "治理合规",
     "govDashboard": "智能体治理",
     "search": "搜索",
     "empty": "无匹配",
@@ -308,7 +307,6 @@
     "logAnomaly": "日志异常",
     "vulnScan": "漏洞扫描",
     "remediation": "修复建议",
-    "compliance": "合规检查",
     "selectOrCreateFirst": "请先创建或选择一个会话",
     "attachments": "个附件",
     "normalModeTip": "NORMAL: 默认 LLM 解析意图决定是否调用子 agent | FAST: 跳过意图解析，只用 Master Agent | EXPERT: 并行派发给所有 active sub-agent",
@@ -376,27 +374,6 @@
     "contentPlaceholder": "完整 Prompt 文本，将按原文应用。",
     "activeInChat": "启用（显示在对话选择器中）"
   },
-  "governance": {
-    "title": "治理合规",
-    "newAssessment": "新建评估",
-    "notAssessed": "未评估",
-    "compliant": "合规",
-    "partial": "部分合规",
-    "nonCompliant": "不合规",
-    "planning": "规划中",
-    "inProgress": "进行中",
-    "completed": "已完成",
-    "archived": "已归档",
-    "all": "全部",
-    "noAssessments": "暂无评估 — 点击“新建评估”开始审计",
-    "thinking": "思考中...",
-    "aiSuggest": "AI: 更多建议",
-    "assess": "评估（预览）",
-    "judging": "评判中...",
-    "saving": "保存中...",
-    "add": "添加",
-    "subtitle": "合规框架 · 审计 · 证据 · AI 评估"
-  },
   "approvals": {
     "title": "审批管理",
     "subtitle": "人工审批队列 · 仅管理员",
@@ -441,7 +418,7 @@
     "modelLoadFail": "无法加载 Provider",
     "aboutVersion": "Version 1.0.0-rc.1",
     "aboutPlatform": "Enterprise Security Operations Platform",
-    "aboutDesc": "面向安全运营与 GRC 的受治理 AI · MCP 工具协议 · 知识库 RAG · 完整审计轨迹"
+    "aboutDesc": "面向安全运营的受治理 AI · MCP 工具协议 · 知识库 RAG · 完整审计轨迹"
   },
   "govDash": {
     "subtitle": "运行时治理：指标、紧急停止、回滚、审计完整性",
