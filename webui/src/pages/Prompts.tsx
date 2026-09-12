@@ -19,11 +19,11 @@ interface PromptTemplate {
   updated_at: string
 }
 
-const CATEGORY_LABELS: Record<Category, string> = {
-  system: 'SYSTEM',
-  intent_parser: 'INTENT PARSER',
-  summarizer: 'SUMMARIZER',
-  general: 'GENERAL',
+const CATEGORY_KEYS: Record<Category, string> = {
+  system: 'prompts.system',
+  intent_parser: 'prompts.intentParser',
+  summarizer: 'prompts.summarizer',
+  general: 'prompts.general',
 }
 
 const CATEGORY_COLORS: Record<Category, string> = {
@@ -67,7 +67,7 @@ export default function Prompts() {
       const data = await api.getPromptTemplates() as PromptTemplate[]
       setItems(data || [])
     } catch (e: any) {
-      alert(e.message || 'Failed to load prompt templates')
+      alert(e.message || t('prompts.loadFailed'))
     } finally {
       setLoading(false)
     }
@@ -83,8 +83,8 @@ export default function Prompts() {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' })
       el.classList.add('search-highlight')
     }
-    const t = setTimeout(() => setSearchTarget(null), 2000)
-    return () => clearTimeout(t)
+    const timer = setTimeout(() => setSearchTarget(null), 2000)
+    return () => clearTimeout(timer)
   }, [searchTarget, setSearchTarget])
 
   const openCreate = () => {
@@ -106,7 +106,7 @@ export default function Prompts() {
 
   const save = async () => {
     if (!edit.name.trim() || !edit.content.trim()) {
-      alert('Name and content are required')
+      alert(t('prompts.required'))
       return
     }
     setSaving(true)
@@ -126,19 +126,19 @@ export default function Prompts() {
       setEditorOpen(false)
       await load()
     } catch (e: any) {
-      alert(e.message || 'Save failed')
+      alert(e.message || t('prompts.saveFailed'))
     } finally {
       setSaving(false)
     }
   }
 
   const remove = async (item: PromptTemplate) => {
-    if (!confirm(`Delete prompt template "${item.name}"?`)) return
+    if (!confirm(t('prompts.deleteConfirm', { name: item.name }))) return
     try {
       await api.deletePromptTemplate(item.id)
       setItems(prev => prev.filter(i => i.id !== item.id))
     } catch (e: any) {
-      alert(e.message || 'Delete failed')
+      alert(e.message || t('prompts.deleteFailed'))
     }
   }
 
@@ -151,23 +151,26 @@ export default function Prompts() {
   }
 
   const filtered = filter === 'all' ? items : items.filter(i => i.category === filter)
+  const categoryLabel = (category: Category) => t(CATEGORY_KEYS[category]).toUpperCase()
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <PageHeader
-        eyebrow="PROMPT LIBRARY"
+        eyebrow={t('prompts.eyebrow').toUpperCase()}
         title={t('prompts.title').toUpperCase()}
-        description={t('prompts.description') || '预定义可复用的 system prompt，会话中可一键填入'}
+        description={t('prompts.description')}
         actions={
           <button onClick={openCreate} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Plus size={12} /> NEW TEMPLATE
+            <Plus size={12} /> {t('prompts.newTemplate').toUpperCase()}
           </button>
         }
       />
 
       {/* Filter */}
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginRight: 4 }}>FILTER</span>
+        <span style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginRight: 4 }}>
+          {t('prompts.filter').toUpperCase()}
+        </span>
         {(['all', 'system', 'intent_parser', 'summarizer', 'general'] as const).map(f => {
           const active = filter === f
           return (
@@ -182,7 +185,7 @@ export default function Prompts() {
                 height: 28,
               }}
             >
-              {f === 'all' ? 'ALL' : CATEGORY_LABELS[f as Category]}
+              {f === 'all' ? t('prompts.all').toUpperCase() : categoryLabel(f)}
             </button>
           )
         })}
@@ -191,14 +194,14 @@ export default function Prompts() {
       {/* List */}
       {loading ? (
         <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-dim)', fontSize: 13, letterSpacing: '0.06em' }}>
-          LOADING...
+          {t('prompts.loading').toUpperCase()}
         </div>
       ) : filtered.length === 0 ? (
         <div style={{
           padding: 40, textAlign: 'center', color: 'var(--text-dim)', fontSize: 13, letterSpacing: '0.06em',
           border: '1px dashed var(--border-bright)', background: 'var(--bg-surface)',
         }}>
-          NO TEMPLATES — CLICK "NEW TEMPLATE" TO CREATE ONE
+          {t('prompts.emptyHint').toUpperCase()}
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 12 }}>
@@ -215,18 +218,18 @@ export default function Prompts() {
                     className="item-card-badge"
                     style={{ borderColor: CATEGORY_COLORS[item.category], color: CATEGORY_COLORS[item.category] }}
                   >
-                    {CATEGORY_LABELS[item.category]}
+                    {categoryLabel(item.category)}
                   </span>
                   <span className="item-card-title" style={{ fontSize: 14 }}>{item.name}</span>
                 </div>
                 <div style={{ display: 'flex', gap: 2 }}>
-                  <button onClick={() => copyContent(item)} title="Copy content" className="item-card-icon-btn">
+                  <button onClick={() => copyContent(item)} title={t('prompts.copyContent')} className="item-card-icon-btn">
                     {copiedId === item.id ? <Check size={12} style={{ color: 'var(--accent)' }} /> : <Copy size={12} />}
                   </button>
-                  <button onClick={() => openEdit(item)} title="Edit" className="item-card-icon-btn">
+                  <button onClick={() => openEdit(item)} title={t('prompts.edit')} className="item-card-icon-btn">
                     <Edit2 size={12} />
                   </button>
-                  <button onClick={() => remove(item)} title="Delete" className="item-card-icon-btn danger">
+                  <button onClick={() => remove(item)} title={t('prompts.delete')} className="item-card-icon-btn danger">
                     <Trash2 size={12} />
                   </button>
                 </div>
@@ -260,56 +263,56 @@ export default function Prompts() {
       {editorOpen && (
         <Modal
           width={720}
-          title={edit.id == null ? 'NEW PROMPT TEMPLATE' : 'EDIT PROMPT TEMPLATE'}
+          title={t(edit.id == null ? 'prompts.newTitle' : 'prompts.editTitle').toUpperCase()}
           onClose={() => { if (!saving) setEditorOpen(false) }}
           footer={(
             <>
               <button onClick={() => setEditorOpen(false)} disabled={saving} className="btn btn-secondary">
-                CANCEL
+                {t('prompts.cancel').toUpperCase()}
               </button>
               <button onClick={save} disabled={saving} className="btn btn-primary" style={{ opacity: saving ? 0.6 : 1 }}>
-                <Save size={12} /> {saving ? 'SAVING...' : 'SAVE'}
+                <Save size={12} /> {t(saving ? 'prompts.saving' : 'prompts.save').toUpperCase()}
               </button>
             </>
           )}
         >
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
             <div>
-              <label className="form-label">NAME</label>
+              <label className="form-label">{t('prompts.name').toUpperCase()}</label>
               <input value={edit.name} onChange={e => setEdit(s => ({ ...s, name: e.target.value }))}
-                placeholder="e.g. Security Auditor"
+                placeholder={t('prompts.namePlaceholder')}
                 className="form-input"
               />
             </div>
             <div>
-              <label className="form-label">CATEGORY</label>
+              <label className="form-label">{t('prompts.category').toUpperCase()}</label>
               <select value={edit.category} onChange={e => setEdit(s => ({ ...s, category: e.target.value as Category }))} className="form-input">
-                <option value="system">System Prompt</option>
-                <option value="intent_parser">Intent Parser</option>
-                <option value="summarizer">Summarizer</option>
-                <option value="general">General</option>
+                <option value="system">{t('prompts.systemPrompt')}</option>
+                <option value="intent_parser">{t('prompts.intentParser')}</option>
+                <option value="summarizer">{t('prompts.summarizer')}</option>
+                <option value="general">{t('prompts.general')}</option>
               </select>
             </div>
           </div>
           <div>
-            <label className="form-label">DESCRIPTION (OPTIONAL)</label>
+            <label className="form-label">{t('prompts.descriptionOptional').toUpperCase()}</label>
             <input value={edit.description} onChange={e => setEdit(s => ({ ...s, description: e.target.value }))}
-              placeholder="Short note shown next to the name"
+              placeholder={t('prompts.descriptionPlaceholder')}
               className="form-input"
             />
           </div>
           <div>
-            <label className="form-label">CONTENT</label>
+            <label className="form-label">{t('prompts.content').toUpperCase()}</label>
             <textarea value={edit.content} onChange={e => setEdit(s => ({ ...s, content: e.target.value }))}
               rows={14}
-              placeholder="The full prompt text. Will be applied verbatim."
+              placeholder={t('prompts.contentPlaceholder')}
               className="form-textarea"
               style={{ minHeight: 280, lineHeight: 1.6 }}
             />
           </div>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-muted)', cursor: 'pointer' }}>
             <input type="checkbox" checked={edit.is_active} onChange={e => setEdit(s => ({ ...s, is_active: e.target.checked }))} />
-            <span style={{ letterSpacing: '0.1em' }}>ACTIVE (shown in Chat picker)</span>
+            <span style={{ letterSpacing: '0.1em' }}>{t('prompts.activeInChat').toUpperCase()}</span>
           </label>
         </Modal>
       )}

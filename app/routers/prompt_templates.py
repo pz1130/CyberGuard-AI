@@ -166,7 +166,7 @@ DEFAULT_TEMPLATES: list[dict] = [
     {
         "name": "Pentest Auditor",
         "category": "system",
-        "description": "渗透测试 / 红队视角，按 PTES 流程汇报。",
+        "description": "Penetration testing and red-team analysis reported using the PTES methodology.",
         "content": (
             "You are a senior penetration-testing auditor working under explicit "
             "authorization from the operator. Follow the PTES phases (recon → "
@@ -183,7 +183,7 @@ DEFAULT_TEMPLATES: list[dict] = [
     {
         "name": "Threat Hunter",
         "category": "system",
-        "description": "基于假设驱动的威胁狩猎，对齐 MITRE ATT&CK。",
+        "description": "Hypothesis-driven threat hunting aligned with MITRE ATT&CK.",
         "content": (
             "You are a threat hunter. For each user request, generate a "
             "hypothesis-driven hunt plan aligned to MITRE ATT&CK.\n\n"
@@ -200,7 +200,7 @@ DEFAULT_TEMPLATES: list[dict] = [
     {
         "name": "SOC Analyst (L2)",
         "category": "system",
-        "description": "二级 SOC 分析师，按事件优先级分级响应。",
+        "description": "L2 SOC analysis with incident triage and priority-based response.",
         "content": (
             "You are an L2 SOC analyst. For every alert or log excerpt, "
             "produce a triage report:\n"
@@ -217,7 +217,7 @@ DEFAULT_TEMPLATES: list[dict] = [
     {
         "name": "Incident Responder",
         "category": "system",
-        "description": "事件响应协调员，遵循 NIST SP 800-61 流程。",
+        "description": "Incident response coordination following NIST SP 800-61.",
         "content": (
             "You are an incident response coordinator following NIST SP 800-61 "
             "(Preparation, Detection & Analysis, Containment / Eradication / "
@@ -235,7 +235,7 @@ DEFAULT_TEMPLATES: list[dict] = [
     {
         "name": "Vulnerability Triage",
         "category": "system",
-        "description": "对漏洞按可利用性 / 暴露面 / 业务影响排序。",
+        "description": "Prioritizes vulnerabilities by exploitability, exposure, and business impact.",
         "content": (
             "You triage vulnerabilities for a security operations team. Given "
             "a CVE list or scanner export, rank items by:\n"
@@ -251,7 +251,7 @@ DEFAULT_TEMPLATES: list[dict] = [
     {
         "name": "Compliance Reviewer (ISO 27001 / NIST CSF)",
         "category": "system",
-        "description": "对照 ISO 27001 Annex A 与 NIST CSF 评估控制项。",
+        "description": "Assesses controls against ISO 27001 Annex A and NIST CSF.",
         "content": (
             "You are a compliance reviewer for ISO 27001 (Annex A) and NIST "
             "CSF 2.0. For each control or evidence artefact provided:\n"
@@ -267,7 +267,7 @@ DEFAULT_TEMPLATES: list[dict] = [
     {
         "name": "Secure Code Reviewer (OWASP)",
         "category": "general",
-        "description": "代码安全审查，对照 OWASP Top 10 + CWE。",
+        "description": "Secure code review mapped to the OWASP Top 10 and CWE.",
         "content": (
             "You review code for security defects. For each finding emit:\n"
             "- File:line range, code excerpt.\n"
@@ -284,7 +284,7 @@ DEFAULT_TEMPLATES: list[dict] = [
     {
         "name": "Concise Bullet Summarizer",
         "category": "summarizer",
-        "description": "把多轮对话压缩为 3–5 条要点。",
+        "description": "Condenses a conversation into three to five key points.",
         "content": (
             "Summarise the conversation so far in 3–5 short bullets. "
             "Preserve: key decisions, outstanding action items (with owner), "
@@ -295,7 +295,7 @@ DEFAULT_TEMPLATES: list[dict] = [
     {
         "name": "Intent Router (Cyber Ops)",
         "category": "intent_parser",
-        "description": "把用户消息路由到合适的 sub-agent。",
+        "description": "Routes each user message to the appropriate sub-agent.",
         "content": (
             "Classify the user message into ONE of the following intents and "
             "return JSON {intent, target_agent, confidence}:\n"
@@ -313,21 +313,49 @@ DEFAULT_TEMPLATES: list[dict] = [
 ]
 
 
-async def seed_prompt_templates_on_startup() -> None:
-    """Insert built-in templates if they don't already exist.
+# Descriptions shipped before the English-language release candidate. They are
+# retained only to identify untouched built-in rows during an upgrade.
+LEGACY_DEFAULT_DESCRIPTIONS = {
+    "Pentest Auditor": "渗透测试 / 红队视角，按 PTES 流程汇报。",
+    "Threat Hunter": "基于假设驱动的威胁狩猎，对齐 MITRE ATT&CK。",
+    "SOC Analyst (L2)": "二级 SOC 分析师，按事件优先级分级响应。",
+    "Incident Responder": "事件响应协调员，遵循 NIST SP 800-61 流程。",
+    "Vulnerability Triage": "对漏洞按可利用性 / 暴露面 / 业务影响排序。",
+    "Compliance Reviewer (ISO 27001 / NIST CSF)": (
+        "对照 ISO 27001 Annex A 与 NIST CSF 评估控制项。"
+    ),
+    "Secure Code Reviewer (OWASP)": "代码安全审查，对照 OWASP Top 10 + CWE。",
+    "Concise Bullet Summarizer": "把多轮对话压缩为 3–5 条要点。",
+    "Intent Router (Cyber Ops)": "把用户消息路由到合适的 sub-agent。",
+}
 
-    Idempotent: matches by name. Existing user-edited rows are never
-    overwritten — only missing names are inserted.
+
+async def seed_prompt_templates_on_startup() -> None:
+    """Insert built-in templates and migrate untouched legacy descriptions.
+
+    Idempotent: matches by name. User-edited rows are never overwritten; an
+    existing description is migrated only when it exactly matches the legacy
+    built-in Chinese text.
     """
     async with get_db_context() as session:
-        existing = await session.execute(select(PromptTemplate.name))
-        have = {row[0] for row in existing.all()}
+        existing = await session.execute(select(PromptTemplate))
+        by_name = {row.name: row for row in existing.scalars().all()}
         inserted = 0
+        migrated = 0
         for tpl in DEFAULT_TEMPLATES:
-            if tpl["name"] in have:
+            current = by_name.get(tpl["name"])
+            if current is not None:
+                legacy_description = LEGACY_DEFAULT_DESCRIPTIONS.get(tpl["name"])
+                if current.description == legacy_description:
+                    current.description = tpl["description"]
+                    migrated += 1
                 continue
             session.add(PromptTemplate(**tpl))
             inserted += 1
-        if inserted:
+        if inserted or migrated:
             await session.commit()
-            logger.info(f"Seeded {inserted} default prompt templates")
+            logger.info(
+                "Prompt templates ready: inserted=%d, migrated=%d",
+                inserted,
+                migrated,
+            )

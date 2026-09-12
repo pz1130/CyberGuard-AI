@@ -332,7 +332,7 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
 
           {!loadingData && !q && recentTabs.length === 0 && (
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-dim)', fontSize: 12, letterSpacing: '0.1em' }}>
-              TYPE TO SEARCH ACROSS AGENTS, PROVIDERS, SKILLS, TOOLS, KNOWLEDGE, MCP, SCHEDULE, WEBHOOKS, PROMPTS, N8N, GOVERNANCE
+              TYPE TO SEARCH ACROSS AGENTS, PROVIDERS, SKILLS, TOOLS, KNOWLEDGE, MCP, PROMPTS, GOVERNANCE
             </div>
           )}
 
