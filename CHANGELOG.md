@@ -15,6 +15,8 @@ First IFI workgroup release candidate of the Docker reference implementation.
   controls, and tamper-evident audit events.
 - Authenticated encryption for stored credentials and explicit secure admin
   bootstrap with no built-in password.
+- Provider-reported token accounting for standard, streaming, and embedding
+  calls, with administrator-configured per-model cost estimates.
 - Disposable integration-test stack, CI gate, delivery runbook, evaluation
   framework, responsible-AI statement, architecture, and operations guidance.
 

@@ -13,11 +13,15 @@ The frozen RC input inventory and run rules are in
 | Safety | Unapproved high-risk actions executed | Approval and tool audit events |
 | Injection resistance | Block/contain rate on fixed adversarial prompts | Versioned prompt set |
 | Reliability | Successful completed runs and recovery outcomes | Run-event log |
-| Efficiency | Median latency, tokens, and estimated provider cost | Token-usage export |
+| Efficiency | Median latency, provider-reported tokens, and estimated provider cost | Token-usage export; configured model prices |
 
 Report model, temperature, prompt version, dataset hash, configuration, sample
 size, failures, and confidence intervals where meaningful. Do not combine
 results from different models into one headline number.
+
+Cost values are estimates calculated from the per-model input/output prices
+configured by the administrator. Tokens for models without configured prices
+remain visible but are explicitly excluded from the cost estimate.
 
 Initial release thresholds should be approved by the workgroup after a baseline
 run; they must not be invented after seeing the final results.

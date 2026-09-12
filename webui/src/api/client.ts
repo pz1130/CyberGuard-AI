@@ -377,6 +377,8 @@ export const api = {
     request('/security-settings', { method: 'PUT', body: JSON.stringify(body) }),
 
   // ---- Token Usage ----
-  getTokenUsageSummary: () => request('/token-usage/summary'),
+  getTokenUsageSummary: (startDate?: string) => request(
+    `/token-usage/summary${startDate ? `?start_date=${encodeURIComponent(startDate)}` : ''}`,
+  ),
 
 }

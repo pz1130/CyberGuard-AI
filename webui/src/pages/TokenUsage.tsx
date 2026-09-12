@@ -12,6 +12,7 @@ interface TokenUsageByModel {
   completion_tokens: number
   total_tokens: number
   call_count: number
+  estimated_cost_usd: number | null
 }
 
 interface TokenUsageSummary {
@@ -20,6 +21,8 @@ interface TokenUsageSummary {
   total_tokens: number
   total_calls: number
   total_cost_usd: number
+  priced_tokens: number
+  unpriced_tokens: number
   by_model: TokenUsageByModel[]
   by_date: Record<string, { prompt_tokens: number; completion_tokens: number; call_count: number }>
 }
@@ -42,18 +45,28 @@ export default function TokenUsage() {
   const [data, setData] = useState<TokenUsageSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [rangeDays, setRangeDays] = useState(30)
 
   useEffect(() => {
-    api.getTokenUsageSummary()
+    const start = new Date()
+    start.setDate(start.getDate() - rangeDays + 1)
+    const startDate = [
+      start.getFullYear(),
+      String(start.getMonth() + 1).padStart(2, '0'),
+      String(start.getDate()).padStart(2, '0'),
+    ].join('-')
+    setLoading(true)
+    setError(null)
+    api.getTokenUsageSummary(startDate)
       .then(result => setData(result as TokenUsageSummary))
       .catch(e => setError(e instanceof Error ? e.message : 'Unknown error'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [rangeDays])
 
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200 }}>
-        <div style={{ color: 'var(--text-muted)' }}>Loading token usage data...</div>
+        <div style={{ color: 'var(--text-muted)' }}>{t('token.loading')}</div>
       </div>
     )
   }
@@ -71,7 +84,7 @@ export default function TokenUsage() {
           }
         />
         <div className="item-card" style={{ padding: 20, color: 'var(--text-muted)' }}>
-          No token usage data available. Make LLM API calls to see usage here.
+          {t('token.loadError')}
         </div>
       </div>
     )
@@ -86,11 +99,22 @@ export default function TokenUsage() {
     <div>
       {/* Header */}
       <PageHeader
-        eyebrow="COST ANALYSIS"
+        eyebrow={t('token.costAnalysis').toUpperCase()}
         title={t('token.title').toUpperCase()}
         actions={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Coins size={16} style={{ color: 'var(--accent)' }} />
+            <select
+              className="form-input"
+              value={rangeDays}
+              onChange={e => setRangeDays(Number(e.target.value))}
+              aria-label={t('token.dateRange')}
+              style={{ width: 110, height: 32, fontSize: 12 }}
+            >
+              <option value={7}>{t('token.lastDays', { count: 7 })}</option>
+              <option value={30}>{t('token.lastDays', { count: 30 })}</option>
+              <option value={90}>{t('token.lastDays', { count: 90 })}</option>
+            </select>
           </div>
         }
       />
@@ -98,9 +122,9 @@ export default function TokenUsage() {
       {/* Summary */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
         {[
-          { label: 'TOTAL INPUT TOKENS', value: (totalInput / 1000000).toFixed(2) + 'M', color: 'var(--cyan)' },
-          { label: 'TOTAL OUTPUT TOKENS', value: (totalOutput / 1000000).toFixed(2) + 'M', color: 'var(--purple)' },
-          { label: 'TOTAL COST (USD)', value: '$' + totalCost.toFixed(2), color: 'var(--amber)' },
+          { label: t('token.totalInputTokens').toUpperCase(), value: totalInput.toLocaleString(), color: 'var(--cyan)' },
+          { label: t('token.totalOutputTokens').toUpperCase(), value: totalOutput.toLocaleString(), color: 'var(--purple)' },
+          { label: t('token.estimatedCostUsd').toUpperCase(), value: data.priced_tokens > 0 ? '$' + totalCost.toFixed(4) : '—', color: 'var(--amber)' },
         ].map(({ label, value, color }) => (
           <div key={label} className="item-card" style={{ padding: 20, textAlign: 'center' }}>
             <div style={{ fontSize: 24, fontWeight: 700, color, letterSpacing: '0.05em', marginBottom: 6 }}>{value}</div>
@@ -109,14 +133,20 @@ export default function TokenUsage() {
         ))}
       </div>
 
+      {data.unpriced_tokens > 0 && (
+        <div style={{ margin: '-12px 0 20px', fontSize: 12, color: 'var(--text-muted)' }}>
+          {t('token.unpricedNotice', { count: data.unpriced_tokens.toLocaleString() })}
+        </div>
+      )}
+
       {/* Bar chart */}
       <div className="item-card" style={{ padding: 20, marginBottom: 24 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 16 }}>INPUT TOKENS BY MODEL</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 16 }}>{t('token.inputByModel').toUpperCase()}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {data.by_model.length > 0 ? data.by_model.map(d => (
             <Bar key={`${d.provider_id}:${d.model_name}`} label={`${d.provider_name}/${d.model_name}`} value={d.prompt_tokens} max={maxVal} />
           )) : (
-            <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No data available</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>{t('token.noData')}</div>
           )}
         </div>
       </div>
@@ -126,7 +156,7 @@ export default function TokenUsage() {
         <table className="data-table">
           <thead>
             <tr>
-              {['MODEL', 'INPUT', 'OUTPUT', 'COST (USD)'].map((h, i) => (
+              {[t('token.model'), t('token.input'), t('token.output'), t('token.estimatedCostUsd')].map((h, i) => (
                 <th key={i} style={i > 0 ? { textAlign: 'right' } : undefined}>{h}</th>
               ))}
             </tr>
@@ -137,11 +167,11 @@ export default function TokenUsage() {
                 <td style={{ color: 'var(--text-primary)', letterSpacing: '0.05em' }}>{d.model_name}</td>
                 <td style={{ color: 'var(--text-muted)', textAlign: 'right', letterSpacing: '0.05em' }}>{(d.prompt_tokens / 1000).toFixed(1)}K</td>
                 <td style={{ color: 'var(--text-muted)', textAlign: 'right', letterSpacing: '0.05em' }}>{(d.completion_tokens / 1000).toFixed(1)}K</td>
-                <td style={{ color: 'var(--purple)', textAlign: 'right', letterSpacing: '0.05em' }}>${(d.prompt_tokens * 0.000001 * 2 + d.completion_tokens * 0.000006).toFixed(2)}</td>
+                <td style={{ color: 'var(--purple)', textAlign: 'right', letterSpacing: '0.05em' }}>{d.estimated_cost_usd == null ? '—' : `$${d.estimated_cost_usd.toFixed(4)}`}</td>
               </tr>
             )) : (
               <tr>
-                <td colSpan={4} style={{ padding: '14px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No data available</td>
+                <td colSpan={4} style={{ padding: '14px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>{t('token.noData')}</td>
               </tr>
             )}
           </tbody>

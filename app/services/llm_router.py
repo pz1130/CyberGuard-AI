@@ -461,12 +461,10 @@ class LLMRouter:
             from app.core.database import get_db_context
             from app.services.token_usage_service import TokenUsageService
 
-            provider_name = f"Provider-{provider_id}" if provider_id else "default"
-            if provider_id:
-                async with get_db_context() as session:
-                    provider_name = await TokenUsageService.get_provider_name(session, provider_id)
-
             async with get_db_context() as session:
+                provider_name = f"Provider-{provider_id}" if provider_id else "default"
+                if provider_id:
+                    provider_name = await TokenUsageService.get_provider_name(session, provider_id)
                 await TokenUsageService.record_usage(
                     db=session,
                     provider_id=provider_id or 0,
@@ -478,7 +476,7 @@ class LLMRouter:
                 )
         except Exception:
             # Don't fail the main request if token recording fails
-            pass
+            logger.warning("[llm_router] Failed to record token usage", exc_info=True)
 
     async def parse_intent(
         self,
@@ -840,16 +838,40 @@ Examples:
         )
 
         accumulated = []
+        usage_response = None
         try:
             await rate_limit(provider_id, await self._provider_rpm(provider_id))
             # Retry only the connection/handshake; mid-stream failures are not retried.
-            stream = await acall_with_retry(lambda: client.chat.completions.create(
-                model=active_model,
-                messages=messages,
-                temperature=temperature,
-                stream=True,
-            ), label="stream_chat")
+            stream_kwargs = {
+                "model": active_model,
+                "messages": messages,
+                "temperature": temperature,
+                "stream": True,
+                "stream_options": {"include_usage": True},
+            }
+            try:
+                stream = await acall_with_retry(
+                    lambda: client.chat.completions.create(**stream_kwargs),
+                    label="stream_chat",
+                )
+            except Exception as exc:
+                # Some OpenAI-compatible endpoints reject stream_options. Keep
+                # streaming functional, but usage cannot be recorded for those
+                # providers unless they include it without being asked.
+                if getattr(exc, "status_code", None) not in {400, 422}:
+                    raise
+                stream_kwargs.pop("stream_options")
+                logger.warning(
+                    "[llm_router] Provider rejected stream usage reporting; "
+                    "retrying without stream_options"
+                )
+                stream = await acall_with_retry(
+                    lambda: client.chat.completions.create(**stream_kwargs),
+                    label="stream_chat_compat",
+                )
             async for chunk in stream:
+                if getattr(chunk, "usage", None):
+                    usage_response = chunk
                 delta = chunk.choices[0].delta.content if chunk.choices else None
                 if delta:
                     accumulated.append(delta)
@@ -860,8 +882,10 @@ Examples:
 
         # Strip think tags from final accumulated response (best-effort)
         full = "".join(accumulated)
+        if usage_response is not None:
+            await self._record_token_usage(active_model, provider_id, usage_response)
         _record_generation("stream_chat", active_model, messages, full,
-                           None, provider_id)
+                           usage_response, provider_id)
         strip = await self._should_strip_think(provider_id)
         if strip and "<think>" in full.lower():
             # We already streamed the raw content — emit a replacement signal
@@ -895,6 +919,7 @@ Examples:
             model=embedding_model,
             input=texts,
         )
+        await self._record_token_usage(embedding_model, provider_id, response)
         # response.data is sorted by index per OpenAI spec
         ordered = sorted(response.data, key=lambda d: d.index)
         return [item.embedding for item in ordered]

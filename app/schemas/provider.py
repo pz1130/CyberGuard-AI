@@ -40,6 +40,16 @@ class ModelInfo(BaseModel):
         description="Max completion tokens the model may emit.",
         ge=1,
     )
+    input_price_per_million: Optional[float] = Field(
+        default=None,
+        description="Optional input-token price in USD per million tokens.",
+        ge=0,
+    )
+    output_price_per_million: Optional[float] = Field(
+        default=None,
+        description="Optional output-token price in USD per million tokens.",
+        ge=0,
+    )
 
 
 class ProviderBase(BaseModel):

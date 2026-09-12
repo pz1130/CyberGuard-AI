@@ -17,6 +17,8 @@ interface ModelInfo {
   verified?: boolean | null
   last_tested_at?: string | null
   test_error?: string | null
+  input_price_per_million?: number | null
+  output_price_per_million?: number | null
 }
 
 interface Provider {
@@ -316,9 +318,9 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
       }
       if (!ids.length) { setFetchErr('No models returned by provider'); return }
       const discovered = ids.map(name => ({ name, model_type: 'chat' as const }))
-      // Merge: keep existing type tags, add new ones
-      const existing = Object.fromEntries(models.map(m => [m.name, m.model_type]))
-      setModels(discovered.map(m => ({ name: m.name, model_type: existing[m.name] || 'chat' })))
+      // Preserve existing type, verification, capability, and price metadata.
+      const existing = Object.fromEntries(models.map(m => [m.name, m]))
+      setModels(discovered.map(m => existing[m.name] || m))
     } catch (e: any) { setFetchErr(e.message) }
     finally { setFetching(false) }
   }
@@ -405,7 +407,7 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
       title={`MODELS · ${provider.name.toUpperCase()}`}
       eyebrow={`${models.length} model${models.length !== 1 ? 's' : ''} configured`}
       onClose={onClose}
-      width={520}
+      width={720}
       footer={
         <>
           <button
@@ -468,7 +470,8 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
             models.map(m => {
               const r = testRes[m.name]
               return (
-                <div key={m.name} style={{ display: 'flex', alignItems: 'center', padding: '9px 14px', borderBottom: '1px solid var(--border)', gap: 10 }}>
+                <div key={m.name} style={{ display: 'flex', flexDirection: 'column', padding: '9px 14px', borderBottom: '1px solid var(--border)', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%' }}>
                   {/* Type badge */}
                   <span style={{ fontSize: 10, padding: '2px 5px', border: `1px solid ${typeColor[m.model_type]}`, color: typeColor[m.model_type], letterSpacing: '0.1em', whiteSpace: 'nowrap', flexShrink: 0 }}>
                     {m.model_type.toUpperCase()}
@@ -511,6 +514,37 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
                   <button onClick={() => remove(m.name)} style={{ color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', flexShrink: 0 }}>
                     <X size={11} />
                   </button>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 64 }}>
+                    <span style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.08em' }}>{t('providers.pricingUsdPerMillion')}</span>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--text-muted)' }}>
+                      {t('providers.inputPrice')}
+                      <input
+                        className="form-input"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={m.input_price_per_million ?? ''}
+                        onChange={e => setModels(prev => prev.map(x => x.name === m.name ? { ...x, input_price_per_million: e.target.value === '' ? null : Number(e.target.value) } : x))}
+                        placeholder="—"
+                        style={{ width: 82, height: 26, fontSize: 11 }}
+                      />
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--text-muted)' }}>
+                      {t('providers.outputPrice')}
+                      <input
+                        className="form-input"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={m.output_price_per_million ?? ''}
+                        onChange={e => setModels(prev => prev.map(x => x.name === m.name ? { ...x, output_price_per_million: e.target.value === '' ? null : Number(e.target.value) } : x))}
+                        placeholder="—"
+                        style={{ width: 82, height: 26, fontSize: 11 }}
+                      />
+                    </label>
+                    <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>{t('providers.pricingOptional')}</span>
+                  </div>
                 </div>
               )
             })

@@ -48,8 +48,8 @@ The Vite dev server proxies `/api/*` → `http://localhost:8000/api/v1/*` and `/
 | MCP | Model Context Protocol servers and tools |
 | 环境变量 | Encrypted environment variables for agents |
 | 安全 | RBAC, encryption status, security settings |
-| Token 消耗 | Track API token usage per user/provider |
+| Token 消耗 | Provider/model token usage and configured cost estimates |
 | 备份 | pg_dump + AES-256 backup/restore |
 | 审计日志 | Full audit trail of all operations |
 | 用户管理 | RBAC user and role management |
-| Governance | Assessments, evidence, approvals, kill switch, and metrics |
+| Agent Governance | Approvals, audit, kill switch, rollback, and metrics |

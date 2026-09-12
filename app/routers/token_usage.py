@@ -23,6 +23,7 @@ class TokenUsageByModel(BaseModel):
     completion_tokens: int = 0
     total_tokens: int = 0
     call_count: int = 0
+    estimated_cost_usd: Optional[float] = None
 
 
 class TokenUsageSummary(BaseModel):
@@ -31,6 +32,8 @@ class TokenUsageSummary(BaseModel):
     total_tokens: int = 0
     total_calls: int = 0
     total_cost_usd: float = 0.0
+    priced_tokens: int = 0
+    unpriced_tokens: int = 0
     by_model: list[TokenUsageByModel] = []
     by_date: dict[str, dict] = {}
 
@@ -48,41 +51,29 @@ class TokenUsageRecord(BaseModel):
     created_at: datetime
 
 
-# Model pricing (USD per 1M tokens) - common models
-MODEL_PRICING = {
-    # OpenAI
-    "gpt-4o": {"input": 5.0, "output": 15.0},
-    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-    "gpt-4-turbo": {"input": 10.0, "output": 30.0},
-    "gpt-3.5-turbo": {"input": 0.5, "output": 1.5},
-    # Anthropic
-    "claude-3-5-sonnet": {"input": 3.0, "output": 15.0},
-    "claude-3-5-haiku": {"input": 0.8, "output": 4.0},
-    "claude-3-opus": {"input": 15.0, "output": 75.0},
-    "claude-3-sonnet": {"input": 3.0, "output": 15.0},
-    # Google
-    "gemini-2.0-flash": {"input": 0.0, "output": 0.0},
-    "gemini-1.5-pro": {"input": 1.25, "output": 5.0},
-    "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
-    # Default
-    "default": {"input": 1.0, "output": 5.0},
-}
-
-
-def get_model_price(model_name: str) -> dict:
-    """Get pricing for a model."""
-    for key, pricing in MODEL_PRICING.items():
-        if key in model_name.lower():
-            return pricing
-    return MODEL_PRICING["default"]
-
-
-def calculate_cost(prompt_tokens: int, completion_tokens: int, model_name: str) -> float:
-    """Calculate cost in USD."""
-    pricing = get_model_price(model_name)
-    input_cost = (prompt_tokens / 1_000_000) * pricing["input"]
-    output_cost = (completion_tokens / 1_000_000) * pricing["output"]
+def calculate_cost(
+    prompt_tokens: int,
+    completion_tokens: int,
+    input_price_per_million: float,
+    output_price_per_million: float,
+) -> float:
+    """Calculate estimated USD cost from administrator-configured prices."""
+    input_cost = (prompt_tokens / 1_000_000) * input_price_per_million
+    output_cost = (completion_tokens / 1_000_000) * output_price_per_million
     return input_cost + output_cost
+
+
+def get_configured_model_price(provider: Provider, model_name: str) -> Optional[tuple[float, float]]:
+    """Return configured input/output prices for an exact provider model."""
+    for model in provider.models or []:
+        if not isinstance(model, dict) or model.get("name") != model_name:
+            continue
+        input_price = model.get("input_price_per_million")
+        output_price = model.get("output_price_per_million")
+        if input_price is None or output_price is None:
+            return None
+        return float(input_price), float(output_price)
+    return None
 
 
 @router.get("/token-usage/summary", response_model=TokenUsageSummary)
@@ -140,20 +131,44 @@ async def get_token_usage_summary(
         by_date_dict[log.date_str]["completion_tokens"] += log.completion_tokens
         by_date_dict[log.date_str]["call_count"] += log.call_count
 
+    numeric_provider_ids = {
+        int(model_data.provider_id)
+        for model_data in by_model_dict.values()
+        if model_data.provider_id.isdigit() and int(model_data.provider_id) > 0
+    }
+    providers_by_id: dict[int, Provider] = {}
+    if numeric_provider_ids:
+        provider_result = await db.execute(
+            select(Provider).where(Provider.id.in_(numeric_provider_ids))
+        )
+        providers_by_id = {provider.id: provider for provider in provider_result.scalars().all()}
+
     total_cost = 0.0
+    priced_tokens = 0
+    unpriced_tokens = 0
     for model_data in by_model_dict.values():
-        total_cost += calculate_cost(
+        provider = providers_by_id.get(int(model_data.provider_id)) if model_data.provider_id.isdigit() else None
+        pricing = get_configured_model_price(provider, model_data.model_name) if provider else None
+        if pricing is None:
+            unpriced_tokens += model_data.total_tokens
+            continue
+        model_data.estimated_cost_usd = round(calculate_cost(
             model_data.prompt_tokens,
             model_data.completion_tokens,
-            model_data.model_name,
-        )
+            pricing[0],
+            pricing[1],
+        ), 6)
+        total_cost += model_data.estimated_cost_usd
+        priced_tokens += model_data.total_tokens
 
     return TokenUsageSummary(
         total_prompt_tokens=total_prompt,
         total_completion_tokens=total_completion,
         total_tokens=total_prompt + total_completion,
         total_calls=total_calls,
-        total_cost_usd=round(total_cost, 2),
+        total_cost_usd=round(total_cost, 6),
+        priced_tokens=priced_tokens,
+        unpriced_tokens=unpriced_tokens,
         by_model=list(by_model_dict.values()),
         by_date=by_date_dict,
     )
