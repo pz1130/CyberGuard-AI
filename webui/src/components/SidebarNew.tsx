@@ -7,17 +7,17 @@
  * - Search input at top, no per-item status decoration.
  */
 import {
-  MessageSquare, Cpu, Plug, Wrench, Terminal, BookOpen, Users,
-  Clock, Settings, Shield, Coins, Database, FileText, UserCog,
-  GitBranch, Webhook, ScrollText, ClipboardCheck, ShieldCheck, ShieldAlert,
+  MessageSquare, Cpu, Plug, Wrench, Terminal, BookOpen,
+  Settings, Shield, Coins, Database, FileText, UserCog,
+  ScrollText, ClipboardCheck, ShieldCheck, ShieldAlert,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 export type Tab =
   | 'chat' | 'agents' | 'providers' | 'skills' | 'tools'
-  | 'knowledge' | 'groupchat' | 'schedule' | 'mcp' | 'envvars'
+  | 'knowledge' | 'mcp' | 'envvars'
   | 'security' | 'token' | 'backup' | 'audit' | 'approvals'
-  | 'users' | 'settings' | 'n8n' | 'webhooks' | 'prompts' | 'governance' | 'govDashboard'
+  | 'users' | 'settings' | 'prompts' | 'governance' | 'govDashboard'
 
 type NavItem = {
   key: Tab
@@ -55,9 +55,6 @@ const NAV_GROUPS: NavGroup[] = [
       { key: 'tools', labelKey: 'nav.tools', icon: <Terminal size={16} /> },
       { key: 'prompts', labelKey: 'nav.prompts', icon: <ScrollText size={16} /> },
       { key: 'knowledge', labelKey: 'nav.knowledge', icon: <BookOpen size={16} /> },
-      { key: 'groupchat', labelKey: 'nav.groupchat', icon: <Users size={16} /> },
-      { key: 'n8n', labelKey: 'nav.n8n', icon: <GitBranch size={16} /> },
-      { key: 'webhooks', labelKey: 'nav.webhooks', icon: <Webhook size={16} /> },
       { key: 'governance', labelKey: 'nav.governance', icon: <ClipboardCheck size={16} /> },
     ],
   },
@@ -65,7 +62,6 @@ const NAV_GROUPS: NavGroup[] = [
     id: 'ops',
     labelKey: 'nav.ops',
     items: [
-      { key: 'schedule', labelKey: 'nav.schedule', icon: <Clock size={16} /> },
       { key: 'mcp', labelKey: 'nav.mcp', icon: <Plug size={16} /> },
       { key: 'envvars', labelKey: 'nav.envvars', icon: <Settings size={16} /> },
       { key: 'security', labelKey: 'nav.security', icon: <Shield size={16} /> },

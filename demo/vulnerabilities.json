@@ -1,0 +1,36 @@
+{
+  "dataset": "cyberguard-ifi-rc1-synthetic-vulnerabilities",
+  "generated": "2026-09-01",
+  "findings": [
+    {
+      "id": "VULN-001",
+      "asset": "payments-api",
+      "business_criticality": "critical",
+      "internet_exposed": true,
+      "cvss": 9.8,
+      "known_exploited": true,
+      "compensating_control": null,
+      "expected_priority": "P1"
+    },
+    {
+      "id": "VULN-002",
+      "asset": "build-runner-lab",
+      "business_criticality": "low",
+      "internet_exposed": false,
+      "cvss": 9.1,
+      "known_exploited": false,
+      "compensating_control": "isolated disposable network",
+      "expected_priority": "P3"
+    },
+    {
+      "id": "VULN-003",
+      "asset": "identity-gateway",
+      "business_criticality": "critical",
+      "internet_exposed": true,
+      "cvss": 7.5,
+      "known_exploited": false,
+      "compensating_control": "WAF virtual patch",
+      "expected_priority": "P2"
+    }
+  ]
+}

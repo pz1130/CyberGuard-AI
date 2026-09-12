@@ -7,8 +7,6 @@ from app.routers import (
     knowledge,
     chat,
     tasks,
-    groupchat,
-    schedule,
     audit,
     backup,
     config,
@@ -18,7 +16,6 @@ from app.routers import (
     approval,
     master_config,
     conversations,
-    n8n,
 )
 
 __all__ = [
@@ -29,8 +26,6 @@ __all__ = [
     "knowledge",
     "chat",
     "tasks",
-    "groupchat",
-    "schedule",
     "audit",
     "backup",
     "config",
@@ -40,5 +35,4 @@ __all__ = [
     "approval",
     "master_config",
     "conversations",
-    "n8n",
 ]

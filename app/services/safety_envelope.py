@@ -99,11 +99,6 @@ async def _mark(action_id: str, status: str, detail: str | None) -> None:
 
 
 async def _page_oncall(action_id: str, tool_name: str | None, stderr) -> None:
-    try:
-        from app.services import webhook_service
-        await webhook_service.emit("rollback.failed",
-                                   {"action_id": action_id, "tool": tool_name, "error": str(stderr)[:300]})
-    except Exception:
-        import logging
-        logging.getLogger("safety_envelope").error(
-            "ROLLBACK FAILED action=%s tool=%s err=%s", action_id, tool_name, str(stderr)[:300])
+    import logging
+    logging.getLogger("safety_envelope").error(
+        "ROLLBACK FAILED action=%s tool=%s err=%s", action_id, tool_name, str(stderr)[:300])

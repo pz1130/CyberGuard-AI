@@ -145,7 +145,7 @@ export default function Backup() {
         background: 'var(--accent-dim)', border: '1px solid var(--accent-border)', borderRadius: 'var(--radius-md)',
         fontSize: 12, color: 'var(--accent)', letterSpacing: '0.05em', lineHeight: 1.8,
       }}>
-        FULL DB BACKUP (PG_DUMP + AES-256) OR "EXPORT CONFIG" (JSON: providers, users, agents, skills, tools, prompts, kbs, schedules, webhooks, MCP, N8N, env, security, master config, governance etc. - no chat/audit/executions) · CHECK "Exclude chat records" FOR DB BACKUP WITHOUT HISTORY · S3 OPTIONAL
+        FULL DB BACKUP (PG_DUMP + AES-256) OR "EXPORT CONFIG" (JSON: providers, users, agents, skills, tools, prompts, knowledge bases, MCP, environment, security, master config, and governance — no chat/audit/executions) · CHECK "Exclude chat records" FOR DB BACKUP WITHOUT HISTORY · S3 OPTIONAL
       </div>
 
       {/* Loading */}

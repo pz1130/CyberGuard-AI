@@ -13,7 +13,6 @@ from app.core.rbac import Permission
 from app.core.auth import AuthenticatedUser
 from app.core.guardrails import check_prompt_sync, GuardrailResult, pick_effective_input
 from app.schemas.chat import ChatAttachmentsResponse, ChatRequest, ChatResponse
-from app.schemas.task import TaskRead, TaskStatus
 from app.models.agent import AgentExecution
 
 router = APIRouter()

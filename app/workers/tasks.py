@@ -14,133 +14,6 @@ logger = logging.getLogger(__name__)
 _executor = ThreadPoolExecutor(max_workers=4)
 
 
-# ---------------------------------------------------------------------------
-# Scheduled Task Execution Engine
-# ---------------------------------------------------------------------------
-
-def _evaluate_cron_should_fire(cron_expr: str, last_run_at: datetime | None) -> bool:
-    """
-    Determine if a cron expression should fire at the current time.
-
-    Returns True if the cron schedule's next run time is within the last 90 seconds
-    and is after the last recorded run time.
-    """
-    try:
-        from croniter import croniter
-    except ImportError:
-        logger.warning("[scheduler] croniter not installed, skipping cron evaluation")
-        return False
-
-    try:
-        tz = timezone.utc
-        cron = croniter(cron_expr, datetime.now(tz))
-        next_run = cron.get_next(datetime)
-        prev_run = cron.get_prev(datetime)
-
-        now = datetime.now(tz)
-        # Fire if prev_run was within the last 90 seconds
-        delta = (now - prev_run).total_seconds()
-        if delta > 90:
-            return False
-
-        # Don't re-fire if last_run_at is more recent than prev_run
-        if last_run_at and last_run_at >= prev_run:
-            return False
-
-        return True
-    except Exception as e:
-        logger.warning(f"[scheduler] Invalid cron expression '{cron_expr}': {e}")
-        return False
-
-
-@shared_task(
-    bind=True,
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    retry_backoff_max=60,
-    retry_jitter=True,
-    max_retries=3,
-    default_retry_delay=30,
-)
-def sync_scheduled_jobs_task(self):
-    """
-    Celery Beat task that runs every minute.
-
-    Reads all active ScheduledTasks from DB and fires any that match
-    the current time window based on their cron_expression.
-    """
-    import uuid
-    from app.core.database import get_sync_session
-    from app.models.schedule import ScheduledTask
-    from app.models.agent import AgentExecution
-    from sqlalchemy import select
-    from croniter import croniter
-
-    logger.debug("[sync_scheduled_jobs_task] Syncing scheduled jobs")
-
-    SessionLocal = get_sync_session()
-    with SessionLocal() as session:
-        result = session.execute(
-            select(ScheduledTask).where(ScheduledTask.is_active.is_(True))
-        )
-        tasks = result.scalars().all()
-
-        fired_count = 0
-        for task in tasks:
-            should_fire = _evaluate_cron_should_fire(
-                task.cron_expression, task.last_run_at
-            )
-            if not should_fire:
-                continue
-
-            logger.info(
-                f"[sync_scheduled_jobs_task] Firing task: {task.name} "
-                f"(cron={task.cron_expression})"
-            )
-
-            # Update last_run_at and compute next_run_at
-            now = datetime.now(timezone.utc)
-            task.last_run_at = now
-            try:
-                cron = croniter(task.cron_expression, now)
-                task.next_run_at = cron.get_next(datetime)
-            except Exception:
-                task.next_run_at = None
-
-            # Create execution record for the scheduled task
-            execution_id = str(uuid.uuid4())
-            task_config = task.task_config or {}
-            prompt = task_config.get("prompt", task_config.get("message", f"Scheduled task: {task.name}"))
-
-            exec_record = AgentExecution(
-                execution_id=execution_id,
-                agent_id=task.agent_id,
-                status="pending",
-                input_data={"user_input": prompt, "source": "scheduled", "scheduled_task_id": task.task_id},
-            )
-            session.add(exec_record)
-            session.commit()
-
-            # Dispatch to run_master_agent_task
-            run_master_agent_task.apply_async(
-                args=[execution_id, prompt, 0],
-                kwargs={
-                    "agent_id": task.agent_id,
-                    "source": "scheduled",
-                    "task_name": task.name,
-                },
-            )
-            fired_count += 1
-
-        if fired_count:
-            session.commit()
-
-        logger.info(
-            f"[sync_scheduled_jobs_task] Synced {len(tasks)} tasks, fired {fired_count}"
-        )
-        return {"total": len(tasks), "fired": fired_count}
-
-
 def _update_execution_status_sync(execution_id: str, status: str):
     """Sync helper to update execution status using a sync DB session."""
     from app.core.database import get_sync_session
@@ -435,19 +308,11 @@ def run_master_agent_task(self, execution_id: str, user_input: str, user_id: int
             _save_to_conversation_async(conversation_id, user_input, result)
             _auto_title_conversation(conversation_id, user_input, result)
 
-        # Email admin if this was a scheduled task
-        if kwargs.get("source") == "scheduled":
-            task_name = kwargs.get("task_name", execution_id)
-            _notify_task_done(task_name, execution_id, "completed")
-
         return {"status": "completed", "execution_id": execution_id, "result": result}
 
     except Exception as e:
         error_msg = str(e)
         _update_execution_with_result_sync(execution_id, "failed", None, str(e))
-        if kwargs.get("source") == "scheduled":
-            task_name = kwargs.get("task_name", execution_id)
-            _notify_task_done(task_name, execution_id, "failed", error=error_msg)
         # Do NOT retry on event-loop errors or auth errors — they are not transient
         if "Event loop is closed" in error_msg or "401" in error_msg or "Unauthorized" in error_msg:
             logger.error(f"[run_master_agent_task] execution_id={execution_id} non-retryable error: {e}")
@@ -515,23 +380,6 @@ def _auto_title_conversation(conversation_id: int, user_input: str, result: dict
         logger.warning(f"[auto-title] Failed for conv {conversation_id}: {e}")
 
 
-def _notify_task_done(task_name: str, execution_id: str, status: str, error: str | None = None):
-    """Fire-and-forget email when a scheduled task finishes (sync wrapper)."""
-    async def _send():
-        from app.services.email_service import notify_scheduled_task_done
-        await notify_scheduled_task_done(task_name, execution_id, status, error)
-
-    try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(_send())
-        finally:
-            loop.close()
-    except Exception as e:
-        logger.warning(f"[email] notify_task_done failed: {e}")
-
-
 @shared_task(
     bind=True,
     autoretry_for=(Exception,),
@@ -591,43 +439,7 @@ celery_app.conf.beat_schedule = {
         "task": "app.workers.tasks.cleanup_stale_executions_task",
         "schedule": 900.0,  # 15 minutes
     },
-    "sync-scheduled-jobs-every-minute": {
-        "task": "app.workers.tasks.sync_scheduled_jobs_task",
-        "schedule": 60.0,  # 1 minute
-    },
 }
-
-
-# ---------------------------------------------------------------------------
-# Outgoing webhook delivery
-# ---------------------------------------------------------------------------
-
-@shared_task(
-    bind=True,
-    autoretry_for=(ConnectionError, TimeoutError),
-    retry_backoff=True,
-    retry_backoff_max=120,
-    retry_jitter=True,
-    max_retries=3,
-    default_retry_delay=30,
-    ignore_result=True,
-)
-def deliver_webhook_task(self, webhook_id: int, event: str, payload: dict):
-    """Async outgoing webhook delivery with retries.
-
-    Retries on transient network errors only. Permanent failures (HTTP 4xx/5xx
-    from the target server) are recorded on the webhook row and *not* retried —
-    by design, so that a buggy receiver doesn't burn the queue.
-    """
-    from app.services.webhook_service import deliver_sync
-
-    result = deliver_sync(webhook_id=webhook_id, event=event, payload=payload)
-    if not result["success"]:
-        logger.warning(
-            "[deliver_webhook_task] webhook=%s event=%s failed: %s",
-            webhook_id, event, result.get("error"),
-        )
-    return result
 
 
 # ---------------------------------------------------------------------------
@@ -699,51 +511,6 @@ def ocr_ingest_task(self, document_id, kb_id, raw_b64, filename, mime_type):
         loop.run_until_complete(_run())
     finally:
         loop.close()
-
-
-# ---------------------------------------------------------------------------
-# Group Chat Completion (multi-worker safe)
-# ---------------------------------------------------------------------------
-
-async def _run_group_chat_completion_async(session_id: str) -> None:
-    """Load the session from Redis, run it to completion, then release the lock.
-
-    Runs inside the Celery worker (a separate process from the API), so the
-    completion loop never shares an event loop with the request handlers.
-    """
-    from app.services.group_chat import GroupChatService
-    service = GroupChatService()
-    try:
-        session = await service.load_session(session_id)
-        if session is None:
-            logger.warning(f"[group_chat_completion] session {session_id} not found")
-            return
-        await service.run_to_completion(session_id)
-    finally:
-        await service.release_run_lock(session_id)
-        await service._clear_cancel_flag(session_id)
-
-
-@shared_task(
-    bind=True,
-    autoretry_for=(ConnectionError, TimeoutError),
-    retry_backoff=True,
-    retry_backoff_max=120,
-    retry_jitter=True,
-    max_retries=3,
-    default_retry_delay=10,
-    ignore_result=True,
-)
-def run_group_chat_completion_task(self, session_id: str):
-    """Run a group-chat discussion to completion in the background."""
-    logger.info(f"[run_group_chat_completion_task] session_id={session_id} started")
-    try:
-        asyncio.run(_run_group_chat_completion_async(session_id))
-        logger.info(f"[run_group_chat_completion_task] session_id={session_id} completed")
-        return {"status": "completed", "session_id": session_id}
-    except Exception as e:
-        logger.error(f"[run_group_chat_completion_task] session_id={session_id} error: {e}")
-        raise
 
 
 @shared_task(

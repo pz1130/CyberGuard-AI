@@ -231,12 +231,6 @@ export const api = {
   updateTask: (id: string, body: any) => request(`/tasks/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteTask: (id: string) => request(`/tasks/${id}`, { method: 'DELETE' }),
 
-  // Schedule
-  getScheduledTasks: () => request('/schedule'),
-  createScheduledTask: (body: any) => request('/schedule', { method: 'POST', body: JSON.stringify(body) }),
-  updateScheduledTask: (id: string, body: any) => request(`/schedule/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
-  deleteScheduledTask: (id: string) => request(`/schedule/${id}`, { method: 'DELETE' }),
-
   // ---- Approvals ----
   getApprovals: (statusFilter: 'pending' | 'approved' | 'rejected' | 'all' = 'pending') =>
     request(`/approvals?status_filter=${statusFilter}`),
@@ -310,18 +304,6 @@ export const api = {
   getConversationMessages: (id: number) => request(`/conversations/${id}/messages`),
   importConfig: (body: any) => request('/config/import', { method: 'POST', body: JSON.stringify(body) }),
 
-  // Group Chat (Multi-Agent)
-  createGroupChatSession: (body: { agent_ids: number[]; initial_message: string; max_rounds?: number }) =>
-    request('/groupchat/sessions', { method: 'POST', body: JSON.stringify(body) }),
-  getGroupChatSession: (sessionId: string) =>
-    request(`/groupchat/sessions/${sessionId}`),
-  runGroupChatRound: (sessionId: string) =>
-    request(`/groupchat/sessions/${sessionId}/round`, { method: 'POST' }),
-  runGroupChatComplete: (sessionId: string) =>
-    request(`/groupchat/sessions/${sessionId}/complete`, { method: 'POST' }),
-  cancelGroupChatSession: (sessionId: string) =>
-    request(`/groupchat/sessions/${sessionId}`, { method: 'DELETE' }),
-
   // ---- MCP Servers ----
   getMCPServers: () => request('/mcp/servers'),
   createMCPServer: (body: any) => request('/mcp/servers', { method: 'POST', body: JSON.stringify(body) }),
@@ -347,27 +329,6 @@ export const api = {
     request(`/envvars/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteEnvVar: (id: number) => request(`/envvars/${id}`, { method: 'DELETE' }),
   decryptEnvVar: (id: number) => request(`/envvars/decrypt/${id}`),
-
-  // ---- N8N ----
-  getN8NConnections: () => request('/n8n/connections'),
-  createN8NConnection: (body: { name: string; base_url: string; api_key?: string; is_active?: boolean; is_default?: boolean }) =>
-    request('/n8n/connections', { method: 'POST', body: JSON.stringify(body) }),
-  updateN8NConnection: (id: number, body: { name?: string; base_url?: string; api_key?: string; is_active?: boolean; is_default?: boolean }) =>
-    request(`/n8n/connections/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
-  deleteN8NConnection: (id: number) => request(`/n8n/connections/${id}`, { method: 'DELETE' }),
-  testN8NConnection: (id: number) => request(`/n8n/connections/${id}/test`, { method: 'POST' }),
-  getN8NWorkflows: (connectionId?: number) =>
-    request(connectionId ? `/n8n/workflows?connection_id=${connectionId}` : '/n8n/workflows'),
-  getN8NWorkflow: (id: string, connectionId?: number) =>
-    request(connectionId ? `/n8n/workflows/${id}?connection_id=${connectionId}` : `/n8n/workflows/${id}`),
-  createN8NWorkflow: (body: { name: string; workflow_json: any; connection_id?: number }) =>
-    request('/n8n/workflows', { method: 'POST', body: JSON.stringify(body) }),
-  updateN8NWorkflow: (id: string, body: { workflow_json: any; connection_id?: number }) =>
-    request(`/n8n/workflows/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
-  deleteN8NWorkflow: (id: string, connectionId?: number) =>
-    request(connectionId ? `/n8n/workflows/${id}?connection_id=${connectionId}` : `/n8n/workflows/${id}`, { method: 'DELETE' }),
-  generateN8NWorkflow: (body: { description: string; connection_id?: number }) =>
-    request('/n8n/workflows/generate', { method: 'POST', body: JSON.stringify(body) }),
 
   // ---- Governance ----
   // Frameworks
@@ -493,25 +454,4 @@ export const api = {
   // ---- Token Usage ----
   getTokenUsageSummary: () => request('/token-usage/summary'),
 
-  // ---- Webhooks ----
-  getWebhooks: () => request('/webhooks'),
-  createWebhook: (body: {
-    name: string
-    direction: 'incoming' | 'outgoing'
-    description?: string
-    is_active?: boolean
-    outgoing_url?: string
-    outgoing_events?: string[]
-    outgoing_secret?: string
-  }) => request('/webhooks', { method: 'POST', body: JSON.stringify(body) }),
-  updateWebhook: (id: number, body: any) =>
-    request(`/webhooks/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
-  deleteWebhook: (id: number) =>
-    request(`/webhooks/${id}`, { method: 'DELETE' }),
-  regenWebhookToken: (id: number) =>
-    request(`/webhooks/${id}/regenerate-token`, { method: 'POST' }),
-  testWebhook: (id: number) =>
-    request(`/webhooks/${id}/test`, { method: 'POST', body: JSON.stringify({}) }),
 }
-
-export const wsBase = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`

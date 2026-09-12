@@ -13,7 +13,8 @@ npm run dev
 
 Open **http://localhost:3000**
 
-Default admin credentials are printed to the console on first backend start (randomly generated password).
+The administrator account is created only when explicit `BOOTSTRAP_ADMIN_*`
+values are supplied to the backend. No built-in or logged password exists.
 
 ### Production Build
 
@@ -44,8 +45,6 @@ The Vite dev server proxies `/api/*` → `http://localhost:8000/api/v1/*` and `/
 | Sub-Agent 管理 | Register and manage remote sub-agents |
 | Skill / Tool Pool | Manage available skills and tools as MD files |
 | Knowledge Base | Upload and query documents with embeddings |
-| 群聊室 | Real-time multi-agent group chat via WebSocket |
-| 定时任务 | Schedule tasks with cron expressions |
 | MCP | Model Context Protocol servers and tools |
 | 环境变量 | Encrypted environment variables for agents |
 | 安全 | RBAC, encryption status, security settings |
@@ -53,3 +52,4 @@ The Vite dev server proxies `/api/*` → `http://localhost:8000/api/v1/*` and `/
 | 备份 | pg_dump + AES-256 backup/restore |
 | 审计日志 | Full audit trail of all operations |
 | 用户管理 | RBAC user and role management |
+| Governance | Assessments, evidence, approvals, kill switch, and metrics |

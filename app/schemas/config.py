@@ -51,8 +51,6 @@ class SystemConfigResponse(BaseModel):
 
 class FeatureFlagsResponse(BaseModel):
     """Feature flags response schema."""
-    enable_group_chat: bool
     enable_knowledge_base: bool
-    enable_scheduled_tasks: bool
     enable_audit_logging: bool
     enable_backup: bool

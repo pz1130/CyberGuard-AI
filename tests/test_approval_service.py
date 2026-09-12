@@ -2,7 +2,7 @@
 
 These exercise the real test DB (DATABASE_URL) since the table/columns and the
 pending->approved/rejected state machine are exactly what's untested.  The
-fire-and-forget side effects (Redis pub/sub, email, webhooks) are patched out so
+fire-and-forget side effects (Redis pub/sub and email) are patched out so
 the tests stay deterministic and offline.
 """
 import uuid
@@ -20,11 +20,11 @@ pytestmark = pytest.mark.asyncio
 
 @pytest.fixture(autouse=True)
 def _silence_side_effects():
-    """Patch out Redis/email/webhook fan-out so create_request stays offline."""
+    """Patch out Redis/email fan-out so create_request stays offline."""
     with patch.object(ApprovalService, "_publish", AsyncMock()), \
          patch.object(ApprovalService, "_publish_admin_event", AsyncMock()), \
          patch.object(ApprovalService, "_email_admin_created", AsyncMock()), \
-         patch("app.services.webhook_service.emit", AsyncMock()):
+         patch("app.services.email_service.notify_approval_created", AsyncMock()):
         yield
 
 

@@ -1,9 +1,7 @@
-"""Static enforcement of the invariants that 04-INVARIANTS.md says a machine must check.
+"""Static enforcement of release architecture boundaries.
 
-INV-08, INV-09 and INV-17 each name "CI 阻断" / "CI 静态检查" as their verification
-method, and 03-ROADMAP.md makes two of them M0a-1 exit criteria. There was no CI,
-so none of them were enforced anywhere. Putting them in the test suite is
-stronger than a pipeline step: they run on every local `pytest` too.
+These checks keep the shared agent kernel deployment-agnostic and prevent
+network-discovery dependencies from entering the Docker service.
 
 These are deliberately grep-shaped rather than AST-shaped. The point is a check
 that stays obvious enough that someone tightening it later can see what it does.
@@ -70,53 +68,6 @@ def test_llm_router_holds_no_agent_concepts():
 
 
 # --------------------------------------------------------------------------
-# INV-08 · Electron security configuration must not be relaxed
-# --------------------------------------------------------------------------
-
-MAIN_CJS = REPO / "apps" / "desktop" / "electron" / "main.cjs"
-
-
-@pytest.mark.parametrize(
-    "setting,required",
-    [
-        ("contextIsolation", "true"),
-        ("nodeIntegration", "false"),
-        ("sandbox", "true"),
-    ],
-)
-def test_electron_webpreferences_are_locked_down(setting, required):
-    """INV-08: contextIsolation on, nodeIntegration off, sandbox on."""
-    source = MAIN_CJS.read_text(encoding="utf-8")
-    found = re.findall(rf"\b{setting}\s*:\s*(\w+)", source)
-    assert found, f"{setting} is not set at all in {MAIN_CJS.name}"
-    assert set(found) == {required}, (
-        f"INV-08: {setting} must be {required} everywhere, found {found}"
-    )
-
-
-def test_no_renderer_gets_node_or_a_remote_origin_in_production():
-    """A packaged build must load from disk, never from a remote origin."""
-    source = MAIN_CJS.read_text(encoding="utf-8")
-    assert "webSecurity: false" not in source
-    assert "allowRunningInsecureContent" not in source
-    # The only loadURL is the dev server, guarded by isDev.
-    for match in re.finditer(r"loadURL\(\s*[\"'`]([^\"'`]+)", source):
-        url = match.group(1)
-        assert url.startswith("http://127.0.0.1") or url.startswith("http://localhost"), (
-            f"INV-08: unexpected remote origin loaded into a renderer: {url}"
-        )
-
-
-def test_preload_exposes_an_explicit_allowlist_not_the_ipc_object():
-    """contextBridge must hand over named methods, never ipcRenderer itself."""
-    preload = (REPO / "apps" / "desktop" / "electron" / "preload.cjs").read_text("utf-8")
-    assert "exposeInMainWorld" in preload
-    assert not re.search(r"exposeInMainWorld\([^,]+,\s*ipcRenderer\s*\)", preload), (
-        "INV-08: the whole ipcRenderer must never be exposed to the renderer"
-    )
-
-
-# --------------------------------------------------------------------------
 # INV-09 · no LAN discovery, no node-to-node P2P
 # --------------------------------------------------------------------------
 
@@ -141,10 +92,7 @@ def test_no_discovery_or_p2p_python_dependency():
     assert banned == set(), f"INV-09 violated by Python dependencies: {sorted(banned)}"
 
 
-@pytest.mark.parametrize(
-    "manifest",
-    ["apps/desktop/package.json", "webui/package.json"],
-)
+@pytest.mark.parametrize("manifest", ["webui/package.json"])
 def test_no_discovery_or_p2p_node_dependency(manifest):
     data = json.loads((REPO / manifest).read_text(encoding="utf-8"))
     declared = set()
@@ -152,16 +100,3 @@ def test_no_discovery_or_p2p_node_dependency(manifest):
         declared |= {k.lower() for k in (data.get(key) or {})}
     banned = declared & {b.lower() for b in BANNED_DEPENDENCIES}
     assert banned == set(), f"INV-09 violated by {manifest}: {sorted(banned)}"
-
-
-def test_the_node_opens_no_listening_socket():
-    """INV-07: shell <-> sidecar is stdio JSONL; the node listens on nothing."""
-    offenders = []
-    for path in _py_files(REPO / "apps" / "desktop"):
-        source = path.read_text(encoding="utf-8")
-        for pattern in ("socket.bind(", ".listen(", "start_server(", "uvicorn.run("):
-            if pattern in source:
-                offenders.append(f"{path.relative_to(REPO)}: {pattern}")
-    assert offenders == [], "INV-07: node must not listen on a port:\n" + "\n".join(
-        offenders
-    )

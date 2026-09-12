@@ -4,54 +4,6 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 
-class BackupConfigBase(BaseModel):
-    """Base backup configuration schema."""
-    name: str = Field(..., min_length=1, max_length=100)
-    description: Optional[str] = None
-    backup_type: str = Field(..., description="full, incremental, differential")
-    retention_days: int = 30
-
-
-class BackupConfigCreate(BackupConfigBase):
-    """Backup configuration creation schema."""
-    target: Optional[str] = Field(None, description="S3/OSS target path for remote backup")
-    schedule_cron: Optional[str] = Field(None, description="Cron expression for scheduled backups (unused in one-shot backup)")
-    compress: bool = True
-    encrypt: bool = True
-
-
-class BackupConfigUpdate(BaseModel):
-    """Backup configuration update schema."""
-    name: Optional[str] = None
-    description: Optional[str] = None
-    backup_type: Optional[str] = None
-    schedule_cron: Optional[str] = None
-    retention_days: Optional[int] = None
-    target_path: Optional[str] = None
-    compress: Optional[bool] = None
-    encrypt: Optional[bool] = None
-    is_active: Optional[bool] = None
-
-
-class BackupConfigResponse(BaseModel):
-    """Backup configuration response schema."""
-    id: int
-    name: str
-    description: Optional[str]
-    backup_type: str
-    schedule_cron: str
-    retention_days: int
-    target_path: str
-    compress: bool
-    encrypt: bool
-    is_active: bool
-    last_backup_at: Optional[datetime]
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
 class BackupExecutionResponse(BaseModel):
     """Backup execution response schema."""
     execution_id: str

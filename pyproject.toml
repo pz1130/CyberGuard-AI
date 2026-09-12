@@ -1,7 +1,7 @@
 [project]
 name = "cyberguard"
-version = "1.0.0"
-description = "CyberGuard AI Agent Platform - M1 MVP"
+version = "1.0.0rc1"
+description = "Docker reference implementation for governed AI in security operations and GRC"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115.0",
@@ -18,17 +18,13 @@ dependencies = [
     # probes with an over-length password during backend init and now raises).
     # app.core.auth calls bcrypt directly, which is what the routers already did.
     "python-multipart>=0.0.9",
-    "websockets>=12.0",
     "httpx>=0.27.0",
     "langgraph>=0.2.0",
     "openai>=1.30.0",
     "cryptography>=42.0.0",
     "email-validator>=2.1.0",
-    "apscheduler>=3.10.0",
     "bcrypt>=4.0.0",
     "celery[redis]>=5.4.0",
-    "croniter>=2.0.0",
-    "flower>=2.0.0",
     "boto3>=1.34.0",
     "pgvector>=0.2.0",
     "msal>=1.28.0",

@@ -151,7 +151,7 @@ export default function Skills() {
         }
       />
 
-      {/* Progressive disclosure (server internal agent + desktop SOP) */}
+      {/* Progressive disclosure for server-managed internal agents */}
       <div
         style={{
           marginBottom: 18,

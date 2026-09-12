@@ -12,8 +12,6 @@ import Agents from './pages/Agents'
 import Skills from './pages/Skills'
 import Tools from './pages/Tools'
 import Knowledge from './pages/Knowledge'
-import GroupChat from './pages/GroupChat'
-import Schedule from './pages/Schedule'
 import MCP from './pages/MCP'
 import EnvVars from './pages/EnvVars'
 import Security from './pages/Security'
@@ -23,8 +21,6 @@ import AuditLogs from './pages/AuditLogs'
 import Approvals from './pages/Approvals'
 import Users from './pages/Users'
 import Settings from './pages/Settings'
-import N8N from './pages/N8N'
-import Webhooks from './pages/Webhooks'
 import Prompts from './pages/Prompts'
 import Governance from './pages/Governance'
 import GovernanceDashboard from './pages/GovernanceDashboard'
@@ -37,8 +33,6 @@ const PAGES: Record<Tab, { labelKey: string; component: React.ReactNode }> = {
   skills: { labelKey: 'nav.skills', component: <Skills /> },
   tools: { labelKey: 'nav.tools', component: <Tools /> },
   knowledge: { labelKey: 'nav.knowledge', component: <Knowledge /> },
-  groupchat: { labelKey: 'nav.groupchat', component: <GroupChat /> },
-  schedule: { labelKey: 'nav.schedule', component: <Schedule /> },
   mcp: { labelKey: 'nav.mcp', component: <MCP /> },
   envvars: { labelKey: 'nav.envvars', component: <EnvVars /> },
   security: { labelKey: 'nav.security', component: <Security /> },
@@ -48,8 +42,6 @@ const PAGES: Record<Tab, { labelKey: string; component: React.ReactNode }> = {
   approvals: { labelKey: 'nav.approvals', component: <Approvals /> },
   users: { labelKey: 'nav.users', component: <Users /> },
   settings: { labelKey: 'nav.settings', component: <Settings /> },
-  n8n: { labelKey: 'nav.n8n', component: <N8N /> },
-  webhooks: { labelKey: 'nav.webhooks', component: <Webhooks /> },
   prompts: { labelKey: 'nav.prompts', component: <Prompts /> },
   governance: { labelKey: 'nav.governance', component: <Governance /> },
   govDashboard: { labelKey: 'nav.govDashboard', component: <GovernanceDashboard /> },

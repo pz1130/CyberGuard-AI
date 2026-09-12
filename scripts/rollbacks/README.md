@@ -8,7 +8,8 @@ with a TTL (default 3600s).
 
 - Trigger a revert: `POST /api/v1/governance/rollback/{action_id}` (admin).
 - List active registrations: `GET /api/v1/governance/rollback`.
-- On rollback failure the on-call is paged (`rollback.failed` webhook event).
+- On rollback failure the event is written to the application log and audit trail;
+  operators should route those logs through their normal alerting platform.
 
 Add per-tool rollback scripts here when a single inverse command is insufficient,
 and reference them from the tool's `rollback_command_template`.

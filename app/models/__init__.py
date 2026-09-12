@@ -10,18 +10,15 @@ from app.models.provider import Provider
 from app.models.backup import BackupRecord
 from app.models.approval import ApprovalRequest
 from app.models.token_usage import TokenUsageLog
-from app.models.webhook import Webhook
 from app.models.prompt_template import PromptTemplate
 from app.models.governance import (
     Framework, Requirement, ComplianceAssessment,
     RequirementAssessment, Evidence,
 )
-from app.models.schedule import ScheduledTask
 from app.models.conversation import Conversation
 from app.models.security_settings import SecuritySettings
 from app.models.ocr import OcrConfig
 from app.models.episode import AgentEpisode
-from app.models.n8n import N8NConnection
 from app.models.master_config import MasterAgentConfig
 from app.models.sso import SsoConfig, SsoRoleMapping
 from app.models.run_event import AgentRunEvent
@@ -38,16 +35,13 @@ __all__ = [
     "BackupRecord",
     "ApprovalRequest",
     "TokenUsageLog",
-    "Webhook",
     "PromptTemplate",
     "Framework", "Requirement", "ComplianceAssessment",
     "RequirementAssessment", "Evidence",
-    "ScheduledTask",
     "Conversation",
     "SecuritySettings",
     "OcrConfig",
     "AgentEpisode",
-    "N8NConnection",
     "MasterAgentConfig",
     "SsoConfig", "SsoRoleMapping",
     "AgentRunEvent",

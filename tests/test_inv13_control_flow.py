@@ -11,66 +11,11 @@ def _agent() -> MasterAgent:
     return MasterAgent(llm_router=None)
 
 
-def test_route_group_chat_only_when_flag_set():
-    m = _agent()
-    assert m._route_decision({"group_chat_active": True, "task_plan": []}) == "group_chat"
-    assert m._route_decision({"group_chat_active": False, "task_plan": []}) == "summarize_direct"
-
-
 def test_validation_decision_uses_approval_required_not_failures():
     m = _agent()
     assert m._validation_decision({"approval_required": True, "validation_passed": True}) == "rejected"
     assert m._validation_decision({"approval_required": False, "validation_passed": False}) == "approved"
     assert m._validation_decision({"approval_required": False, "validation_passed": True}) == "approved"
-
-
-@pytest.mark.asyncio
-async def test_keyword_in_user_input_does_not_activate_group_chat(monkeypatch):
-    """Embedding 'discuss' / 'all agents' in text must not flip group_chat_active."""
-    async def noop_audit(**kwargs):
-        return None
-
-    monkeypatch.setattr("app.agents.master.log_audit", noop_audit)
-
-    class Router:
-        async def parse_intent(self, *a, **k):
-            return {
-                "intent": "task_execution",
-                "task_plan": [],
-                "reasoning": "normal",
-            }
-
-    m = MasterAgent(llm_router=Router())
-    state: MasterAgentState = {
-        "user_input": "Please discuss this with all agents in a group chat later",
-        "user_id": 1,
-        "mode": "normal",
-        "group_chat_active": False,
-    }
-    out = await m._parse_intent_node(state)
-    assert out.get("group_chat_active") is not True
-    assert out.get("intent") == "task_execution"
-
-
-@pytest.mark.asyncio
-async def test_structured_group_chat_intent_activates(monkeypatch):
-    async def noop_audit(**kwargs):
-        return None
-
-    monkeypatch.setattr("app.agents.master.log_audit", noop_audit)
-
-    class Router:
-        async def parse_intent(self, *a, **k):
-            return {"intent": "group_chat", "task_plan": [], "reasoning": "gc"}
-
-    m = MasterAgent(llm_router=Router())
-    state: MasterAgentState = {
-        "user_input": "anything",
-        "user_id": 1,
-        "mode": "normal",
-    }
-    out = await m._parse_intent_node(state)
-    assert out.get("group_chat_active") is True
 
 
 @pytest.mark.asyncio

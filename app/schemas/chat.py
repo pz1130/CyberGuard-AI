@@ -44,36 +44,6 @@ class IntentParsingResponse(BaseModel):
     reasoning: str
 
 
-class GroupChatCreateRequest(BaseModel):
-    """Group chat creation request schema."""
-    agent_ids: List[int] = Field(..., min_length=1)
-    initial_message: str = Field(..., min_length=1)
-    max_rounds: int = Field(default=5, ge=1, le=20)
-
-
-class GroupChatMessageRequest(BaseModel):
-    """Group chat message addition request schema."""
-    session_id: str
-    content: str
-    role: str = "user"
-
-
-class GroupChatResponse(BaseModel):
-    """Group chat response schema."""
-    session_id: str
-    status: str
-    messages: List[Dict[str, Any]]
-    current_round: int
-    max_rounds: int
-
-
-class GroupChatRoundResponse(BaseModel):
-    """Group chat round response schema."""
-    session_id: str
-    round: int
-    responses: List[Dict[str, Any]]
-
-
 class AgentChatRequest(BaseModel):
     """Direct agent chat request schema."""
     agent_id: Optional[int] = Field(default=None, description="指定 Sub-Agent ID，null 表示 Master Agent")
@@ -81,7 +51,7 @@ class AgentChatRequest(BaseModel):
     context: Optional[Dict[str, Any]] = None
     provider_id: Optional[int] = Field(default=None, description="指定 AI Provider ID，不指定则用默认")
     model: Optional[str] = Field(default=None, description="指定模型名称，不指定则用 Provider 默认")
-    mode: Optional[str] = Field(default="normal", description="运行模式：normal / group_chat / knowledge")
+    mode: Optional[str] = Field(default="normal", description="运行模式：normal / fast / expert")
     conversation_id: Optional[int] = Field(default=None, description="关联的会话 ID")
 
 

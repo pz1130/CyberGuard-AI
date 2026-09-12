@@ -9,7 +9,6 @@ class AgentState(str, Enum):
     PARSE_INTENT = "parse_intent"
     ROUTE_TO_SUB = "route_to_sub"
     WAIT_FOR_SUB_RESULTS = "wait_for_sub_results"
-    GROUP_CHAT_MODE = "group_chat_mode"
     VALIDATE_RESULTS = "validate_results"
     SUMMARIZE = "summarize"
     HUMAN_APPROVAL = "human_approval"
@@ -42,10 +41,6 @@ class MasterAgentState(TypedDict, total=False):
 
     # Current state
     current_state: AgentState
-
-    # Group chat
-    group_chat_active: bool
-    group_chat_messages: List[Dict[str, Any]]
 
     # Validation
     validation_passed: bool

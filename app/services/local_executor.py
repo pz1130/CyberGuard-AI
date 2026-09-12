@@ -35,11 +35,6 @@ AGENT_TYPE_KEYWORDS = {
         "osint", "recon", " footprint", "whois", "dns lookup",
         "子域名", "信息收集", "侦察",
     ],
-    "n8n_workflow": [
-        "n8n", "workflow", "工作流", "automation", "automate",
-        "自动化", "流程", "create workflow", "n8n workflow",
-        "自动化工作流", "创建工作流",
-    ],
 }
 
 # Default fallback system prompts (used when no skill is configured in DB)
@@ -81,13 +76,6 @@ FALLBACK_SYSTEM_PROMPTS: Dict[str, str] = {
 4. 网络空间测绘数据
 提示：当作为「internal」类型 Agent 并启用 enable_search 时，你可调用 web_search
 （公开网络检索）与 vuln_search（Sploitus 漏洞/利用检索）工具获取实时情报。""",
-    "n8n_workflow": """你是一个 N8N 工作流生成 Agent。
-当用户请求创建自动化工作流时：
-1. 理解用户的自动化目标
-2. 设计合适的 N8N 工作流 JSON 结构
-3. 选择合适的触发节点（Webhook、Schedule 等）
-4. 添加相应的操作节点
-5. 直接输出 N8N 工作流 JSON""",
     "general": """你 CyberGuard 安全助理。
 基于你的网络安全知识，帮助用户：
 - 分析安全事件和 IOC

@@ -82,32 +82,6 @@ class TestAPISmoke(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertEqual(data["username"], SMOKE_USER)
 
-    def test_schedule_crud(self):
-        name = f"smoke-schedule-{uuid.uuid4().hex[:8]}"
-        code, created = _request(
-            "POST",
-            "/schedule",
-            {
-                "name": name,
-                "description": "smoke test",
-                "cron_expression": "*/10 * * * *",
-                "task_type": "agent_execution",
-                "task_config": {"kind": "smoke"},
-                "is_active": True,
-            },
-            token=self.token,
-        )
-        self.assertEqual(code, 201)
-        task_id = created["task_id"]
-
-        code, listing = _request("GET", "/schedule", token=self.token)
-        self.assertEqual(code, 200)
-        self.assertIn("schedules", listing)
-        self.assertTrue(any(item["task_id"] == task_id for item in listing["schedules"]))
-
-        code, _ = _request("DELETE", f"/schedule/{task_id}", token=self.token)
-        self.assertEqual(code, 204)
-
     def test_knowledge_base_crud(self):
         name = f"smoke-kb-{uuid.uuid4().hex[:8]}"
         code, created = _request(

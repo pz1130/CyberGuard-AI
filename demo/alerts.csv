@@ -1,0 +1,6 @@
+timestamp,alert_id,asset,asset_criticality,source_ip,event,severity,context,expected_priority
+2026-09-01T09:00:00Z,ALT-001,payments-api,critical,203.0.113.44,repeated privileged login failures,high,internet-facing production service,P1
+2026-09-01T09:04:00Z,ALT-002,analyst-laptop,medium,198.51.100.17,unsigned PowerShell download,high,test endpoint in isolated lab,P2
+2026-09-01T09:10:00Z,ALT-003,public-web,high,192.0.2.88,known scanner user agent,medium,blocked by WAF with no follow-on activity,P3
+2026-09-01T09:15:00Z,ALT-004,backup-server,critical,10.20.4.19,backup deletion attempt,critical,service account outside maintenance window,P1
+2026-09-01T09:20:00Z,ALT-005,dns-resolver,high,10.20.8.31,rare domain lookup,low,domain belongs to approved security testing,P4

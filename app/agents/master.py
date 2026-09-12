@@ -95,7 +95,6 @@ class MasterAgent:
         workflow.add_node("parse_intent_node", self._parse_intent_node)
         workflow.add_node("router_node", self._router_node)
         workflow.add_node("sub_agent_executor_node", self._sub_agent_executor_node)
-        workflow.add_node("group_chat_moderator_node", self._group_chat_moderator_node)
         workflow.add_node("validation_node", self._validation_node)
         workflow.add_node("summarizer_node", self._summarizer_node)
         workflow.add_node("approval_node", self._approval_node)
@@ -114,7 +113,6 @@ class MasterAgent:
             self._route_decision,
             {
                 "sub_agents": "sub_agent_executor_node",
-                "group_chat": "group_chat_moderator_node",
                 "approval": "approval_node",
                 "summarize_direct": "summarizer_node",
                 "end": END,
@@ -131,7 +129,6 @@ class MasterAgent:
             }
         )
 
-        workflow.add_edge("group_chat_moderator_node", "summarizer_node")
         workflow.add_edge("summarizer_node", END)
 
         # The approval node suspends on interrupt(); on resume it routes onward
@@ -151,9 +148,6 @@ class MasterAgent:
 
     def _route_decision(self, state: MasterAgentState) -> str:
         """Decide routing based on parsed intent."""
-        if state.get("group_chat_active"):
-            return "group_chat"
-
         task_plan = state.get("task_plan", [])
         if not task_plan:
             # No tasks — go to summarizer for direct LLM response
@@ -218,7 +212,6 @@ class MasterAgent:
         state["request_id"] = str(uuid.uuid4())
         state["timestamp"] = datetime.now(timezone.utc).isoformat()
         state["sub_results"] = {}
-        state["group_chat_messages"] = []
         return state
 
     async def _parse_intent_node(self, state: MasterAgentState) -> MasterAgentState:
@@ -352,13 +345,6 @@ class MasterAgent:
                 state["error_message"] = f"Intent parsing failed: {e}"
                 return state
 
-        # INV-13: group chat only via structured intent (or UI-preset flag),
-        # never via raw keyword match on user_input.
-        intent = (state.get("intent") or "").strip().lower()
-        if intent == "group_chat":
-            state["group_chat_active"] = True
-        # Preserve explicit UI / caller pre-set of group_chat_active (truthy only).
-
         # Log audit
         await log_audit(
             user_id=user_id,
@@ -368,7 +354,6 @@ class MasterAgent:
             output_data={
                 "intent": state.get("intent"),
                 "task_plan": state.get("task_plan"),
-                "group_chat_active": bool(state.get("group_chat_active")),
             },
             request_id=state.get("request_id"),
         )
@@ -725,43 +710,6 @@ class MasterAgent:
             self._local_executor = get_local_executor()
         return self._local_executor
 
-    async def _group_chat_moderator_node(self, state: MasterAgentState) -> MasterAgentState:
-        """Moderate group chat among agents."""
-        state["current_state"] = AgentState.GROUP_CHAT_MODE
-
-        messages = list(state.get("group_chat_messages", []))
-        task_plan = state.get("task_plan", [])
-        user_id = state.get("user_id")
-        user_input = state.get("user_input", "")
-
-        # Add user message
-        messages.append({
-            "role": "user",
-            "content": user_input,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
-
-        # Round-robin through agents
-        for task in task_plan:
-            agent_id = task["agent_id"]
-            result = await self.executor.execute(
-                agent_id=agent_id,
-                task=f"Group chat response to: {user_input}",
-                user_id=user_id,
-                context={"conversation_id": state.get("conversation_id")},
-            )
-
-            messages.append({
-                "role": "agent",
-                "agent_id": agent_id,
-                "content": result.get("output", ""),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
-
-        state["group_chat_messages"] = messages
-        state["current_state"] = AgentState.SUMMARIZE
-        return state
-
     async def _validation_node(self, state: MasterAgentState) -> MasterAgentState:
         """Validate sub-agent results for consistency and structured risk."""
         state["current_state"] = AgentState.VALIDATE_RESULTS
@@ -803,7 +751,6 @@ class MasterAgent:
         state["current_state"] = AgentState.SUMMARIZE
 
         sub_results = state.get("sub_results", {})
-        group_chat_messages = state.get("group_chat_messages", [])
 
         if sub_results:
             if self.llm_router:
@@ -829,11 +776,6 @@ class MasterAgent:
                     f"Agent {k}: {v.get('output', 'No output')}"
                     for k, v in sub_results.items()
                 )
-        elif group_chat_messages:
-            state["final_summary"] = "\n".join(
-                f"{m['role']}: {m['content']}"
-                for m in group_chat_messages[-5:]
-            )
         elif self.llm_router:
             # No sub-agents involved — respond directly via LLM
             user_input = state.get("user_input", "")
@@ -1103,7 +1045,6 @@ class MasterAgent:
             "user_input": user_input,
             "user_id": user_id,
             "current_state": AgentState.START,
-            "group_chat_active": False,
             "request_id": request_id,
             "thread_id": thread_id,
             "approval_round": 0,

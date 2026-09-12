@@ -151,27 +151,3 @@ async def notify_approval_decided(
 </table>
 """
     await send_email(to_email, subject, html)
-
-
-async def notify_scheduled_task_done(
-    task_name: str,
-    execution_id: str,
-    status: str,
-    error: Optional[str] = None,
-) -> None:
-    """Notify admin when a scheduled task completes (or fails)."""
-    admin_email = _cfg("SMTP_ADMIN_EMAIL")
-    if not admin_email:
-        return
-    icon = "✅" if status == "completed" else "❌"
-    subject = f"[CyberGuard] {icon} 定时任务 {status}: {task_name}"
-    html = f"""
-<h2>CyberGuard — 定时任务通知</h2>
-<table>
-  <tr><th>任务名称</th><td>{task_name}</td></tr>
-  <tr><th>执行 ID</th><td><code>{execution_id}</code></td></tr>
-  <tr><th>状态</th><td><strong>{status.upper()}</strong></td></tr>
-  {'<tr><th>错误</th><td>' + error + '</td></tr>' if error else ''}
-</table>
-"""
-    await send_email(admin_email, subject, html)

@@ -1,0 +1,17 @@
+{
+  "name": "CyberGuard IFI RC1 frozen demonstration set",
+  "version": "1.0.0-rc.1",
+  "classification": "synthetic-public",
+  "files": {
+    "alerts.csv": "sha256:b16783b076239751a4464d6be83abcf632a391977cbfb27c8e682d16c698c295",
+    "vulnerabilities.json": "sha256:d90ed278cdb0c84910f9a1f3b6bd91965d20d6666a414d865a665c304eaab767",
+    "grc-access-control-policy.md": "sha256:fa993427cc1ac2fc9f5f215e41b2c4b553fa4c899a403bfa023a377f7cb04439"
+  },
+  "rules": {
+    "minimum_runs_per_model": 3,
+    "temperature_must_be_recorded": true,
+    "prompt_version_must_be_recorded": true,
+    "human_reviewer_required": true,
+    "results_from_different_models_must_not_be_merged": true
+  }
+}

@@ -16,13 +16,13 @@ async def export_config(
     """
     Export full system configuration as JSON (excluding chat history, audit logs, executions, approvals, token usage, backups).
     Includes: providers, users (no passwords), agents, skills, tools, prompt_templates, knowledge_bases (with documents),
-    scheduled_tasks, webhooks, mcp_servers, mcp_tools, n8n_connections, env_vars, security_settings,
+    mcp_servers, mcp_tools, env_vars, security_settings,
     master_agent_config, ocr_config, sso_config, sso_role_mapping, gov_frameworks, gov_requirements,
     gov_assessments, gov_req_assessments, gov_evidences.
     """
     from app.models import (
         User, AgentConfig, Skill, Tool, KnowledgeBase, Document, PromptTemplate,
-        ScheduledTask, Webhook, MCPServer, MCPTool, N8NConnection, EnvVar,
+        MCPServer, MCPTool, EnvVar,
         SecuritySettings, MasterAgentConfig, OcrConfig, SsoConfig, SsoRoleMapping,
         Framework, Requirement, ComplianceAssessment, RequirementAssessment, Evidence,
         Provider
@@ -90,20 +90,6 @@ async def export_config(
         for p in prompts_result.scalars().all()
     ]
 
-    # Export scheduled tasks
-    schedules_result = await db.execute(select(ScheduledTask))
-    scheduled_tasks = [
-        {k: v for k, v in s.__dict__.items() if not k.startswith("_")}
-        for s in schedules_result.scalars().all()
-    ]
-
-    # Export webhooks
-    webhooks_result = await db.execute(select(Webhook))
-    webhooks = [
-        {k: v for k, v in w.__dict__.items() if not k.startswith("_")}
-        for w in webhooks_result.scalars().all()
-    ]
-
     # Export MCP
     mcp_servers_result = await db.execute(select(MCPServer))
     mcp_servers = [
@@ -114,13 +100,6 @@ async def export_config(
     mcp_tools = [
         {k: v for k, v in t.__dict__.items() if not k.startswith("_")}
         for t in mcp_tools_result.scalars().all()
-    ]
-
-    # Export N8N
-    n8n_result = await db.execute(select(N8NConnection))
-    n8n_connections = [
-        {k: v for k, v in n.__dict__.items() if not k.startswith("_")}
-        for n in n8n_result.scalars().all()
     ]
 
     # Export env vars (encrypted)
@@ -192,7 +171,7 @@ async def export_config(
 
     from datetime import datetime, timezone
     config = {
-        "version": "1.0.0",
+        "version": "1.0.0-rc.1",
         "exported_at": datetime.now(timezone.utc).isoformat(),
         "providers": providers,
         "users": users,
@@ -202,11 +181,8 @@ async def export_config(
         "prompt_templates": prompt_templates,
         "knowledge_bases": kbs,
         "documents": documents,
-        "scheduled_tasks": scheduled_tasks,
-        "webhooks": webhooks,
         "mcp_servers": mcp_servers,
         "mcp_tools": mcp_tools,
-        "n8n_connections": n8n_connections,
         "env_vars": env_vars,
         "security_settings": security_settings,
         "master_agent_config": master_agent_config,
@@ -240,8 +216,7 @@ async def import_config(
     imported = {
         "providers": 0, "users": 0, "agents": 0, "skills": 0, "tools": 0,
         "prompt_templates": 0, "knowledge_bases": 0, "documents": 0,
-        "scheduled_tasks": 0, "webhooks": 0, "mcp_servers": 0, "mcp_tools": 0,
-        "n8n_connections": 0, "env_vars": 0, "security_settings": 0,
+        "mcp_servers": 0, "mcp_tools": 0, "env_vars": 0, "security_settings": 0,
         "master_agent_config": 0, "ocr_config": 0, "sso_config": 0, "sso_role_mapping": 0,
         "gov_frameworks": 0, "gov_requirements": 0, "gov_assessments": 0,
         "gov_req_assessments": 0, "gov_evidences": 0,
@@ -250,8 +225,8 @@ async def import_config(
 
     from sqlalchemy import select
     from app.models import (
-        Provider, User, AgentConfig, Skill, Tool, PromptTemplate, ScheduledTask,
-        Webhook, MCPServer, MCPTool, N8NConnection, EnvVar, SecuritySettings,
+        Provider, User, AgentConfig, Skill, Tool, PromptTemplate,
+        MCPServer, MCPTool, EnvVar, SecuritySettings,
         MasterAgentConfig, OcrConfig, SsoConfig, SsoRoleMapping,
         Framework, Requirement, ComplianceAssessment, RequirementAssessment, Evidence,
         KnowledgeBase, Document
@@ -448,51 +423,6 @@ async def import_config(
         except Exception as e:
             errors.append(f"prompt_template {pt_data.get('name')}: {e}")
 
-    # Import scheduled tasks
-    for st_data in config.get("scheduled_tasks", []):
-        try:
-            existing = await db.execute(
-                select(ScheduledTask).where(ScheduledTask.name == st_data.get("name"))
-            )
-            if existing.scalar_one_or_none():
-                continue
-            st = ScheduledTask(
-                name=st_data.get("name"),
-                description=st_data.get("description"),
-                task_type=st_data.get("task_type", "backup"),
-                schedule_cron=st_data.get("schedule_cron"),
-                is_active=st_data.get("is_active", True),
-                target=st_data.get("target"),
-                params_json=st_data.get("params_json"),
-                retention_days=st_data.get("retention_days", 30),
-            )
-            db.add(st)
-            imported["scheduled_tasks"] += 1
-        except Exception as e:
-            errors.append(f"scheduled_task {st_data.get('name')}: {e}")
-
-    # Import webhooks
-    for wh_data in config.get("webhooks", []):
-        try:
-            existing = await db.execute(
-                select(Webhook).where(Webhook.name == wh_data.get("name"))
-            )
-            if existing.scalar_one_or_none():
-                continue
-            wh = Webhook(
-                name=wh_data.get("name"),
-                description=wh_data.get("description"),
-                url=wh_data.get("url"),
-                secret=wh_data.get("secret"),
-                direction=wh_data.get("direction", "outgoing"),
-                is_active=wh_data.get("is_active", True),
-                metadata_json=wh_data.get("metadata_json"),
-            )
-            db.add(wh)
-            imported["webhooks"] += 1
-        except Exception as e:
-            errors.append(f"webhook {wh_data.get('name')}: {e}")
-
     # Import MCP
     for srv_data in config.get("mcp_servers", []):
         try:
@@ -540,27 +470,6 @@ async def import_config(
             imported["mcp_tools"] += 1
         except Exception as e:
             errors.append(f"mcp_tool {tool_data.get('tool_name')}: {e}")
-
-    # Import N8N
-    for n8n_data in config.get("n8n_connections", []):
-        try:
-            existing = await db.execute(
-                select(N8NConnection).where(N8NConnection.name == n8n_data.get("name"))
-            )
-            if existing.scalar_one_or_none():
-                continue
-            n8n = N8NConnection(
-                name=n8n_data.get("name"),
-                base_url=n8n_data.get("base_url"),
-                api_key_encrypted=n8n_data.get("api_key_encrypted"),
-                is_active=n8n_data.get("is_active", True),
-                is_default=n8n_data.get("is_default", False),
-                metadata_json=n8n_data.get("metadata_json"),
-            )
-            db.add(n8n)
-            imported["n8n_connections"] += 1
-        except Exception as e:
-            errors.append(f"n8n_connection {n8n_data.get('name')}: {e}")
 
     # Import env vars (encrypted)
     for ev_data in config.get("env_vars", []):

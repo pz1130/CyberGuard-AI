@@ -21,8 +21,7 @@ RUN pip install --no-cache-dir -e .
 COPY alembic.ini ./alembic.ini
 COPY alembic/ ./alembic/
 
-# Belt-and-braces: compose bind-mounts ./app and ./packages over the image
-# contents for live reload, which bypasses the editable-install finder.
+# Keep both the application and reusable agent kernel importable at runtime.
 ENV PYTHONPATH=/app:/app/packages
 
 # Expose port

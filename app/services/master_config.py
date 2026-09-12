@@ -16,7 +16,7 @@ async def _load_or_create(db: AsyncSession) -> MasterAgentConfig:
         default_intent = """You are CyberGuard's intent parser. Analyze user input and create a task plan.
 
 Output JSON with:
-- intent: one of [task_execution, group_chat, knowledge_query, admin_action]
+- intent: one of [task_execution, knowledge_query, admin_action]
 - task_plan: array of {"agent_type": str, "task": "description", "requires_approval": bool}
 - reasoning: brief explanation
 

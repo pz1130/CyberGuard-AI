@@ -52,29 +52,32 @@ async def lifespan(app: FastAPI):
         # The /health endpoint will check alembic version vs DB state
         logger.info("Production mode — relying on CI/CD alembic upgrade")
 
-    # Seed default admin user (dev and prod — idempotent by username). Runs in
-    # both modes so a fresh DB (e.g. `docker compose down -v`) is always usable.
+    # Seed the first admin only when an explicit bootstrap password is supplied.
+    # There is deliberately no built-in password in any environment.
     from app.core.database import get_db_context
     from app.models.user import User
     from app.core.auth import get_password_hash
     from sqlalchemy import select
     try:
         async with get_db_context() as session:
-            result = await session.execute(select(User).where(User.username == "admin"))
-            if not result.scalar_one_or_none():
-                # Fixed default password
-                default_password = "admin123"
+            result = await session.execute(
+                select(User).where(User.username == settings.BOOTSTRAP_ADMIN_USERNAME)
+            )
+            if not result.scalar_one_or_none() and settings.BOOTSTRAP_ADMIN_PASSWORD:
                 admin = User(
-                    username="admin",
-                    email="admin@cyberguard.local",
-                    hashed_password=get_password_hash(default_password),
+                    username=settings.BOOTSTRAP_ADMIN_USERNAME,
+                    email=settings.BOOTSTRAP_ADMIN_EMAIL,
+                    hashed_password=get_password_hash(settings.BOOTSTRAP_ADMIN_PASSWORD),
                     role="admin",
                     full_name="Administrator",
                     is_active=True,
                 )
                 session.add(admin)
                 await session.commit()
-                logger.warning(f"Default admin user created — username: admin, password: {default_password}")
+                logger.warning(
+                    "Bootstrap admin created — username: %s",
+                    settings.BOOTSTRAP_ADMIN_USERNAME,
+                )
     except Exception as e:
         logger.warning(f"User seed skipped: {e}")
 
@@ -176,7 +179,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="CyberGuard AI Agent Platform",
     description="Secure, controllable and extensible multi-agent AI system for cybersecurity operations.",
-    version="1.0.0",
+    version="1.0.0-rc.1",
     lifespan=lifespan,
 )
 
@@ -248,14 +251,14 @@ async def health_check():
     Liveness probe: checks app is running.
     Does NOT verify DB/Redis — app can be alive without them (read-only degraded state).
     """
-    return {"status": "ok", "version": "1.0.0"}
+    return {"status": "ok", "version": "1.0.0-rc.1"}
 
 
 @app.get("/health/ready", tags=["Health"])
 async def readiness_probe():
     """
     Readiness probe: checks all critical backends are reachable.
-    Use this as K8s readiness/liveness probe in production.
+    Use this as the Docker health/readiness probe in production.
     """
     from app.core.database import engine
     from app.core.ratelimit import get_redis
@@ -295,15 +298,15 @@ async def readiness_probe():
 async def startup_probe():
     """
     Startup probe: checks that initialisation (migrations + seeds) is complete.
-    Use as K8s startup probe to delay readiness/liveness checks during boot.
+    Use as the Docker startup probe to delay readiness checks during boot.
     """
-    return {"status": "started", "version": "1.0.0"}
+    return {"status": "started", "version": "1.0.0-rc.1"}
 
 
 # ---------------------------------------------------------------------------
 # Routers (imported here to avoid circular imports)
 # ---------------------------------------------------------------------------
-from app.routers import auth, users, agents, skills, knowledge, chat, tasks, groupchat, schedule, audit, backup, config, providers, mcp, envvars, approval, token_usage, master_config, conversations, n8n, webhooks, prompt_templates, governance, security, kill_switch, governance_config, governance_rollback, governance_metrics
+from app.routers import auth, users, agents, skills, knowledge, chat, tasks, audit, backup, config, providers, mcp, envvars, approval, token_usage, master_config, conversations, prompt_templates, governance, security, kill_switch, governance_config, governance_rollback, governance_metrics
 from app.routers import chat_stream, gateway, sso
 
 app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
@@ -314,7 +317,6 @@ app.include_router(knowledge.router, prefix="/api/v1", tags=["Knowledge Base"])
 app.include_router(chat.router, prefix="/api/v1", tags=["Chat"])
 app.include_router(chat_stream.router, prefix="/api/v1", tags=["Chat"])
 app.include_router(tasks.router, prefix="/api/v1", tags=["Tasks"])
-app.include_router(schedule.router, prefix="/api/v1", tags=["Scheduled Tasks"])
 app.include_router(audit.router, prefix="/api/v1", tags=["Audit"])
 app.include_router(kill_switch.router, prefix="/api/v1", tags=["Kill Switch"])
 app.include_router(governance_config.router, prefix="/api/v1", tags=["Agent Governance Config"])
@@ -329,11 +331,7 @@ app.include_router(approval.router, prefix="/api/v1", tags=["Approvals"])
 app.include_router(token_usage.router, prefix="/api/v1", tags=["Token Usage"])
 app.include_router(master_config.router, prefix="/api/v1", tags=["Master Agent Config"])
 app.include_router(conversations.router, prefix="/api/v1", tags=["Conversations"])
-app.include_router(n8n.router, prefix="/api/v1", tags=["N8N"])
 app.include_router(gateway.router, prefix="/api/v1", tags=["OpenClaw Gateway"])
-
-app.include_router(groupchat.router, prefix="/api/v1", tags=["Group Chat"])
-app.include_router(webhooks.router, prefix="/api/v1", tags=["Webhooks"])
 app.include_router(prompt_templates.router, prefix="/api/v1", tags=["Prompt Templates"])
 app.include_router(governance.router, prefix="/api/v1", tags=["Governance"])
 app.include_router(security.router, prefix="/api/v1", tags=["Security Settings"])

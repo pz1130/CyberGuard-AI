@@ -1,6 +1,6 @@
 """App-side helpers for model context_window / max_output_tokens.
 
-Delegates catalog logic to ``agent_core.model_limits`` so desktop can share it.
+Delegates catalog logic to the reusable ``agent_core.model_limits`` package.
 """
 from __future__ import annotations
 

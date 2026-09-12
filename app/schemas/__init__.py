@@ -56,31 +56,12 @@ from app.schemas.chat import (
     ChatSessionResponse,
     IntentParsingRequest,
     IntentParsingResponse,
-    GroupChatCreateRequest,
-    GroupChatMessageRequest,
-    GroupChatResponse,
-    GroupChatRoundResponse,
     AgentChatRequest,
     AgentChatResponse,
 )
 from app.schemas.task import (
-    TaskPriority,
-    TaskStatus,
-    TaskBase,
-    TaskCreate,
-    TaskUpdate,
-    TaskResponse,
+    ExecutionRead,
     TaskListResponse,
-    TaskExecuteRequest,
-    TaskExecuteResponse,
-)
-from app.schemas.schedule import (
-    ScheduleBase,
-    ScheduleCreate,
-    ScheduleUpdate,
-    ScheduleResponse,
-    ScheduleExecutionResponse,
-    ScheduleListResponse,
 )
 from app.schemas.audit import (
     AuditLogResponse,
@@ -89,10 +70,6 @@ from app.schemas.audit import (
     AuditLogExportRequest,
 )
 from app.schemas.backup import (
-    BackupConfigBase,
-    BackupConfigCreate,
-    BackupConfigUpdate,
-    BackupConfigResponse,
     BackupExecutionResponse,
     RestoreRequest,
     RestoreResponse,
@@ -126,16 +103,6 @@ from app.schemas.mcp import (
     MCPToolExecuteRequest,
     MCPToolExecuteResponse,
     MCPServerListResponse,
-)
-from app.schemas.groupchat import (
-    GroupChatMessageResponse,
-    GroupChatSessionResponse,
-    GroupChatCreateRequest,
-    GroupChatAddMessageRequest,
-    GroupChatRunRoundRequest,
-    GroupChatRunToCompletionRequest,
-    GroupChatRoundResponse,
-    GroupChatCancelRequest,
 )
 from app.schemas.gateway import (
     ManifestSkill,
@@ -197,39 +164,17 @@ __all__ = [
     "ChatSessionResponse",
     "IntentParsingRequest",
     "IntentParsingResponse",
-    "GroupChatCreateRequest",
-    "GroupChatMessageRequest",
-    "GroupChatResponse",
-    "GroupChatRoundResponse",
     "AgentChatRequest",
     "AgentChatResponse",
     # Task
-    "TaskPriority",
-    "TaskStatus",
-    "TaskBase",
-    "TaskCreate",
-    "TaskUpdate",
-    "TaskResponse",
+    "ExecutionRead",
     "TaskListResponse",
-    "TaskExecuteRequest",
-    "TaskExecuteResponse",
-    # Schedule
-    "ScheduleBase",
-    "ScheduleCreate",
-    "ScheduleUpdate",
-    "ScheduleResponse",
-    "ScheduleExecutionResponse",
-    "ScheduleListResponse",
     # Audit
     "AuditLogResponse",
     "AuditLogListResponse",
     "AuditLogQuery",
     "AuditLogExportRequest",
     # Backup
-    "BackupConfigBase",
-    "BackupConfigCreate",
-    "BackupConfigUpdate",
-    "BackupConfigResponse",
     "BackupExecutionResponse",
     "RestoreRequest",
     "RestoreResponse",
@@ -260,15 +205,6 @@ __all__ = [
     "MCPToolExecuteRequest",
     "MCPToolExecuteResponse",
     "MCPServerListResponse",
-    # GroupChat
-    "GroupChatMessageResponse",
-    "GroupChatSessionResponse",
-    "GroupChatCreateRequest",
-    "GroupChatAddMessageRequest",
-    "GroupChatRunRoundRequest",
-    "GroupChatRunToCompletionRequest",
-    "GroupChatRoundResponse",
-    "GroupChatCancelRequest",
     # Gateway
     "ManifestSkill",
     "ManifestTool",

@@ -4,14 +4,13 @@ services:
     environment:
       POSTGRES_DB: cyberguard
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       # Loopback only. `"5432:5432"` binds 0.0.0.0 — this database
-      # holds encrypted provider keys and the audit trail, and the compose
-      # credentials are postgres/postgres.
-      - "127.0.0.1:5432:5432"
+      # holds encrypted provider keys and the audit trail.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -20,11 +19,11 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: redis-server --requirepass "${REDIS_PASSWORD}"
+    command: redis-server --requirepass "${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}"
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-cyberguard-redis-pass}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
     ports:
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -34,115 +33,130 @@ services:
       retries: 5
 
   api:
+    image: cyberguard-api:1.0.0-rc.1
     build:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:8000"
     env_file:
-      - .env
+      - ${CYBERGUARD_ENV_FILE:-.env}
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/cyberguard
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/cyberguard
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in .env}
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
+      RUNNER_TOKEN: ${RUNNER_TOKEN:?Set RUNNER_TOKEN in .env}
+      ENVIRONMENT: production
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?Set BOOTSTRAP_ADMIN_PASSWORD in .env}
       TOOL_RUNNER_URL: http://tool-runner:9000
       # RUNNER_TOKEN and others come from .env or defaults in compose
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     volumes:
-      - ./app:/app/app
-      - ./packages:/app/packages
       - evidence_data:/data/evidence
       - backup_data:/backups
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=5)"]
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  migrate:
+    image: cyberguard-api:1.0.0-rc.1
+    command: alembic -c alembic.ini upgrade head
+    env_file:
+      - ${CYBERGUARD_ENV_FILE:-.env}
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/cyberguard
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in .env}
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
+      ENVIRONMENT: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
 
   tool-runner:
+    image: cyberguard-tool-runner:1.0.0-rc.1
     build:
       context: .
       dockerfile: tool-runner/Dockerfile
     env_file:
-      - .env
+      - ${CYBERGUARD_ENV_FILE:-.env}
     environment:
-      RUNNER_TOKEN: ${RUNNER_TOKEN:-changeme-runner-token}
+      RUNNER_TOKEN: ${RUNNER_TOKEN:?Set RUNNER_TOKEN in .env}
     # No host port: only reachable on the compose network as tool-runner:9000.
     restart: unless-stopped
 
   celery_worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: cyberguard-api:1.0.0-rc.1
     command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=4
     env_file:
-      - .env
+      - ${CYBERGUARD_ENV_FILE:-.env}
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/cyberguard
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/cyberguard
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in .env}
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - ./app:/app/app
-      - ./packages:/app/packages
+    restart: unless-stopped
 
   celery_beat:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: cyberguard-api:1.0.0-rc.1
     command: celery -A app.workers.celery_app beat --loglevel=info --scheduler celery.beat:PersistentScheduler
     env_file:
-      - .env
+      - ${CYBERGUARD_ENV_FILE:-.env}
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/cyberguard
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/cyberguard
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in .env}
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     volumes:
-      - ./app:/app/app
-      - ./packages:/app/packages
       - celerybeat_data:/var/run/celerybeat
-
-  # Flower is the Celery admin UI: it lists task arguments and can revoke
-  # running tasks. It ships with no authentication of its own, so it is
-  # opt-in (`docker compose --profile monitoring up`) and refuses to start
-  # without credentials rather than coming up open.
-  flower:
-    profiles: ["monitoring"]
-    build:
-      context: .
-      dockerfile: Dockerfile
-    command: >
-      sh -c 'if [ -z "$$FLOWER_BASIC_AUTH" ]; then
-        echo "flower: refusing to start without FLOWER_BASIC_AUTH (set it to user:password in .env)" >&2;
-        exit 1;
-      fi;
-      exec celery -A app.workers.celery_app flower --port=5555'
-    env_file:
-      - .env
-    environment:
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
-      FLOWER_BASIC_AUTH: ${FLOWER_BASIC_AUTH:-}
-    ports:
-      - "127.0.0.1:5555:5555"
-    depends_on:
-      redis:
-        condition: service_healthy
-      celery_worker:
-        condition: service_started
+    restart: unless-stopped
 
   webui:
+    image: cyberguard-webui:1.0.0-rc.1
     build:
       context: ./webui
       dockerfile: Dockerfile
     ports:
-      - "3000:80"
+      - "${WEBUI_PORT:-3000}:80"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
 volumes:
   postgres_data:

@@ -76,7 +76,7 @@ class AuditBus:
             await handler(event)
 
 
-# Process-default bus: empty until app/desktop subscribes. Emit is a no-op
+# Process-default bus: empty until the application subscribes. Emit is a no-op
 # with zero subscribers (zero product behavior change).
 _default_bus = AuditBus()
 

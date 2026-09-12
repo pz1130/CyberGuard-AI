@@ -523,7 +523,7 @@ class LLMRouter:
             or """You are CyberGuard's intent parser. Analyze user input and create a task plan.
 
 Output JSON with:
-- intent: one of [task_execution, group_chat, knowledge_query, admin_action]
+- intent: one of [task_execution, knowledge_query, admin_action]
 - task_plan: array of {"agent_type": str, "agent_name": str, "task": "description", "requires_approval": bool}
 - reasoning: brief explanation
 
@@ -540,7 +540,6 @@ agent_type options (fallback when no specific agent is mentioned):
 - remediation: fix/remediate/mute/isolate/quarantine actions
 - compliance: policy audit, framework compliance (ISO27001, GDPR, PCI-DSS)
 - osint: open-source intelligence, recon, footprinting
-- n8n_workflow: generate n8n automation workflows from natural language
 - general: anything not matching above categories
 
 Examples:
@@ -548,8 +547,6 @@ Examples:
 - "check if this IP is malicious" → agent_type: threat_intel
 - "analyze firewall logs for anomalies" → agent_type: log_anomaly
 - "block this domain" → agent_type: remediation
-- "create a n8n workflow to check my email every hour" → agent_type: n8n_workflow
-- "帮我创建一个 n8n 工作流" → agent_type: n8n_workflow
 - "ask 1p to do something" → agent_name: "1p" (use this to route to the named sub-agent)
 """
         )

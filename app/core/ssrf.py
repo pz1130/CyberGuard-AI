@@ -1,6 +1,6 @@
 """Shared SSRF protection — resolve hostname to IP and block private ranges.
 
-All outbound URL validation (agents, providers, webhooks, OpenClaw) should
+All outbound URL validation (agents, providers, MCP, OpenClaw) should
 use :func:`validate_outbound_url` to prevent server-side request forgery.
 """
 from __future__ import annotations

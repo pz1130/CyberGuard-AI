@@ -1,7 +1,7 @@
 """Skill loading service — catalog + progressive body load.
 
 Full skill bodies must not be dumped into system prompts for tool-capable
-agents (server roadmap item 3 / desktop progressive disclosure). Catalog =
+agents. Catalog =
 name + description only; body arrives via ``load_skill`` tool result.
 """
 from __future__ import annotations

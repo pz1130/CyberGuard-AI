@@ -1,0 +1,51 @@
+name: release-gate
+
+on:
+  pull_request:
+  push:
+    branches: [main, "codex/release-candidate"]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CYBERGUARD_ENV_FILE: /dev/null
+      POSTGRES_PASSWORD: ci-postgres-password
+      REDIS_PASSWORD: ci-redis-password
+      RUNNER_TOKEN: ci-runner-token
+      BOOTSTRAP_ADMIN_PASSWORD: ci-admin-password
+      ENCRYPTION_KEY: 1111111111111111111111111111111111111111111111111111111111111111
+      SECRET_KEY: 2222222222222222222222222222222222222222222222222222222222222222
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: webui/package-lock.json
+      - name: Install dependencies
+        run: |
+          uv sync --extra test
+          npm --prefix webui ci
+      - name: Run release gate
+        run: make check
+      - name: Validate release Compose file
+        run: make docker-config
+      - name: Build release images
+        run: make docker-build
+      - name: Scan release images
+        run: make security-scan
+      - name: Generate CycloneDX SBOMs
+        run: make sbom
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cyberguard-1.0.0-rc.1-sbom
+          path: artifacts/*.cdx.json
+          if-no-files-found: error

@@ -36,12 +36,7 @@ htmlcov/
 dist/
 build/
 *.egg-info/
-
-# Desktop (Electron)
-apps/desktop/node_modules/
-apps/desktop/dist-renderer/
-apps/desktop/dist/
-apps/desktop/.vite/
+artifacts/
 
 # Local
 *.bak

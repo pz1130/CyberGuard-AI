@@ -1,7 +1,7 @@
 {
   "name": "webui",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0-rc.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -18,7 +18,7 @@
     "react-dom": "^19.2.5",
     "react-i18next": "^17.0.6",
     "react-markdown": "^10.1.0",
-    "react-router-dom": "^7.14.2",
+    "react-router-dom": "^7.18.3",
     "tailwindcss": "^4.2.4"
   },
   "devDependencies": {
@@ -33,6 +33,11 @@
     "globals": "^17.5.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.2",
-    "vite": "^8.0.10"
+    "vite": "^8.3.0"
+  },
+  "overrides": {
+    "dompurify": "^3.4.15",
+    "nanoid": "^3.3.19",
+    "postcss": "^8.5.28"
   }
 }

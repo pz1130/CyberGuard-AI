@@ -1,0 +1,53 @@
+# Release Candidate Scope and Acceptance
+
+## Positioning
+
+CyberGuard demonstrates one joined workstream: **AI for Security**, with
+cybersecurity operations as the execution plane and GRC as the governance and
+assurance plane. The release is a Docker reference implementation rather than
+a managed service or endpoint application.
+
+## Included outcomes
+
+| Outcome | Primary modules | Human control |
+|---|---|---|
+| Alert triage | Chat, agents, tools/MCP, knowledge | Review evidence; approve risky tools |
+| Vulnerability prioritisation | Agents, search, knowledge, remediation | Validate impact and remediation |
+| GRC assessment | Frameworks, assessments, evidence, reports | Own control status and final report |
+| Demonstrable governance | RBAC, approval, audit, kill switch, PII and egress policy | Admin sets policy and decides exceptions |
+
+## Explicit exclusions
+
+- Desktop or mobile clients
+- Kubernetes manifests or support claims
+- Group-chat rooms and consensus discussions
+- N8N generation or management
+- User-configurable scheduled tasks
+- Incoming or outgoing webhooks
+- Claims of autonomous remediation, regulatory compliance, or certification
+
+## Release acceptance
+
+A release candidate is acceptable only when all boxes below are evidenced:
+
+- [x] `make check` passes from the RC branch in a disposable environment.
+- [x] `make docker-build` succeeds from the committed Docker contexts.
+- [x] An isolated `docker compose up -d --wait` reaches a healthy state with
+      non-default smoke-test secrets.
+- [x] A fresh database migrates to the single current Alembic head.
+- [ ] The three demonstration paths complete with their expected artifacts.
+- [ ] A high-risk action pauses, is approved by an authorised user, and then
+      executes exactly once; rejection executes nothing.
+- [ ] Audit-chain verification succeeds after the demonstrations.
+- [ ] Backup creation and restore are exercised on disposable data.
+- [x] Dependency and container scans have no unaccepted critical finding.
+- [x] Known limitations and accepted risks are recorded in the release notes.
+
+Machine and command evidence for completed checks is recorded in
+`RC_EVIDENCE.md`. Demonstration, approval, audit export, and restore boxes stay
+open until the workgroup executes the runbook with its selected model/provider.
+
+## Versioning
+
+Use `v1.0.0-rc.1` for the first frozen candidate. Do not reuse a tag. Promote
+to `v1.0.0` only after the workgroup accepts the demonstrations and limitations.

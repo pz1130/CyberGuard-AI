@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     SECRET_KEY: str = DEFAULT_KEY
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+    BOOTSTRAP_ADMIN_USERNAME: str = "admin"
+    BOOTSTRAP_ADMIN_EMAIL: str = "admin@cyberguard.local"
+    BOOTSTRAP_ADMIN_PASSWORD: str = ""
 
     # LLM Providers
     LITELLM_CONFIG: str = '{"providers": []}'

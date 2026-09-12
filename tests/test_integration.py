@@ -228,10 +228,10 @@ class TestLLMRouterHelpers(unittest.TestCase):
 
     def test_extract_json_object_with_think(self):
         router = self._router()
-        text = '<think>reasoning</think>{"intent": "group_chat", "task_plan": []}'
+        text = '<think>reasoning</think>{"intent": "knowledge_query", "task_plan": []}'
         result = router._extract_json_object(text)
         self.assertIsNotNone(result)
-        self.assertEqual(result["intent"], "group_chat")
+        self.assertEqual(result["intent"], "knowledge_query")
 
     def test_extract_json_object_embedded_in_prose(self):
         router = self._router()
@@ -313,23 +313,6 @@ class TestMasterAgentStateMachine(unittest.IsolatedAsyncioTestCase):
         self.assertIn("final_summary", result)
         self.assertEqual(result["final_summary"], "The analysis is complete.")
         mock_router.chat.assert_awaited_once()
-
-    async def test_group_chat_trigger(self):
-        """Structured intent=group_chat → group_chat_active (INV-13, not keywords)."""
-        agent, mock_router = self._make_agent()
-        mock_router.parse_intent = AsyncMock(return_value={
-            "intent": "group_chat",
-            "task_plan": [],
-            "reasoning": "group_chat",
-        })
-        with patch("app.core.audit.log_audit", new_callable=AsyncMock):
-            result = await agent.run(
-                user_input="Please coordinate agents on this case",
-                user_id=1,
-            )
-        # With empty task_plan in group chat, summarizer handles it
-        self.assertIn("final_summary", result)
-        self.assertTrue(result.get("group_chat_active"))
 
     async def test_conversation_history_injected(self):
         """conversation_history is passed through to the state."""

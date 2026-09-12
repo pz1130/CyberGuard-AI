@@ -86,23 +86,6 @@ class ApprovalService:
             user_id=user_id,
         ))
 
-        # Fan out to outgoing webhooks subscribed to approval.required (non-blocking)
-        try:
-            from app.services.webhook_service import emit
-            asyncio.create_task(emit("approval.required", {
-                "request_id": request_id,
-                "user_id": user_id,
-                "agent_id": agent_id,
-                "agent_name": agent_name,
-                "action_type": action_type,
-                "action_description": action_description,
-                "risk_level": risk_level,
-                "urgency": urgency,
-                "expires_at": expires_at.isoformat() + "Z" if expires_at else None,
-            }))
-        except Exception as e:
-            logger.warning(f"[approval] webhook emit failed: {e}")
-
         logger.info(
             f"[approval] Created request {record.id} for request_id={request_id} "
             f"action={action_type} risk={risk_level}"

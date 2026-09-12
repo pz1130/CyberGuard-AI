@@ -27,10 +27,10 @@ interface Props {
 const TAB_LABELS: Record<string, string> = {
   chat: 'CHAT', agents: 'AGENTS', providers: 'PROVIDERS',
   skills: 'SKILLS', tools: 'TOOLS', knowledge: 'KNOWLEDGE',
-  groupchat: 'GROUP CHAT', schedule: 'SCHEDULE', mcp: 'MCP',
+  mcp: 'MCP',
   envvars: 'ENV VARS', security: 'SECURITY', token: 'TOKEN USAGE',
   backup: 'BACKUP', audit: 'AUDIT LOGS', users: 'USERS',
-  settings: 'SETTINGS', n8n: 'N8N', webhooks: 'WEBHOOKS',
+  settings: 'SETTINGS',
   prompts: 'PROMPTS', governance: 'GOVERNANCE',
 }
 
@@ -57,14 +57,11 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
       api.getTools(),
       api.getKnowledgeBases(),
       api.getMCPServers(),
-      api.getScheduledTasks(),
-      api.getWebhooks(),
       api.getFrameworks(),
       api.getAssessments(),
       api.getPromptTemplates(),
-      api.getN8NConnections(),
       api.getConversations(),
-    ]).then(([agents, providers, skills, tools, knowledge, mcp, schedule, webhooks, frameworks, assessments, prompts, n8n, convos]) => {
+    ]).then(([agents, providers, skills, tools, knowledge, mcp, frameworks, assessments, prompts, convos]) => {
       const items: SearchItem[] = []
 
       if (agents.status === 'fulfilled') {
@@ -132,26 +129,6 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
         }))
       }
 
-      if (schedule.status === 'fulfilled') {
-        const d = schedule.value as any
-        const list = Array.isArray(d) ? d : (d?.tasks || d?.schedules || [])
-        list.forEach((t: any) => items.push({
-          id: t.task_id || t.id, name: t.name,
-          subtitle: (t.task_type || 'TASK').toUpperCase(),
-          tab: 'schedule', category: 'SCHEDULE', icon: '○',
-        }))
-      }
-
-      if (webhooks.status === 'fulfilled') {
-        const d = webhooks.value as any
-        const list = Array.isArray(d) ? d : (d?.webhooks || [])
-        list.forEach((w: any) => items.push({
-          id: w.id, name: w.name,
-          subtitle: (w.direction || 'WEBHOOK').toUpperCase(),
-          tab: 'webhooks', category: 'WEBHOOKS', icon: '⟳',
-        }))
-      }
-
       if (frameworks.status === 'fulfilled') {
         const d = frameworks.value as any
         const list = Array.isArray(d) ? d : []
@@ -181,16 +158,6 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
           id: p.id, name: p.name,
           subtitle: (p.category || 'PROMPT').toUpperCase(),
           tab: 'prompts', category: 'PROMPTS', icon: '≡',
-        }))
-      }
-
-      if (n8n.status === 'fulfilled') {
-        const d = n8n.value as any
-        const list = Array.isArray(d) ? d : (d?.connections || [])
-        list.forEach((c: any) => items.push({
-          id: c.id, name: c.name,
-          subtitle: c.base_url || 'N8N CONNECTION',
-          tab: 'n8n', category: 'N8N', icon: '⌥',
         }))
       }
 
