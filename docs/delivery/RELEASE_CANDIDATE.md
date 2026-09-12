@@ -36,17 +36,18 @@ A release candidate is acceptable only when all boxes below are evidenced:
 - [x] An isolated `docker compose up -d --wait` reaches a healthy state with
       non-default smoke-test secrets.
 - [x] A fresh database migrates to the single current Alembic head.
-- [ ] The two demonstration paths complete with their expected artifacts.
-- [ ] A high-risk action pauses, is approved by an authorised user, and then
+- [x] The two demonstration paths complete with their expected artifacts.
+- [x] A high-risk action pauses, is approved by an authorised user, and then
       executes exactly once; rejection executes nothing.
-- [ ] Audit-chain verification succeeds after the demonstrations.
-- [ ] Backup creation and restore are exercised on disposable data.
+- [x] Audit-chain verification succeeds after the demonstrations.
+- [x] Backup creation and restore are exercised on disposable data.
 - [x] Dependency and container scans have no unaccepted critical finding.
 - [x] Known limitations and accepted risks are recorded in the release notes.
 
-Machine and command evidence for completed checks is recorded in
-`RC_EVIDENCE.md`. Demonstration, approval, audit export, and restore boxes stay
-open until the workgroup executes the runbook with its selected model/provider.
+Machine and command evidence is in `RC_EVIDENCE.md`, including the 2026-09-12
+isolated-preview demonstration (MiniMax-M3). Named workgroup signatures,
+security-reporting contact, and promotion to `v1.0.0` remain human
+acceptance steps in that file's acceptance packet.
 
 ## Versioning
 

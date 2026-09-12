@@ -115,13 +115,14 @@ async def discover_stdio_tools(server: MCPServer) -> list:
 async def execute_http_tool(server: MCPServer, tool_name: str, arguments: Dict[str, Any]) -> Any:
     """Execute a tool via HTTP POST to an MCP server endpoint."""
     from urllib.parse import urlparse
-    from app.core.ssrf import validate_outbound_url, SSRFError
+    from app.core.egress import EgressBlocked, enforce_egress
+    from app.core.ssrf import SSRFError
 
     if not server.url:
         raise RuntimeError("MCP server has no URL configured")
     try:
-        validate_outbound_url(server.url)
-    except SSRFError as e:
+        enforce_egress(server.url)
+    except (SSRFError, EgressBlocked) as e:
         raise RuntimeError(f"SSRF blocked: {e}")
     parsed = urlparse(server.url)
 

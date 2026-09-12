@@ -412,6 +412,26 @@ async def _llm_classify(text: str, llm_router) -> tuple[bool, float]:
         return False, 0.0
 
 
+_CRITICAL_FLAGS = frozenset({
+    "jailbreak_prefix",
+    "recursive_injection",
+    "direct_instruction_override",
+})
+
+
+def _escalate_critical_flags(flags: list[str], risk_level: str) -> str:
+    if any(f in _CRITICAL_FLAGS for f in flags):
+        return "critical"
+    return risk_level
+
+
+def _pass_block(risk_level: str, *, block: bool) -> tuple[bool, bool]:
+    """Critical injection is always hard-blocked. `block=True` also rejects high."""
+    blocked = risk_level == "critical" or (block and risk_level in ("high", "critical"))
+    passed = not blocked and risk_level in ("low", "medium", "high")
+    return passed, blocked
+
+
 # ----------------------------------------------------------------------
 # Main guardrail function
 # ----------------------------------------------------------------------
@@ -484,6 +504,7 @@ async def check_prompt(
         risk_level = "medium"
     else:
         risk_level = "low"
+    risk_level = _escalate_critical_flags(flags, risk_level)
 
     # --- Strategy 5: LLM classification for ambiguous medium-risk inputs ---
     if llm_router and risk_level in ("medium", "high") and not flags:
@@ -496,10 +517,7 @@ async def check_prompt(
             if conf > 0.8:
                 risk_level = "high"
 
-    # --- Determine passed / blocked ---
-    # Direct injection always fails
-    passed = risk_level in ("low", "medium") or (risk_level in ("high", "critical") and not block)
-    blocked = block and risk_level in ("high", "critical")
+    passed, blocked = _pass_block(risk_level, block=block)
 
     if not flags:
         message = "No injection signals detected"
@@ -550,9 +568,9 @@ def check_prompt_sync(text: str, *, block: bool = False) -> GuardrailResult:
         risk_level = "medium"
     else:
         risk_level = "low"
+    risk_level = _escalate_critical_flags(flags, risk_level)
 
-    passed = risk_level in ("low", "medium") or (risk_level in ("high", "critical") and not block)
-    blocked = block and risk_level in ("high", "critical")
+    passed, blocked = _pass_block(risk_level, block=block)
 
     message = f"Detected {len(flags)} signal(s): {', '.join(flags[:5])}" if flags else "No injection signals detected"
 

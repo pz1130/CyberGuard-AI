@@ -15,12 +15,39 @@ from app.schemas.knowledge import (
 )
 from app.schemas.ocr import OcrConfigRead, OcrConfigUpdate
 from app.models.knowledge import KnowledgeBase, Document
+from app.models.provider import Provider
 from app.services.knowledge_service import get_knowledge_service, extract_text
 from app.services.ocr_service import ScannedPdfError, load_ocr_config
 
 MAX_OCR_BYTES = 20 * 1024 * 1024  # 20 MB
 
 router = APIRouter()
+
+
+async def _validate_embedding_selection(
+    db: AsyncSession, provider_id: Optional[int], model_name: Optional[str],
+) -> Provider:
+    if not provider_id or not model_name:
+        raise HTTPException(
+            status_code=400,
+            detail="An active, configured embedding provider and model are required",
+        )
+    provider = await db.get(Provider, provider_id)
+    if not provider or not provider.is_active:
+        raise HTTPException(status_code=400, detail="Selected provider is not active")
+    if not provider.api_key_encrypted:
+        raise HTTPException(status_code=400, detail="Selected provider has no configured API key")
+    embedding_models = {
+        m.get("name")
+        for m in (provider.models or [])
+        if isinstance(m, dict) and m.get("model_type") == "embedding"
+    }
+    if model_name not in embedding_models:
+        raise HTTPException(
+            status_code=400,
+            detail="Selected embedding model does not belong to the selected provider",
+        )
+    return provider
 
 
 # ---------------------------------------------------------------------------
@@ -77,6 +104,7 @@ async def create_knowledge_base(body: KnowledgeBaseCreate, db: AsyncSession = De
     existing = await db.execute(select(KnowledgeBase).where(KnowledgeBase.name == body.name))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Knowledge base name already exists")
+    await _validate_embedding_selection(db, body.provider_id, body.embedding_model)
     kb = KnowledgeBase(**body.model_dump())
     db.add(kb)
     await db.commit()
@@ -97,7 +125,14 @@ async def update_knowledge_base(kb_id: int, body: KnowledgeBaseUpdate, db: Async
     kb = await db.get(KnowledgeBase, kb_id)
     if not kb:
         raise HTTPException(status_code=404, detail="Knowledge base not found")
-    for key, value in body.model_dump(exclude_unset=True).items():
+    changes = body.model_dump(exclude_unset=True)
+    if "provider_id" in changes or "embedding_model" in changes:
+        await _validate_embedding_selection(
+            db,
+            changes.get("provider_id", kb.provider_id),
+            changes.get("embedding_model", kb.embedding_model),
+        )
+    for key, value in changes.items():
         setattr(kb, key, value)
     await db.commit()
     await db.refresh(kb)
@@ -152,6 +187,9 @@ async def ingest_text_document(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        from openai import APIStatusError
+        if isinstance(e, APIStatusError):
+            raise HTTPException(status_code=400, detail=f"Embedding failed: {e.message}")
         raise HTTPException(status_code=500, detail=f"Ingest failed: {e}")
 
     chunk_count = (doc.metadata_json or {}).get("chunk_count", 0)
@@ -217,6 +255,9 @@ async def upload_document(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        from openai import APIStatusError
+        if isinstance(e, APIStatusError):
+            raise HTTPException(status_code=400, detail=f"Embedding failed: {e.message}")
         raise HTTPException(status_code=500, detail=f"Ingest failed: {e}")
 
     chunk_count = (doc.metadata_json or {}).get("chunk_count", 0)

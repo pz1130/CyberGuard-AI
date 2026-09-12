@@ -53,6 +53,14 @@ def get_sync_session():
     return _SyncSessionLocal
 
 
+async def dispose_engines() -> None:
+    """Drop pooled connections so pg_restore can take exclusive locks."""
+    await engine.dispose()
+    global _sync_engine
+    if _sync_engine is not None:
+        _sync_engine.dispose()
+
+
 # Base class for models
 Base = declarative_base()
 

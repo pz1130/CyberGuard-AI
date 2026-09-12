@@ -224,7 +224,7 @@ export default function Users() {
                 </tr></thead>
                 <tbody>{ssoMappings.map(m => (
                   <tr key={m.id}>
-                    <td style={{ fontSize: 12 }}>{m.azure_key}</td>
+                    <td className="font-mono" style={{ fontSize: 12 }}>{m.azure_key}</td>
                     <td style={{ fontSize: 12, color: 'var(--accent)' }}>{m.app_role.toUpperCase()}</td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{m.priority}</td>
                     <td style={{ textAlign: 'right' }}>

@@ -100,11 +100,17 @@ async def put_config(
         model_names = {
             model.get("name") if isinstance(model, dict) else str(model)
             for model in (provider.models or [])
+            if not isinstance(model, dict) or model.get("model_type", "chat") == "chat"
         }
         if selected_model not in model_names:
             raise HTTPException(
                 status_code=400,
                 detail="Selected model does not belong to the selected provider",
+            )
+        if not provider.api_key_encrypted:
+            raise HTTPException(
+                status_code=400,
+                detail="Selected provider has no configured API key",
             )
 
     if 'provider_id' in update_data:

@@ -33,6 +33,24 @@ def _is_email_configured() -> bool:
     return bool(host and host != "localhost" and _cfg("SMTP_FROM_EMAIL"))
 
 
+def smtp_status() -> dict:
+    """Operator-visible SMTP readiness. Never includes secrets."""
+    host = _cfg("SMTP_HOST")
+    from_addr = _cfg("SMTP_FROM_EMAIL")
+    admin = _cfg("SMTP_ADMIN_EMAIL")
+    if not host or host == "localhost":
+        reason = "SMTP_HOST is unset or localhost — approval email is skipped"
+    elif not from_addr:
+        reason = "SMTP_FROM_EMAIL is unset — approval email is skipped"
+    else:
+        reason = "SMTP is configured"
+    return {
+        "configured": _is_email_configured(),
+        "reason": reason,
+        "admin_email_set": bool(admin),
+    }
+
+
 def _build_message(
     to: str,
     subject: str,
@@ -91,7 +109,10 @@ async def send_email(
     Never raises — all errors are logged and swallowed.
     """
     if not _is_email_configured():
-        logger.debug(f"[email] SMTP not configured — skipping email to {to!r}: {subject!r}")
+        logger.warning(
+            "[email] SMTP not configured — skipping email to %r: %s (%s)",
+            to, subject, smtp_status()["reason"],
+        )
         return False
     plain = body_text or _html_to_text(body_html)
     return await asyncio.to_thread(_send_sync, to, subject, body_html, plain)

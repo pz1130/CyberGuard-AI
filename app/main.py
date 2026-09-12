@@ -104,6 +104,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Internal agent seed skipped: {e}")
 
+    try:
+        from app.services.demo_catalog import seed_demo_catalog_on_startup
+        await seed_demo_catalog_on_startup()
+        logger.info("Demo tools/skills seeded")
+    except Exception as e:
+        logger.warning(f"Demo catalog seed skipped: {e}")
+
     # Kill switch file poller (NDB Std §Kill Switch — file trigger)
     import os as _os
     import asyncio as _aio
@@ -207,6 +214,20 @@ async def audit_middleware(request: Request, call_next):
     if request.url.path in ["/health", "/docs", "/openapi.json"]:
         return await call_next(request)
 
+    # A restore replaces the entire application schema. Stop all other API
+    # workers from opening fresh transactions until it finishes.
+    if not request.url.path.endswith("/restore"):
+        try:
+            from app.core.maintenance import database_restore_in_progress
+            if await database_restore_in_progress():
+                return JSONResponse(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    content={"detail": "Database restore in progress"},
+                    headers={"Retry-After": "10"},
+                )
+        except Exception as e:  # Redis outage must not take down normal traffic.
+            logger.warning("Maintenance-state check failed: %s", e)
+
     status_code = 500
     try:
         response = await call_next(request)
@@ -304,6 +325,8 @@ from app.routers import chat_stream, gateway, sso
 
 app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
 app.include_router(users.router, prefix="/api/v1", tags=["Users"])
+# Kill-switch static paths must be registered before /agents/{agent_id}.
+app.include_router(kill_switch.router, prefix="/api/v1", tags=["Kill Switch"])
 app.include_router(agents.router, prefix="/api/v1", tags=["Agents"])
 app.include_router(skills.router, prefix="/api/v1", tags=["Skills & Tools"])
 app.include_router(knowledge.router, prefix="/api/v1", tags=["Knowledge Base"])
@@ -311,7 +334,6 @@ app.include_router(chat.router, prefix="/api/v1", tags=["Chat"])
 app.include_router(chat_stream.router, prefix="/api/v1", tags=["Chat"])
 app.include_router(tasks.router, prefix="/api/v1", tags=["Tasks"])
 app.include_router(audit.router, prefix="/api/v1", tags=["Audit"])
-app.include_router(kill_switch.router, prefix="/api/v1", tags=["Kill Switch"])
 app.include_router(governance_config.router, prefix="/api/v1", tags=["Agent Governance Config"])
 app.include_router(governance_rollback.router, prefix="/api/v1", tags=["Safety Envelope"])
 app.include_router(governance_metrics.router, prefix="/api/v1", tags=["Governance Metrics"])

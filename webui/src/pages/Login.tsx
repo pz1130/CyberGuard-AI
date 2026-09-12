@@ -130,10 +130,10 @@ export default function Login() {
             </div>
           )}
           <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 20, letterSpacing: '0.06em', color: 'var(--shell-text-strong)' }}>
+            <div style={{ fontFamily: 'var(--font-sans)', fontWeight: 700, fontSize: 20, letterSpacing: '0.06em', color: 'var(--text-primary)' }}>
               {(branding.branding_company_name || 'CYBERGUARD').toUpperCase()}
             </div>
-            <div style={{ fontSize: 11, color: 'var(--shell-text-muted)', letterSpacing: '0.08em' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.08em' }}>
               AI AGENT PLATFORM · AUTH GATE
             </div>
           </div>

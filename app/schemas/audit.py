@@ -14,6 +14,9 @@ class AuditLogResponse(BaseModel):
     output_hash: str
     request_id: Optional[str]
     timestamp: datetime
+    prev_hash: Optional[str] = None
+    entry_hash: Optional[str] = None
+    chain_version: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -197,6 +197,14 @@ async def test_embed_records_provider_reported_usage(monkeypatch):
         embeddings=SimpleNamespace(create=AsyncMock(return_value=response))
     )
     monkeypatch.setattr(router, "get_client_async", AsyncMock(return_value=client))
+    monkeypatch.setattr(router, "get_provider_config_async", AsyncMock(return_value={
+        "name": "OpenAI",
+        "api_key": "sk-test",
+        "base_url": "https://api.openai.com/v1",
+        "models": [],
+        "metadata_json": {},
+        "provider_type": "openai",
+    }))
     record = AsyncMock()
     monkeypatch.setattr(router, "_record_token_usage", record)
 

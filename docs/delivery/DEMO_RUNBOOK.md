@@ -5,6 +5,12 @@ model/provider, prompt-template version, timestamps, and operator for every run.
 The repository includes a small frozen set under `demo/`; preserve those files
 unchanged when comparing models or release candidates.
 
+The approver must be a different account than the requester (admin vs
+operator). Expert mode still fans out to every active sub-agent; high-risk
+intent (remediation / `requires_approval`) pauses **before** that fan-out.
+With no registered sub-agents, expert keeps the parser plan so the same
+gate still opens.
+
 ## 1. Security alert triage
 
 1. Load `demo/alerts.csv` into a knowledge base or read-only MCP source.

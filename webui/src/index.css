@@ -46,8 +46,9 @@
   --border-bright: #334155;
 
   /* Typography: sans for UI, mono for code/IDs only */
-  --font-sans: 'Space Grotesk', system-ui, -apple-system, sans-serif;
-  --font-mono: 'IBM Plex Mono', 'Fira Code', ui-monospace, monospace;
+  --font-sans: 'Space Grotesk', -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "PingFang SC", "Microsoft YaHei", monospace;
+  --font-display: var(--font-sans);
 
   /* Spacing scale (8pt base) */
   --space-1: 4px;
@@ -340,8 +341,13 @@ button {
   padding: 12px;
   color: var(--text-primary);
   border-bottom: 1px solid var(--border);
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 13px;
+  letter-spacing: 0.01em;
+}
+.data-table td.font-mono,
+.data-table td .font-mono {
+  font-family: var(--font-mono);
   letter-spacing: 0.03em;
 }
 .data-table tr:last-child td { border-bottom: none; }
@@ -525,6 +531,42 @@ button {
   background: var(--accent);
   flex-shrink: 0;
   animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* ============================================
+   Terminal Blink Indicator (Header Status)
+   ============================================ */
+@keyframes terminal-blink {
+  0%, 100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 6px rgba(74, 222, 128, 0.85));
+  }
+  50% {
+    opacity: 0.3;
+    filter: drop-shadow(0 0 1px rgba(74, 222, 128, 0.15));
+  }
+}
+
+@keyframes terminal-cursor-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+.terminal-icon-blink {
+  animation: terminal-blink 1.4s ease-in-out infinite;
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+}
+
+.terminal-cursor-blink {
+  display: inline-block;
+  width: 5px;
+  height: 10px;
+  background-color: var(--accent);
+  margin-left: 3px;
+  vertical-align: -1px;
+  animation: terminal-cursor-blink 1s step-start infinite;
 }
 
 /* ============================================

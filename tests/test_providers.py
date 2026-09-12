@@ -5,10 +5,27 @@ from sqlalchemy import select
 
 from app.core.database import AsyncSessionLocal
 from app.models.provider import Provider
-from app.routers.providers import _stamp_model_verified, _seed_presets, _PRESET_PROVIDERS
+from app.routers.providers import (
+    _stamp_model_verified, _seed_presets, _PRESET_PROVIDERS,
+    _test_provider_connectivity,
+)
 
 
 pytestmark = pytest.mark.asyncio
+
+
+async def test_minimax_preset_includes_native_embedding_model():
+    minimax = next(p for p in _PRESET_PROVIDERS if p.name == "MiniMax")
+    models = [(m.name, m.model_type) for m in minimax.models]
+    assert ("embo-01", "embedding") in models
+    assert any(name.startswith("MiniMax") and mtype == "chat" for name, mtype in models)
+
+
+async def test_openai_preset_includes_embedding_models():
+    openai = next(p for p in _PRESET_PROVIDERS if p.name == "OpenAI")
+    types = {m.name: m.model_type for m in openai.models}
+    assert types.get("text-embedding-3-small") == "embedding"
+    assert types.get("gpt-4o") == "chat"
 
 
 async def test_stamp_updates_existing_model():
@@ -96,6 +113,10 @@ async def test_seed_presets_leaves_models_unverified():
                 )
                 assert m.get("last_tested_at") is None
                 assert m.get("test_error") is None
+        minimax = next(p for p in providers if p.name == "MiniMax")
+        embo = next((m for m in minimax.models if m.get("name") == "embo-01"), None)
+        assert embo is not None, "MiniMax preset must include native embedding model embo-01"
+        assert embo.get("model_type") == "embedding"
 
 
 async def test_stamp_then_reload_roundtrip():
@@ -123,7 +144,6 @@ async def test_stamp_then_reload_roundtrip():
             prov = result.scalar_one()
             prov.models = _stamp_model_verified(prov.models, "m1", ok=True)
             await session.commit()
-
         # Re-fetch and assert
         async with AsyncSessionLocal() as session:
             result = await session.execute(select(Provider).where(Provider.id == pid))
@@ -137,3 +157,29 @@ async def test_stamp_then_reload_roundtrip():
             for prov in result.scalars().all():
                 await session.delete(prov)
             await session.commit()
+
+
+async def test_connectivity_401_is_failure(monkeypatch):
+    import httpx
+    from openai import APIStatusError
+    from unittest.mock import AsyncMock, MagicMock
+
+    response = httpx.Response(
+        401,
+        request=httpx.Request("POST", "https://provider.example/v1/chat/completions"),
+    )
+    error = APIStatusError("Unauthorized", response=response, body=None)
+    client = MagicMock()
+    client.chat.completions.create = AsyncMock(side_effect=error)
+    monkeypatch.setattr("app.routers.providers.AsyncOpenAI", lambda **_kwargs: client)
+
+    result = await _test_provider_connectivity(
+        base_url="https://provider.example/v1",
+        api_key="bad-key",
+        provider_type="openai",
+        api_version=None,
+        models=[{"name": "chat-model", "model_type": "chat"}],
+    )
+
+    assert result.success is False
+    assert "401" in (result.error or "")

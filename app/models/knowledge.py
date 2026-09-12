@@ -29,6 +29,7 @@ class KnowledgeBase(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), unique=True, nullable=False, index=True)
     description = Column(String(500), nullable=True)
+    provider_id = Column(Integer, ForeignKey("providers.id", ondelete="SET NULL"), nullable=True)
     embedding_model = Column(String(100), nullable=True)
     # Dimension of vectors produced by `embedding_model`. Locked at KB creation —
     # cannot change without re-embedding all docs. CHECK enforced in DB.

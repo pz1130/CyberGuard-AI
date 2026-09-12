@@ -48,7 +48,8 @@ class EpisodicMemoryService:
     async def _embed(self, task: str, provider_id: Optional[int]) -> Optional[List[float]]:
         try:
             vecs = await self.router.embed(
-                texts=[task], model=EPISODE_EMBED_MODEL, provider_id=provider_id)
+                texts=[task], model=EPISODE_EMBED_MODEL, provider_id=provider_id,
+                embed_type="query")
         except Exception as e:                       # noqa: BLE001 - degrade gracefully
             logger.warning("episodic memory: embed failed: %s", e)
             return None

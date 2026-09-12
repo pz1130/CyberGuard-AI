@@ -34,7 +34,10 @@ def test_master_config_response_exposes_provider_id():
 @pytest.mark.asyncio
 async def test_master_config_rejects_model_from_another_provider(monkeypatch):
     current = _master_config()
-    provider = SimpleNamespace(id=8, is_active=True, models=[{"name": "model-b"}])
+    provider = SimpleNamespace(
+        id=8, is_active=True, api_key_encrypted="ciphertext",
+        models=[{"name": "model-b"}],
+    )
     result = SimpleNamespace(scalar_one_or_none=lambda: provider)
     db = SimpleNamespace(execute=AsyncMock(return_value=result))
     monkeypatch.setattr(

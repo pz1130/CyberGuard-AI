@@ -59,7 +59,10 @@ async def export_audit_logs(
     if format == "csv":
         import csv, io
         output = io.StringIO()
-        writer = csv.DictWriter(output, fieldnames=["id", "user_id", "agent_id", "action", "input_hash", "output_hash", "timestamp"])
+        writer = csv.DictWriter(output, fieldnames=[
+            "id", "user_id", "agent_id", "action", "input_hash", "output_hash",
+            "prev_hash", "entry_hash", "timestamp",
+        ])
         writer.writeheader()
         for log in logs:
             writer.writerow({
@@ -69,6 +72,8 @@ async def export_audit_logs(
                 "action": log.action,
                 "input_hash": log.input_hash,
                 "output_hash": log.output_hash,
+                "prev_hash": log.prev_hash,
+                "entry_hash": log.entry_hash,
                 "timestamp": log.timestamp.isoformat() if log.timestamp else "",
             })
         return {

@@ -121,10 +121,12 @@ function SettingsModal({
   const [baseUrl, setBaseUrl] = useState(provider?.base_url || preset?.base_url || '')
   const [apiKey, setApiKey] = useState('')
   const [preserveThink, setPreserveThink] = useState(!!provider?.metadata_json?.preserve_think)
+  const [groupId, setGroupId] = useState(String(provider?.metadata_json?.group_id || provider?.metadata_json?.GroupId || ''))
   const [testing, setTesting] = useState(false)
   const [testMsg, setTestMsg] = useState<{ ok: boolean; msg: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const keyPlaceholder = preset?.key_placeholder || 'sk-...'
+  const isMinimax = /minimax/i.test(baseUrl) || /minimax/i.test(name)
 
   const testConn = async () => {
     setTesting(true); setTestMsg(null)
@@ -153,16 +155,27 @@ function SettingsModal({
     if (!name) return
     setSaving(true)
     try {
+      const metadata_json: Record<string, any> = {
+        ...(provider?.metadata_json || {}),
+        preserve_think: preserveThink,
+      }
+      if (isMinimax) {
+        if (groupId.trim()) metadata_json.group_id = groupId.trim()
+        else delete metadata_json.group_id
+      }
       const payload: any = {
         name, provider_type: type, base_url: baseUrl,
-        metadata_json: { preserve_think: preserveThink },
+        metadata_json,
       }
       if (apiKey && apiKey !== '******') payload.api_key = apiKey
       if (provider?.id) {
         await api.updateProvider(String(provider.id), payload)
       } else {
-        // New provider: pre-fill default models from preset
-        payload.models = preset?.default_models?.map(m => ({ name: m, model_type: 'chat' })) || []
+        // New provider: pre-fill default models from preset. MiniMax chat
+        // models are OpenAI-compatible; embo-01 is the native embedding model.
+        const chatModels = (preset?.default_models || []).map(m => ({ name: m, model_type: 'chat' as const }))
+        const embeddingModels = isMinimax ? [{ name: 'embo-01', model_type: 'embedding' as const }] : []
+        payload.models = [...chatModels, ...embeddingModels]
         await api.createProvider(payload)
       }
       onSaved()
@@ -252,6 +265,19 @@ function SettingsModal({
           />
         </div>
 
+        {isMinimax && (
+          <div>
+            <label className="form-label">{t('providers.groupId')}</label>
+            <input
+              className="form-input"
+              value={groupId}
+              onChange={e => setGroupId(e.target.value)}
+              placeholder="1234567890"
+            />
+            <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 4 }}>{t('providers.groupIdHint')}</div>
+          </div>
+        )}
+
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: '1px solid var(--border-bright)', background: 'var(--bg-base)', borderRadius: 'var(--radius-md)' }}>
           <div>
             <div style={{ fontSize: 12, color: 'var(--text-primary)', letterSpacing: '0.08em' }}>{t('providers.keepThink')}</div>
@@ -298,13 +324,19 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
     if (!provider.base_url) { setFetchErr('No base URL configured'); return }
     setFetching(true); setFetchErr('')
     try {
-      let ids: string[] = []
+      let discovered: ModelInfo[] = []
       if (provider.id) {
         // Saved provider: discover server-side with the stored (real) key. The key
         // is masked in the form, so a browser-side fetch would 401; the backend also
-        // sidesteps provider CORS.
+        // sidesteps provider CORS. The backend classifies embedding names and
+        // backfills MiniMax embo-01.
         const data = await api.discoverProviderModels(provider.id) as any
-        ids = (data.models || []).map((m: any) => m.name || m.id).filter(Boolean)
+        discovered = (data.models || [])
+          .map((m: any) => ({
+            name: m.name || m.id,
+            model_type: (m.model_type || 'chat') as ModelInfo['model_type'],
+          }))
+          .filter((m: ModelInfo) => m.name)
       } else {
         // New provider not yet saved: use the key just typed into the form.
         const base = provider.base_url.replace(/\/$/, '')
@@ -313,14 +345,16 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
         })
         if (!resp.ok) { setFetchErr(`HTTP ${resp.status}`); return }
         const data = await resp.json()
+        let ids: string[] = []
         if (Array.isArray(data.data)) ids = data.data.map((m: any) => m.id).filter(Boolean)
         else if (Array.isArray(data.models)) ids = data.models.map((m: any) => m.name || m.id).filter(Boolean)
+        discovered = ids.map(name => ({ name, model_type: 'chat' as const }))
       }
-      if (!ids.length) { setFetchErr('No models returned by provider'); return }
-      const discovered = ids.map(name => ({ name, model_type: 'chat' as const }))
-      // Preserve existing type, verification, capability, and price metadata.
+      if (!discovered.length) { setFetchErr('No models returned by provider'); return }
       const existing = Object.fromEntries(models.map(m => [m.name, m]))
-      setModels(discovered.map(m => existing[m.name] || m))
+      const merged = discovered.map(m => existing[m.name] ? { ...m, ...existing[m.name], name: m.name, model_type: existing[m.name].model_type || m.model_type } : m)
+      const preserved = models.filter(m => m.model_type !== 'chat' && !merged.some(x => x.name === m.name))
+      setModels([...merged, ...preserved])
     } catch (e: any) { setFetchErr(e.message) }
     finally { setFetching(false) }
   }
@@ -392,6 +426,14 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
   }
 
   const save = async () => {
+    const isMinimax = /minimax/i.test(provider.base_url || '') || /minimax/i.test(provider.name)
+    if (isMinimax) {
+      const bad = models.filter(m => m.model_type === 'embedding' && !/embed|embo/i.test(m.name))
+      if (bad.length) {
+        alert(t('providers.minimaxChatNotEmbed', { name: bad[0].name }))
+        return
+      }
+    }
     setSaving(true)
     try {
       await api.updateProvider(String(provider.id), { ...provider, models, api_key: undefined })
@@ -459,6 +501,11 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
           </button>
         </div>
         {fetchErr && <div style={{ fontSize: 11, color: '#f87171' }}>{fetchErr}</div>}
+        {(/minimax/i.test(provider.base_url || '') || /minimax/i.test(provider.name)) && (
+          <div style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.02em' }}>
+            {t('providers.minimaxEmbedHint')}
+          </div>
+        )}
 
         {/* Model list */}
         <div style={{ border: '1px solid var(--border-bright)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>

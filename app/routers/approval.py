@@ -51,6 +51,15 @@ def graph_resume_target(record) -> Optional[dict]:
 logger = logging.getLogger(__name__)
 
 
+@router.get("/approvals/notify-status")
+async def approval_notify_status(
+    _=Depends(require_role(Role.ADMIN)),
+):
+    """Whether approval emails will actually send."""
+    from app.services.email_service import smtp_status
+    return smtp_status()
+
+
 @router.get("/approvals", response_model=ApprovalListResponse)
 async def list_approvals(
     status_filter: str = "pending",

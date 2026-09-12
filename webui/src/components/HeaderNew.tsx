@@ -5,7 +5,7 @@
  * - Centered search trigger, no animated glyphs.
  * - Theme / Lang / User as 32px icon buttons; status dot is semantic only.
  */
-import { Sun, Moon, Globe, Search, Bell, ChevronDown, LogOut, Shield } from 'lucide-react'
+import { Sun, Moon, Globe, Search, Bell, ChevronDown, LogOut, Shield, Terminal } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
@@ -171,27 +171,26 @@ export default function HeaderNew({
           {branding.branding_company_name || 'CyberGuard'}
         </div>
 
-        {/* Semantic status pill */}
+        {/* Terminal status badge with green blinking animation */}
         <div
           aria-label={`System ${sysStatus}`}
+          title={`System status: ${sysStatus}`}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 6,
-            marginLeft: 6,
-            padding: '2px 8px',
-            fontSize: 11,
+            justifyContent: 'center',
+            marginLeft: 8,
+            padding: '4px 8px',
             color: STATUS_COLOR[sysStatus],
             background: 'var(--bg-elevated)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-full)',
+            border: `1px solid ${sysStatus === 'online' ? 'var(--accent-border)' : 'var(--border)'}`,
+            borderRadius: 'var(--radius-md)',
+            boxShadow: sysStatus === 'online' ? 'var(--accent-glow)' : undefined,
           }}
         >
-          <span
-            className="status-dot"
-            style={{ background: STATUS_COLOR[sysStatus] }}
-          />
-          <span style={{ textTransform: 'capitalize' }}>{sysStatus}</span>
+          <span className={sysStatus === 'online' ? 'terminal-icon-blink' : undefined} style={{ display: 'inline-flex', alignItems: 'center' }}>
+            <Terminal size={14} strokeWidth={2.25} />
+          </span>
         </div>
       </div>
 

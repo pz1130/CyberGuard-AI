@@ -61,3 +61,30 @@ async def test_tampering_breaks_verification(uid):
         await s.commit()
     ok, broken_at = await audit.verify_chain()
     assert ok is False and broken_at is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field,value", [
+    ("action", "tampered_action"),
+    ("input_hash", "1" * 64),
+    ("output_hash", "2" * 64),
+    ("entry_hash", "3" * 64),
+])
+async def test_payload_or_hash_tampering_breaks_verification(uid, field, value):
+    from app.core.database import get_db_context
+    from app.models.audit import AuditLog
+    from sqlalchemy import select
+
+    row = await audit.record_action(
+        user_id=uid, action="original", action_category="observe",
+        input_data={"x": 1}, output_data={"y": 1},
+    )
+    async with get_db_context() as session:
+        record = (await session.execute(select(AuditLog).where(
+            AuditLog.entry_hash == row["entry_hash"]
+        ))).scalar_one()
+        setattr(record, field, value)
+        broken_id = record.id
+        await session.commit()
+
+    assert await audit.verify_chain() == (False, broken_id)

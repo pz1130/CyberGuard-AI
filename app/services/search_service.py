@@ -152,6 +152,8 @@ class SploitusProvider(SearchProvider):
         import httpx
         payload = {"type": "exploits", "sort": "default", "query": query,
                    "title": False, "offset": 0}
+        from app.core.egress import enforce_egress
+        enforce_egress(self.endpoint)
         async with httpx.AsyncClient(timeout=20) as client:
             r = await client.post(self.endpoint, json=payload,
                                   headers={"User-Agent": _UA,

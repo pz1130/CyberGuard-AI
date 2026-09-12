@@ -32,6 +32,7 @@ class AuditLog(Base):
     # --- Tamper-evidence hash chain ---
     prev_hash = Column(String(64), nullable=True)
     entry_hash = Column(String(64), nullable=True, index=True)
+    chain_version = Column(Integer, nullable=True)
 
     # Relationship
     user = relationship("User", back_populates="audit_logs")

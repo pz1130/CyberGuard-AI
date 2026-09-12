@@ -55,20 +55,100 @@ async def _run_pg_dump(exclude_tables: list[str] = None) -> bytes:
     return stdout
 
 
-async def _run_psql_restore(dump_path: str):
-    """Restore database from pg_dump custom format."""
+def terminate_backends_sql(dbname: str) -> str:
+    """SQL that kicks other sessions off `dbname` so --clean restore can lock."""
+    if not dbname.replace("_", "").isalnum():
+        raise ValueError(f"invalid database name: {dbname!r}")
+    return (
+        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+        f"WHERE datname = '{dbname}' AND pid <> pg_backend_pid()"
+    )
+
+
+def restore_stderr_is_fatal(stderr: str) -> bool:
+    """pg_restore often exits 1 for ignorable SET errors (e.g. transaction_timeout)."""
+    for line in (stderr or "").splitlines():
+        low = line.lower()
+        if "fatal:" in low:
+            return True
+        if "error" not in low:
+            continue
+        if "unrecognized configuration parameter" in low:
+            continue
+        if "errors ignored on restore" in low:
+            continue
+        return True
+    return False
+
+
+async def _disconnect_app_from_database() -> None:
+    """Dispose SQLAlchemy pools and terminate leftover backends on the target DB."""
+    from urllib.parse import urlparse
+    from app.core.database import dispose_engines
+
+    await dispose_engines()
     db_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
-    with open(dump_path, "rb") as f:
-        data = f.read()
+    dbname = (urlparse(db_url).path or "/").lstrip("/")
+    if not dbname:
+        return
     proc = await asyncio.create_subprocess_exec(
-        "pg_restore", "--dbname", db_url, "--clean", "--if-exists",
-        stdin=asyncio.subprocess.PIPE,
+        "psql", db_url, "-c", terminate_backends_sql(dbname),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    _, stderr = await asyncio.wait_for(proc.communicate(input=data), timeout=600)
+    _, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
     if proc.returncode != 0:
-        raise RuntimeError(f"pg_restore failed: {stderr.decode()}")
+        raise RuntimeError(f"failed to disconnect database sessions: {stderr.decode(errors='replace')}")
+
+
+def _backup_manifest_snapshot(record: BackupRecordModel) -> dict:
+    """Copy manifest data before the database is replaced by pg_restore."""
+    return {
+        "id": record.id,
+        "created_at": record.created_at,
+        "size_bytes": record.size_bytes,
+        "format": record.format,
+        "local_path": record.local_path,
+        "remote_url": record.remote_url,
+        "s3_bucket": record.s3_bucket,
+        "status": record.status,
+        "error": record.error,
+        "retention_days": record.retention_days,
+    }
+
+
+async def _restore_backup_manifests(snapshots: list[dict]) -> None:
+    """Reinsert out-of-band backup manifests after restoring application data."""
+    async with AsyncSessionLocal() as db:
+        for snapshot in snapshots:
+            await db.merge(BackupRecordModel(**snapshot))
+        await db.commit()
+
+
+async def _run_psql_restore(dump_path: str):
+    """Restore database from a pg_dump custom-format file.
+
+    Disconnects the app pool first. Custom-format dumps are passed as a file
+    argument (stdin restore of -Fc can hang). Exit code 1 is accepted when
+    stderr contains only ignorable errors.
+    """
+    db_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+    await _disconnect_app_from_database()
+    proc = await asyncio.create_subprocess_exec(
+        "pg_restore",
+        "--dbname", db_url,
+        "--clean",
+        "--if-exists",
+        "--no-owner",
+        "--no-acl",
+        dump_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=600)
+    stderr = (stderr_b or b"").decode(errors="replace")
+    if proc.returncode not in (0, 1) or restore_stderr_is_fatal(stderr):
+        raise RuntimeError(f"pg_restore failed (code={proc.returncode}): {stderr}")
 
 
 def _encrypt_dump(data: bytes) -> bytes:
@@ -463,7 +543,12 @@ async def create_backup(
 
     try:
         # 1. pg_dump
-        exclude_tables = ["conversations"] if exclude_chat else None
+        # Backup files are out-of-band artifacts. Keep their live manifests
+        # outside the database snapshot so a restore does not turn the current
+        # backup back into a pending/unusable row.
+        exclude_tables = ["backup_records"]
+        if exclude_chat:
+            exclude_tables.append("conversations")
         dump_data = await _run_pg_dump(exclude_tables=exclude_tables)
 
         # 2. Encrypt
@@ -574,15 +659,29 @@ async def restore_backup(
     if not manifest:
         raise HTTPException(status_code=404, detail="Backup not found")
 
+    remote_url = manifest.remote_url
+    local_path = manifest.local_path
+    all_manifests = list((await session.execute(select(BackupRecordModel))).scalars().all())
+    manifest_snapshots = [_backup_manifest_snapshot(item) for item in all_manifests]
+    await session.commit()
+    await session.close()
+
     execution_id = str(uuid.uuid4())
     started_at = datetime.utcnow()
+    from app.core.maintenance import acquire_database_restore, release_database_restore
+    try:
+        lock_acquired = await acquire_database_restore(execution_id)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Cannot enter restore maintenance mode: {e}")
+    if not lock_acquired:
+        raise HTTPException(status_code=409, detail="Another database restore is already running")
 
     try:
         # 1. Get encrypted data
-        if manifest.remote_url:
-            encrypted_data = await _download_from_s3(manifest.remote_url)
-        elif manifest.local_path:
-            with open(manifest.local_path, "rb") as f:
+        if remote_url:
+            encrypted_data = await _download_from_s3(remote_url)
+        elif local_path:
+            with open(local_path, "rb") as f:
                 encrypted_data = f.read()
         else:
             raise RuntimeError("No backup data source available")
@@ -597,8 +696,9 @@ async def restore_backup(
             tmp_path = tmp.name
 
         try:
-            # 4. Restore
+            # 4. Restore after releasing this request's DB session.
             await _run_psql_restore(tmp_path)
+            await _restore_backup_manifests(manifest_snapshots)
         finally:
             os.unlink(tmp_path)
 
@@ -618,6 +718,11 @@ async def restore_backup(
             completed_at=datetime.utcnow(),
             error=str(e),
         )
+    finally:
+        try:
+            await release_database_restore(execution_id)
+        except Exception as e:
+            logger.error("Failed to release database restore maintenance lock: %s", e)
 
 
 @router.delete("/backup/{backup_id}")

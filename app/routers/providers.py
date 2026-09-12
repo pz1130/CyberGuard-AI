@@ -12,6 +12,7 @@ from app.core.rbac import Permission
 from app.core.security import CredentialField, encrypt_data, decrypt_data
 from app.models.provider import Provider
 from app.schemas.provider import (
+    ModelInfo,
     ProviderCreate,
     ProviderRead,
     ProviderUpdate,
@@ -41,7 +42,14 @@ _PRESET_PROVIDERS: list[ProviderCreate] = [
         provider_type="openai",
         base_url="https://api.openai.com/v1",
         api_key="",
-        models=["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
+        models=[
+            ModelInfo(name="gpt-4o", model_type="chat"),
+            ModelInfo(name="gpt-4o-mini", model_type="chat"),
+            ModelInfo(name="gpt-4-turbo", model_type="chat"),
+            ModelInfo(name="gpt-3.5-turbo", model_type="chat"),
+            ModelInfo(name="text-embedding-3-small", model_type="embedding"),
+            ModelInfo(name="text-embedding-3-large", model_type="embedding"),
+        ],
     ),
     ProviderCreate(
         name="Anthropic",
@@ -84,14 +92,23 @@ _PRESET_PROVIDERS: list[ProviderCreate] = [
         provider_type="openai",
         base_url="https://api.siliconflow.cn/v1",
         api_key="",
-        models=["Qwen/Qwen2.5-7B-Instruct", "deepseek-ai/DeepSeek-V2.5"],
+        models=[
+            ModelInfo(name="Qwen/Qwen2.5-7B-Instruct", model_type="chat"),
+            ModelInfo(name="deepseek-ai/DeepSeek-V2.5", model_type="chat"),
+            ModelInfo(name="BAAI/bge-m3", model_type="embedding"),
+        ],
     ),
     ProviderCreate(
         name="Zhipu AI (智谱)",
         provider_type="openai",
         base_url="https://open.bigmodel.cn/api/paas/v4",
         api_key="",
-        models=["glm-4-flash", "glm-4-plus", "glm-3-turbo"],
+        models=[
+            ModelInfo(name="glm-4-flash", model_type="chat"),
+            ModelInfo(name="glm-4-plus", model_type="chat"),
+            ModelInfo(name="glm-3-turbo", model_type="chat"),
+            ModelInfo(name="embedding-3", model_type="embedding"),
+        ],
     ),
     # Bailian (阿里云百炼) — OpenAI-compatible endpoint for Qwen / 通义千问 series.
     # Docs: https://help.aliyun.com/zh/model-studio/compatibility-of-openai-with-dashscope
@@ -103,20 +120,37 @@ _PRESET_PROVIDERS: list[ProviderCreate] = [
         provider_type="openai",
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         api_key="",
-        models=["qwen-max", "qwen-plus", "qwen-turbo", "qwen-long", "qwq-plus", "deepseek-r1"],
+        models=[
+            ModelInfo(name="qwen-max", model_type="chat"),
+            ModelInfo(name="qwen-plus", model_type="chat"),
+            ModelInfo(name="qwen-turbo", model_type="chat"),
+            ModelInfo(name="qwen-long", model_type="chat"),
+            ModelInfo(name="qwq-plus", model_type="chat"),
+            ModelInfo(name="deepseek-r1", model_type="chat"),
+            ModelInfo(name="text-embedding-v3", model_type="embedding"),
+        ],
     ),
     # MiniMax — use the OpenAI-compatible endpoint (/v1), NOT the Anthropic
     # endpoint (/anthropic) the MiniMax quickstart suggests: this platform speaks
-    # the OpenAI wire protocol (AsyncOpenAI -> /chat/completions) for every
-    # provider, so the Anthropic Messages endpoint would 404. International users
-    # can swap the host for https://api.minimax.io/v1. Chat-only: MiniMax's
-    # embedding API (embo-01) is not OpenAI /embeddings compatible.
+    # the OpenAI wire protocol (AsyncOpenAI -> /chat/completions) for chat.
+    # International users can swap the host for https://api.minimax.io/v1.
+    # Embeddings are NOT OpenAI-compatible: use native embo-01 ({texts, type}
+    # body, vectors in the response). LLMRouter.embed() routes MiniMax hosts
+    # through that adapter.
     ProviderCreate(
         name="MiniMax",
         provider_type="openai",
         base_url="https://api.minimaxi.com/v1",
         api_key="",
-        models=["MiniMax-M3", "MiniMax-M2.7", "MiniMax-M2.5", "MiniMax-M2.1", "MiniMax-M2", "MiniMax-Text-01"],
+        models=[
+            ModelInfo(name="MiniMax-M3", model_type="chat"),
+            ModelInfo(name="MiniMax-M2.7", model_type="chat"),
+            ModelInfo(name="MiniMax-M2.5", model_type="chat"),
+            ModelInfo(name="MiniMax-M2.1", model_type="chat"),
+            ModelInfo(name="MiniMax-M2", model_type="chat"),
+            ModelInfo(name="MiniMax-Text-01", model_type="chat"),
+            ModelInfo(name="embo-01", model_type="embedding"),
+        ],
     ),
     # All of the below speak the OpenAI wire protocol via their /v1 (or Gemini's
     # OpenAI-compat) endpoint, so they slot into the unified AsyncOpenAI client.
@@ -159,6 +193,49 @@ _PRESET_PROVIDERS: list[ProviderCreate] = [
 ]
 
 
+def _normalize_provider_models(
+    models,
+    *,
+    base_url: Optional[str],
+    name: Optional[str],
+    provider_type: Optional[str],
+) -> list:
+    """Validate embedding types and backfill MiniMax embo-01."""
+    from app.services.embedding_catalog import (
+        classify_model_type,
+        ensure_provider_embedding_models,
+        validate_embedding_models,
+    )
+
+    as_dicts: list = []
+    for m in models or []:
+        if isinstance(m, dict):
+            as_dicts.append(dict(m))
+        elif hasattr(m, "model_dump"):
+            as_dicts.append(m.model_dump())
+        else:
+            as_dicts.append({"name": str(m), "model_type": "chat"})
+    for entry in as_dicts:
+        if not entry.get("model_type"):
+            entry["model_type"] = classify_model_type(entry.get("name"))
+    validate_embedding_models(
+        as_dicts, base_url=base_url, name=name, provider_type=provider_type,
+    )
+    return ensure_provider_embedding_models(
+        as_dicts, base_url=base_url, name=name, provider_type=provider_type,
+    )
+
+
+def _model_type_of(models: list, model_name: str) -> str:
+    from app.services.embedding_catalog import classify_model_type
+    for m in models or []:
+        if isinstance(m, dict) and m.get("name") == model_name:
+            return m.get("model_type") or classify_model_type(model_name)
+        if getattr(m, "name", None) == model_name:
+            return getattr(m, "model_type", None) or classify_model_type(model_name)
+    return classify_model_type(model_name)
+
+
 async def _seed_presets(db: AsyncSession):
     """Seed preset providers (idempotent — only seeds if name doesn't exist).
 
@@ -189,7 +266,12 @@ async def _seed_presets(db: AsyncSession):
             api_key_encrypted=encrypt_data(preset.api_key, CredentialField.PROVIDER_API_KEY) if preset.api_key else None,
             base_url=preset.base_url,
             api_version=preset.api_version,
-            models=enrich_models_list([m.model_dump() for m in preset.models]),
+            models=enrich_models_list(_normalize_provider_models(
+                [m.model_dump() for m in preset.models],
+                base_url=preset.base_url,
+                name=preset.name,
+                provider_type=preset.provider_type,
+            )),
             is_active=preset.is_active,
             metadata_json=preset.metadata_json,
         )
@@ -199,6 +281,30 @@ async def _seed_presets(db: AsyncSession):
         except IntegrityError:
             await db.rollback()  # another worker seeded this preset first
 
+    # Existing MiniMax rows were seeded chat-only. Backfill embo-01 so knowledge
+    # ingest can select a real embedding model without a manual re-add.
+    from app.services.embedding_catalog import (
+        ensure_provider_embedding_models,
+        is_minimax_provider,
+    )
+    result = await db.execute(select(Provider))
+    for row in result.scalars().all():
+        if not is_minimax_provider(row.base_url, row.name, row.provider_type):
+            continue
+        has_embo = any(
+            isinstance(m, dict) and m.get("name") == "embo-01" and m.get("model_type") == "embedding"
+            for m in (row.models or [])
+        )
+        if has_embo:
+            continue
+        row.models = ensure_provider_embedding_models(
+            row.models, base_url=row.base_url, name=row.name, provider_type=row.provider_type,
+        )
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+
 
 async def _test_provider_connectivity(
     base_url: str,
@@ -207,8 +313,9 @@ async def _test_provider_connectivity(
     api_version: Optional[str],
     models: list,
     test_model: Optional[str] = None,
+    metadata_json: Optional[dict] = None,
 ) -> ProviderTestResponse:
-    """Ping the provider with a minimal completion call to validate configuration."""
+    """Ping the provider with a minimal completion or embedding call."""
     if not base_url:
         return ProviderTestResponse(
             success=False,
@@ -237,6 +344,32 @@ async def _test_provider_connectivity(
 
     start = time.monotonic()
     try:
+        if _model_type_of(models, model_name) == "embedding":
+            from app.services.embedding_catalog import is_minimax_provider
+            if is_minimax_provider(base_url):
+                from app.services.minimax_embedder import embed_texts
+                meta = metadata_json or {}
+                vectors, _usage = await embed_texts(
+                    ["ping"],
+                    api_key=api_key or "",
+                    base_url=base_url,
+                    model=model_name,
+                    group_id=str(meta.get("group_id") or meta.get("GroupId") or "") or None,
+                    embed_type="query",
+                )
+                if not vectors or not vectors[0]:
+                    raise ValueError("No embedding data received")
+            else:
+                resp = await client.embeddings.create(model=model_name, input=["ping"])
+                if not getattr(resp, "data", None):
+                    raise ValueError("No embedding data received")
+            latency_ms = (time.monotonic() - start) * 1000
+            return ProviderTestResponse(
+                success=True,
+                latency_ms=round(latency_ms, 1),
+                model=model_name,
+            )
+
         # MiniMax uses OpenAI-compatible API despite anthropic provider_type
         if provider_type == "anthropic" and ("minimaxi" in base_url or ".minimaxi.com" in base_url):
             minimax_model = "MiniMax-Text-01"
@@ -256,10 +389,10 @@ async def _test_provider_connectivity(
                 latency_ms = (time.monotonic() - start) * 1000
                 if e.status_code == 401:
                     return ProviderTestResponse(
-                        success=True,
+                        success=False,
                         latency_ms=round(latency_ms, 1),
                         model=minimax_model,
-                        error="Connected (401 Unauthorized — check your API key)",
+                        error="HTTP 401: Unauthorized — check your API key",
                     )
                 return ProviderTestResponse(
                     success=False,
@@ -318,10 +451,10 @@ async def _test_provider_connectivity(
         latency_ms = (time.monotonic() - start) * 1000
         if e.status_code == 401:
             return ProviderTestResponse(
-                success=True,
+                success=False,
                 latency_ms=round(latency_ms, 1),
                 model=model_name,
-                error="Connected (401 Unauthorized — check your API key)",
+                error="HTTP 401: Unauthorized — check your API key",
             )
         return ProviderTestResponse(
             success=False,
@@ -442,6 +575,15 @@ async def create_provider(
             raise HTTPException(status_code=400, detail=f"Invalid base_url: {e}")
 
     from app.services.model_limits import enrich_models_list
+    try:
+        models = _normalize_provider_models(
+            [m.model_dump() for m in body.models],
+            base_url=body.base_url,
+            name=body.name,
+            provider_type=body.provider_type,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     provider = Provider(
         name=body.name,
         provider_type=body.provider_type,
@@ -449,7 +591,7 @@ async def create_provider(
         base_url=body.base_url,
         api_version=body.api_version,
         # Store as JSON-serializable dicts; the column can't hold ModelInfo objects.
-        models=enrich_models_list([m.model_dump() for m in body.models]),
+        models=enrich_models_list(models),
         is_active=body.is_active,
         metadata_json=body.metadata_json,
     )
@@ -485,6 +627,7 @@ async def test_provider_connection(
         api_version=provider.api_version,
         models=provider.models or [],
         test_model=body.test_model,
+        metadata_json=provider.metadata_json or {},
     )
 
     # Stamp per-model verified flag using the model that was actually tested.
@@ -572,11 +715,18 @@ async def discover_provider_models(
         raise HTTPException(status_code=404, detail="Provider returned no models")
 
     from app.services.model_limits import enrich_model_entry
+    from app.services.embedding_catalog import classify_model_type, ensure_provider_embedding_models
+    discovered = [
+        enrich_model_entry({"name": name, "model_type": classify_model_type(name)})
+        for name in ids
+    ]
     return {
-        "models": [
-            enrich_model_entry({"name": name, "model_type": "chat"})
-            for name in ids
-        ]
+        "models": ensure_provider_embedding_models(
+            discovered,
+            base_url=provider.base_url,
+            name=provider.name,
+            provider_type=provider.provider_type,
+        )
     }
 
 
@@ -601,16 +751,39 @@ async def probe_provider_capabilities(
 
     from app.services.llm_router import get_llm_router
     from app.services.capability_prober import probe_model
+    from app.services.embedding_catalog import looks_like_embedding_model, looks_like_rerank_model
 
     client = await get_llm_router().get_client_async(provider_id=provider_id)
 
     from app.services.model_limits import enrich_model_entry
+    from datetime import datetime, timezone
 
     updated = []
     for m in models:
         # Models are stored as dicts, but tolerate a stray legacy string.
         entry = dict(m) if isinstance(m, dict) else {"name": str(m), "model_type": "chat"}
         name = entry.get("name")
+        model_type = entry.get("model_type") or "chat"
+        if name and (model_type == "embedding" or looks_like_embedding_model(name)):
+            try:
+                vecs = await get_llm_router().embed(
+                    ["ping"], model=name, provider_id=provider_id, embed_type="query",
+                )
+                entry["verified"] = bool(vecs and vecs[0])
+                entry["last_tested_at"] = datetime.now(timezone.utc).isoformat()
+                if entry["verified"]:
+                    entry.pop("test_error", None)
+                else:
+                    entry["test_error"] = "No embedding data received"
+            except Exception as e:  # noqa: BLE001
+                entry["verified"] = False
+                entry["test_error"] = str(e)[:200]
+            updated.append(entry)
+            continue
+        if name and (model_type == "rerank" or looks_like_rerank_model(name)):
+            # Rerank is not probed here; skip chat-completions to avoid 400s.
+            updated.append(entry)
+            continue
         if name:
             try:
                 cap = await probe_model(client, name)
@@ -671,6 +844,34 @@ async def update_provider(
             validate_outbound_url(update_data["base_url"])
         except SSRFError as e:
             raise HTTPException(status_code=400, detail=f"Invalid base_url: {e}")
+
+    if "models" in update_data:
+        from app.services.model_limits import enrich_models_list
+        try:
+            update_data["models"] = enrich_models_list(_normalize_provider_models(
+                update_data["models"],
+                base_url=update_data.get("base_url") or provider.base_url,
+                name=update_data.get("name") or provider.name,
+                provider_type=update_data.get("provider_type") or provider.provider_type,
+            ))
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    else:
+        from app.services.embedding_catalog import (
+            ensure_provider_embedding_models,
+            is_minimax_provider,
+        )
+        if is_minimax_provider(
+            update_data.get("base_url") or provider.base_url,
+            update_data.get("name") or provider.name,
+            update_data.get("provider_type") or provider.provider_type,
+        ):
+            provider.models = ensure_provider_embedding_models(
+                provider.models,
+                base_url=update_data.get("base_url") or provider.base_url,
+                name=update_data.get("name") or provider.name,
+                provider_type=update_data.get("provider_type") or provider.provider_type,
+            )
 
     for key, value in update_data.items():
         if key == "api_key":

@@ -108,24 +108,48 @@ async def _flush_audit_buffer():
     from app.core.database import get_db_context
 
     try:
-        async with get_db_context() as session:
-            for entry in logs_to_write:
-                log = AuditLog(
-                    user_id=entry["user_id"],
-                    agent_id=entry["agent_id"],
-                    action=entry["action"],
-                    input_hash=entry["input_hash"],
-                    output_hash=entry["output_hash"],
-                    request_id=entry.get("request_id"),
-                    # .get(): entries buffered by an older process may predate
-                    # these keys, and a flush must never fail on that.
-                    ip_address=entry.get("ip_address"),
-                    user_agent=entry.get("user_agent"),
-                    request_path=entry.get("request_path"),
-                    metadata_json=entry.get("metadata"),
-                )
-                session.add(log)
-            await session.commit()
+        async with _chain_lock:
+            async with get_db_context() as session:
+                await session.execute(select(func.pg_advisory_xact_lock(0xA0D17)))
+                prev = (await session.execute(
+                    select(AuditLog.entry_hash)
+                    .where(AuditLog.entry_hash.is_not(None))
+                    .order_by(AuditLog.id.desc())
+                    .limit(1)
+                )).scalar_one_or_none()
+                prev_hash = prev or _GENESIS
+                for entry in logs_to_write:
+                    entry_timestamp = datetime.fromisoformat(entry["timestamp"]).replace(tzinfo=None)
+                    chain_payload = _chain_payload(
+                        user_id=entry["user_id"], agent_id=entry["agent_id"],
+                        action=entry["action"], input_hash=entry["input_hash"],
+                        output_hash=entry["output_hash"], request_id=entry.get("request_id"),
+                        timestamp=entry_timestamp, ip_address=entry.get("ip_address"),
+                        user_agent=entry.get("user_agent"), request_path=entry.get("request_path"),
+                        metadata_json=entry.get("metadata"),
+                    )
+                    stamped = stamp_chain_hashes(chain_payload, prev_hash)
+                    prev_hash = stamped["entry_hash"]
+                    log = AuditLog(
+                        user_id=entry["user_id"],
+                        agent_id=entry["agent_id"],
+                        action=entry["action"],
+                        input_hash=entry["input_hash"],
+                        output_hash=entry["output_hash"],
+                        request_id=entry.get("request_id"),
+                        # .get(): entries buffered by an older process may predate
+                        # these keys, and a flush must never fail on that.
+                        ip_address=entry.get("ip_address"),
+                        user_agent=entry.get("user_agent"),
+                        request_path=entry.get("request_path"),
+                        metadata_json=entry.get("metadata"),
+                        timestamp=entry_timestamp,
+                        prev_hash=stamped["prev_hash"],
+                        entry_hash=stamped["entry_hash"],
+                        chain_version=_CHAIN_VERSION,
+                    )
+                    session.add(log)
+                await session.commit()
     except Exception:
         # Put entries back so a later flush can retry
         async with _buffer_lock:
@@ -208,11 +232,68 @@ def audit_middleware():
 
 
 _GENESIS = "0" * 64
+_CHAIN_VERSION = 2
 _chain_lock = asyncio.Lock()
 
 
 def _canonical(entry: dict) -> str:
     return json.dumps(entry, sort_keys=True, default=str)
+
+
+def stamp_chain_hashes(payload: dict, prev_hash: str) -> dict:
+    """Return a copy of payload with prev_hash/entry_hash filled."""
+    stamped = dict(payload)
+    stamped["prev_hash"] = prev_hash
+    body = {k: stamped[k] for k in sorted(stamped) if k != "entry_hash"}
+    stamped["entry_hash"] = hashlib.sha256(
+        (_canonical(body) + prev_hash).encode()
+    ).hexdigest()
+    return stamped
+
+
+def _chain_payload(
+    *, user_id=None, agent_id=None, agent_name=None, action=None,
+    action_category=None, confidence=None, human_reviewer=None,
+    rollback_possible=None, risk_tier=None, input_hash=None,
+    output_hash=None, request_id=None, timestamp=None, ip_address=None,
+    user_agent=None, request_path=None, metadata_json=None,
+) -> dict:
+    """Build the complete persisted payload protected by chain version 2."""
+    if isinstance(timestamp, datetime):
+        timestamp = timestamp.replace(tzinfo=None).isoformat()
+    return {
+        "user_id": user_id,
+        "agent_id": str(agent_id) if agent_id is not None else None,
+        "agent_name": agent_name,
+        "action": action,
+        "action_category": action_category,
+        "confidence": confidence,
+        "human_reviewer": human_reviewer,
+        "rollback_possible": rollback_possible,
+        "risk_tier": risk_tier,
+        "input_hash": input_hash,
+        "output_hash": output_hash,
+        "request_id": request_id,
+        "timestamp": timestamp,
+        "ip_address": ip_address,
+        "user_agent": user_agent,
+        "request_path": request_path,
+        "metadata_json": metadata_json,
+        "chain_version": _CHAIN_VERSION,
+    }
+
+
+def _row_chain_payload(row: AuditLog) -> dict:
+    return _chain_payload(
+        user_id=row.user_id, agent_id=row.agent_id, agent_name=row.agent_name,
+        action=row.action, action_category=row.action_category,
+        confidence=row.confidence, human_reviewer=row.human_reviewer,
+        rollback_possible=row.rollback_possible, risk_tier=row.risk_tier,
+        input_hash=row.input_hash, output_hash=row.output_hash,
+        request_id=row.request_id, timestamp=row.timestamp,
+        ip_address=row.ip_address, user_agent=row.user_agent,
+        request_path=row.request_path, metadata_json=row.metadata_json,
+    )
 
 
 async def record_action(
@@ -227,34 +308,29 @@ async def record_action(
     """
     from app.core.database import get_db_context
 
-    payload = {
-        "user_id": user_id,
-        "agent_id": agent_id,
-        "agent_name": agent_name,
-        "action": action,
-        "action_category": action_category,
-        "confidence": None if confidence is None else f"{float(confidence):.4f}",
-        "human_reviewer": human_reviewer,
-        "rollback_possible": rollback_possible,
-        "risk_tier": risk_tier,
-        "input_hash": _hash_data(input_data),
-        "output_hash": _hash_data(output_data),
-        "request_id": request_id or _generate_request_id(),
-        "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
-    }
+    timestamp = datetime.now(timezone.utc).replace(tzinfo=None)
+    payload = _chain_payload(
+        user_id=user_id, agent_id=agent_id, agent_name=agent_name, action=action,
+        action_category=action_category,
+        confidence=None if confidence is None else f"{float(confidence):.4f}",
+        human_reviewer=human_reviewer, rollback_possible=rollback_possible,
+        risk_tier=risk_tier, input_hash=_hash_data(input_data),
+        output_hash=_hash_data(output_data), request_id=request_id or _generate_request_id(),
+        timestamp=timestamp,
+    )
 
     async with _chain_lock:
         async with get_db_context() as session:
             await session.execute(select(func.pg_advisory_xact_lock(0xA0D17)))
             prev = (await session.execute(
-                select(AuditLog.entry_hash).order_by(AuditLog.id.desc()).limit(1)
+                select(AuditLog.entry_hash)
+                .where(AuditLog.entry_hash.is_not(None))
+                .order_by(AuditLog.id.desc())
+                .limit(1)
             )).scalar_one_or_none()
             prev_hash = prev or _GENESIS
-            payload["prev_hash"] = prev_hash
-            entry_hash = hashlib.sha256(
-                (_canonical({k: payload[k] for k in sorted(payload)}) + prev_hash).encode()
-            ).hexdigest()
-            payload["entry_hash"] = entry_hash
+            payload = stamp_chain_hashes(payload, prev_hash)
+            entry_hash = payload["entry_hash"]
 
             session.add(AuditLog(
                 user_id=user_id, agent_id=(str(agent_id) if agent_id is not None else None),
@@ -263,6 +339,7 @@ async def record_action(
                 rollback_possible=rollback_possible, risk_tier=risk_tier,
                 input_hash=payload["input_hash"], output_hash=payload["output_hash"],
                 request_id=payload["request_id"], prev_hash=prev_hash, entry_hash=entry_hash,
+                timestamp=timestamp, chain_version=_CHAIN_VERSION,
             ))
             await session.commit()
     return payload
@@ -279,5 +356,9 @@ async def verify_chain() -> tuple[bool, int | None]:
     for r in rows:
         if r.prev_hash != prev:
             return False, r.id
+        if r.chain_version == _CHAIN_VERSION:
+            expected = stamp_chain_hashes(_row_chain_payload(r), prev)["entry_hash"]
+            if r.entry_hash != expected:
+                return False, r.id
         prev = r.entry_hash
     return True, None

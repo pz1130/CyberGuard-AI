@@ -332,7 +332,7 @@ class LLMRouter:
                 from sqlalchemy import text
                 result = await session.execute(
                     text(
-                        "SELECT name, api_key_encrypted, base_url, models, metadata_json "
+                        "SELECT name, api_key_encrypted, base_url, models, metadata_json, provider_type "
                         "FROM providers "
                         "WHERE is_active = true "
                         "AND api_key_encrypted IS NOT NULL "
@@ -374,6 +374,7 @@ class LLMRouter:
                     "base_url": base_url,
                     "models": models,
                     "metadata_json": row[4] or {},
+                    "provider_type": row[5] if len(row) > 5 else None,
                 }
         except Exception:
             return None
@@ -904,20 +905,55 @@ Examples:
         texts: List[str],
         model: Optional[str] = None,
         provider_id: Optional[int] = None,
+        embed_type: str = "db",
     ) -> List[List[float]]:
         """
-        Generate embeddings for a list of texts via OpenAI-compatible /embeddings.
+        Generate embeddings for a list of texts.
+
+        OpenAI-compatible providers use `/embeddings` with `input`.
+        MiniMax uses a native `{texts, type}` API (embo-01) — its OpenAI-compat
+        chat endpoint does not implement embeddings.
 
         Args:
             texts: list of strings to embed
-            model: embedding model name (e.g. "text-embedding-3-small")
+            model: embedding model name (e.g. "text-embedding-3-small" or "embo-01")
             provider_id: which configured provider to use
+            embed_type: MiniMax-only; "db" for document ingest, "query" for search
 
         Returns:
             list of embedding vectors, same order as input.
         """
         if not texts:
             return []
+
+        config = None
+        if provider_id:
+            config = await self.get_provider_config_async(provider_id)
+        else:
+            config = await self._get_first_active_provider()
+
+        from app.services.embedding_catalog import is_minimax_provider
+        if config and is_minimax_provider(
+            config.get("base_url"), config.get("name"), config.get("provider_type"),
+        ):
+            from app.services.minimax_embedder import embed_texts
+            from llm_router.minimax_embeddings import resolve_embed_model
+
+            metadata = config.get("metadata_json") or {}
+            embedding_model = resolve_embed_model(model)
+            await rate_limit(provider_id, await self._provider_rpm(provider_id))
+            vectors, usage = await embed_texts(
+                texts,
+                api_key=config.get("api_key") or "",
+                base_url=config.get("base_url") or "",
+                model=embedding_model,
+                group_id=str(metadata.get("group_id") or metadata.get("GroupId") or "") or None,
+                embed_type=embed_type,
+            )
+            await self._record_token_usage(
+                embedding_model, provider_id, SimpleNamespace(usage=usage),
+            )
+            return vectors
 
         client = await self.get_client_async(provider_id=provider_id)
         embedding_model = model or "text-embedding-3-small"
@@ -926,9 +962,17 @@ Examples:
             model=embedding_model,
             input=texts,
         )
+        data = getattr(response, "data", None) or []
+        if not data:
+            raise ValueError(
+                "No embedding data received. This provider's /embeddings endpoint "
+                "is missing or incompatible (MiniMax chat is not OpenAI-embeddings "
+                "compatible — use model embo-01, or configure a provider that "
+                "exposes OpenAI-style embeddings)."
+            )
         await self._record_token_usage(embedding_model, provider_id, response)
         # response.data is sorted by index per OpenAI spec
-        ordered = sorted(response.data, key=lambda d: d.index)
+        ordered = sorted(data, key=lambda d: d.index)
         return [item.embedding for item in ordered]
 
 

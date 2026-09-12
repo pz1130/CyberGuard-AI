@@ -195,7 +195,7 @@ export default function EnvVars() {
           }}>
             {/* Key */}
             <div style={{ width: 200, flexShrink: 0 }}>
-              <span style={{ fontSize: 14, color: 'var(--accent)', letterSpacing: '0.05em' }}>{v.key}</span>
+              <span className="font-mono" style={{ fontSize: 13, color: 'var(--accent)', letterSpacing: '0.04em' }}>{v.key}</span>
               <span style={{
                 marginLeft: 8, padding: '1px 5px',
                 border: `1px solid ${v.value_type === 'secret' ? 'var(--amber)' : 'var(--border)'}`,

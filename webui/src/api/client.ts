@@ -333,10 +333,10 @@ export const api = {
   // ---- Agent Governance Operations ----
   getGovernanceMetrics: (windowDays = 30) =>
     request(`/governance/metrics?window_days=${windowDays}`),
-  getHaltStatus: () => request('/agents/halt/status'),
+  getHaltStatus: () => request('/kill-switch/status'),
   haltAll: (reason: string) =>
-    request('/agents/halt', { method: 'POST', body: JSON.stringify({ reason }) }),
-  resumeAll: () => request('/agents/halt', { method: 'DELETE' }),
+    request('/kill-switch', { method: 'POST', body: JSON.stringify({ reason }) }),
+  resumeAll: () => request('/kill-switch', { method: 'DELETE' }),
   getRollbacks: () => request('/governance/rollback'),
   triggerRollback: (actionId: string) =>
     request(`/governance/rollback/${actionId}`, { method: 'POST' }),

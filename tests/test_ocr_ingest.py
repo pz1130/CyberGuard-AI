@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 
 from app.core.database import AsyncSessionLocal
 from app.models.knowledge import KnowledgeBase, Document
+from app.models.provider import Provider
 from app.services.knowledge_service import get_knowledge_service
 
 
@@ -19,7 +20,16 @@ async def test_create_pending_document_sets_processing():
     svc = get_knowledge_service()
     uid = uuid.uuid4().hex[:8]
     async with AsyncSessionLocal() as db:
-        kb = KnowledgeBase(name=f"kb_{uid}", embedding_dim=1536, embedding_model="text-embedding-3-small")
+        provider = Provider(
+            name=f"provider_{uid}", provider_type="openai",
+            api_key_encrypted="test", base_url="https://example.com/v1",
+            models=[{"name": "text-embedding-3-small", "model_type": "embedding"}],
+        )
+        db.add(provider); await db.flush()
+        kb = KnowledgeBase(
+            name=f"kb_{uid}", provider_id=provider.id, embedding_dim=1536,
+            embedding_model="text-embedding-3-small",
+        )
         db.add(kb); await db.commit(); await db.refresh(kb)
 
         doc = await svc.create_pending_document(
@@ -30,6 +40,7 @@ async def test_create_pending_document_sets_processing():
 
         await db.execute(Document.__table__.delete().where(Document.id == doc.id))
         await db.execute(KnowledgeBase.__table__.delete().where(KnowledgeBase.id == kb.id))
+        await db.execute(Provider.__table__.delete().where(Provider.id == provider.id))
         await db.commit()
 
 
@@ -39,7 +50,16 @@ async def test_ingest_into_existing_document_id(monkeypatch):
     monkeypatch.setattr(svc, "_embed", AsyncMock(return_value=[[0.1] * 1536]))
     uid = uuid.uuid4().hex[:8]
     async with AsyncSessionLocal() as db:
-        kb = KnowledgeBase(name=f"kb_{uid}", embedding_dim=1536, embedding_model="text-embedding-3-small")
+        provider = Provider(
+            name=f"provider_{uid}", provider_type="openai",
+            api_key_encrypted="test", base_url="https://example.com/v1",
+            models=[{"name": "text-embedding-3-small", "model_type": "embedding"}],
+        )
+        db.add(provider); await db.flush()
+        kb = KnowledgeBase(
+            name=f"kb_{uid}", provider_id=provider.id, embedding_dim=1536,
+            embedding_model="text-embedding-3-small",
+        )
         db.add(kb); await db.commit(); await db.refresh(kb)
         doc = await svc.create_pending_document(
             db=db, kb_id=kb.id, filename="scan.pdf",
@@ -55,6 +75,7 @@ async def test_ingest_into_existing_document_id(monkeypatch):
 
         await db.execute(Document.__table__.delete().where(Document.id == doc.id))
         await db.execute(KnowledgeBase.__table__.delete().where(KnowledgeBase.id == kb.id))
+        await db.execute(Provider.__table__.delete().where(Provider.id == provider.id))
         await db.commit()
 
 
@@ -69,11 +90,20 @@ async def test_ocr_ingest_task_sets_ready(monkeypatch):
 
     uid = uuid.uuid4().hex[:8]
     async with AsyncSessionLocal() as db:
-        kb = KnowledgeBase(name=f"kb_{uid}", embedding_dim=1536, embedding_model="text-embedding-3-small")
+        provider = Provider(
+            name=f"provider_{uid}", provider_type="openai",
+            api_key_encrypted="test", base_url="https://example.com/v1",
+            models=[{"name": "text-embedding-3-small", "model_type": "embedding"}],
+        )
+        db.add(provider); await db.flush()
+        kb = KnowledgeBase(
+            name=f"kb_{uid}", provider_id=provider.id, embedding_dim=1536,
+            embedding_model="text-embedding-3-small",
+        )
         db.add(kb); await db.commit(); await db.refresh(kb)
         doc = await svc.create_pending_document(
             db=db, kb_id=kb.id, filename="s.pdf", mime_type="application/pdf", raw=b"%PDF x")
-        kb_id, doc_id = kb.id, doc.id
+        kb_id, doc_id, provider_id = kb.id, doc.id, provider.id
 
     import base64
     await _call_task(tasks.ocr_ingest_task, doc_id, kb_id,
@@ -84,6 +114,7 @@ async def test_ocr_ingest_task_sets_ready(monkeypatch):
         assert refreshed.status == "ready"
         await db.execute(Document.__table__.delete().where(Document.id == doc_id))
         await db.execute(KnowledgeBase.__table__.delete().where(KnowledgeBase.id == kb_id))
+        await db.execute(Provider.__table__.delete().where(Provider.id == provider_id))
         await db.commit()
 
 

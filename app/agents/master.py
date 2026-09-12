@@ -24,6 +24,18 @@ _RISK_TIER_WEIGHT = {"low": 0.0, "medium": 0.15, "high": 0.3, "critical": 0.4}
 _FAILED_STATUSES = frozenset({"failed", "denied", "halted", "error"})
 
 
+def plan_requires_approval(task_plan: Optional[List[Dict[str, Any]]]) -> bool:
+    """True when the intent parser marked HITL or planned a remediation action."""
+    for task in task_plan or []:
+        if not isinstance(task, dict):
+            continue
+        if task.get("requires_approval"):
+            return True
+        if str(task.get("agent_type") or "").lower() == "remediation":
+            return True
+    return False
+
+
 def approval_request_id(run_request_id: str, approval_round: int) -> str:
     """Stable, per-gate approval id.
 
@@ -270,6 +282,9 @@ class MasterAgent:
             return state
 
         # ----- 3. Expert mode — fan out to all active sub-agents -----
+        # INV-21: the user chose fan-out, so dispatch_source stays user_expert.
+        # That is not a HITL exemption: still parse intent so high-risk work
+        # pauses before any sub-agent runs.
         if mode == "expert":
             from app.core.database import get_db_context
             from app.models.agent import AgentConfig
@@ -288,6 +303,29 @@ class MasterAgent:
             except Exception as e:
                 logger.warning(f"[expert mode] Failed to load active agents: {e}")
 
+            parsed_intent = None
+            parsed_plan: List[Dict[str, Any]] = []
+            approval_gate_uncertain = self.llm_router is None
+            if self.llm_router:
+                try:
+                    parsed = await self.llm_router.parse_intent(
+                        user_input,
+                        provider_id=state.get("provider_id"),
+                        model=state.get("model"),
+                        intent_parser_prompt_override=state.get("intent_parser_prompt_override"),
+                        temperature_override=state.get("temperature_override"),
+                        model_override=state.get("model_override"),
+                    )
+                    parsed_intent = parsed.get("intent")
+                    parsed_plan = parsed.get("task_plan") or []
+                except Exception as e:
+                    approval_gate_uncertain = True
+                    logger.warning("[expert mode] intent parse for approval gate failed: %s", e)
+
+            # Fail closed: if the classifier is unavailable, expert fan-out may
+            # contain mutating work and must pause before any sub-agent runs.
+            needs_approval = approval_gate_uncertain or plan_requires_approval(parsed_plan)
+
             if active:
                 state["intent"] = "task_execution"
                 state["task_plan"] = [
@@ -295,13 +333,23 @@ class MasterAgent:
                         "agent_id": a["id"],
                         "agent_name": a["agent_name"],
                         "task": user_input,
-                        "requires_approval": False,
+                        "requires_approval": needs_approval,
                         "dispatch_source": "user_expert",  # INV-21: user chose fan-out
                     }
                     for a in active
                 ]
+            elif parsed_plan:
+                # No registered sub-agents: keep the parser plan so HITL and
+                # local executors still run instead of a direct Master reply.
+                state["intent"] = parsed_intent or "task_execution"
+                state["task_plan"] = [
+                    {**t, "dispatch_source": t.get("dispatch_source") or "llm"}
+                    if isinstance(t, dict)
+                    else t
+                    for t in parsed_plan
+                ]
+                state["expert_mode_no_agents"] = True
             else:
-                # No active sub-agents — degrade to Master LLM with a note.
                 state["intent"] = "knowledge_query"
                 state["task_plan"] = []
                 state["expert_mode_no_agents"] = True
@@ -315,6 +363,8 @@ class MasterAgent:
                     "intent": state.get("intent"),
                     "fan_out_count": len(active),
                     "agents": [a["agent_name"] for a in active],
+                    "requires_approval": needs_approval,
+                    "approval_gate_uncertain": approval_gate_uncertain,
                 },
                 request_id=state.get("request_id"),
             )

@@ -13,6 +13,7 @@ class KnowledgeBaseBase(BaseModel):
     """Base knowledge base schema."""
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
+    provider_id: Optional[int] = None
     embedding_model: Optional[str] = None
     embedding_dim: int = Field(
         default=DEFAULT_EMBEDDING_DIM,
@@ -41,6 +42,7 @@ class KnowledgeBaseUpdate(BaseModel):
     """Knowledge base update schema. `embedding_dim` is intentionally immutable."""
     name: Optional[str] = None
     description: Optional[str] = None
+    provider_id: Optional[int] = None
     embedding_model: Optional[str] = None
     rerank_model: Optional[str] = None
     is_active: Optional[bool] = None
@@ -52,6 +54,7 @@ class KnowledgeBaseResponse(BaseModel):
     id: int
     name: str
     description: Optional[str]
+    provider_id: Optional[int]
     embedding_model: Optional[str]
     embedding_dim: int
     rerank_model: Optional[str]

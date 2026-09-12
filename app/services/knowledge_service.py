@@ -153,12 +153,14 @@ class KnowledgeService:
         texts: List[str],
         embedding_model: Optional[str],
         provider_id: Optional[int] = None,
+        embed_type: str = "db",
     ) -> List[List[float]]:
         """Embed a list of texts via the configured AI Provider."""
         return await self.router.embed(
             texts=texts,
             model=embedding_model,
             provider_id=provider_id,
+            embed_type=embed_type,
         )
 
     async def create_pending_document(
@@ -200,6 +202,10 @@ class KnowledgeService:
         kb = await db.get(KnowledgeBase, kb_id)
         if not kb:
             raise ValueError(f"Knowledge base {kb_id} not found")
+        if not kb.provider_id:
+            raise ValueError(f"Knowledge base {kb_id} has no embedding provider configured")
+        if provider_id is not None and provider_id != kb.provider_id:
+            raise ValueError("Embedding provider does not match the knowledge base configuration")
 
         col_name = EMBEDDING_COLUMN_BY_DIM.get(kb.embedding_dim)
         if not col_name:
@@ -215,7 +221,8 @@ class KnowledgeService:
         embeddings = await self._embed(
             texts=chunks,
             embedding_model=kb.embedding_model,
-            provider_id=provider_id,
+            provider_id=kb.provider_id,
+            embed_type="db",
         )
 
         if len(embeddings) != len(chunks):
@@ -297,11 +304,16 @@ class KnowledgeService:
         kb = await db.get(KnowledgeBase, kb_id)
         if not kb:
             raise ValueError(f"Knowledge base {kb_id} not found")
+        if not kb.provider_id:
+            raise ValueError(f"Knowledge base {kb_id} has no embedding provider configured")
+        if provider_id is not None and provider_id != kb.provider_id:
+            raise ValueError("Embedding provider does not match the knowledge base configuration")
 
         query_embeddings = await self._embed(
             texts=[query],
             embedding_model=kb.embedding_model,
-            provider_id=provider_id,
+            provider_id=kb.provider_id,
+            embed_type="query",
         )
         if not query_embeddings:
             return []

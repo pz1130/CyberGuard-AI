@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
-import { FileText, Download, Search, Loader2 } from 'lucide-react'
+import { Download, Search, Loader2 } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
 
 interface Log {
   id?: number
@@ -49,30 +50,19 @@ export default function AuditLogs() {
   return (
     <div>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{
-            width: 36, height: 36, border: '1px solid var(--border-bright)',
-            background: 'var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--cyan)',
-          }}>
-            <FileText size={15} />
-          </div>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em' }}>{t('audit.title').toUpperCase()}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>COMPLETE OPERATION RECORDS · SIEM EXPORT</div>
-          </div>
-        </div>
-        <button onClick={exportLogs}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '0 16px', height: 36,
-            background: 'var(--accent)', border: '1px solid var(--accent-border)',
-            color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer',
-                      }}>
-          <Download size={11} /> EXPORT
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="COMPLETE OPERATION RECORDS · SIEM EXPORT"
+        title={t('audit.title').toUpperCase()}
+        actions={
+          <button
+            onClick={exportLogs}
+            className="btn btn-primary"
+            style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36 }}
+          >
+            <Download size={13} /> EXPORT
+          </button>
+        }
+      />
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
@@ -84,13 +74,14 @@ export default function AuditLogs() {
               width: '100%', height: 36, paddingLeft: 36, paddingRight: 12,
               background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
               color: 'var(--text-primary)', fontSize: 13, letterSpacing: '0.05em',
-                          }} />
+            }} />
         </div>
         <select value={limit} onChange={e => setLimit(Number(e.target.value))}
           style={{
             height: 36, padding: '0 10px',
             background: 'var(--bg-base)', border: '1px solid var(--border-bright)',
-            color: 'var(--text-primary)', fontSize: 13,           }}>
+            color: 'var(--text-primary)', fontSize: 13,
+          }}>
           <option value={20}>20 RECORDS</option>
           <option value={50}>50 RECORDS</option>
           <option value={100}>100 RECORDS</option>
@@ -101,7 +92,7 @@ export default function AuditLogs() {
             height: 36, padding: '0 14px',
             border: '1px solid var(--border-bright)', background: 'transparent',
             color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.1em', cursor: 'pointer',
-                      }}>
+          }}>
           REFRESH
         </button>
       </div>
@@ -129,14 +120,14 @@ export default function AuditLogs() {
               </tr>
             ) : filtered.map((log, i) => (
               <tr key={i}>
-                <td style={{ fontSize: 12, color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>
+                <td className="font-mono" style={{ fontSize: 12, color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>
                   {log.timestamp ? new Date(log.timestamp).toLocaleString('zh-CN') : '—'}
                 </td>
                 <td style={{ color: 'var(--text-muted)' }}>
                   {log.user_id ?? '—'}
                 </td>
                 <td style={{ color: 'var(--cyan)', letterSpacing: '0.05em' }}>{log.action}</td>
-                <td style={{ fontSize: 12, color: 'var(--text-dim)' }}>{log.request_id ?? '—'}</td>
+                <td className="font-mono" style={{ fontSize: 12, color: 'var(--text-dim)' }}>{log.request_id ?? '—'}</td>
               </tr>
             ))}
           </tbody>
