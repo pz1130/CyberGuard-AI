@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from datetime import datetime, timedelta
 from sqlalchemy import select, func
+from app.core.time import utc_now
 
 _TARGETS = {
     "governance_violation_rate":    (0.005, lambda v, t: v < t),
@@ -23,7 +24,7 @@ def _rate(num: int, denom: int) -> float:
 
 
 def _since(window_days: int) -> datetime:
-    return datetime.utcnow() - timedelta(days=window_days)
+    return utc_now() - timedelta(days=window_days)
 
 
 async def _governance_violation_rate(window_days: int) -> float:

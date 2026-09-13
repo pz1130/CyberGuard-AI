@@ -3,7 +3,6 @@ import hashlib
 import json
 import os
 import secrets
-from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +13,7 @@ from app.core.auth import AuthenticatedUser
 from app.core.database import AsyncSessionLocal
 from app.core.rbac import Permission
 from app.core.security import CredentialField, encrypt_data, decrypt_data
+from app.core.time import utc_now
 from app.schemas.agent import (
     AgentConfigCreate, AgentConfigRead, AgentConfigUpdate,
     AgentConfigListResponse, AgentTestResponse,
@@ -341,7 +341,7 @@ async def test_agent_connection(
         last_seen = agent.openclaw_last_seen
         if last_seen is None:
             return AgentTestResponse(success=False, error="OpenClaw 节点从未上线（尚未首次 poll）")
-        delta = (datetime.now(timezone.utc) - last_seen).total_seconds()
+        delta = (utc_now() - last_seen).total_seconds()
         if delta < 300:   # 5 分钟内 poll 过 = 在线
             return AgentTestResponse(success=True, latency_ms=None,
                                      error=f"在线（最近活跃：{int(delta)} 秒前）")

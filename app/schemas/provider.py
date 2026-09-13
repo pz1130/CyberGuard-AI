@@ -17,7 +17,7 @@ class ModelInfo(BaseModel):
       False — test failed (see test_error for detail)
 
     `last_tested_at` is an ISO 8601 string (UTC, naive — matches the
-    project's `datetime.utcnow()` convention; see also
+    project's database timestamp convention; see also
     `tz-aware-timestamps-migration` memory note). Stored as `str` (not
     `datetime`) so the JSON column write sites (`provider.models = [m.model_dump()...]`)
     don't need a JSON encoder for datetime — asyncpg won't serialize it.

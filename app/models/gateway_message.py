@@ -1,7 +1,7 @@
 """GatewayMessage — task queue between CyberGuard and OpenClaw nodes."""
-from datetime import datetime
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class GatewayMessage(Base):
@@ -21,6 +21,6 @@ class GatewayMessage(Base):
     result = Column(Text, nullable=True)
     error = Column(Text, nullable=True)
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
     delivered_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)

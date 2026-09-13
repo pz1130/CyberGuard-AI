@@ -34,6 +34,7 @@ from sqlalchemy import select
 from agent_core.events import AuditEvent, AuditLayer, AuditPhase
 
 from app.core.database import AsyncSessionLocal
+from app.core.time import utc_now
 from app.models.run_event import AgentRunEvent
 
 logger = logging.getLogger(__name__)
@@ -181,7 +182,7 @@ async def find_interrupted_runs(
     worker sweeps it on boot: an unbounded scan gets slower for the life of the
     deployment, and a run interrupted last month is archaeology, not recovery.
     """
-    cutoff = datetime.utcnow() - timedelta(hours=within_hours)
+    cutoff = utc_now() - timedelta(hours=within_hours)
     async with AsyncSessionLocal() as session:
         recent = select(AgentRunEvent.run_id).where(
             AgentRunEvent.layer == AuditLayer.AGENT.value,

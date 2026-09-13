@@ -5,9 +5,9 @@ a DB EnvVar record (``secret_env_var_id``) so the UI can manage it like
 any other encrypted environment variable.  Only non-secret configuration
 lives in the DB row.
 """
-from datetime import datetime
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class SsoConfig(Base):
@@ -24,7 +24,7 @@ class SsoConfig(Base):
     allow_jit = Column(Boolean, default=True, nullable=False)
     # FK to env_vars.id — stores which DB EnvVar holds the Azure client secret
     secret_env_var_id = Column(Integer, ForeignKey("env_vars.id"), nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
 
 class SsoRoleMapping(Base):
@@ -39,4 +39,4 @@ class SsoRoleMapping(Base):
     azure_key = Column(String(255), unique=True, nullable=False, index=True)
     app_role = Column(String(50), nullable=False)
     priority = Column(Integer, default=10, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)

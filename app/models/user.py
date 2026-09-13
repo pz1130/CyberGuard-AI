@@ -1,8 +1,8 @@
 """User and RBAC database models."""
-from datetime import datetime
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class User(Base):
@@ -23,8 +23,8 @@ class User(Base):
     # Stable external identity (Azure AD object id / "oid") for SSO accounts.
     external_id = Column(String(255), nullable=True, index=True)
     last_login = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
     # Relationships
     audit_logs = relationship("AuditLog", back_populates="user")
@@ -42,7 +42,7 @@ class RoleModel(Base):
     name = Column(String(50), unique=True, nullable=False, index=True)
     permissions_json = Column(Text, nullable=True)  # JSON array of permissions
     description = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
 
     def __repr__(self):
         return f"<RoleModel {self.name}>"

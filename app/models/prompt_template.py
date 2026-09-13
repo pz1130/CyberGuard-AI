@@ -9,9 +9,9 @@ User-defined reusable system prompts that can be picked from the Chat
   - "summarizer"    : Summarizer prompt override
   - "general"       : Re-usable in any slot
 """
-from datetime import datetime
 from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, CheckConstraint
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class PromptTemplate(Base):
@@ -23,9 +23,9 @@ class PromptTemplate(Base):
     content = Column(Text, nullable=False)
     category = Column(String(32), nullable=False, default="general")
     is_active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=utc_now)
     updated_at = Column(
-        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, nullable=False, default=utc_now, onupdate=utc_now
     )
 
     __table_args__ = (

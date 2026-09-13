@@ -1,9 +1,8 @@
 """Global OCR configuration (single row)."""
-from datetime import datetime
-
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
 
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class OcrConfig(Base):
@@ -18,4 +17,4 @@ class OcrConfig(Base):
     vision_model = Column(String(255), nullable=True)
     languages = Column(String(64), nullable=False, default="chi_sim+eng")
     max_pages = Column(Integer, nullable=False, default=30)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)

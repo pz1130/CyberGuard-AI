@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.core.database import AsyncSessionLocal
+from app.core.time import utc_now
 from app.models.agent import AgentConfig
 from app.models.gateway_message import GatewayMessage
 from app.models.mcp import MCPTool
@@ -122,7 +123,7 @@ async def poll(x_api_key: str = Header(..., alias="X-Api-Key")):
         )
         messages = list(result.scalars().all())
 
-        now = datetime.now(timezone.utc)
+        now = utc_now()
         for msg in messages:
             msg.status = "delivered"
             msg.delivered_at = now
@@ -186,7 +187,7 @@ async def report(
 
         msg.status = "completed"
         msg.result = body.result
-        msg.completed_at = datetime.now(timezone.utc)
+        msg.completed_at = utc_now()
         await session.commit()
 
     # 通知等待中的 AgentExecutor（best-effort）
@@ -215,7 +216,7 @@ async def heartbeat(x_api_key: str = Header(..., alias="X-Api-Key")):
         )
         agent_row = result.scalar_one_or_none()
         if agent_row:
-            agent_row.openclaw_last_seen = datetime.now(timezone.utc)
+            agent_row.openclaw_last_seen = utc_now()
             await session.commit()
 
     return HeartbeatResponse(success=True, timestamp=datetime.now(timezone.utc).isoformat())
@@ -239,15 +240,15 @@ async def send_message(
             content=f"[来自 Agent] {safe_content}",
             status="completed",          # 主动发送的消息无需等待执行
             result=safe_content,
-            created_at=datetime.now(timezone.utc),
-            completed_at=datetime.now(timezone.utc),
+            created_at=utc_now(),
+            completed_at=utc_now(),
         )
         session.add(msg)
 
         # 更新在线时间
         agent_row = await session.get(AgentConfig, agent.id)
         if agent_row:
-            agent_row.openclaw_last_seen = datetime.now(timezone.utc)
+            agent_row.openclaw_last_seen = utc_now()
 
         await session.commit()
         await session.refresh(msg)

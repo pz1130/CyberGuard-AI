@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
+from app.core.time import utc_now
 from app.models.conversation import Conversation
 
 
@@ -72,7 +73,7 @@ async def append_messages_locked(
     for m in new_messages:
         messages.append(stamp_message(m))
     conv.messages_json = serialize_messages(messages)
-    conv.updated_at = datetime.now(timezone.utc)
+    conv.updated_at = utc_now()
     return conv, len(messages)
 
 
@@ -108,5 +109,5 @@ def append_messages_locked_sync(
     for m in new_messages:
         messages.append(stamp_message(m))
     conv.messages_json = serialize_messages(messages)
-    conv.updated_at = datetime.now(timezone.utc)
+    conv.updated_at = utc_now()
     return conv, len(messages)

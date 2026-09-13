@@ -53,12 +53,12 @@ async def test_upload_scanned_disabled_returns_400(monkeypatch):
 
 def test_document_response_includes_status():
     from types import SimpleNamespace
-    from datetime import datetime
+    from app.core.time import utc_now
     from app.schemas.knowledge import DocumentResponse
     obj = SimpleNamespace(
         id=1, kb_id=2, filename="s.pdf", content_chunks_json=None,
         file_hash="x", file_size=3, mime_type="application/pdf",
-        metadata_json={}, created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        metadata_json={}, created_at=utc_now(), updated_at=utc_now(),
         status="processing", status_detail=None)
     dumped = DocumentResponse.model_validate(obj).model_dump()
     assert dumped["status"] == "processing"

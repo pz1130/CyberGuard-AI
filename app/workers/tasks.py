@@ -1,13 +1,14 @@
 """Celery tasks for background agent execution."""
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from concurrent.futures import ThreadPoolExecutor
 
 from celery import shared_task
 from celery.exceptions import MaxRetriesExceededError
 
 from app.workers.celery_app import celery_app
+from app.core.time import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ def _update_execution_status_sync(execution_id: str, status: str):
         if execution:
             execution.status = status
             if status == "running":
-                execution.started_at = datetime.now(timezone.utc)
+                execution.started_at = utc_now()
             session.commit()
 
 
@@ -47,7 +48,7 @@ def _update_execution_with_result_sync(execution_id: str, status: str, result_da
         execution = result.scalar_one_or_none()
         if execution:
             execution.status = status
-            execution.completed_at = datetime.now(timezone.utc)
+            execution.completed_at = utc_now()
             if result_data is not None:
                 execution.output_data = result_data
             if error_msg is not None:
@@ -402,7 +403,7 @@ def cleanup_stale_executions_task(self):
 
     logger.info("[cleanup_stale_executions_task] Running stale execution cleanup")
 
-    stale_threshold = datetime.now(timezone.utc) - timedelta(minutes=STALE_TIMEOUT_MINUTES)
+    stale_threshold = utc_now() - timedelta(minutes=STALE_TIMEOUT_MINUTES)
 
     SessionLocal = get_sync_session()
     with SessionLocal() as session:
@@ -418,7 +419,7 @@ def cleanup_stale_executions_task(self):
             for exec_record in stale_executions:
                 exec_record.status = "failed"
                 exec_record.error_message = "Execution timed out (stale cleanup)"
-                exec_record.completed_at = datetime.now(timezone.utc)
+                exec_record.completed_at = utc_now()
                 logger.warning(
                     f"[cleanup_stale_executions_task] Marked stale execution {exec_record.execution_id} as failed"
                 )

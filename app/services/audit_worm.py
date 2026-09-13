@@ -9,6 +9,7 @@ import json
 import os
 from datetime import datetime, timedelta
 from sqlalchemy import select, func
+from app.core.time import utc_now
 
 _FIELDS = ("id", "user_id", "agent_id", "agent_name", "action", "action_category",
            "confidence", "human_reviewer", "rollback_possible", "risk_tier",
@@ -44,7 +45,7 @@ async def _record_marker(last_id: int, key: str, rows: int, retain_until: dateti
     from app.models.audit_worm import AuditWormExport
     async with get_db_context() as s:
         s.add(AuditWormExport(last_audit_id=last_id, object_key=key, rows=rows,
-                              retain_until=retain_until, exported_at=datetime.utcnow()))
+                              retain_until=retain_until, exported_at=utc_now()))
         await s.commit()
 
 
@@ -77,8 +78,8 @@ async def export_new(retain_days: int = 365) -> dict:
     if not rows:
         return {"rows": 0, "object_key": None, "last_audit_id": after}
     last_id = rows[-1].id
-    key = f"audit/worm/{after + 1}-{last_id}-{datetime.utcnow():%Y%m%dT%H%M%SZ}.jsonl"
-    retain_until = datetime.utcnow() + timedelta(days=retain_days)
+    key = f"audit/worm/{after + 1}-{last_id}-{utc_now():%Y%m%dT%H%M%SZ}.jsonl"
+    retain_until = utc_now() + timedelta(days=retain_days)
     body = _serialize_jsonl(rows).encode()
     object_key = await _put_worm_object(key, body, retain_until)
     await _record_marker(last_id, object_key, len(rows), retain_until)

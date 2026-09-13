@@ -26,6 +26,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
 from app.core.auth import AuthenticatedUser
+from app.core.time import utc_now
 from app.core.dependencies import get_db, rate_limit, require_permission
 from app.core.guardrails import check_prompt_sync
 from app.core.rbac import Permission
@@ -188,7 +189,7 @@ async def _persist_to_conversation(
             messages.append({"role": "user", "content": user_message, "created_at": now})
             messages.append({"role": "assistant", "content": assistant_response, "created_at": now})
             conv.messages_json = _json.dumps(messages, ensure_ascii=False)
-            conv.updated_at = datetime.now(timezone.utc)
+            conv.updated_at = utc_now()
 
             # Auto-title if still default
             if conv.title == "新对话" and user_message:

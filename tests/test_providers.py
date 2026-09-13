@@ -1,9 +1,9 @@
 """Tests for provider verification status stamping + seed behavior."""
 import pytest
-from datetime import datetime
 from sqlalchemy import select
 
 from app.core.database import AsyncSessionLocal
+from app.core.time import utc_now
 from app.models.provider import Provider
 from app.routers.providers import (
     _stamp_model_verified, _seed_presets, _PRESET_PROVIDERS,
@@ -123,7 +123,7 @@ async def test_stamp_then_reload_roundtrip():
     """Full round-trip: create a provider, stamp a model, commit, reload,
     verify the value persisted. Guards against SQLAlchemy not detecting
     the JSON-column mutation."""
-    tag = f"stamp-test-{datetime.utcnow().timestamp()}"
+    tag = f"stamp-test-{utc_now().timestamp()}"
     p = Provider(
         name=tag,
         provider_type="openai",

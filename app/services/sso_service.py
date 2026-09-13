@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.core.time import utc_now
 from app.models.sso import SsoConfig, SsoRoleMapping
 from app.models.user import User
 
@@ -147,8 +148,6 @@ async def provision_or_link_user(db: AsyncSession, claims: Dict[str, Any]) -> Us
         raise SsoError("sso_no_account", "No matching account and JIT is disabled")
 
     role = resolve_role(await _get_mappings(db), claims, cfg.default_role)
-    from datetime import datetime, timezone
-
     if action == "create":
         username = (claims.get("preferred_username") or email or oid)[:100]
         # Avoid colliding with an unrelated existing username.
@@ -163,14 +162,14 @@ async def provision_or_link_user(db: AsyncSession, claims: Dict[str, Any]) -> Us
             full_name=claims.get("name"),
             auth_provider="azure_ad",
             external_id=oid,
-            last_login=datetime.now(timezone.utc),
+            last_login=utc_now(),
         )
         db.add(user)
     else:  # "use" or "link_email" — keep identity + role in sync with Azure
         user.auth_provider = "azure_ad"
         user.external_id = oid
         user.role = role
-        user.last_login = datetime.now(timezone.utc)
+        user.last_login = utc_now()
 
     await db.commit()
     await db.refresh(user)

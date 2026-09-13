@@ -1,7 +1,7 @@
 """Skill and Tool database models."""
-from datetime import datetime
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, JSON
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class Skill(Base):
@@ -20,8 +20,8 @@ class Skill(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     metadata_json = Column(JSON, nullable=True)
     tags = Column(JSON, nullable=True)  # List[str]
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
     def __repr__(self):
         return f"<Skill {self.name} (v{self.version})>"
@@ -52,8 +52,8 @@ class Tool(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     metadata_json = Column(JSON, nullable=True)
     tags = Column(JSON, nullable=True)  # List[str]
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
     def __repr__(self):
         return f"<Tool {self.name} (v{self.version})>"

@@ -4,12 +4,11 @@ The service (app/services/episodic_memory.py) reads/writes via raw SQL for the
 pgvector ANN path; this model exists for metadata completeness and ORM access.
 See: docs/superpowers/specs/2026-06-02-episodic-memory-design.md
 """
-from datetime import datetime
-
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, JSON, Index
 from pgvector.sqlalchemy import Vector
 
 from app.core.database import Base
+from app.core.time import utc_now
 
 EPISODE_EMBED_DIM = 1536
 
@@ -28,7 +27,7 @@ class AgentEpisode(Base):
     success = Column(Boolean, nullable=False, default=True, index=True)
     tool_count = Column(Integer, nullable=False, default=0)
     metadata_json = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
 
     __table_args__ = (
         Index("ix_agent_episodes_agent_success", "agent_id", "success"),

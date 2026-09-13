@@ -6,7 +6,7 @@ Verification date: 2026-09-13 (Asia/Shanghai)
 
 ## Automated gate
 
-- `make check`: 610 passed, 0 skipped; frontend type check and lint ratchet
+- `make check`: 611 passed, 0 skipped; frontend type check and lint ratchet
   passed (eslint baseline 126 errors / 0 warnings after hook cleanup);
   production npm audit reported 0 vulnerabilities.
 - Fresh Alembic migration: `036_knowledge_provider_binding (head)`, with one head.
@@ -47,11 +47,11 @@ review. No existing project volume was used.
 ## Local image identifiers
 
 - `cyberguard-api:1.0.0-rc.1` —
-  `sha256:bdcf9941c8e79b7f476e8b18d631108ea282ca4b3cd22376cd663653ae4824f6`
+  `sha256:b7295c87c1ce650bbcb02a8897a584b4ae90df726672806fbdc2d9edc793517a`
 - `cyberguard-tool-runner:1.0.0-rc.1` —
-  `sha256:f53b79e5bdfd4481a93a4a410ea9b9edc423cc952c5ad5d85cc11235bfea9939`
+  `sha256:a961139da410bb3b11aed736353c0599b239d64dd38a626a69e02e9206cc90fa`
 - `cyberguard-webui:1.0.0-rc.1` —
-  `sha256:fe078783ee386dca2885f27d125a643e99937bc5ac497fed6b188a2283582a63`
+  `sha256:1201349b4864ca28feb43ca1ee334c99dfa6d587f10f3e0b9a833e2285274f9e`
 
 These are local image identifiers, not registry digests. Record immutable
 registry digests after publishing.

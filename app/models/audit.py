@@ -1,8 +1,8 @@
 """Audit log database model."""
-from datetime import datetime
 from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, JSON, Boolean
 from sqlalchemy.orm import relationship
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class AuditLog(Base):
@@ -20,7 +20,7 @@ class AuditLog(Base):
     user_agent = Column(String(500), nullable=True)
     request_path = Column(String(500), nullable=True)
     metadata_json = Column(JSON, nullable=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    timestamp = Column(DateTime, default=utc_now, nullable=False, index=True)
     request_id = Column(String(36), nullable=True)
     # --- Standard "AI Agent Governance" audit fields (NDB Std v1.0 §Audit Trail) ---
     agent_name = Column(String(100), nullable=True)

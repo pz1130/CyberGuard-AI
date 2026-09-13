@@ -5,6 +5,7 @@ from celery.result import AsyncResult
 from app.workers.celery_app import celery_app
 from app.core.dependencies import get_db, require_permission
 from app.core.rbac import Permission
+from app.core.time import utc_now
 from app.schemas.task import ExecutionRead, TaskListResponse
 from app.models.agent import AgentExecution
 from sqlalchemy import select, func
@@ -64,8 +65,7 @@ async def cancel_task(
     execution = result.scalar_one_or_none()
     if execution:
         execution.status = "cancelled"
-        from datetime import datetime, timezone
-        execution.completed_at = datetime.now(timezone.utc)
+        execution.completed_at = utc_now()
         await db.commit()
 
     return {"task_id": task_id, "status": "cancelled"}

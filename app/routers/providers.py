@@ -10,6 +10,7 @@ from sqlalchemy import select, func
 from app.core.dependencies import get_db, require_permission
 from app.core.rbac import Permission
 from app.core.security import CredentialField, encrypt_data, decrypt_data
+from app.core.time import utc_now
 from app.models.provider import Provider
 from app.schemas.provider import (
     ModelInfo,
@@ -489,12 +490,11 @@ def _stamp_model_verified(
     when the caller assigns the result back to `provider.models = ...`.
     Also fills context_window / max_output_tokens when missing (M0a-2 catalog).
     """
-    from datetime import datetime as _dt
     from app.services.model_limits import enrich_model_entry
 
     result: list = [dict(m) if isinstance(m, dict) else {"name": str(m), "model_type": "chat"}
                     for m in (models or [])]
-    now_iso = _dt.utcnow().isoformat()
+    now_iso = utc_now().isoformat()
     for entry in result:
         if entry.get("name") == model_name:
             entry["verified"] = bool(ok)

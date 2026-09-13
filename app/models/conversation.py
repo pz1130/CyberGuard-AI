@@ -1,7 +1,7 @@
 """Chat conversation model."""
-from datetime import datetime
 from sqlalchemy import Column, Index, Integer, String, Text, DateTime, ForeignKey, Float
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class Conversation(Base):
@@ -16,8 +16,8 @@ class Conversation(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     title = Column(String(200), default="新对话")
     messages_json = Column(Text, default="[]")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Per-conversation agent config overrides
     system_prompt_override = Column(Text, nullable=True)

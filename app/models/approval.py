@@ -1,7 +1,7 @@
 """Approval request database model."""
-from datetime import datetime
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, JSON, ForeignKey
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class ApprovalRequest(Base):
@@ -33,7 +33,7 @@ class ApprovalRequest(Base):
     status = Column(String(20), default="pending", index=True)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False, index=True)
     expires_at = Column(DateTime, nullable=True)                                 # auto-expire if set
     decided_at = Column(DateTime, nullable=True)
 

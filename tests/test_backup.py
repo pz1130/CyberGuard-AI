@@ -6,13 +6,14 @@ BackupRecord table roundtrip (catches model/migration column drift), and the
 retention-cleanup state machine.
 """
 import uuid
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import pytest
 
 from sqlalchemy import delete, select
 
 from app.core.database import AsyncSessionLocal
+from app.core.time import utc_now
 from app.models.backup import BackupRecord as BackupRecordModel
 from app.routers import backup as bk
 
@@ -160,7 +161,7 @@ async def _status_of(bid: str) -> str:
 
 @pytest.mark.asyncio
 async def test_backup_record_roundtrip(cleanup_backup_ids):
-    bid = await _insert_backup(cleanup_backup_ids, created_at=datetime.utcnow())
+    bid = await _insert_backup(cleanup_backup_ids, created_at=utc_now())
     async with AsyncSessionLocal() as session:
         result = await session.execute(
             select(BackupRecordModel).where(BackupRecordModel.id == bid)
@@ -175,10 +176,10 @@ async def test_backup_record_roundtrip(cleanup_backup_ids):
 @pytest.mark.asyncio
 async def test_cleanup_expires_old_backup_but_keeps_fresh(cleanup_backup_ids):
     # A fresh backup (never expires) and an old one past its retention window.
-    fresh = await _insert_backup(cleanup_backup_ids, created_at=datetime.utcnow())
+    fresh = await _insert_backup(cleanup_backup_ids, created_at=utc_now())
     old = await _insert_backup(
         cleanup_backup_ids,
-        created_at=datetime.utcnow() - timedelta(days=100),
+        created_at=utc_now() - timedelta(days=100),
         retention_days=30,
         remote_url=None,  # local-only → no S3 needed
     )

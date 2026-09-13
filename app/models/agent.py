@@ -1,8 +1,8 @@
 """Agent configuration database models."""
-from datetime import datetime
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, JSON, Float
 from sqlalchemy.orm import relationship
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class AgentConfig(Base):
@@ -46,8 +46,8 @@ class AgentConfig(Base):
     # OpenClaw Gateway fields
     api_key_hash = Column(String(128), nullable=True)      # SHA-256 of the oc-xxx key
     openclaw_last_seen = Column(DateTime, nullable=True)   # last poll/heartbeat time
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
     def __repr__(self):
         return f"<AgentConfig {self.agent_name} ({self.backend_type})>"
@@ -67,7 +67,7 @@ class AgentExecution(Base):
     error_message = Column(Text, nullable=True)
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
 
     def __repr__(self):
         return f"<AgentExecution {self.execution_id} ({self.status})>"

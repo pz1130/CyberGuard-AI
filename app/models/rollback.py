@@ -1,7 +1,7 @@
 """Rollback registration model."""
-from datetime import datetime
 from sqlalchemy import Column, Integer, String, DateTime, JSON
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class RollbackRegistration(Base):
@@ -12,7 +12,7 @@ class RollbackRegistration(Base):
     tool_name = Column(String(100), nullable=True)
     rollback_argv = Column(JSON, nullable=False)
     status = Column(String(20), nullable=False, default="registered")
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
     expires_at = Column(DateTime, nullable=False, index=True)
     reverted_at = Column(DateTime, nullable=True)
     detail = Column(String(500), nullable=True)

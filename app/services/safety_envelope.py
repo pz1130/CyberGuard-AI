@@ -1,8 +1,9 @@
 """Safety Envelope: pre-validation, rollback registry, revert + paging (B6)."""
 from __future__ import annotations
 import json
-from datetime import datetime, timedelta
+from datetime import timedelta
 import httpx
+from app.core.time import utc_now
 from app.services.tool_executor import build_argv, TOOL_RUNNER_URL, RUNNER_TOKEN
 
 ENVELOPE_CATEGORIES = {"contain_soft", "contain_hard", "remediate"}
@@ -41,8 +42,8 @@ async def register_rollback(action_id: str, tool, args: dict, ttl_seconds: int =
         "tool_name": getattr(tool, "name", None),
         "rollback_argv": argv,
         "status": "registered",
-        "created_at": datetime.utcnow(),
-        "expires_at": datetime.utcnow() + timedelta(seconds=ttl_seconds),
+        "created_at": utc_now(),
+        "expires_at": utc_now() + timedelta(seconds=ttl_seconds),
     })
 
 
@@ -94,7 +95,7 @@ async def _mark(action_id: str, status: str, detail: str | None) -> None:
             reg.status = status
             reg.detail = detail
             if status == "reverted":
-                reg.reverted_at = datetime.utcnow()
+                reg.reverted_at = utc_now()
             await s.commit()
 
 

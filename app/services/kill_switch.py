@@ -3,9 +3,9 @@
 Redis is the fast read path; the DB table is the durable source of truth and
 is reloaded into Redis on cold start. Checked at the execute_tool chokepoint.
 """
-from datetime import datetime
 from app.core.redis_client import RedisCache
 from app.core.database import get_db_context
+from app.core.time import utc_now
 from app.models.kill_switch import KillSwitchState
 from sqlalchemy import select, delete
 
@@ -19,7 +19,7 @@ async def engage(scope: str, by: str | None, reason: str | None) -> None:
             KillSwitchState.scope == scope))).scalar_one_or_none()
         if existing is None:
             s.add(KillSwitchState(scope=scope, engaged_by=by, reason=reason,
-                                  engaged_at=datetime.utcnow()))
+                                  engaged_at=utc_now()))
             await s.commit()
     await _refresh_redis()
 

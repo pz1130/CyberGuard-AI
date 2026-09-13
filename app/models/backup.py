@@ -1,7 +1,7 @@
 """Backup manifest database model."""
-from datetime import datetime
 from sqlalchemy import Column, Integer, String, BigInteger, DateTime, Text
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class BackupRecord(Base):
@@ -10,7 +10,7 @@ class BackupRecord(Base):
     __tablename__ = "backup_records"
 
     id = Column(String(36), primary_key=True)  # UUID as string
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
     size_bytes = Column(BigInteger, nullable=False)
     format = Column(String(50), nullable=False, default="pg_dump.custom.aes")
     local_path = Column(String(500), nullable=True)

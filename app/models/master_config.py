@@ -1,8 +1,8 @@
 """Master Agent configuration model."""
-from datetime import datetime
 from sqlalchemy import Boolean, Column, Integer, String, Float, Text, DateTime
 from typing import Optional
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class MasterAgentConfig(Base):
@@ -19,7 +19,7 @@ class MasterAgentConfig(Base):
     context_compression_enabled = Column(Boolean, nullable=False, default=True)
     compression_model = Column(String(100), nullable=True)
     compression_max_tokens = Column(Integer, nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     # Master agent behavior (prompts + limits)
     intent_parser_prompt = Column(Text, nullable=True)
     summarizer_prompt = Column(Text, nullable=True)

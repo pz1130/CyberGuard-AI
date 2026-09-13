@@ -1,9 +1,9 @@
 """Knowledge base database models."""
-from datetime import datetime
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, JSON, Index, CheckConstraint
 from sqlalchemy.orm import relationship
 from pgvector.sqlalchemy import Vector, HALFVEC
 from app.core.database import Base
+from app.core.time import utc_now
 
 # Supported embedding dimensions and the column each maps to.
 # Add new dims by creating a new column + HNSW index via Alembic, then
@@ -38,8 +38,8 @@ class KnowledgeBase(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     metadata_encrypted = Column(Text, nullable=True)  # AES-256 encrypted
     metadata_json = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
     __table_args__ = (
         CheckConstraint(
@@ -70,8 +70,8 @@ class Document(Base):
     metadata_json = Column(JSON, nullable=True)
     status = Column(String(20), nullable=False, default="ready")  # ready | processing | failed
     status_detail = Column(Text, nullable=True)  # failure reason when status == "failed"
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
     # Relationships
     knowledge_base = relationship("KnowledgeBase", back_populates="documents")
@@ -103,7 +103,7 @@ class DocumentChunk(Base):
     # Precision loss is negligible for cosine similarity.
     embedding_large = Column(HALFVEC(EMBEDDING_DIM_LARGE), nullable=True)  # halfvec(3072)
     metadata_json = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
 
     # Relationships
     document = relationship("Document", back_populates="chunks")

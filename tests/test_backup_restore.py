@@ -1,4 +1,5 @@
 """In-place restore must not hold the app pool on the target database."""
+from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -66,7 +67,7 @@ async def test_disconnect_failure_is_not_silently_ignored(monkeypatch):
 
 def test_backup_manifest_snapshot_is_complete():
     record = bk.BackupRecordModel(
-        id="b1", created_at=bk.datetime(2026, 9, 12), size_bytes=42,
+        id="b1", created_at=datetime(2026, 9, 12), size_bytes=42,
         format="pg_dump.custom.aes", local_path="/backups/b1.dump.aes",
         remote_url=None, s3_bucket=None, status="completed", error=None,
         retention_days=30,

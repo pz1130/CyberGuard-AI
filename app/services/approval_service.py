@@ -7,12 +7,13 @@ the admin calls POST /approvals/{id}/decide in the FastAPI process.
 import asyncio
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
+from app.core.time import utc_now
 from app.models.approval import ApprovalRequest
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ class ApprovalService:
         if expires_in_minutes:
             # Naive UTC — all DateTime columns in this project are TIMESTAMP
             # WITHOUT TIME ZONE; a tz-aware value makes asyncpg raise DataError.
-            expires_at = datetime.utcnow() + timedelta(minutes=expires_in_minutes)
+            expires_at = utc_now() + timedelta(minutes=expires_in_minutes)
 
         async with AsyncSessionLocal() as session:
             from app.services.governance_config import approver_for_risk
@@ -230,7 +231,7 @@ class ApprovalService:
             record.status = decision
             record.approver_id = approver_id
             record.approver_comment = comment
-            record.decided_at = datetime.utcnow()  # naive UTC (see create_request)
+            record.decided_at = utc_now()
 
             await session.commit()
             await session.refresh(record)

@@ -5,7 +5,7 @@ import subprocess
 import io
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -15,6 +15,7 @@ from app.core.database import AsyncSessionLocal, get_db_session
 from app.core.dependencies import require_role
 from app.core.rbac import Role
 from app.core.security import CredentialField, encrypt_data, decrypt_data
+from app.core.time import utc_now
 from app.config import settings
 from app.schemas.backup import BackupRequest, BackupResponse, RestoreRequest, RestoreResponse, BackupRecord
 from app.models.backup import BackupRecord as BackupRecordModel
@@ -483,7 +484,7 @@ async def _cleanup_old_backups() -> int:
         most_recent = all_backups[0]
 
         cleaned_count = 0
-        now = datetime.utcnow()
+        now = utc_now()
 
         for backup in all_backups[1:]:  # Skip the most recent
             if backup.status != "completed":
@@ -525,7 +526,7 @@ async def create_backup(
     """
     _ensure_backup_dir()
     backup_id = str(uuid.uuid4())
-    timestamp = datetime.utcnow()
+    timestamp = utc_now()
     retention_days = body.retention_days if hasattr(body, "retention_days") and body.retention_days else 30
     exclude_chat = getattr(body, 'exclude_chat', False)
 
@@ -584,7 +585,7 @@ async def create_backup(
             config_id=0,
             status="completed",
             started_at=timestamp,
-            completed_at=datetime.utcnow(),
+            completed_at=utc_now(),
             file_size=file_size,
         )
     except Exception as e:
@@ -597,7 +598,7 @@ async def create_backup(
             config_id=0,
             status="failed",
             started_at=timestamp,
-            completed_at=datetime.utcnow(),
+            completed_at=utc_now(),
             error=str(e),
         )
 
@@ -667,7 +668,7 @@ async def restore_backup(
     await session.close()
 
     execution_id = str(uuid.uuid4())
-    started_at = datetime.utcnow()
+    started_at = utc_now()
     from app.core.maintenance import acquire_database_restore, release_database_restore
     try:
         lock_acquired = await acquire_database_restore(execution_id)
@@ -707,7 +708,7 @@ async def restore_backup(
             backup_id=backup_id,
             status="completed",
             started_at=started_at,
-            completed_at=datetime.utcnow(),
+            completed_at=utc_now(),
         )
     except Exception as e:
         return RestoreResponse(
@@ -715,7 +716,7 @@ async def restore_backup(
             backup_id=backup_id,
             status="failed",
             started_at=started_at,
-            completed_at=datetime.utcnow(),
+            completed_at=utc_now(),
             error=str(e),
         )
     finally:

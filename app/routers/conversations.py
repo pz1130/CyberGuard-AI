@@ -1,7 +1,7 @@
 """Chat conversation management router."""
 from typing import Optional
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +10,7 @@ from sqlalchemy import select, desc
 from app.core.dependencies import get_db, require_permission
 from app.core.rbac import Permission
 from app.core.auth import AuthenticatedUser
+from app.core.time import utc_now
 from app.models.conversation import Conversation
 
 
@@ -173,7 +174,7 @@ async def update_conversation(
 
     # The schema stores TIMESTAMP WITHOUT TIME ZONE. Keep the value in UTC,
     # but strip tzinfo so asyncpg does not reject the update.
-    conv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    conv.updated_at = utc_now()
     await db.commit()
     await db.refresh(conv)
     return ConversationResponse.model_validate(conv)

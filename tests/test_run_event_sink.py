@@ -134,10 +134,11 @@ async def test_a_finished_run_is_not_reported_as_interrupted():
 @pytest.mark.asyncio
 async def test_the_sweep_ignores_runs_older_than_its_window():
     """The table only grows and every API worker sweeps on boot."""
-    from datetime import datetime, timedelta
+    from datetime import timedelta
     from sqlalchemy import select
 
     from app.core.database import AsyncSessionLocal
+    from app.core.time import utc_now
     from app.models.run_event import AgentRunEvent
 
     run_id = f"run-{uuid.uuid4()}"
@@ -149,7 +150,7 @@ async def test_the_sweep_ignores_runs_older_than_its_window():
             select(AgentRunEvent).where(AgentRunEvent.run_id == run_id)
         )).scalars().all()
         for row in rows:
-            row.created_at = datetime.utcnow() - timedelta(days=30)
+            row.created_at = utc_now() - timedelta(days=30)
         await s.commit()
 
     recent = await find_interrupted_runs(agent_id=9007, within_hours=24)

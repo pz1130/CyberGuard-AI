@@ -1,8 +1,8 @@
 """Database models for MCP servers and tools."""
-from datetime import datetime
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class MCPServer(Base):
@@ -26,8 +26,8 @@ class MCPServer(Base):
     timeout_seconds = Column(Integer, default=30)
     process_id = Column(Integer, nullable=True)  # PID of running subprocess
     metadata_json = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
     tools = relationship("MCPTool", back_populates="server", cascade="all, delete-orphan")
 
@@ -54,7 +54,7 @@ class MCPTool(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     last_used_at = Column(DateTime, nullable=True)
     use_count = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
 
     server = relationship("MCPServer", back_populates="tools")
 
