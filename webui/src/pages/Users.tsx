@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Trash2, Edit2 } from 'lucide-react'
+import { errorMessage } from '../lib/errorMessage'
 
 interface User {
   id?: number
@@ -10,6 +11,23 @@ interface User {
   role: string
   is_active?: boolean
   created_at?: string
+}
+
+interface SsoConfig {
+  enabled?: boolean
+  secret_env_var_id?: number | null
+  tenant_id?: string | null
+  client_id?: string | null
+  redirect_uri?: string | null
+  default_role?: string
+  allow_jit?: boolean
+}
+
+interface SsoMapping {
+  id: number
+  azure_key: string
+  app_role: string
+  priority?: number
 }
 
 const ROLES = ['admin', 'operator', 'viewer']
@@ -24,8 +42,8 @@ export default function Users() {
   const [password, setPassword] = useState('')
   const [activeTab, setActiveTab] = useState<'users' | 'sso'>('users')
   // SSO state
-  const [ssoCfg, setSsoCfg] = useState<any>(null)
-  const [ssoMappings, setSsoMappings] = useState<any[]>([])
+  const [ssoCfg, setSsoCfg] = useState<SsoConfig | null>(null)
+  const [ssoMappings, setSsoMappings] = useState<SsoMapping[]>([])
   const [ssoSaving, setSsoSaving] = useState(false)
   const [newMapping, setNewMapping] = useState({ azure_key: '', app_role: 'viewer', priority: 10 })
   const [secretEnvVars, setSecretEnvVars] = useState<{id: number; key: string; description?: string}[]>([])
@@ -58,18 +76,18 @@ export default function Users() {
       }
       setShowForm(false); setEditing(null)
       setForm({ username: '', email: '', role: 'viewer' }); setPassword(''); load()
-    } catch (e: any) {
+    } catch (e: unknown) {
       // Show friendly error from backend validation
       try {
-        const errData = JSON.parse(e.message)
+        const errData = JSON.parse(errorMessage(e))
         if (Array.isArray(errData.detail)) {
-          const msgs = errData.detail.map((d: any) => d.msg).join('\n')
+          const msgs = errData.detail.map((d: { msg?: string }) => d.msg).join('\n')
           alert(msgs)
         } else {
-          alert(e.message)
+          alert(errorMessage(e))
         }
       } catch {
-        alert(e.message)
+        alert(errorMessage(e))
       }
     }
   }
@@ -87,7 +105,9 @@ export default function Users() {
         api.getSsoRoleMappings(),
         api.getSecretEnvVars(),
       ])
-      setSsoCfg(cfg); setSsoMappings(mappings || []); setSecretEnvVars(envvars || [])
+      setSsoCfg(cfg as SsoConfig)
+      setSsoMappings((mappings as SsoMapping[]) || [])
+      setSecretEnvVars((envvars as { id: number; key: string; description?: string }[]) || [])
     } catch { /* admin-only, let tabs gate access */ }
   }, [])
 
@@ -95,9 +115,9 @@ export default function Users() {
     setSsoSaving(true)
     try {
       const updated = await api.updateSsoConfig(patch)
-      setSsoCfg(updated)
-    } catch (e: any) {
-      alert(e?.message || 'Failed to save SSO config')
+      setSsoCfg(updated as SsoConfig)
+    } catch (e: unknown) {
+      alert(errorMessage(e) || 'Failed to save SSO config')
     } finally { setSsoSaving(false) }
   }
 

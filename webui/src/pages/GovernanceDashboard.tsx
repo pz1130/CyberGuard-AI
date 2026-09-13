@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { ShieldAlert, RefreshCw, Power, RotateCcw, CheckCircle2, XCircle } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import { api } from '../api/client'
+import { unwrapList } from '../lib/unwrapList'
 
 interface Metric { name: string; value: number; target: number; pass: boolean }
 interface MetricsReport { window_days: number; metrics: Metric[]; all_pass: boolean }
@@ -34,11 +35,11 @@ export default function GovernanceDashboard() {
         api.getGovernanceMetrics(30), api.getHaltStatus(), api.getRollbacks(),
         api.verifyAudit(), api.getApprovals('pending'),
       ])
-      if (m.status === 'fulfilled') setMetrics(m.value)
-      if (h.status === 'fulfilled') setHalted(!!h.value?.global)
-      if (rb.status === 'fulfilled') setRollbacks(rb.value || [])
-      if (av.status === 'fulfilled') setAuditIntact(!!av.value?.intact)
-      if (ap.status === 'fulfilled') setPending((ap.value || []).length)
+      if (m.status === 'fulfilled') setMetrics(m.value as MetricsReport)
+      if (h.status === 'fulfilled') setHalted(!!(h.value as { global?: boolean } | null)?.global)
+      if (rb.status === 'fulfilled') setRollbacks((rb.value as Rollback[] | null) || [])
+      if (av.status === 'fulfilled') setAuditIntact(!!(av.value as { intact?: boolean } | null)?.intact)
+      if (ap.status === 'fulfilled') setPending(unwrapList(ap.value, 'requests').length)
     } finally {
       setLoading(false)
     }

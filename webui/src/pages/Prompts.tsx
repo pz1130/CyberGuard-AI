@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { Plus, Edit2, Trash2, Save, Copy, Check } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import { api } from '../api/client'
-import { SearchContext } from '../context/SearchContext'
+import { SearchContext } from '../context/search'
+import { errorMessage } from '../lib/errorMessage'
 import Modal from '../components/Modal'
 
 type Category = 'system' | 'intent_parser' | 'summarizer' | 'general'
@@ -65,8 +66,8 @@ export default function Prompts() {
     try {
       const data = await api.getPromptTemplates() as PromptTemplate[]
       setItems(data || [])
-    } catch (e: any) {
-      alert(e.message || t('prompts.loadFailed'))
+    } catch (e: unknown) {
+      alert(errorMessage(e) || t('prompts.loadFailed'))
     } finally {
       setLoading(false)
     }
@@ -124,8 +125,8 @@ export default function Prompts() {
       }
       setEditorOpen(false)
       await load()
-    } catch (e: any) {
-      alert(e.message || t('prompts.saveFailed'))
+    } catch (e: unknown) {
+      alert(errorMessage(e) || t('prompts.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -136,8 +137,8 @@ export default function Prompts() {
     try {
       await api.deletePromptTemplate(item.id)
       setItems(prev => prev.filter(i => i.id !== item.id))
-    } catch (e: any) {
-      alert(e.message || t('prompts.deleteFailed'))
+    } catch (e: unknown) {
+      alert(errorMessage(e) || t('prompts.deleteFailed'))
     }
   }
 

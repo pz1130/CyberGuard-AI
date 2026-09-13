@@ -1,24 +1,7 @@
-import { createContext, useContext, useState } from 'react'
-import type { Tab } from '../components/SidebarNew'
+import { useState, type ReactNode } from 'react'
+import { SearchContext, type SearchTarget } from './search'
 
-export interface SearchTarget {
-  tab: Tab
-  id: number | string
-  name: string
-  subview?: string
-}
-
-interface SearchContextValue {
-  searchTarget: SearchTarget | null
-  setSearchTarget: (t: SearchTarget | null) => void
-}
-
-export const SearchContext = createContext<SearchContextValue>({
-  searchTarget: null,
-  setSearchTarget: () => {},
-})
-
-export function SearchProvider({ children }: { children: React.ReactNode }) {
+export function SearchProvider({ children }: { children: ReactNode }) {
   const [searchTarget, setSearchTarget] = useState<SearchTarget | null>(null)
   return (
     <SearchContext.Provider value={{ searchTarget, setSearchTarget }}>
@@ -26,5 +9,3 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
     </SearchContext.Provider>
   )
 }
-
-export const useSearch = () => useContext(SearchContext)

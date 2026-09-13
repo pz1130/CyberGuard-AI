@@ -1,7 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 const BASE = '/api/v1'
 
-async function request(path: string, options: RequestInit = {}) {
+/** JSON-object request body. Field sets vary by endpoint. */
+export type JsonBody = Record<string, unknown>
+
+async function request(path: string, options: RequestInit = {}): Promise<unknown> {
   const token = localStorage.getItem('token')
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -18,7 +20,7 @@ async function request(path: string, options: RequestInit = {}) {
   if (!res.ok) throw new Error(await res.text())
   const text = await res.text()
   if (!text) return null
-  return JSON.parse(text)
+  return JSON.parse(text) as unknown
 }
 
 export const api = {
@@ -58,14 +60,14 @@ export const api = {
   // Users
   getUsers: () => request('/users'),
   getUserMe: () => request('/users/me'),
-  createUser: (body: any) => request('/users', { method: 'POST', body: JSON.stringify(body) }),
-  updateUser: (id: number, body: any) => request(`/users/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  createUser: (body: JsonBody) => request('/users', { method: 'POST', body: JSON.stringify(body) }),
+  updateUser: (id: number, body: JsonBody) => request(`/users/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteUser: (id: number) => request(`/users/${id}`, { method: 'DELETE' }),
 
   // Providers
   getProviders: () => request('/providers'),
-  createProvider: (body: any) => request('/providers', { method: 'POST', body: JSON.stringify(body) }),
-  updateProvider: (id: string, body: any) => request(`/providers/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  createProvider: (body: JsonBody) => request('/providers', { method: 'POST', body: JSON.stringify(body) }),
+  updateProvider: (id: string, body: JsonBody) => request(`/providers/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteProvider: (id: string) => request(`/providers/${id}`, { method: 'DELETE' }),
   testProvider: (id: number, model?: string) => request(`/providers/test`, {
     method: 'POST',
@@ -76,16 +78,16 @@ export const api = {
 
   // Agents
   getAgents: () => request('/agents'),
-  createAgent: (body: any) => request('/agents', { method: 'POST', body: JSON.stringify(body) }),
-  updateAgent: (id: string, body: any) => request(`/agents/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  createAgent: (body: JsonBody) => request('/agents', { method: 'POST', body: JSON.stringify(body) }),
+  updateAgent: (id: string, body: JsonBody) => request(`/agents/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteAgent: (id: string) => request(`/agents/${id}`, { method: 'DELETE' }),
-  testAgent: (id: string, body: any) => request(`/agents/${id}/test`, { method: 'POST', body: JSON.stringify(body) }),
+  testAgent: (id: string, body: JsonBody = {}) => request(`/agents/${id}/test`, { method: 'POST', body: JSON.stringify(body) }),
   regenAgentApiKey: (id: string) => request(`/agents/${id}/api-key`, { method: 'POST' }),
 
   // Skills
   getSkills: (qs = '') => request('/skills' + qs),
-  createSkill: (body: any) => request('/skills', { method: 'POST', body: JSON.stringify(body) }),
-  updateSkill: (id: string, body: any) => request(`/skills/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  createSkill: (body: JsonBody) => request('/skills', { method: 'POST', body: JSON.stringify(body) }),
+  updateSkill: (id: string, body: JsonBody) => request(`/skills/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteSkill: (id: string) => request(`/skills/${id}`, { method: 'DELETE' }),
   installSkillFromUrl: (body: { url: string; headers?: Record<string, string> }) =>
     request('/skills/install/url', { method: 'POST', body: JSON.stringify(body) }),
@@ -101,8 +103,8 @@ export const api = {
   // Knowledge — knowledge bases
   getKnowledgeBases: () => request('/knowledge/bases'),
   getKnowledgeBase: (id: number) => request(`/knowledge/bases/${id}`),
-  createKnowledgeBase: (body: any) => request('/knowledge/bases', { method: 'POST', body: JSON.stringify(body) }),
-  updateKnowledgeBase: (id: number, body: any) => request(`/knowledge/bases/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  createKnowledgeBase: (body: JsonBody) => request('/knowledge/bases', { method: 'POST', body: JSON.stringify(body) }),
+  updateKnowledgeBase: (id: number, body: JsonBody) => request(`/knowledge/bases/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteKnowledgeBase: (id: number) => request(`/knowledge/bases/${id}`, { method: 'DELETE' }),
 
   // Knowledge — documents
@@ -227,8 +229,8 @@ export const api = {
   getTasks: () => request('/tasks'),
   getTask: (id: string) => request(`/tasks/${id}`),
   cancelTask: (id: string) => request(`/tasks/${id}/cancel`, { method: 'POST' }),
-  createTask: (body: any) => request('/tasks', { method: 'POST', body: JSON.stringify(body) }),
-  updateTask: (id: string, body: any) => request(`/tasks/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  createTask: (body: JsonBody) => request('/tasks', { method: 'POST', body: JSON.stringify(body) }),
+  updateTask: (id: string, body: JsonBody) => request(`/tasks/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteTask: (id: string) => request(`/tasks/${id}`, { method: 'DELETE' }),
 
   // ---- Approvals ----
@@ -249,12 +251,13 @@ export const api = {
     const qs = q.toString()
     return request(`/audit/logs${qs ? '?' + qs : ''}`)
   },
-  exportAuditLogs: (params?: any) =>
+  exportAuditLogs: (params?: Record<string, string>) =>
     request(`/audit/export?${new URLSearchParams(params || {})}`),
 
   // Backup
   listBackups: () => request('/backup'),
-  createBackup: (body?: any) => request('/backup', { method: 'POST', body: JSON.stringify(body || {}) }),
+  createBackup: (body?: { name?: string; backup_type?: string; exclude_chat?: boolean }) =>
+    request('/backup', { method: 'POST', body: JSON.stringify(body || {}) }),
   restoreBackup: (id: string) =>
     request(`/backup/${id}/restore`, {
       method: 'POST',
@@ -265,7 +268,7 @@ export const api = {
   // Config
   exportConfig: () => request('/config/export', { method: 'POST' }),
   getMasterConfig: () => request('/master-config'),
-  updateMasterConfig: (body: any) => request('/master-config', { method: 'PUT', body: JSON.stringify(body) }),
+  updateMasterConfig: (body: JsonBody) => request('/master-config', { method: 'PUT', body: JSON.stringify(body) }),
   getBranding: () => request('/branding'),
 
   // OCR
@@ -302,12 +305,12 @@ export const api = {
   appendConversationMessage: (id: number, body: { role: string; content: string }) =>
     request(`/conversations/${id}/messages`, { method: 'POST', body: JSON.stringify(body) }),
   getConversationMessages: (id: number) => request(`/conversations/${id}/messages`),
-  importConfig: (body: any) => request('/config/import', { method: 'POST', body: JSON.stringify(body) }),
+  importConfig: (body: JsonBody) => request('/config/import', { method: 'POST', body: JSON.stringify(body) }),
 
   // ---- MCP Servers ----
   getMCPServers: () => request('/mcp/servers'),
-  createMCPServer: (body: any) => request('/mcp/servers', { method: 'POST', body: JSON.stringify(body) }),
-  updateMCPServer: (id: number, body: any) => request(`/mcp/servers/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  createMCPServer: (body: JsonBody) => request('/mcp/servers', { method: 'POST', body: JSON.stringify(body) }),
+  updateMCPServer: (id: number, body: JsonBody) => request(`/mcp/servers/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteMCPServer: (id: number) => request(`/mcp/servers/${id}`, { method: 'DELETE' }),
   startMCPServer: (id: number) => request(`/mcp/servers/${id}/start`, { method: 'POST' }),
   stopMCPServer: (id: number) => request(`/mcp/servers/${id}/stop`, { method: 'POST' }),
@@ -315,8 +318,8 @@ export const api = {
   getAllMcpTools: (qs = '') => request('/mcp/tools/all' + qs),
 
   // MCP Tools
-  createMCPTool: (body: any) => request('/mcp/tools', { method: 'POST', body: JSON.stringify(body) }),
-  updateMCPTool: (id: number, body: any) => request(`/mcp/tools/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  createMCPTool: (body: JsonBody) => request('/mcp/tools', { method: 'POST', body: JSON.stringify(body) }),
+  updateMCPTool: (id: number, body: JsonBody) => request(`/mcp/tools/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteMCPTool: (id: number) => request(`/mcp/tools/${id}`, { method: 'DELETE' }),
   executeMCPTool: (body: { tool_id: number; arguments: Record<string, unknown> }) =>
     request('/mcp/tools/execute', { method: 'POST', body: JSON.stringify(body) }),
@@ -365,10 +368,10 @@ export const api = {
 
   // ---- Tools (executable tool pool) ----
   getTools: (qs = '') => request('/tools' + qs),
-  createTool: (body: any) => request('/tools', { method: 'POST', body: JSON.stringify(body) }),
-  updateTool: (id: number, body: any) => request(`/tools/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  createTool: (body: JsonBody) => request('/tools', { method: 'POST', body: JSON.stringify(body) }),
+  updateTool: (id: number, body: JsonBody) => request(`/tools/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteTool: (id: number) => request(`/tools/${id}`, { method: 'DELETE' }),
-  executeTool: (id: number, args: Record<string, any>) =>
+  executeTool: (id: number, args: Record<string, unknown>) =>
     request(`/tools/${id}/execute`, { method: 'POST', body: JSON.stringify({ args }) }),
 
   // ---- Security Settings ----

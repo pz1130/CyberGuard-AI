@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Save, RotateCcw } from 'lucide-react'
+import { errorMessage } from '../lib/errorMessage'
+import { unwrapList } from '../lib/unwrapList'
 
 interface MasterConfig {
   id: number
@@ -79,10 +81,18 @@ export default function Settings() {
   useEffect(() => {
     const loadModels = async () => {
       try {
-        const data = await api.getProviders() as { total: number; providers: any[] }
-        if (!data?.providers) return
+        type ProviderRow = {
+          id: number
+          name: string
+          provider_type: string
+          base_url?: string
+          is_active?: boolean
+          models?: Array<string | { name?: string; verified?: boolean | null }>
+        }
+        const providers = unwrapList<ProviderRow>(await api.getProviders(), 'providers')
+        if (!providers.length) return
         const models: ProviderModel[] = []
-        for (const p of data.providers) {
+        for (const p of providers) {
           if (!p.is_active) continue
           for (const m of (p.models || [])) {
             // Only show models that the user has explicitly verified (or seeded as verified).
@@ -108,8 +118,8 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState<'master' | 'branding' | 'about'>('master')
 
   useEffect(() => {
-    api.getMasterConfig().then((data: any) => {
-      setConfig(data)
+    api.getMasterConfig().then((data: unknown) => {
+      if (data && typeof data === 'object') setConfig({ ...DEFAULTS, ...(data as MasterConfig) })
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
@@ -117,13 +127,13 @@ export default function Settings() {
   const save = async () => {
     setSaving(true)
     try {
-      await api.updateMasterConfig(config)
+      await api.updateMasterConfig({ ...config })
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
       // Notify live components (header) to refresh branding without full reload
       window.dispatchEvent(new CustomEvent('branding-updated'))
-    } catch (e: any) {
-      alert(t('settings.saveFailedPrefix') + e.message)
+    } catch (e: unknown) {
+      alert(t('settings.saveFailedPrefix') + errorMessage(e))
     } finally {
       setSaving(false)
     }

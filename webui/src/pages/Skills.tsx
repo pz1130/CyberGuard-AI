@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Trash2, Plus, Edit2, Wrench, X, Loader2, Link, Upload } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
-import { SearchContext } from '../context/SearchContext'
+import { SearchContext } from '../context/search'
+import { errorMessage } from '../lib/errorMessage'
 import Modal from '../components/Modal'
 
 interface Skill {
@@ -14,7 +15,7 @@ interface Skill {
   version?: string
   permission_level?: string
   is_active?: boolean
-  metadata_json?: Record<string, any>
+  metadata_json?: Record<string, unknown>
   tags?: string[]
   tagsText?: string
   md_content?: string
@@ -83,7 +84,7 @@ export default function Skills() {
       setForm({ name: '', category: 'tool', description: '', version: '1.0.0', permission_level: 'medium', tagsText: '' })
       setMdContent('')
       load()
-    } catch (e: any) { alert(e.message) }
+    } catch (e: unknown) { alert(errorMessage(e)) }
   }
 
   const openEdit = (s: Skill) => {
@@ -99,13 +100,13 @@ export default function Skills() {
     if (!installUrl.trim()) return
     setInstallLoading(true); setInstallError('')
     try {
-      const result: any = await api.installSkillFromUrl({ url: installUrl.trim() })
+      const result = await api.installSkillFromUrl({ url: installUrl.trim() }) as { success?: boolean; error?: string }
       if (result.success) {
         setShowInstallUrl(false); setInstallUrl(''); load()
       } else {
         setInstallError(result.error || 'Installation failed')
       }
-    } catch (e: any) { setInstallError(e.message) }
+    } catch (e: unknown) { setInstallError(errorMessage(e)) }
     finally { setInstallLoading(false) }
   }
 
@@ -116,13 +117,13 @@ export default function Skills() {
     try {
       const fd = new FormData()
       fd.append('file', file)
-      const result: any = await api.importSkillFile(fd)
+      const result = await api.importSkillFile(fd) as { success?: boolean; error?: string }
       if (result.success) {
         setShowImport(false); load()
       } else {
         setInstallError(result.error || 'Import failed')
       }
-    } catch (e: any) { setInstallError(e.message) }
+    } catch (e: unknown) { setInstallError(errorMessage(e)) }
     finally { setInstallLoading(false) }
     if (fileInputRef.current) fileInputRef.current.value = ''
   }

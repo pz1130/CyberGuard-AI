@@ -7,13 +7,15 @@ or the raw markers leak into the answer.
 from pathlib import Path
 import re
 
-CHAT_TS = Path(__file__).resolve().parents[1] / "webui" / "src" / "pages" / "Chat.tsx"
+REASONING_TS = (
+    Path(__file__).resolve().parents[1] / "webui" / "src" / "lib" / "splitReasoningContent.ts"
+)
 
 
 def test_chat_opening_tag_accepts_think_attribute_variants():
-    src = CHAT_TS.read_text(encoding="utf-8")
+    src = REASONING_TS.read_text(encoding="utf-8")
     assert re.search(r"think\[\^>\]\*", src), (
-        "Chat.tsx must match <think...> openings, not only <think>"
+        "splitReasoningContent.ts must match <think...> openings, not only <think>"
     )
 
 

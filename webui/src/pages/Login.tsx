@@ -9,7 +9,7 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState(() => {
     const err = new URLSearchParams(window.location.search).get('error')
-    return err ? (t(`login.${err}` as any) || t('login.ssoError')) : ''
+    return err ? (t(`login.${err}` as never) || t('login.ssoError')) : ''
   })
   const [loading, setLoading] = useState(false)
   const [ssoEnabled, setSsoEnabled] = useState(false)
@@ -17,7 +17,9 @@ export default function Login() {
 
   useEffect(() => {
     api.getSsoStatus().then((d: unknown) => setSsoEnabled(!!(d as { enabled?: boolean } | null)?.enabled)).catch(() => {})
-    api.getBranding().then((d: any) => { if (d) setBranding(d) }).catch(() => {})
+    api.getBranding().then((d: unknown) => {
+      if (d && typeof d === 'object') setBranding(d as { branding_logo?: string | null; branding_company_name?: string | null })
+    }).catch(() => {})
     const err = new URLSearchParams(window.location.search).get('error')
     if (err) {
       window.history.replaceState(null, '', window.location.pathname)

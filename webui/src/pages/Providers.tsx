@@ -2,7 +2,9 @@ import { useState, useEffect, useMemo, useContext, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Plus, Loader2, Search, X, RefreshCw, Zap, Settings2, Database } from 'lucide-react'
-import { SearchContext } from '../context/SearchContext'
+import { SearchContext } from '../context/search'
+import { errorMessage } from '../lib/errorMessage'
+import { unwrapList } from '../lib/unwrapList'
 import Modal from '../components/Modal'
 import PageHeader from '../components/PageHeader'
 
@@ -29,7 +31,7 @@ interface Provider {
   api_key?: string        // masked '******' from server, or empty
   models: ModelInfo[]
   is_active: boolean
-  metadata_json?: Record<string, any>
+  metadata_json?: Record<string, unknown>
   // derived
   _status?: 'ready' | 'partial' | 'unconfigured'
 }
@@ -132,8 +134,8 @@ function SettingsModal({
     setTesting(true); setTestMsg(null)
     try {
       if (provider?.id) {
-        const r = await api.testProvider(provider.id) as any
-        setTestMsg({ ok: r.success, msg: r.error || (r.latency_ms ? `${r.latency_ms}ms` : 'Connected') })
+        const r = await api.testProvider(provider.id) as { success?: boolean; error?: string; latency_ms?: number }
+        setTestMsg({ ok: !!r.success, msg: r.error || (r.latency_ms ? `${r.latency_ms}ms` : 'Connected') })
       } else {
         // Live test before saving — directly hit the API
         const base = baseUrl.replace(/\/$/, '')
@@ -144,8 +146,8 @@ function SettingsModal({
           })
           const ms = Date.now() - t0
           setTestMsg({ ok: resp.ok, msg: resp.ok ? `Connected · ${ms}ms` : `HTTP ${resp.status}` })
-        } catch (e: any) {
-          setTestMsg({ ok: false, msg: e.message })
+        } catch (e: unknown) {
+          setTestMsg({ ok: false, msg: errorMessage(e) })
         }
       }
     } finally { setTesting(false) }
@@ -155,7 +157,7 @@ function SettingsModal({
     if (!name) return
     setSaving(true)
     try {
-      const metadata_json: Record<string, any> = {
+      const metadata_json: Record<string, unknown> = {
         ...(provider?.metadata_json || {}),
         preserve_think: preserveThink,
       }
@@ -163,7 +165,7 @@ function SettingsModal({
         if (groupId.trim()) metadata_json.group_id = groupId.trim()
         else delete metadata_json.group_id
       }
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         name, provider_type: type, base_url: baseUrl,
         metadata_json,
       }
@@ -179,7 +181,7 @@ function SettingsModal({
         await api.createProvider(payload)
       }
       onSaved()
-    } catch (e: any) { alert(e.message) }
+    } catch (e: unknown) { alert(errorMessage(e)) }
     finally { setSaving(false) }
   }
 
@@ -330,10 +332,12 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
         // is masked in the form, so a browser-side fetch would 401; the backend also
         // sidesteps provider CORS. The backend classifies embedding names and
         // backfills MiniMax embo-01.
-        const data = await api.discoverProviderModels(provider.id) as any
+        const data = await api.discoverProviderModels(provider.id) as {
+          models?: Array<{ name?: string; id?: string; model_type?: ModelInfo['model_type'] }>
+        }
         discovered = (data.models || [])
-          .map((m: any) => ({
-            name: m.name || m.id,
+          .map(m => ({
+            name: m.name || m.id || '',
             model_type: (m.model_type || 'chat') as ModelInfo['model_type'],
           }))
           .filter((m: ModelInfo) => m.name)
@@ -344,10 +348,20 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
           headers: provider.api_key ? { Authorization: `Bearer ${provider.api_key}` } : {},
         })
         if (!resp.ok) { setFetchErr(`HTTP ${resp.status}`); return }
-        const data = await resp.json()
+        const data: unknown = await resp.json()
         let ids: string[] = []
-        if (Array.isArray(data.data)) ids = data.data.map((m: any) => m.id).filter(Boolean)
-        else if (Array.isArray(data.models)) ids = data.models.map((m: any) => m.name || m.id).filter(Boolean)
+        if (data && typeof data === 'object') {
+          const rec = data as Record<string, unknown>
+          if (Array.isArray(rec.data)) {
+            ids = rec.data.map(m => (m && typeof m === 'object' && 'id' in m ? String((m as { id?: string }).id || '') : '')).filter(Boolean)
+          } else if (Array.isArray(rec.models)) {
+            ids = rec.models.map(m => {
+              if (!m || typeof m !== 'object') return ''
+              const row = m as { name?: string; id?: string }
+              return row.name || row.id || ''
+            }).filter(Boolean)
+          }
+        }
         discovered = ids.map(name => ({ name, model_type: 'chat' as const }))
       }
       if (!discovered.length) { setFetchErr('No models returned by provider'); return }
@@ -355,7 +369,7 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
       const merged = discovered.map(m => existing[m.name] ? { ...m, ...existing[m.name], name: m.name, model_type: existing[m.name].model_type || m.model_type } : m)
       const preserved = models.filter(m => m.model_type !== 'chat' && !merged.some(x => x.name === m.name))
       setModels([...merged, ...preserved])
-    } catch (e: any) { setFetchErr(e.message) }
+    } catch (e: unknown) { setFetchErr(errorMessage(e)) }
     finally { setFetching(false) }
   }
 
@@ -363,10 +377,12 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
     if (!provider.id) { setFetchErr(t('providers.saveToProbe')); return }
     setProbing(true); setFetchErr('')
     try {
-      const data = await api.probeProviderModels(provider.id) as any
-      const caps = Object.fromEntries((data.models || []).map((m: any) => [m.name, m.capabilities]))
+      const data = await api.probeProviderModels(provider.id) as {
+        models?: Array<{ name: string; capabilities?: ModelInfo['capabilities'] }>
+      }
+      const caps = Object.fromEntries((data.models || []).map(m => [m.name, m.capabilities]))
       setModels(prev => prev.map(m => ({ ...m, capabilities: caps[m.name] ?? m.capabilities })))
-    } catch (e: any) { setFetchErr(e.message) }
+    } catch (e: unknown) { setFetchErr(errorMessage(e)) }
     finally { setProbing(false) }
   }
 
@@ -400,7 +416,7 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
     try {
       // Route through the backend so it uses the stored (real) key — the form only
       // has the masked '******' key, and a browser-direct call also hits provider CORS.
-      const r = await api.testProvider(provider.id, name) as any
+      const r = await api.testProvider(provider.id, name) as { success?: boolean; error?: string }
       const ok = !!r.success
       const err = r.error || null
       setTestRes(res => ({ ...res, [name]: { ok, ms: Date.now() - t0, err } }))
@@ -414,13 +430,13 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
         last_tested_at: new Date().toISOString(),
         test_error: ok ? null : (err || 'test failed'),
       } : m))
-    } catch (e: any) {
-      setTestRes(res => ({ ...res, [name]: { ok: false, ms: Date.now() - t0, err: e?.message || 'request failed' } }))
+    } catch (e: unknown) {
+      setTestRes(res => ({ ...res, [name]: { ok: false, ms: Date.now() - t0, err: errorMessage(e) || 'request failed' } }))
       setModels(prev => prev.map(m => m.name === name ? {
         ...m,
         verified: false,
         last_tested_at: new Date().toISOString(),
-        test_error: e?.message || 'request failed',
+        test_error: errorMessage(e) || 'request failed',
       } : m))
     } finally { setTesting(null) }
   }
@@ -438,7 +454,7 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
     try {
       await api.updateProvider(String(provider.id), { ...provider, models, api_key: undefined })
       onSaved()
-    } catch (e: any) { alert(e.message) }
+    } catch (e: unknown) { alert(errorMessage(e)) }
     finally { setSaving(false) }
   }
 
@@ -545,7 +561,7 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
                   {/* Type selector */}
                   <select
                     value={m.model_type}
-                    onChange={e => setModels(prev => prev.map(x => x.name === m.name ? { ...x, model_type: e.target.value as any } : x))}
+                    onChange={e => setModels(prev => prev.map(x => x.name === m.name ? { ...x, model_type: e.target.value as ModelInfo['model_type'] } : x))}
                     style={{ height: 24, padding: '0 4px', background: 'var(--bg-base)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}
                   >
                     <option value="chat">chat</option>
@@ -611,7 +627,7 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
           <select
             className="form-input"
             value={newType}
-            onChange={e => setNewType(e.target.value as any)}
+            onChange={e => setNewType(e.target.value as ModelInfo['model_type'])}
             style={{ width: 90, height: 34, fontSize: 12 }}
           >
             <option value="chat">chat</option>
@@ -720,11 +736,10 @@ export default function Providers() {
 
   const load = useCallback(async () => {
     try {
-      const data = await api.getProviders() as any
-      const list: any[] = data?.providers || data || []
+      const list = unwrapList<Provider>(await api.getProviders(), 'providers')
       setProviders(list.map(p => ({
         ...p,
-        models: (p.models || []).map((m: any) => typeof m === 'string' ? { name: m, model_type: 'chat' } : m),
+        models: (p.models || []).map(m => typeof m === 'string' ? { name: m, model_type: 'chat' as const } : m),
       })))
     } catch { setProviders([]) } finally { setLoading(false) }
   }, [])
@@ -733,7 +748,7 @@ export default function Providers() {
 
   const del = async (p: Provider) => {
     if (!confirm(t('providers.confirmDeleteName', { name: p.name }))) return
-    try { await api.deleteProvider(String(p.id)); load() } catch (e: any) { alert(e.message) }
+    try { await api.deleteProvider(String(p.id)); load() } catch (e: unknown) { alert(errorMessage(e)) }
   }
 
   // Presets not yet in DB — no longer used (the "可添加的 Provider" card grid

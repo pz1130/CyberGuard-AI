@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Key, Lock, AlertTriangle, Save, Loader2 } from 'lucide-react'
 import { api } from '../api/client'
 import PageHeader from '../components/PageHeader'
+import { errorMessage } from '../lib/errorMessage'
 
 interface SecuritySettings {
   encryption_enabled: boolean
@@ -106,8 +107,8 @@ export default function Security() {
       setSettings(d)
       setNotice({ ok: true, msg: t('security.saved') })
       setTimeout(() => setNotice(null), 3000)
-    } catch (e: any) {
-      setNotice({ ok: false, msg: e?.message || t('security.saveFailed') })
+    } catch (e: unknown) {
+      setNotice({ ok: false, msg: errorMessage(e) || t('security.saveFailed') })
     } finally {
       setSaving(false)
     }

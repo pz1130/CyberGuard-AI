@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Check, X, RefreshCw, Loader2, ChevronDown, ChevronRight } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import { api } from '../api/client'
+import { errorMessage } from '../lib/errorMessage'
 
 type StatusFilter = 'pending' | 'approved' | 'rejected' | 'all'
 type RiskLevel = 'low' | 'medium' | 'high' | 'critical'
@@ -87,8 +88,8 @@ export default function Approvals() {
       setNotice({ id: item.id, ok: true, msg: decision === 'approved' ? 'APPROVED' : 'REJECTED' })
       setTimeout(() => setNotice(null), 3000)
       await load()
-    } catch (e: any) {
-      setNotice({ id: item.id, ok: false, msg: e?.message || 'FAILED' })
+    } catch (e: unknown) {
+      setNotice({ id: item.id, ok: false, msg: errorMessage(e) || 'FAILED' })
     } finally {
       setDeciding(null)
     }

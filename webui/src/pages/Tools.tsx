@@ -2,7 +2,8 @@ import { useState, useEffect, useContext, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Trash2, Plus, Edit2, Terminal, X, Loader2 } from 'lucide-react'
-import { SearchContext } from '../context/SearchContext'
+import { SearchContext } from '../context/search'
+import { errorMessage } from '../lib/errorMessage'
 
 interface Tool {
   id?: number
@@ -17,7 +18,7 @@ interface Tool {
   timeout_seconds?: number
   required_permission?: string
   md_content?: string
-  metadata_json?: Record<string, any>
+  metadata_json?: Record<string, unknown>
   tags?: string[]
   tagsText?: string
 }
@@ -120,7 +121,7 @@ export default function Tools() {
       setShowForm(false); setEditing(null)
       resetForm()
       load()
-    } catch (e: any) { alert(e.message) }
+    } catch (e: unknown) { alert(errorMessage(e)) }
   }
 
   const openEdit = (t: Tool) => {
@@ -144,7 +145,7 @@ export default function Tools() {
   const del = async (id: number) => {
     if (confirm('CONFIRM DELETION?')) {
       try { await api.deleteTool(id); load() }
-      catch (e: any) { alert(e.message) }
+      catch (e: unknown) { alert(errorMessage(e)) }
     }
   }
 
@@ -152,9 +153,11 @@ export default function Tools() {
     const raw = prompt(`Args JSON for ${t.name}:`, '{}')
     if (raw == null) return
     try {
-      const res: any = await api.executeTool(t.id!, JSON.parse(raw))
+      const res = await api.executeTool(t.id!, JSON.parse(raw) as Record<string, unknown>) as {
+        status?: string; exit_code?: number; stdout?: string; error?: string
+      }
       alert(`status: ${res.status}\nexit: ${res.exit_code ?? ''}\n\n${res.stdout || res.error || ''}`)
-    } catch (e: any) { alert(e.message) }
+    } catch (e: unknown) { alert(errorMessage(e)) }
   }
 
   return (

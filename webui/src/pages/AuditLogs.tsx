@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Download, Search, Loader2 } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
+import { errorMessage } from '../lib/errorMessage'
 
 interface Log {
   id?: number
@@ -32,13 +33,13 @@ export default function AuditLogs() {
 
   const exportLogs = async () => {
     try {
-      const data = await api.exportAuditLogs() as any
+      const data: unknown = await api.exportAuditLogs()
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url; a.download = `audit-logs-${Date.now()}.json`; a.click()
       URL.revokeObjectURL(url)
-    } catch (e: any) { alert(e.message) }
+    } catch (e: unknown) { alert(errorMessage(e)) }
   }
 
   const filtered = logs.filter(l =>

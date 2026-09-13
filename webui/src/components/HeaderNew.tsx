@@ -70,8 +70,8 @@ export default function HeaderNew({
 
   useEffect(() => {
     const load = () => {
-      api.getBranding().then((d: any) => {
-        if (d) setBranding(d)
+      api.getBranding().then((d: unknown) => {
+        if (d && typeof d === 'object') setBranding(d as { branding_logo?: string | null; branding_company_name?: string | null })
       }).catch(() => {})
     }
     load()

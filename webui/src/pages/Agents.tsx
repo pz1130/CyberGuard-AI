@@ -2,7 +2,9 @@ import { useState, useEffect, useContext } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Plus, Loader2, Cpu, Trash, Pencil, Copy, Wifi, WifiOff, Key } from 'lucide-react'
-import { SearchContext } from '../context/SearchContext'
+import { SearchContext } from '../context/search'
+import { errorMessage } from '../lib/errorMessage'
+import { unwrapList } from '../lib/unwrapList'
 import Modal from '../components/Modal'
 import PageHeader from '../components/PageHeader'
 
@@ -20,7 +22,7 @@ interface Agent {
   has_api_key?: boolean
   is_online?: boolean
   openclaw_last_seen?: string
-  metadata_json?: Record<string, any>
+  metadata_json?: Record<string, unknown>
   llm_provider_id?: number | null
   llm_model?: string | null
   tool_loop_max_steps?: number
@@ -367,9 +369,11 @@ function CodeBlock({ text, onCopy, copied }: { text: string; onCopy: (t: string)
 }
 
 // ── PoolPicker: reusable checkbox list for skills / tools / mcp-tools ────────
+type PoolItem = { id: number; name?: string; tool_name?: string; tags?: string[]; version?: string }
+
 function PoolPicker({ label: lbl, options, selected, onToggle }: {
   label: string
-  options: { id: number; name?: string; tool_name?: string; tags?: string[]; version?: string }[]
+  options: PoolItem[]
   selected: number[]
   onToggle: (id: number) => void
 }) {
@@ -423,8 +427,8 @@ function AgentRunPanel({ agentId, agentName, onClose }: {
           setSteps(s => [...s, ev])
         }
       }
-    } catch (e: any) {
-      setErr(String(e?.message || e))
+    } catch (e: unknown) {
+      setErr(errorMessage(e))
     } finally {
       setRunning(false)
     }
@@ -484,9 +488,9 @@ export default function Agents() {
   const [kindFilter, setKindFilter] = useState<string>('all')
   const [showKindPicker, setShowKindPicker] = useState(false)
   const [providers, setProviders] = useState<ProviderOption[]>([])
-  const [skillsPool, setSkillsPool] = useState<any[]>([])
-  const [toolsPool, setToolsPool] = useState<any[]>([])
-  const [mcpToolsPool, setMcpToolsPool] = useState<any[]>([])
+  const [skillsPool, setSkillsPool] = useState<PoolItem[]>([])
+  const [toolsPool, setToolsPool] = useState<PoolItem[]>([])
+  const [mcpToolsPool, setMcpToolsPool] = useState<PoolItem[]>([])
   const [runningAgent, setRunningAgent] = useState<{ id: string | number; name: string } | null>(null)
 
   const { searchTarget, setSearchTarget } = useContext(SearchContext)
@@ -506,28 +510,21 @@ export default function Agents() {
 
   const load = async () => {
     try {
-      const data = await api.getAgents() as any
-      const list: Agent[] = Array.isArray(data) ? data : (data?.agents || [])
-      setItems(list)
+      setItems(unwrapList<Agent>(await api.getAgents(), 'agents'))
     } catch { setItems([]) } finally { setLoading(false) }
   }
 
   const loadProviders = async () => {
     try {
-      const data = await api.getProviders() as any
-      const list: ProviderOption[] = Array.isArray(data) ? data : (data?.providers || [])
-      setProviders(list)
+      setProviders(unwrapList<ProviderOption>(await api.getProviders(), 'providers'))
     } catch { setProviders([]) }
   }
 
   const loadPools = async () => {
     try {
-      const s = await api.getSkills() as any
-      setSkillsPool(Array.isArray(s) ? s : (s?.skills || []))
-      const t = await api.getTools() as any
-      setToolsPool(Array.isArray(t) ? t : (t?.tools || []))
-      const m = await api.getAllMcpTools() as any
-      setMcpToolsPool(Array.isArray(m) ? m : (m?.tools || []))
+      setSkillsPool(unwrapList<PoolItem>(await api.getSkills(), 'skills'))
+      setToolsPool(unwrapList<PoolItem>(await api.getTools(), 'tools'))
+      setMcpToolsPool(unwrapList<PoolItem>(await api.getAllMcpTools(), 'tools'))
     } catch { /* leave pools empty */ }
   }
 
@@ -574,7 +571,7 @@ export default function Agents() {
     if (!form.agent_name) return
     try {
       const isInternal = form.backend_type === '__internal__'
-      const payload: Record<string, any> = {
+      const payload: Record<string, unknown> = {
         agent_name: form.agent_name,
         kind: isInternal ? 'internal' : 'external',
         description: form.description || undefined,
@@ -608,7 +605,7 @@ export default function Agents() {
         await api.updateAgent(editing, payload)
         setShowForm(false)
       } else {
-        const res = await api.createAgent(payload) as any
+        const res = await api.createAgent(payload) as { api_key?: string }
         if (!isInternal && res?.api_key) {
           setCreatedApiKey(res.api_key)
         } else {
@@ -616,7 +613,7 @@ export default function Agents() {
         }
       }
       load()
-    } catch (e: any) { alert(e.message || String(e)) }
+    } catch (e: unknown) { alert(errorMessage(e)) }
   }
 
   const del = async (id: string) => {
@@ -627,10 +624,10 @@ export default function Agents() {
   const test = async (id: string) => {
     setTesting(id)
     try {
-      const res = await api.testAgent(id, {}) as any
-      setTestResult(r => ({ ...r, [id]: { ok: res.success, msg: res.error || (res.success ? t('agents.connectionOk') : t('agents.connectionFail')) } }))
-    } catch (e: any) {
-      setTestResult(r => ({ ...r, [id]: { ok: false, msg: e.message } }))
+      const res = await api.testAgent(id, {}) as { success?: boolean; error?: string }
+      setTestResult(r => ({ ...r, [id]: { ok: !!res.success, msg: res.error || (res.success ? t('agents.connectionOk') : t('agents.connectionFail')) } }))
+    } catch (e: unknown) {
+      setTestResult(r => ({ ...r, [id]: { ok: false, msg: errorMessage(e) } }))
     } finally { setTesting(null) }
   }
 
@@ -638,9 +635,10 @@ export default function Agents() {
     if (!confirm(t('agents.reissueKeyShort'))) return
     setRegenLoading(id)
     try {
-      const res = await (api as any).regenAgentApiKey(id) as any
-      if (res?.api_key) setRegenKey(k => ({ ...k, [id]: res.api_key }))
-    } catch (e: any) { alert(e.message) }
+      const res = await api.regenAgentApiKey(id) as { api_key?: string }
+      const key = res?.api_key
+      if (key) setRegenKey(k => ({ ...k, [id]: key }))
+    } catch (e: unknown) { alert(errorMessage(e)) }
     finally { setRegenLoading(null) }
   }
 
@@ -1020,10 +1018,10 @@ export default function Agents() {
                   apiKey={createdApiKey || undefined}
                   onRequestKey={editing ? async () => {
                     try {
-                      const res = await (api as any).regenAgentApiKey(editing) as { api_key?: string }
+                      const res = await api.regenAgentApiKey(editing) as { api_key?: string }
                       if (res?.api_key) setCreatedApiKey(res.api_key)
-                    } catch (e: any) {
-                      alert(e?.message || t('agents.genKeyFail'))
+                    } catch (e: unknown) {
+                      alert(errorMessage(e) || t('agents.genKeyFail'))
                     }
                   } : undefined}
                 />
@@ -1073,9 +1071,9 @@ export default function Agents() {
                       onClick={async () => {
                         if (!confirm(t('agents.reissueKeyShort'))) return
                         try {
-                          const res = await (api as any).regenAgentApiKey(editing) as { api_key?: string }
+                          const res = await api.regenAgentApiKey(editing) as { api_key?: string }
                           if (res?.api_key) setCreatedApiKey(res.api_key)
-                        } catch (e: any) { alert(e?.message || t('agents.genKeyFail')) }
+                        } catch (e: unknown) { alert(errorMessage(e) || t('agents.genKeyFail')) }
                       }}
                       style={{
                         alignSelf: 'flex-start', padding: '6px 12px',

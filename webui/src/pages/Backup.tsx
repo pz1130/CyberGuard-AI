@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Database, Download, Trash2, Plus, RefreshCw, Loader2 } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
+import { errorMessage } from '../lib/errorMessage'
 
 interface Backup {
   id: string
@@ -71,7 +72,7 @@ export default function Backup() {
         exclude_chat: excludeChat,
       })
       await load()
-    } catch (e: any) { alert(e.message) } finally { setCreating(false) }
+    } catch (e: unknown) { alert(errorMessage(e)) } finally { setCreating(false) }
   }
 
   const restore = async (id: string) => {
@@ -80,7 +81,7 @@ export default function Backup() {
     try {
       await api.restoreBackup(id)
       alert('RESTORE SUCCESS')
-    } catch (e: any) { alert(e.message) } finally { setRestoring(null) }
+    } catch (e: unknown) { alert(errorMessage(e)) } finally { setRestoring(null) }
   }
 
   const del = async (id: string) => {
@@ -89,18 +90,18 @@ export default function Backup() {
     try {
       await api.deleteBackup(id)
       await load()
-    } catch (e: any) { alert(e.message) } finally { setDeleting(null) }
+    } catch (e: unknown) { alert(errorMessage(e)) } finally { setDeleting(null) }
   }
 
   const exportConfig = async () => {
     try {
-      const data = await api.exportConfig() as any
+      const data: unknown = await api.exportConfig()
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url; a.download = 'cyberguard-config.json'; a.click()
       URL.revokeObjectURL(url)
-    } catch (e: any) { alert(e.message) }
+    } catch (e: unknown) { alert(errorMessage(e)) }
   }
 
   return (

@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useContext, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Plus, Search, Trash2, Upload, FileText, Database, Loader2, Settings2 } from 'lucide-react'
-import { SearchContext } from '../context/SearchContext'
+import { SearchContext } from '../context/search'
+import { errorMessage } from '../lib/errorMessage'
 import PageHeader from '../components/PageHeader'
 import Modal from '../components/Modal'
 
@@ -106,8 +107,8 @@ function OcrSettingsModal({ open, onClose }: { open: boolean; onClose: () => voi
     try {
       await api.updateOcrConfig(cfg)
       onClose()
-    } catch (e: any) {
-      alert(e.message || 'Failed to update OCR config')
+    } catch (e: unknown) {
+      alert(errorMessage(e) || 'Failed to update OCR config')
     } finally {
       setSaving(false)
     }
@@ -337,7 +338,7 @@ export default function Knowledge() {
       setKBForm({ name: '', description: '', provider_id: null, embedding_model: '', embedding_dim: 1536 })
       await loadKBs()
       if (created?.id) setSelected(created)
-    } catch (e: any) { alert(e.message) }
+    } catch (e: unknown) { alert(errorMessage(e)) }
   }
 
   const deleteKB = async (kb: KB) => {
@@ -347,7 +348,7 @@ export default function Knowledge() {
       await api.deleteKnowledgeBase(kb.id)
       if (selected?.id === kb.id) setSelected(null)
       loadKBs()
-    } catch (e: any) { alert(e.message) }
+    } catch (e: unknown) { alert(errorMessage(e)) }
   }
 
   const ingestText = async () => {
@@ -364,8 +365,8 @@ export default function Knowledge() {
       setTextForm({ filename: '', content: '' })
       setShowTextForm(false)
       loadDocs(selected.id)
-    } catch (e: any) {
-      alert(`${t('knowledge.importFailed')}: ${e.message}`)
+    } catch (e: unknown) {
+      alert(`${t('knowledge.importFailed')}: ${errorMessage(e)}`)
     } finally {
       setIngesting(false)
     }
@@ -384,8 +385,8 @@ export default function Knowledge() {
       if (res?.status === 'processing') {
         alert(t('knowledge.scanUploadedOcr'))
       }
-    } catch (e: any) {
-      alert(`${t('knowledge.uploadFailed')}: ${e.message}`)
+    } catch (e: unknown) {
+      alert(`${t('knowledge.uploadFailed')}: ${errorMessage(e)}`)
     } finally {
       setIngesting(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -398,7 +399,7 @@ export default function Knowledge() {
     try {
       await api.deleteDocument(selected.id, doc.id)
       loadDocs(selected.id)
-    } catch (e: any) { alert(e.message) }
+    } catch (e: unknown) { alert(errorMessage(e)) }
   }
 
   const search = async () => {
@@ -412,7 +413,7 @@ export default function Knowledge() {
     try {
       const res = await api.queryKnowledge({ kb_id: selected.id, query, top_k: topK, provider_id: selected.provider_id ?? undefined }) as { results: QueryResult[] }
       setResults(res.results || [])
-    } catch (e: any) { alert(e.message) } finally { setQuerying(false) }
+    } catch (e: unknown) { alert(errorMessage(e)) } finally { setQuerying(false) }
   }
 
   return (

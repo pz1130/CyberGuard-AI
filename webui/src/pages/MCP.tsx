@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Trash2, Plus, Edit2, ChevronDown, ChevronRight, Server, Activity, Wrench } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
-import { SearchContext } from '../context/SearchContext'
+import { SearchContext } from '../context/search'
+import { errorMessage } from '../lib/errorMessage'
 import Modal from '../components/Modal'
 
 interface MCPServer {
@@ -132,12 +133,12 @@ export default function MCP() {
       else await api.createMCPServer(payload)
       setShowServerForm(false); setEditingServer(null); setServerForm(emptyServerForm)
       loadServers()
-    } catch (e: any) { alert(e.message) }
+    } catch (e: unknown) { alert(errorMessage(e)) }
   }
 
   const delServer = async (id: number) => {
     if (!confirm('DELETE THIS MCP SERVER?')) return
-    try { await api.deleteMCPServer(id); loadServers() } catch (e: any) { alert(e.message) }
+    try { await api.deleteMCPServer(id); loadServers() } catch (e: unknown) { alert(errorMessage(e)) }
   }
 
   const toggleExpand = (id: number) => setExpandedServer(expandedServer === id ? null : id)
@@ -170,13 +171,16 @@ export default function MCP() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 0, marginBottom: 24, border: '1px solid var(--border-bright)', borderRadius: 'var(--radius-md)', overflow: 'hidden', width: 'fit-content' }}>
-        {[['servers', 'SERVERS', servers.length], ['tools', 'TOOLS', tools.length]].map(([t, label, count]) => (
-          <button key={t} onClick={() => setTab(t as any)}
+        {([
+          { id: 'servers' as const, label: 'SERVERS', count: servers.length },
+          { id: 'tools' as const, label: 'TOOLS', count: tools.length },
+        ]).map(({ id, label, count }) => (
+          <button key={id} onClick={() => setTab(id)}
             style={{
               padding: '8px 20px', height: 34,
-              background: tab === t ? 'var(--accent-dim)' : 'transparent',
+              background: tab === id ? 'var(--accent-dim)' : 'transparent',
               border: 'none', borderRight: '1px solid var(--border-bright)',
-              color: tab === t ? 'var(--accent)' : 'var(--text-muted)',
+              color: tab === id ? 'var(--accent)' : 'var(--text-muted)',
               fontSize: 12, letterSpacing: '0.06em', cursor: 'pointer',
                           }}>
             {label} <span style={{ marginLeft: 6, opacity: 0.6 }}>({count})</span>

@@ -3,7 +3,10 @@ import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import ReactMarkdown from 'react-markdown'
 import { Send, Plus, X, Check, Edit2, Trash2, Settings, Paperclip, Image as ImageIcon, FileText } from 'lucide-react'
-import { useSearch } from '../context/SearchContext'
+import { useSearch } from '../context/search'
+import { errorMessage } from '../lib/errorMessage'
+import { splitReasoningContent } from '../lib/splitReasoningContent'
+import { unwrapList } from '../lib/unwrapList'
 
 interface Message {
   role: 'user' | 'assistant' | 'system'
@@ -91,43 +94,6 @@ const MAX_FILES = 10
 interface AttachmentFile {
   file: File
   previewUrl: string
-}
-
-interface ReasoningContent {
-  reasoning: string[]
-  answer: string
-}
-
-/** Split provider reasoning tags without exposing the raw XML-like markers. */
-export function splitReasoningContent(content: string): ReasoningContent {
-  const reasoning: string[] = []
-  let answer = ''
-  let cursor = 0
-  // Same family as packages/llm_router/utils.py: <think>, <think>0, <think>_1.
-  const openingTag = /<(think[^>]*|reasoning)>/gi
-  let match: RegExpExecArray | null
-
-  while ((match = openingTag.exec(content)) !== null) {
-    answer += content.slice(cursor, match.index)
-    const bodyStart = match.index + match[0].length
-    const closeName = match[1].toLowerCase().startsWith('think') ? 'think' : 'reasoning'
-    const closingTag = new RegExp(`</${closeName}>`, 'i')
-    const closingMatch = closingTag.exec(content.slice(bodyStart))
-    if (!closingMatch) {
-      const partial = content.slice(bodyStart).trim()
-      if (partial) reasoning.push(partial)
-      cursor = content.length
-      break
-    }
-
-    const body = content.slice(bodyStart, bodyStart + closingMatch.index).trim()
-    if (body) reasoning.push(body)
-    cursor = bodyStart + closingMatch.index + closingMatch[0].length
-    openingTag.lastIndex = cursor
-  }
-
-  answer += content.slice(cursor)
-  return { reasoning, answer: answer.replace(/<\/(?:think|reasoning)>/gi, '') }
 }
 
 function AssistantMessage({ content }: { content: string }) {
@@ -255,11 +221,10 @@ export default function Chat() {
   // Load registered sub-agents for the selector
   const loadAvailableAgents = async () => {
     try {
-      const data = await api.getAgents() as any
-      const rawList: any[] = Array.isArray(data) ? data : (data?.agents || [])
-      const list: AgentOption[] = rawList.map((a: any) => ({
+      const rawList = unwrapList<AgentOption>(await api.getAgents(), 'agents')
+      const list: AgentOption[] = rawList.map(a => ({
         ...a,
-        id: String(a.id),  // normalize for consistent selectedAgentId matching (localStorage strings)
+        id: String(a.id),
       }))
       setAvailableAgents(list.filter(a => a.is_active !== false))
     } catch { setAvailableAgents([]) }
@@ -269,8 +234,7 @@ export default function Chat() {
   // Load knowledge bases
   const loadKnowledgeBases = async () => {
     try {
-      const data = await api.getKnowledgeBases() as { bases: any[] }
-      setAvailableKBs(data?.bases || [])
+      setAvailableKBs(unwrapList<KnowledgeBase>(await api.getKnowledgeBases(), 'knowledge_bases', 'bases'))
     } catch { setAvailableKBs([]) }
   }
   loadKnowledgeBasesRef.current = loadKnowledgeBases
@@ -325,7 +289,7 @@ export default function Chat() {
         knowledge_base_id: null,
       })
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
-    } catch (e: any) { alert(e.message) }
+    } catch (e: unknown) { alert(errorMessage(e)) }
   }
 
   // Select conversation
@@ -364,7 +328,7 @@ export default function Chat() {
         setMessages([])
         localStorage.removeItem('activeChatTaskId')
       }
-    } catch (e: any) { alert(e.message) }
+    } catch (e: unknown) { alert(errorMessage(e)) }
   }
 
   // Start editing title
@@ -380,7 +344,7 @@ export default function Chat() {
     try {
       await api.updateConversation(editingConvId, { title: editingTitle })
       setConversations(prev => prev.map(c => c.id === editingConvId ? { ...c, title: editingTitle } : c))
-    } catch (e: any) { alert(e.message) }
+    } catch (e: unknown) { alert(errorMessage(e)) }
     setEditingConvId(null)
   }
 
@@ -393,10 +357,18 @@ export default function Chat() {
   useEffect(() => {
     const loadModels = async () => {
       try {
-        const data = await api.getProviders() as { total: number; providers: any[] }
-        if (!data?.providers) return
+        type ProviderRow = {
+          id: number
+          name: string
+          provider_type: string
+          base_url?: string
+          is_active?: boolean
+          models?: Array<string | { name?: string; verified?: boolean | null }>
+        }
+        const providers = unwrapList<ProviderRow>(await api.getProviders(), 'providers')
+        if (!providers.length) return
         const models: ProviderModel[] = []
-        for (const p of data.providers) {
+        for (const p of providers) {
           if (!p.is_active) continue
           for (const m of (p.models || [])) {
             // Only show models that the user has explicitly verified.
@@ -565,7 +537,12 @@ export default function Chat() {
       setPollingStatus('STREAMING...')
 
       try {
-        const streamBody: any = { message: userText, conversation_id: activeConvId }
+        const streamBody: {
+          message: string
+          conversation_id?: number
+          provider_id?: number
+          model?: string
+        } = { message: userText, conversation_id: activeConvId || undefined }
         if (modelOverride.provider_id) streamBody.provider_id = modelOverride.provider_id
         if (modelOverride.model) streamBody.model = modelOverride.model
 
@@ -592,14 +569,14 @@ export default function Chat() {
           }
           // 'done' — stream finished, backend persists + auto-titles automatically
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         setMessages(prev => {
           const updated = [...prev]
           const last = updated[updated.length - 1]
           if (last?.role === 'assistant' && !last.content) {
-            updated[updated.length - 1] = { ...last, content: `⚠ STREAM ERROR — ${e?.message || 'CONNECTION FAILED'}` }
+            updated[updated.length - 1] = { ...last, content: `⚠ STREAM ERROR — ${errorMessage(e) || 'CONNECTION FAILED'}` }
           } else {
-            updated.push({ role: 'assistant', content: `⚠ STREAM ERROR — ${e?.message || 'CONNECTION FAILED'}`, created_at: new Date().toISOString() })
+            updated.push({ role: 'assistant', content: `⚠ STREAM ERROR — ${errorMessage(e) || 'CONNECTION FAILED'}`, created_at: new Date().toISOString() })
           }
           return updated
         })
@@ -634,8 +611,8 @@ export default function Chat() {
         localStorage.setItem('activeChatTaskId', taskId)
 
         startPolling(taskId, 'PROCESSING...')
-      } catch (e: any) {
-        setMessages(prev => [...prev, { role: 'assistant', content: `⚠ SYSTEM ERROR — ${e?.message || 'TRANSMISSION FAILURE'}`, created_at: new Date().toISOString() }])
+      } catch (e: unknown) {
+        setMessages(prev => [...prev, { role: 'assistant', content: `⚠ SYSTEM ERROR — ${errorMessage(e) || 'TRANSMISSION FAILURE'}`, created_at: new Date().toISOString() }])
         setLoading(false)
         setPollingStatus('')
       }
@@ -931,7 +908,7 @@ export default function Chat() {
                       c.id === activeConvId ? { ...c, ...update } : c
                     ))
                     setShowConvSettings(false)
-                  } catch (e: any) { alert(e.message) }
+                  } catch (e: unknown) { alert(errorMessage(e)) }
                 }}
                 className="btn btn-primary btn-sm" style={{ fontWeight: 700 }}>
                 SAVE SETTINGS

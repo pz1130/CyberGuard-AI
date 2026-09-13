@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Trash2, Eye, EyeOff, RefreshCw, Lock } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
+import { errorMessage } from '../lib/errorMessage'
 
 interface EnvVar {
   id?: number
@@ -39,7 +40,7 @@ export default function EnvVars() {
       await api.createEnvVar({ key: newKey.trim().toUpperCase(), value: newVal, value_type: newType, description: newDesc || undefined })
       setNewKey(''); setNewVal(''); setNewType('text'); setNewDesc(''); setShowNew(false)
       load()
-    } catch (e: any) { alert(e.message) }
+    } catch (e: unknown) { alert(errorMessage(e)) }
   }
 
   const del = async (id: number) => {
@@ -48,7 +49,7 @@ export default function EnvVars() {
       await api.deleteEnvVar(id)
       setVars(v => v.filter(x => x.id !== id))
       setDecryptedValues(prev => { const n = { ...prev }; delete n[id]; return n })
-    } catch (e: any) { alert(e.message) }
+    } catch (e: unknown) { alert(errorMessage(e)) }
   }
 
   const toggleActive = async (v: EnvVar) => {
@@ -56,7 +57,7 @@ export default function EnvVars() {
     try {
       await api.updateEnvVar(v.id, { is_active: !v.is_active })
       load()
-    } catch (e: any) { alert(e.message) }
+    } catch (e: unknown) { alert(errorMessage(e)) }
   }
 
   const decryptValue = async (id: number, key: string) => {
@@ -69,7 +70,7 @@ export default function EnvVars() {
       const res = await api.decryptEnvVar(id) as { value: string }
       setDecryptedValues(prev => ({ ...prev, [id]: res.value }))
       setVisibleValues(prev => ({ ...prev, [key]: true }))
-    } catch (e: any) { alert(e.message) }
+    } catch (e: unknown) { alert(errorMessage(e)) }
     finally { setDecrypting(null) }
   }
 

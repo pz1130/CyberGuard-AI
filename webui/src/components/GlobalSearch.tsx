@@ -2,7 +2,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../api/client'
-import { useSearch } from '../context/SearchContext'
+import { useSearch } from '../context/search'
+import { unwrapList } from '../lib/unwrapList'
 import type { Tab } from './SidebarNew'
 
 interface SearchItem {
@@ -75,91 +76,89 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
     ]).then(([agents, providers, skills, tools, knowledge, mcp, prompts, convos]) => {
       const items: SearchItem[] = []
 
+      type AgentRow = { id?: number | string; name?: string; agent_name?: string; kind?: string; backend_type?: string }
+      type NamedRow = { id?: number | string; name?: string; description?: string; provider_type?: string; url?: string; category?: string }
+      type ConvRow = { id: number; title?: string; messages_json?: string }
+
       if (agents.status === 'fulfilled') {
-        const d = agents.value as any
-        const list = Array.isArray(d) ? d : (d?.agents || [])
-        list.forEach((a: any) => {
+        for (const a of unwrapList<AgentRow>(agents.value, 'agents')) {
           const k = (a.kind || '').toLowerCase()
           const isInternal = k === 'internal' || a.backend_type === '__internal__'
           const suffix = isInternal ? 'INTERNAL' : (a.backend_type || 'AGENT').toUpperCase()
           items.push({
-            id: a.id, name: a.agent_name || a.name || String(a.id),
+            id: a.id ?? '', name: a.agent_name || a.name || String(a.id),
             subtitle: suffix,
             tab: 'agents', category: 'AGENTS', icon: '◆',
           })
-        })
+        }
       }
 
       if (providers.status === 'fulfilled') {
-        const d = providers.value as any
-        const list = Array.isArray(d) ? d : (d?.providers || [])
-        list.forEach((p: any) => items.push({
-          id: p.id, name: p.name,
-          subtitle: (p.provider_type || 'PROVIDER').toUpperCase(),
-          tab: 'providers', category: 'PROVIDERS', icon: '▣',
-        }))
+        for (const p of unwrapList<NamedRow>(providers.value, 'providers')) {
+          items.push({
+            id: p.id ?? '', name: p.name || '',
+            subtitle: (p.provider_type || 'PROVIDER').toUpperCase(),
+            tab: 'providers', category: 'PROVIDERS', icon: '▣',
+          })
+        }
       }
 
       if (skills.status === 'fulfilled') {
-        const d = skills.value as any
-        const list = Array.isArray(d) ? d : (d?.skills || [])
-        list.forEach((s: any) => items.push({
-          id: s.id, name: s.name,
-          subtitle: s.description ? String(s.description).slice(0, 40) : 'SKILL',
-          tab: 'skills', category: 'SKILLS', icon: '◈',
-        }))
+        for (const s of unwrapList<NamedRow>(skills.value, 'skills')) {
+          items.push({
+            id: s.id ?? '', name: s.name || '',
+            subtitle: s.description ? String(s.description).slice(0, 40) : 'SKILL',
+            tab: 'skills', category: 'SKILLS', icon: '◈',
+          })
+        }
       }
 
       if (tools.status === 'fulfilled') {
-        const d = tools.value as any
-        const list = Array.isArray(d) ? d : (d?.tools || [])
-        list.forEach((t: any) => items.push({
-          id: t.id, name: t.name,
-          subtitle: t.description ? String(t.description).slice(0, 40) : 'TOOL',
-          tab: 'tools', category: 'TOOLS', icon: '◇',
-        }))
+        for (const t of unwrapList<NamedRow>(tools.value, 'tools')) {
+          items.push({
+            id: t.id ?? '', name: t.name || '',
+            subtitle: t.description ? String(t.description).slice(0, 40) : 'TOOL',
+            tab: 'tools', category: 'TOOLS', icon: '◇',
+          })
+        }
       }
 
       if (knowledge.status === 'fulfilled') {
-        const d = knowledge.value as any
-        const list = Array.isArray(d) ? d : (d?.bases || [])
-        list.forEach((k: any) => items.push({
-          id: k.id, name: k.name,
-          subtitle: 'KNOWLEDGE BASE',
-          tab: 'knowledge', category: 'KNOWLEDGE', icon: '◉',
-        }))
+        for (const k of unwrapList<NamedRow>(knowledge.value, 'knowledge_bases', 'bases')) {
+          items.push({
+            id: k.id ?? '', name: k.name || '',
+            subtitle: 'KNOWLEDGE BASE',
+            tab: 'knowledge', category: 'KNOWLEDGE', icon: '◉',
+          })
+        }
       }
 
       if (mcp.status === 'fulfilled') {
-        const d = mcp.value as any
-        const list = d?.servers || (Array.isArray(d) ? d : [])
-        list.forEach((m: any) => items.push({
-          id: m.id, name: m.name,
-          subtitle: m.url || 'MCP SERVER',
-          tab: 'mcp', category: 'MCP', icon: '◎',
-        }))
+        for (const m of unwrapList<NamedRow>(mcp.value, 'servers')) {
+          items.push({
+            id: m.id ?? '', name: m.name || '',
+            subtitle: m.url || 'MCP SERVER',
+            tab: 'mcp', category: 'MCP', icon: '◎',
+          })
+        }
       }
 
       if (prompts.status === 'fulfilled') {
-        const d = prompts.value as any
-        const list = Array.isArray(d) ? d : []
-        list.forEach((p: any) => items.push({
-          id: p.id, name: p.name,
-          subtitle: (p.category || 'PROMPT').toUpperCase(),
-          tab: 'prompts', category: 'PROMPTS', icon: '≡',
-        }))
+        for (const p of unwrapList<NamedRow>(prompts.value, 'templates')) {
+          items.push({
+            id: p.id ?? '', name: p.name || '',
+            subtitle: (p.category || 'PROMPT').toUpperCase(),
+            tab: 'prompts', category: 'PROMPTS', icon: '≡',
+          })
+        }
       }
 
       if (convos.status === 'fulfilled') {
-        const d = convos.value as any
-        const list = Array.isArray(d) ? d : (d?.conversations || [])
-        list.forEach((c: any) => {
-          // Parse messages for search
+        for (const c of unwrapList<ConvRow>(convos.value, 'conversations')) {
           let msgs: Array<{ role: string; content: string }> = []
           try {
             msgs = typeof c.messages_json === 'string' ? JSON.parse(c.messages_json || '[]') : []
           } catch { /* keep the empty fallback for malformed history */ }
-          // Build a searchable text from the last few messages
           const lastMsgs = msgs.slice(-6)
           const previewText = lastMsgs.map(m => m.content || '').join(' ').slice(0, 200)
           items.push({
@@ -171,7 +170,7 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
             icon: '◉',
             preview: previewText,
           })
-        })
+        }
       }
 
       setAllItems(items)
