@@ -1,48 +1,32 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useState, useEffect } from 'react'
+import { lazy, Suspense, useState, useEffect } from 'react'
+import type { ComponentType, LazyExoticComponent } from 'react'
 import { useTranslation } from 'react-i18next'
 import SidebarNew, { type Tab } from './components/SidebarNew'
 import HeaderNew from './components/HeaderNew'
 import GlobalSearch from './components/GlobalSearch'
 import { SearchProvider } from './context/SearchContext'
 import { api } from './api/client'
-import Chat from './pages/Chat'
-import Providers from './pages/Providers'
-import Agents from './pages/Agents'
-import Skills from './pages/Skills'
-import Tools from './pages/Tools'
-import Knowledge from './pages/Knowledge'
-import MCP from './pages/MCP'
-import EnvVars from './pages/EnvVars'
-import Security from './pages/Security'
-import TokenUsage from './pages/TokenUsage'
-import Backup from './pages/Backup'
-import AuditLogs from './pages/AuditLogs'
-import Approvals from './pages/Approvals'
-import Users from './pages/Users'
-import Settings from './pages/Settings'
-import Prompts from './pages/Prompts'
-import GovernanceDashboard from './pages/GovernanceDashboard'
 import Login from './pages/Login'
 
-const PAGES: Record<Tab, { labelKey: string; component: React.ReactNode }> = {
-  chat: { labelKey: 'nav.chat', component: <Chat /> },
-  agents: { labelKey: 'nav.agents', component: <Agents /> },
-  providers: { labelKey: 'nav.providers', component: <Providers /> },
-  skills: { labelKey: 'nav.skills', component: <Skills /> },
-  tools: { labelKey: 'nav.tools', component: <Tools /> },
-  knowledge: { labelKey: 'nav.knowledge', component: <Knowledge /> },
-  mcp: { labelKey: 'nav.mcp', component: <MCP /> },
-  envvars: { labelKey: 'nav.envvars', component: <EnvVars /> },
-  security: { labelKey: 'nav.security', component: <Security /> },
-  token: { labelKey: 'nav.token', component: <TokenUsage /> },
-  backup: { labelKey: 'nav.backup', component: <Backup /> },
-  audit: { labelKey: 'nav.audit', component: <AuditLogs /> },
-  approvals: { labelKey: 'nav.approvals', component: <Approvals /> },
-  users: { labelKey: 'nav.users', component: <Users /> },
-  settings: { labelKey: 'nav.settings', component: <Settings /> },
-  prompts: { labelKey: 'nav.prompts', component: <Prompts /> },
-  govDashboard: { labelKey: 'nav.govDashboard', component: <GovernanceDashboard /> },
+const PAGES: Record<Tab, { labelKey: string; component: LazyExoticComponent<ComponentType> }> = {
+  chat: { labelKey: 'nav.chat', component: lazy(() => import('./pages/Chat')) },
+  agents: { labelKey: 'nav.agents', component: lazy(() => import('./pages/Agents')) },
+  providers: { labelKey: 'nav.providers', component: lazy(() => import('./pages/Providers')) },
+  skills: { labelKey: 'nav.skills', component: lazy(() => import('./pages/Skills')) },
+  tools: { labelKey: 'nav.tools', component: lazy(() => import('./pages/Tools')) },
+  knowledge: { labelKey: 'nav.knowledge', component: lazy(() => import('./pages/Knowledge')) },
+  mcp: { labelKey: 'nav.mcp', component: lazy(() => import('./pages/MCP')) },
+  envvars: { labelKey: 'nav.envvars', component: lazy(() => import('./pages/EnvVars')) },
+  security: { labelKey: 'nav.security', component: lazy(() => import('./pages/Security')) },
+  token: { labelKey: 'nav.token', component: lazy(() => import('./pages/TokenUsage')) },
+  backup: { labelKey: 'nav.backup', component: lazy(() => import('./pages/Backup')) },
+  audit: { labelKey: 'nav.audit', component: lazy(() => import('./pages/AuditLogs')) },
+  approvals: { labelKey: 'nav.approvals', component: lazy(() => import('./pages/Approvals')) },
+  users: { labelKey: 'nav.users', component: lazy(() => import('./pages/Users')) },
+  settings: { labelKey: 'nav.settings', component: lazy(() => import('./pages/Settings')) },
+  prompts: { labelKey: 'nav.prompts', component: lazy(() => import('./pages/Prompts')) },
+  govDashboard: { labelKey: 'nav.govDashboard', component: lazy(() => import('./pages/GovernanceDashboard')) },
 }
 
 export default function App() {
@@ -67,6 +51,7 @@ export default function App() {
       return []
     }
   })
+  const ActivePage = PAGES[tab].component
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme')
@@ -184,7 +169,9 @@ export default function App() {
               padding: '24px 28px 40px',
             }}
           >
-            {PAGES[tab].component}
+            <Suspense fallback={<div style={{ color: 'var(--text-muted)' }}>Loading...</div>}>
+              <ActivePage />
+            </Suspense>
           </main>
         </div>
         <GlobalSearch

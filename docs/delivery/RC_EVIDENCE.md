@@ -7,7 +7,7 @@ Verification date: 2026-09-13 (Asia/Shanghai)
 ## Automated gate
 
 - `make check`: 611 passed, 0 skipped; frontend type check and lint ratchet
-  passed (eslint baseline 124 errors / 0 warnings after cleanup);
+  passed (eslint baseline 0 errors / 0 warnings after cleanup);
   production npm audit reported 0 vulnerabilities.
 - Fresh Alembic migration: `036_knowledge_provider_binding (head)`, with one head.
 - Compose configuration validation: passed with explicit non-default secrets.
@@ -51,7 +51,7 @@ review. No existing project volume was used.
 - `cyberguard-tool-runner:1.0.0-rc.1` —
   `sha256:a961139da410bb3b11aed736353c0599b239d64dd38a626a69e02e9206cc90fa`
 - `cyberguard-webui:1.0.0-rc.1` —
-  `sha256:1b1ef6a26a57583e1cc5825b314306d8c83083c3be3d18a779255dd6a92c3268`
+  `sha256:92f515fb7299a11d74b22dffe78d3bfd944465d87ba76c7c12856b3ecadf4cb6`
 
 These are local image identifiers, not registry digests. Record immutable
 registry digests after publishing.
@@ -62,11 +62,11 @@ CycloneDX files are generated locally under `artifacts/` and intentionally not
 committed. Their hashes for this build are:
 
 - `cyberguard-api.cdx.json` —
-  `sha256:02fb365a06dd3e4ff0b7038f0f43e625bdebaa0286876b7413ddb91acb26897f`
+  `sha256:5678416aa56605addbde36ab86e15bf52ebc5b534bcf2b7ca4371d9152d91889`
 - `cyberguard-tool-runner.cdx.json` —
-  `sha256:1a87ff6ff560da2d305dfcdcc6480eb7b0ab173e68a6535f1004e12d511b6071`
+  `sha256:e432b9636a3532e2fbe8f0f6b19a00292a18c6ba3fd984abd8a13c72de253ea8`
 - `cyberguard-webui.cdx.json` —
-  `sha256:9fb3ed7100bb7f44e8a524daa721d225e3fc285d9413c6c3096ec191e96f477d`
+  `sha256:38f01dff66ef423b2267f340b6a5143c231259d87ba3740db7a066cd45bdc91e`
 
 ## Demonstration run (isolated preview)
 

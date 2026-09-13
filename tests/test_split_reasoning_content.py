@@ -20,7 +20,7 @@ def test_chat_opening_tag_accepts_think_attribute_variants():
 
 
 def split_reasoning_content(content: str):
-    """Mirror of webui/src/pages/Chat.tsx splitReasoningContent."""
+    """Mirror of webui/src/lib/splitReasoningContent.ts."""
     reasoning = []
     answer = ""
     cursor = 0
