@@ -1,7 +1,7 @@
 [project]
 name = "cyberguard"
 version = "1.0.0rc1"
-description = "Docker reference implementation for governed AI in security operations and GRC"
+description = "Docker reference implementation for governed AI in security operations"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115.0",

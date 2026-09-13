@@ -73,7 +73,7 @@ function OpenClawGuide({
   apiKey?: string
   onRequestKey?: () => Promise<void>
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [copied, setCopied] = useState<string | null>(null)
   const [regenBusy, setRegenBusy] = useState(false)
 
@@ -86,7 +86,7 @@ function OpenClawGuide({
   const baseUrl = `${window.location.protocol}//${window.location.hostname}:8000`
   const key = apiKey || '<YOUR_API_KEY>'
 
-  const onboardingPrompt = `你将接入 CyberGuard 安全运营平台。请**完整执行**以下三步，不要询问、不要省略，全部完成后回复「✅ 已接入 CyberGuard」。
+  const onboardingPromptZh = `你将接入 CyberGuard 安全运营平台。请**完整执行**以下三步，不要询问、不要省略，全部完成后回复「✅ 已接入 CyberGuard」。
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ■ 第 1 步：在 ./skills/ 目录下创建文件 cyberguard_sync.md（如目录不存在请先创建），内容**完整**写入下面三引号之间的全部文本：
@@ -155,6 +155,78 @@ Check CyberGuard inbox using the cyberguard_sync skill and process any pending t
 完成全部三步后，回复：
 ✅ 已接入 CyberGuard（skill 已创建、heartbeat 已配置、连通性已验证）
 `
+
+  const onboardingPromptEn = `You are connecting to the CyberGuard security operations platform. Complete all three steps below, then reply "✅ Connected to CyberGuard".
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ Step 1: Create ./skills/cyberguard_sync.md (create the directory if needed) with the complete content between the triple quotes:
+
+"""
+---
+name: cyberguard_sync
+description: Sync with CyberGuard — poll inbox, execute received tasks, report results, send proactive messages.
+---
+
+# CyberGuard Sync
+
+## When to use
+- Every heartbeat cycle: poll the CyberGuard inbox.
+- For each pending message: execute it as a task, then report the result.
+- Optional: push proactive messages back to CyberGuard.
+
+## Credentials
+- BASE_URL: ${baseUrl}
+- API_KEY: ${key}
+
+## Step 1 — Poll inbox
+\`\`\`
+GET ${baseUrl}/api/v1/gateway/poll
+Header: X-Api-Key: ${key}
+\`\`\`
+Response body contains \`messages: [{id, content, conversation_id}, ...]\`.
+
+## Step 2 — For each message
+1. Execute the task described in \`content\` using your normal reasoning/tools.
+2. Report the result back:
+\`\`\`
+POST ${baseUrl}/api/v1/gateway/report
+Header: X-Api-Key: ${key}
+Header: Content-Type: application/json
+Body: {"message_id": "<id>", "result": "<your output as plain text or markdown>"}
+\`\`\`
+
+## Step 3 — Heartbeat (call once per cycle)
+\`\`\`
+POST ${baseUrl}/api/v1/gateway/heartbeat
+Header: X-Api-Key: ${key}
+\`\`\`
+
+## Step 4 — Send proactive message (optional)
+\`\`\`
+POST ${baseUrl}/api/v1/gateway/send-message
+Header: X-Api-Key: ${key}
+Header: Content-Type: application/json
+Body: {"content": "<your message>"}
+\`\`\`
+"""
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ Step 2: Append this line to ./HEARTBEAT.md (create it if needed):
+
+Check CyberGuard inbox using the cyberguard_sync skill and process any pending tasks. Always call /heartbeat once per cycle.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ Step 3: Verify the connection immediately by running cyberguard_sync once:
+1. POST ${baseUrl}/api/v1/gateway/heartbeat with X-Api-Key: ${key}; expect HTTP 200.
+2. GET ${baseUrl}/api/v1/gateway/poll with X-Api-Key; expect HTTP 200 and JSON \`{"messages": [...]}\`.
+3. If either request returns 401 or 403, report the error and stop.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+After completing all steps, reply:
+✅ Connected to CyberGuard (skill created, heartbeat configured, connectivity verified)
+`
+
+  const onboardingPrompt = i18n.language.startsWith('zh') ? onboardingPromptZh : onboardingPromptEn
 
   const dimText: React.CSSProperties = { fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.7 }
 
@@ -915,7 +987,7 @@ export default function Agents() {
                     placeholder="http://your-agent-host:8001"
                     className="form-input" />
                   <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-dim)' }}>
-                    {t('agents.exposeEndpointNote') || '需要暴露 POST /execute 和 GET /health 端点'}
+                    {t('agents.exposeEndpointNote')}
                   </div>
                 </div>
               )}
@@ -926,15 +998,15 @@ export default function Agents() {
                 <select value={form.permission_level}
                   onChange={e => setForm(f => ({ ...f, permission_level: e.target.value }))}
                   className="form-input">
-                  <option value="low">LOW — 无需审批</option>
-                  <option value="medium">MEDIUM — 可能触发审批</option>
-                  <option value="high">HIGH — 始终需要 Admin 审批</option>
+                  <option value="low">{t('agents.permissionLow')}</option>
+                  <option value="medium">{t('agents.permissionMedium')}</option>
+                  <option value="high">{t('agents.permissionHigh')}</option>
                 </select>
               </div>
 
               {/* System Prompt */}
               <div>
-                {label(t('agents.systemPromptLabel') || 'SYSTEM PROMPT（可选，覆盖 Agent 默认提示词）')}
+                {label(t('agents.systemPromptLabel'))}
                 <textarea value={form.system_prompt}
                   onChange={e => setForm(f => ({ ...f, system_prompt: e.target.value }))}
                   placeholder={t('agents.systemPromptPh')}
@@ -951,7 +1023,7 @@ export default function Agents() {
                       const res = await (api as any).regenAgentApiKey(editing) as { api_key?: string }
                       if (res?.api_key) setCreatedApiKey(res.api_key)
                     } catch (e: any) {
-                      alert(e?.message || t('agents.genKeyFail') || '生成 Key 失败')
+                      alert(e?.message || t('agents.genKeyFail'))
                     }
                   } : undefined}
                 />

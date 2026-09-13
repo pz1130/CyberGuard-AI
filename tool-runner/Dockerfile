@@ -1,12 +1,15 @@
-FROM python:3.11-slim
+FROM python:3.11-slim@sha256:9534e5a8e315485d4061ed659af0fd78a284c015f9b73661b41d6bab25604534
 
 WORKDIR /app
 
 # Runner deps only (kept minimal; add security tools below as needed).
-RUN pip install --no-cache-dir fastapi "uvicorn[standard]"
+COPY tool-runner/requirements.lock ./requirements.lock
+RUN pip install --no-cache-dir -r requirements.lock
 
 # --- Security tools layer (extend this list as your team needs) ---
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
         nmap \
     && rm -rf /var/lib/apt/lists/*
 

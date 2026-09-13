@@ -1,21 +1,26 @@
-FROM python:3.11-slim
+FROM python:3.11-slim@sha256:9534e5a8e315485d4061ed659af0fd78a284c015f9b73661b41d6bab25604534
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
     tesseract-ocr tesseract-ocr-chi-sim \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# The agent kernel lives in packages/ (agent_core, llm_router) and app/ imports
-# it at module scope — app/services/run_event_log.py, tool_executor.py and the
-# startup lifespan all do. Both trees must be present *before* `pip install -e .`
-# or setuptools' packages.find (where = [".", "packages"]) resolves to nothing
-# and the container dies on `ModuleNotFoundError: agent_core` at boot.
-COPY pyproject.toml ./
+# Install the frozen third-party dependency set before application sources so
+# ordinary source changes retain this expensive Docker layer.
+COPY pyproject.toml uv.lock ./
+RUN pip install --no-cache-dir uv==0.11.17 \
+    && uv export --frozen --no-dev --no-emit-project --format requirements-txt \
+       | pip install --no-cache-dir -r /dev/stdin
+
+# Both import roots must be present before the editable project install because
+# setuptools discovers `app`, `agent_core`, and `llm_router` from these trees.
 COPY packages/ ./packages/
 COPY app/ ./app/
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir --no-deps -e .
 
 # Migration assets (kept after the install so they don't bust the wheel cache)
 COPY alembic.ini ./alembic.ini
@@ -27,4 +32,4 @@ ENV PYTHONPATH=/app:/app/packages
 # Expose port
 EXPOSE 8000
 
-CMD uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${API_WORKERS:-4}
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${API_WORKERS:-4}"]

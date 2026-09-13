@@ -522,7 +522,7 @@ export default function Chat() {
   const send = async () => {
     if ((!input.trim() && attachments.length === 0) || loading) return
     if (!activeConvId) {
-      alert(t('chat.selectOrCreateFirst') || '请先创建或选择一个会话')
+      alert(t('chat.selectOrCreateFirst'))
       return
     }
 

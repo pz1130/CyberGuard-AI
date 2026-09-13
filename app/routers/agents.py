@@ -37,6 +37,7 @@ async def seed_example_internal_agents() -> None:
         return
 
     async with AsyncSessionLocal() as s:
+        await s.execute(select(func.pg_advisory_xact_lock(0xC7B003)))
         existing = await s.execute(select(AgentConfig).where(
             AgentConfig.agent_name == "triage_analyst"
         ))

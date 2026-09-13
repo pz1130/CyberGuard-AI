@@ -120,7 +120,10 @@
     "pasteSuccessNote": "粘贴后 OpenClaw 会回复 <span style={{ color: 'var(--accent)' }}>✅ 已接入 CyberGuard</span>。回到此页面刷新，Agent 卡片右上角出现 <span style={{ color: 'var(--accent)' }}>● ONLINE</span> 即接入成功。",
     "exposeEndpointNote": "需要暴露 POST /execute 和 GET /health 端点",
     "systemPromptLabel": "SYSTEM PROMPT（可选，覆盖 Agent 默认提示词）",
-    "genKeyFail": "生成 Key 失败"
+    "genKeyFail": "生成 Key 失败",
+    "permissionLow": "低 — 无需审批",
+    "permissionMedium": "中 — 可能触发审批",
+    "permissionHigh": "高 — 始终需要管理员审批"
   },
   "users": {
     "title": "用户管理",

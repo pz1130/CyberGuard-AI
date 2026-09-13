@@ -60,6 +60,12 @@ async def lifespan(app: FastAPI):
     from sqlalchemy import select
     try:
         async with get_db_context() as session:
+            # Uvicorn workers enter lifespan concurrently. Keep the initial
+            # check-and-insert atomic across processes on a fresh database.
+            await session.execute(
+                text("SELECT pg_advisory_xact_lock(:key)"),
+                {"key": 0xC7B001},
+            )
             result = await session.execute(
                 select(User).where(User.username == settings.BOOTSTRAP_ADMIN_USERNAME)
             )

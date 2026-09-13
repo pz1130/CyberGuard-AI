@@ -120,7 +120,10 @@
     "pasteSuccessNote": "After pasting, OpenClaw will reply <span style={{ color: 'var(--accent)' }}>✅ Connected to CyberGuard</span>. Refresh this page; when the Agent card shows <span style={{ color: 'var(--accent)' }}>● ONLINE</span> in top-right, onboarding succeeded.",
     "exposeEndpointNote": "Must expose POST /execute and GET /health endpoints",
     "systemPromptLabel": "SYSTEM PROMPT (optional, overrides default)",
-    "genKeyFail": "Failed to generate key"
+    "genKeyFail": "Failed to generate key",
+    "permissionLow": "Low — no approval required",
+    "permissionMedium": "Medium — may require approval",
+    "permissionHigh": "High — always requires Admin approval"
   },
   "users": {
     "title": "User Management",

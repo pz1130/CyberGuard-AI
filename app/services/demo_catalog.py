@@ -85,7 +85,7 @@ def demo_tool_by_name(name: str) -> Optional[Dict[str, Any]]:
 
 async def seed_demo_catalog_on_startup() -> None:
     """Idempotent: insert demo tools/skill/agent if missing."""
-    from sqlalchemy import select
+    from sqlalchemy import func, select
 
     from app.core.database import get_db_context
     from app.models.agent import AgentConfig
@@ -93,6 +93,10 @@ async def seed_demo_catalog_on_startup() -> None:
     from app.models.skill import Skill, Tool
 
     async with get_db_context() as session:
+        # Uvicorn starts multiple worker processes at once. Serialize this
+        # check-then-insert transaction across processes to avoid unique-key
+        # races on a fresh database.
+        await session.execute(select(func.pg_advisory_xact_lock(0xD3A0CA7)))
         tool_ids: Dict[str, int] = {}
         for spec in DEMO_TOOLS:
             existing = await session.execute(select(Tool).where(Tool.name == spec["name"]))

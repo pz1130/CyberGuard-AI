@@ -7,7 +7,7 @@ import logging
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select, desc
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
@@ -341,6 +341,7 @@ async def seed_prompt_templates_on_startup() -> None:
     built-in Chinese text.
     """
     async with get_db_context() as session:
+        await session.execute(select(func.pg_advisory_xact_lock(0xC7B002)))
         existing = await session.execute(select(PromptTemplate))
         by_name = {row.name: row for row in existing.scalars().all()}
         inserted = 0

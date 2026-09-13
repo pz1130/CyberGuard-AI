@@ -2,11 +2,11 @@
 
 Candidate: `1.0.0-rc.1`  
 Branch: `codex/release-candidate`  
-Verification date: 2026-09-12 (Asia/Shanghai)
+Verification date: 2026-09-13 (Asia/Shanghai)
 
 ## Automated gate
 
-- `make check`: 593 passed, 1 skipped; frontend type check and lint ratchet
+- `make check`: 594 passed, 1 skipped; frontend type check and lint ratchet
   passed; production npm audit reported 0 vulnerabilities.
 - Fresh Alembic migration: `036_knowledge_provider_binding (head)`, with one head.
 - Compose configuration validation: passed with explicit non-default secrets.
@@ -26,6 +26,9 @@ The following checks passed:
 - The OpenAPI surface contains no GRC Assessment, Group Chat, Schedule, N8N,
   or Webhook route.
 - The WebUI root returned HTTP 200.
+- A fresh-database cold start with four API workers created exactly one
+  bootstrap administrator, eight built-in Prompt templates, two demo tools,
+  one demo skill, and one demo agent, with no seed race or duplicate-key log.
 - The Master Agent persisted `MiniMax` Provider ID `34` together with the exact
   verified model name `MiniMax-M3`; a cross-provider model save returned 400.
 - A live streamed chat completed through that Master Agent selection, including
@@ -39,11 +42,11 @@ review. No existing project volume was used.
 ## Local image identifiers
 
 - `cyberguard-api:1.0.0-rc.1` —
-  `sha256:caadab4223d09a99450350628efd962bb2ac3d17cc9c53809774f1ed389f8b3d`
+  `sha256:9faaf838bf619b90c767fd8b0b38d2266c024108232a13af2b1a84df46067f0e`
 - `cyberguard-tool-runner:1.0.0-rc.1` —
-  `sha256:41f05153593dfc61d1af581b8bc56ce5a9bcec77c41a538fd21279bc04d75fdf`
+  `sha256:8c1dc1c9d1972c50c6726edac830871fb2315295cf816753202f0a649dc2a964`
 - `cyberguard-webui:1.0.0-rc.1` —
-  `sha256:d4f092b3beba06820fb0352ff2f493e5ede88f340319cd14c36f72905c5fba24`
+  `sha256:6400f8ff736d915e77c7cd66a21bcc5e78d93eff5601c054b1ce2816d768dc67`
 
 These are local image identifiers, not registry digests. Record immutable
 registry digests after publishing.
@@ -54,11 +57,11 @@ CycloneDX files are generated locally under `artifacts/` and intentionally not
 committed. Their hashes for this build are:
 
 - `cyberguard-api.cdx.json` —
-  `sha256:11d888062ae68a32fc7409592db5d1ba6850190f33971d362428a8a631f9f188`
+  `sha256:02fb365a06dd3e4ff0b7038f0f43e625bdebaa0286876b7413ddb91acb26897f`
 - `cyberguard-tool-runner.cdx.json` —
-  `sha256:7c600bf7d9e179581915ecb9b0da26660fed4cc33c470fc715ada7e95f8aaf1b`
+  `sha256:1a87ff6ff560da2d305dfcdcc6480eb7b0ab173e68a6535f1004e12d511b6071`
 - `cyberguard-webui.cdx.json` —
-  `sha256:1c18a5bf963fad61391ca084fcd8e458421230d47b3483e140279c1e03147cdf`
+  `sha256:9fb3ed7100bb7f44e8a524daa721d225e3fc285d9413c6c3096ec191e96f477d`
 
 ## Demonstration run (isolated preview)
 
@@ -141,11 +144,9 @@ fan-out pauses for approval before any sub-agent runs.
 Prompt-injection sample
 `36d020f4-40fd-4d63-91e6-534babca84ee` completed with a refusal (fake
 `<system>` tags did not change behaviour). Global kill switch engage
-`POST /agents/halt` set `{global: true}`. `DELETE /agents/halt` is shadowed
-by `DELETE /agents/{agent_id}` (`agent_id="halt"` → HTTP 422); the switch
-was cleared in the preview database/Redis for continued review. That
-routing clash is a known limitation of this candidate, not a failed
-engage demonstration.
+`POST /agents/halt` set `{global: true}`. The static kill-switch routes are
+registered ahead of `/agents/{agent_id}`, so `DELETE /agents/halt` now clears
+the global switch without being captured as an agent ID.
 
 ### Audit chain after the demonstrations
 
