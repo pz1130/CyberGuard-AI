@@ -181,8 +181,6 @@ def _run_async_master_agent(execution_id: str, user_input: str, user_id: int, **
                 conv_overrides["intent_parser_prompt_override"] = conv.intent_parser_prompt_override
             if conv.summarizer_prompt_override:
                 conv_overrides["summarizer_prompt_override"] = conv.summarizer_prompt_override
-            if conv.model_override:
-                conv_overrides["model_override"] = conv.model_override
             if conv.temperature_override is not None:
                 conv_overrides["temperature_override"] = conv.temperature_override
 

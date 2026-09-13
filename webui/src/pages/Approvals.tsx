@@ -63,7 +63,6 @@ export default function Approvals() {
   const [notice, setNotice] = useState<{ id: number; ok: boolean; msg: string } | null>(null)
 
   const load = useCallback(async () => {
-    setLoading(true)
     try {
       const d = await api.getApprovals(filter) as { requests: ApprovalRequest[]; total: number }
       setItems(d?.requests || [])
@@ -71,7 +70,7 @@ export default function Approvals() {
     finally { setLoading(false) }
   }, [filter])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { void Promise.resolve().then(() => load()) }, [load])
 
   // Auto-refresh every 15s when viewing pending
   useEffect(() => {

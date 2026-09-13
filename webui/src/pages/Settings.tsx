@@ -6,7 +6,7 @@ import { Save, RotateCcw } from 'lucide-react'
 interface MasterConfig {
   id: number
   provider_id: number | null
-  model: string
+  model: string | null
   temperature: number
   system_prompt: string
   intent_parser_prompt: string

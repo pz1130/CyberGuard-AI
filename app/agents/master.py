@@ -314,7 +314,6 @@ class MasterAgent:
                         model=state.get("model"),
                         intent_parser_prompt_override=state.get("intent_parser_prompt_override"),
                         temperature_override=state.get("temperature_override"),
-                        model_override=state.get("model_override"),
                     )
                     parsed_intent = parsed.get("intent")
                     parsed_plan = parsed.get("task_plan") or []
@@ -380,7 +379,6 @@ class MasterAgent:
                     model=state.get("model"),
                     intent_parser_prompt_override=state.get("intent_parser_prompt_override"),
                     temperature_override=state.get("temperature_override"),
-                    model_override=state.get("model_override"),
                 )
                 state["intent"] = parsed.get("intent")
                 raw_plan = parsed.get("task_plan", []) or []
@@ -812,9 +810,9 @@ class MasterAgent:
                     state["final_summary"] = await self.llm_router.generate_summary(
                         results_list,
                         provider_id=state.get("provider_id"),
+                        model=state.get("model"),
                         summarizer_prompt_override=state.get("summarizer_prompt_override"),
                         temperature_override=state.get("temperature_override"),
-                        model_override=state.get("model_override"),
                     )
                 except Exception:
                     state["final_summary"] = "\n\n".join(
@@ -841,11 +839,7 @@ class MasterAgent:
                 )
                 history = state.get("conversation_history") or []
                 # M0a-2: threshold from remaining budget (context_window - reserves)
-                model_name = (
-                    state.get("model_override")
-                    or state.get("model")
-                    or None
-                )
+                model_name = state.get("model") or None
                 provider_id = state.get("provider_id")
                 try:
                     from app.services.model_limits import limits_for_provider_model
@@ -883,7 +877,6 @@ class MasterAgent:
                     messages=messages,
                     provider_id=state.get("provider_id"),
                     model=state.get("model"),
-                    model_override=state.get("model_override"),
                     temperature_override=state.get("temperature_override"),
                     enable_prompt_cache=True,
                 )

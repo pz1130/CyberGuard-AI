@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from 'react'
+import { useState, useEffect, useContext, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Trash2, Plus, Edit2, ChevronDown, ChevronRight, Server, Activity, Wrench } from 'lucide-react'
@@ -80,14 +80,14 @@ export default function MCP() {
     return () => clearTimeout(timer)
   }, [searchTarget, setSearchTarget])
 
-  const loadServers = async () => {
+  const loadServers = useCallback(async () => {
     try {
       const data = await api.getMCPServers() as { servers: MCPServer[] }
       setServers(data?.servers || [])
     } catch { setServers([]) }
-  }
+  }, [])
 
-  const loadTools = async (currentServers: MCPServer[]) => {
+  const loadTools = useCallback(async (currentServers: MCPServer[]) => {
     const all: MCPTool[] = []
     const map: Record<number, MCPTool[]> = {}
     for (const s of currentServers) {
@@ -98,11 +98,11 @@ export default function MCP() {
           all.push(...data.tools)
           map[s.id] = data.tools
         }
-      } catch {}
+      } catch { /* skip a server that fails to list tools */ }
     }
     setTools(all)
     setServerTools(map)
-  }
+  }, [])
 
   const loadAllTools = async () => {
     try {
@@ -111,8 +111,8 @@ export default function MCP() {
     } catch { setTools([]) }
   }
 
-  useEffect(() => { loadServers() }, [])
-  useEffect(() => { if (servers.length) loadTools(servers) }, [servers.length])
+  useEffect(() => { void Promise.resolve().then(() => loadServers()) }, [loadServers])
+  useEffect(() => { if (servers.length) void Promise.resolve().then(() => loadTools(servers)) }, [servers, loadTools])
 
   const submitServer = async () => {
     if (!serverForm.name) return

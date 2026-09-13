@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from 'react'
+import { useState, useEffect, useContext, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Trash2, Plus, Edit2, Terminal, X, Loader2 } from 'lucide-react'
@@ -79,13 +79,13 @@ export default function Tools() {
     return () => clearTimeout(timer)
   }, [searchTarget, setSearchTarget])
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const data = await api.getTools(tagFilter ? `?tag=${encodeURIComponent(tagFilter)}` : '') as Tool[] | { tools?: Tool[] }
       setItems(Array.isArray(data) ? data : data?.tools || [])
     } catch { setItems([]) } finally { setLoading(false) }
-  }
-  useEffect(() => { load() }, [])
+  }, [tagFilter])
+  useEffect(() => { void Promise.resolve().then(() => load()) }, [load])
 
   const resetForm = () => setForm({
     name: '',

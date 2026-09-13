@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Trash2, Eye, EyeOff, RefreshCw, Lock } from 'lucide-react'
@@ -25,14 +25,13 @@ export default function EnvVars() {
   const [visibleValues, setVisibleValues] = useState<Record<string, boolean>>({})
   const [decrypting, setDecrypting] = useState<number | null>(null)
 
-  const load = async () => {
-    setLoading(true)
+  const load = useCallback(async () => {
     try {
       const data = await api.getEnvVars() as { vars: EnvVar[] }
       setVars(data?.vars || [])
     } catch { setVars([]) } finally { setLoading(false) }
-  }
-  useEffect(() => { load() }, [])
+  }, [])
+  useEffect(() => { void Promise.resolve().then(() => load()) }, [load])
 
   const add = async () => {
     if (!newKey.trim()) return

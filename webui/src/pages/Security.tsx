@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Key, Lock, AlertTriangle, Save, Loader2 } from 'lucide-react'
 import { api } from '../api/client'
@@ -20,6 +20,57 @@ const DEFAULT: SecuritySettings = {
   max_login_attempts: 5,
   session_timeout_minutes: 30,
   api_key_rotation_days: 90,
+}
+
+function Toggle({ enabled, onToggle, color = 'var(--cyan)' }: {
+  enabled: boolean; onToggle: () => void; color?: string
+}) {
+  return (
+    <button onClick={onToggle} style={{
+      position: 'relative', width: 44, height: 22,
+      background: enabled ? color : 'var(--bg-elevated)',
+      border: `1px solid ${enabled ? color : 'var(--border-bright)'}`,
+      cursor: 'pointer', transition: 'all 0.2s',
+      borderRadius: 'var(--radius-full)',
+    }}>
+      <div style={{
+        position: 'absolute', top: 2, left: 2,
+        width: 16, height: 16,
+        background: enabled ? '#0b1018' : 'var(--text-dim)',
+        borderRadius: 'var(--radius-full)',
+        transition: 'all 0.2s',
+        transform: enabled ? 'translateX(22px)' : 'translateX(0)',
+      }} />
+    </button>
+  )
+}
+
+function SettingRow({ icon, title, desc, enabled, onToggle, color = 'var(--cyan)' }: {
+  icon: ReactNode; title: string; desc: string
+  enabled: boolean; onToggle: () => void; color?: string
+}) {
+  return (
+    <div className="item-card" style={{
+      display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      padding: '16px 20px',
+      marginBottom: 12,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{
+          width: 36, height: 36, border: '1px solid var(--border)',
+          background: 'var(--bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color, borderRadius: 'var(--radius-md)', flexShrink: 0,
+        }}>
+          {icon}
+        </div>
+        <div>
+          <div className="item-card-title">{title}</div>
+          <div className="item-card-desc">{desc}</div>
+        </div>
+      </div>
+      <Toggle enabled={enabled} onToggle={onToggle} color={color} />
+    </div>
+  )
 }
 
 export default function Security() {
@@ -61,53 +112,6 @@ export default function Security() {
       setSaving(false)
     }
   }
-
-  const Toggle = ({ enabled, onToggle, color = 'var(--cyan)' }: {
-    enabled: boolean; onToggle: () => void; color?: string
-  }) => (
-    <button onClick={onToggle} style={{
-      position: 'relative', width: 44, height: 22,
-      background: enabled ? color : 'var(--bg-elevated)',
-      border: `1px solid ${enabled ? color : 'var(--border-bright)'}`,
-      cursor: 'pointer', transition: 'all 0.2s',
-      borderRadius: 'var(--radius-full)',
-    }}>
-      <div style={{
-        position: 'absolute', top: 2, left: 2,
-        width: 16, height: 16,
-        background: enabled ? '#0b1018' : 'var(--text-dim)',
-        borderRadius: 'var(--radius-full)',
-        transition: 'all 0.2s',
-        transform: enabled ? 'translateX(22px)' : 'translateX(0)',
-      }} />
-    </button>
-  )
-
-  const SettingRow = ({ icon, title, desc, enabled, onToggle, color = 'var(--cyan)' }: {
-    icon: React.ReactNode; title: string; desc: string
-    enabled: boolean; onToggle: () => void; color?: string
-  }) => (
-    <div className="item-card" style={{
-      display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-      padding: '16px 20px',
-      marginBottom: 12,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <div style={{
-          width: 36, height: 36, border: '1px solid var(--border)',
-          background: 'var(--bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color, borderRadius: 'var(--radius-md)', flexShrink: 0,
-        }}>
-          {icon}
-        </div>
-        <div>
-          <div className="item-card-title">{title}</div>
-          <div className="item-card-desc">{desc}</div>
-        </div>
-      </div>
-      <Toggle enabled={enabled} onToggle={onToggle} color={color} />
-    </div>
-  )
 
   if (loading) {
     return (

@@ -12,9 +12,11 @@ WORKDIR /app
 # Install the frozen third-party dependency set before application sources so
 # ordinary source changes retain this expensive Docker layer.
 COPY pyproject.toml uv.lock ./
-RUN pip install --no-cache-dir uv==0.11.17 \
+RUN pip install --no-cache-dir --upgrade 'setuptools>=84.0.0' \
+    && pip install --no-cache-dir uv==0.11.17 \
     && uv export --frozen --no-dev --no-emit-project --format requirements-txt \
-       | pip install --no-cache-dir -r /dev/stdin
+       | pip install --no-cache-dir -r /dev/stdin \
+    && pip uninstall -y uv
 
 # Both import roots must be present before the editable project install because
 # setuptools discovers `app`, `agent_core`, and `llm_router` from these trees.

@@ -19,8 +19,12 @@ First IFI workgroup release candidate of the Docker reference implementation.
   calls, with administrator-configured per-model cost estimates.
 - Durable PostgreSQL LangGraph checkpoints for task execution and approval
   resume across API and worker processes.
-- Provider-bound Master Agent model selection with server-side validation and
-  deterministic fallback that excludes providers without credentials.
+- Provider-bound Master Agent model selection with server-side validation.
+  AUTO uses the saved Provider+Model pair; a model name is never sent to a
+  different provider. Session-level model-name override was removed.
+- Dependency floors for cryptography, starlette, python-multipart, Pillow,
+  pypdf, httpx2, and httpcore2. Container scan gate is High and Critical;
+  rebuilt images scan clean with `--ignore-unfixed`.
 - Collapsed rendering for provider `<think>` and `<reasoning>` output in chat.
 - Disposable integration-test stack, CI gate, delivery runbook, evaluation
   framework, responsible-AI statement, architecture, and operations guidance.

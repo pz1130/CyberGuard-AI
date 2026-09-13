@@ -19,8 +19,20 @@ def _first_full_match(method: str, path: str):
     }
     for route in app.router.routes:
         match, _child = route.matches(scope)
-        if match == Match.FULL:
-            return getattr(route, "path", None) or str(route)
+        if match != Match.FULL:
+            continue
+        prefix = getattr(getattr(route, "include_context", None), "prefix", "") or ""
+        inner_routes = getattr(getattr(route, "original_router", None), "routes", None)
+        if not inner_routes:
+            return getattr(route, "path", None) or path
+        rest = path[len(prefix):] if prefix and path.startswith(prefix) else path
+        rest_scope = {**scope, "path": rest or "/", "raw_path": (rest or "/").encode()}
+        for inner in inner_routes:
+            inner_match, _ = inner.matches(rest_scope)
+            if inner_match == Match.FULL:
+                inner_path = getattr(inner, "path", "") or rest
+                return f"{prefix}{inner_path}"
+        return prefix or path
     return None
 
 

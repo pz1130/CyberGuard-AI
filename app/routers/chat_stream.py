@@ -102,7 +102,6 @@ async def stream_chat(
         # Build messages: system prompt override + history + current message
         messages: list[dict] = []
         system_prompt = getattr(conversation, "system_prompt_override", None) if conversation else None
-        model_override = getattr(conversation, "model_override", None) if conversation else None
         temp_override = getattr(conversation, "temperature_override", None) if conversation else None
 
         if system_prompt:
@@ -119,7 +118,6 @@ async def stream_chat(
                     messages=messages,
                     provider_id=body.provider_id,
                     model=body.model,
-                    model_override=model_override,
                     temperature_override=temp_override,
                 ):
                     accumulated.append(chunk)

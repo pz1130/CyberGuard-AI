@@ -23,7 +23,10 @@ async def test_chat_returns_message_when_tools_passed(monkeypatch):
     fake_client = MagicMock()
     fake_client.chat.completions.create = AsyncMock(return_value=fake_resp)
     monkeypatch.setattr(router, "get_client_async", AsyncMock(return_value=fake_client))
-    monkeypatch.setattr(router, "_load_master_config", AsyncMock(return_value={}))
+    monkeypatch.setattr(router, "_load_master_config", AsyncMock(return_value={
+        "provider_id": 1, "model": "test-model",
+    }))
+    monkeypatch.setattr(router, "get_provider_config_async", AsyncMock(return_value={}))
     monkeypatch.setattr(router, "_should_strip_think", AsyncMock(return_value=False))
     monkeypatch.setattr(router, "_record_token_usage", AsyncMock())
 
@@ -52,7 +55,10 @@ async def test_chat_returns_string_when_no_tools(monkeypatch):
     fake_client = MagicMock()
     fake_client.chat.completions.create = AsyncMock(return_value=fake_resp)
     monkeypatch.setattr(router, "get_client_async", AsyncMock(return_value=fake_client))
-    monkeypatch.setattr(router, "_load_master_config", AsyncMock(return_value={}))
+    monkeypatch.setattr(router, "_load_master_config", AsyncMock(return_value={
+        "provider_id": 1, "model": "test-model",
+    }))
+    monkeypatch.setattr(router, "get_provider_config_async", AsyncMock(return_value={}))
     monkeypatch.setattr(router, "_should_strip_think", AsyncMock(return_value=False))
     monkeypatch.setattr(router, "_record_token_usage", AsyncMock())
     monkeypatch.setattr(llm_router_module.settings, "MOCK_MODE", False)
@@ -93,6 +99,96 @@ async def test_chat_uses_master_provider_and_exact_model(monkeypatch):
     assert await router.chat([{"role": "user", "content": "hi"}]) == "reply"
     get_client.assert_awaited_once_with(provider_id=42)
     assert fake_client.chat.completions.create.await_args.kwargs["model"] == "Case-Sensitive-Model"
+
+
+def test_auto_uses_the_master_provider_model_pair():
+    from app.services.llm_router import bound_provider_model
+
+    assert bound_provider_model(
+        master_config={"provider_id": 34, "model": "MiniMax-M3"},
+    ) == (34, "MiniMax-M3")
+
+
+def test_request_pair_wins_over_master_pair():
+    from app.services.llm_router import bound_provider_model
+
+    assert bound_provider_model(
+        provider_id=8,
+        model="model-b",
+        master_config={"provider_id": 34, "model": "MiniMax-M3"},
+    ) == (8, "model-b")
+
+
+def test_unbound_master_model_is_not_paired_with_another_provider():
+    from app.services.llm_router import UnboundSelectionError, bound_provider_model
+
+    with pytest.raises(UnboundSelectionError, match="bound Provider"):
+        bound_provider_model(master_config={"provider_id": None, "model": "MiniMax-m2.7"})
+
+
+def test_partial_request_selection_is_rejected_even_when_master_is_bound():
+    from app.services.llm_router import UnboundSelectionError, bound_provider_model
+
+    master = {"provider_id": 34, "model": "MiniMax-M3"}
+    with pytest.raises(UnboundSelectionError, match="together"):
+        bound_provider_model(provider_id=8, master_config=master)
+    with pytest.raises(UnboundSelectionError, match="together"):
+        bound_provider_model(model="only-a-name", master_config=master)
+
+
+@pytest.mark.asyncio
+async def test_chat_auto_does_not_call_first_available_provider(monkeypatch):
+    """AUTO must not send MiniMax-m2.7 (or any unbound model) to the first DB provider."""
+    router = llm_router_module.LLMRouter()
+    fallback = AsyncMock(return_value={
+        "api_key": "unexpected", "base_url": "https://example.com/v1", "models": ["other"],
+    })
+    get_client = AsyncMock()
+    monkeypatch.setattr(router, "_get_first_active_provider", fallback)
+    monkeypatch.setattr(router, "get_client_async", get_client)
+    monkeypatch.setattr(router, "_load_master_config", AsyncMock(return_value={
+        "provider_id": None,
+        "model": "MiniMax-m2.7",
+    }))
+    monkeypatch.setattr(llm_router_module.settings, "MOCK_MODE", False)
+
+    with pytest.raises(llm_router_module.UnboundSelectionError, match="bound Provider"):
+        await router.chat([{"role": "user", "content": "hi"}])
+    fallback.assert_not_awaited()
+    get_client.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_chat_ignores_session_model_name_override(monkeypatch):
+    """A model name without its Provider must not ride along with the Master pair."""
+    router = llm_router_module.LLMRouter()
+    fake_msg = MagicMock(content="reply", tool_calls=None)
+    fake_resp = MagicMock()
+    fake_resp.choices = [MagicMock(message=fake_msg, finish_reason="stop")]
+    fake_resp.usage = None
+    fake_client = MagicMock()
+    fake_client.chat.completions.create = AsyncMock(return_value=fake_resp)
+    get_client = AsyncMock(return_value=fake_client)
+
+    monkeypatch.setattr(router, "get_client_async", get_client)
+    monkeypatch.setattr(router, "_load_master_config", AsyncMock(return_value={
+        "provider_id": 42,
+        "model": "Master-Model",
+    }))
+    monkeypatch.setattr(router, "get_provider_config_async", AsyncMock(return_value={
+        "provider_type": "openai",
+        "models": [{"name": "Master-Model"}],
+    }))
+    monkeypatch.setattr(router, "_should_strip_think", AsyncMock(return_value=False))
+    monkeypatch.setattr(router, "_record_token_usage", AsyncMock())
+    monkeypatch.setattr(llm_router_module.settings, "MOCK_MODE", False)
+
+    assert await router.chat(
+        [{"role": "user", "content": "hi"}],
+        model_override="Session-Only-Name",
+    ) == "reply"
+    get_client.assert_awaited_once_with(provider_id=42)
+    assert fake_client.chat.completions.create.await_args.kwargs["model"] == "Master-Model"
 
 
 @pytest.mark.asyncio
@@ -149,7 +245,10 @@ async def test_chat_records_langfuse_generation(monkeypatch):
     fake_client = MagicMock()
     fake_client.chat.completions.create = AsyncMock(return_value=fake_resp)
     monkeypatch.setattr(router, "get_client_async", AsyncMock(return_value=fake_client))
-    monkeypatch.setattr(router, "_load_master_config", AsyncMock(return_value={}))
+    monkeypatch.setattr(router, "_load_master_config", AsyncMock(return_value={
+        "provider_id": 1, "model": "test-model",
+    }))
+    monkeypatch.setattr(router, "get_provider_config_async", AsyncMock(return_value={}))
     monkeypatch.setattr(router, "_should_strip_think", AsyncMock(return_value=False))
     monkeypatch.setattr(router, "_record_token_usage", AsyncMock())
     monkeypatch.setattr(llm_router_module.settings, "MOCK_MODE", False)

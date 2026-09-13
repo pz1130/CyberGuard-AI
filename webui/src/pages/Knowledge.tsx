@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useContext } from 'react'
+import { useState, useEffect, useRef, useContext, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Plus, Search, Trash2, Upload, FileText, Database, Loader2, Settings2 } from 'lucide-react'
@@ -81,15 +81,21 @@ function OcrSettingsModal({ open, onClose }: { open: boolean; onClose: () => voi
   const [cfg, setCfg] = useState<OcrConfig | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [prevOpen, setPrevOpen] = useState(open)
+
+  if (open !== prevOpen) {
+    setPrevOpen(open)
+    if (open) setLoading(true)
+  }
 
   useEffect(() => {
-    if (open) {
-      setLoading(true)
-      api.getOcrConfig()
-        .then(res => setCfg(res as OcrConfig))
-        .catch(() => onClose())
-        .finally(() => setLoading(false))
-    }
+    if (!open) return
+    let cancelled = false
+    void api.getOcrConfig()
+      .then(res => { if (!cancelled) setCfg(res as OcrConfig) })
+      .catch(() => { if (!cancelled) onClose() })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
   }, [open, onClose])
 
   if (!open) return null
@@ -251,9 +257,16 @@ export default function Knowledge() {
   const [querying, setQuerying] = useState(false)
   const [providers, setProviders] = useState<ProviderOption[]>([])
   const [providerId, setProviderId] = useState<number | null>(null)
+  const [prevSelectedId, setPrevSelectedId] = useState(selected?.id)
 
-  const loadKBs = async () => {
-    setLoadingKB(true)
+  if (selected?.id !== prevSelectedId) {
+    setPrevSelectedId(selected?.id)
+    setResults([])
+    setProviderId(selected?.provider_id ?? null)
+    if (selected) setLoadingDocs(true)
+  }
+
+  const loadKBs = useCallback(async () => {
     try {
       const data = await api.getKnowledgeBases() as { knowledge_bases?: KB[] }
       const list = data?.knowledge_bases || []
@@ -268,17 +281,16 @@ export default function Knowledge() {
         setSelected(null)
       }
     } catch { setBases([]) } finally { setLoadingKB(false) }
-  }
+  }, [])
 
-  const loadDocs = async (kbId: number) => {
-    setLoadingDocs(true)
+  const loadDocs = useCallback(async (kbId: number) => {
     try {
       const data = await api.getDocuments(kbId) as { documents?: Doc[] }
       setDocs(data?.documents || [])
     } catch { setDocs([]) } finally { setLoadingDocs(false) }
-  }
+  }, [])
 
-  const loadProviders = async () => {
+  const loadProviders = useCallback(async () => {
     try {
       const data = await api.getProviders() as { providers?: ProviderOption[] }
       const list = data?.providers || []
@@ -288,25 +300,22 @@ export default function Knowledge() {
         if (prev && capable.some(p => p.id === prev)) return prev
         return capable[0]?.id ?? null
       })
-    } catch {}
-  }
+    } catch { /* keep previous providers */ }
+  }, [])
 
-  useEffect(() => { loadKBs(); loadProviders() }, [])
   useEffect(() => {
-    if (selected) {
-      loadDocs(selected.id)
-      setResults([])
-      setProviderId(selected.provider_id ?? null)
-    }
-  }, [selected?.id])
+    void Promise.resolve().then(() => { void loadKBs(); void loadProviders() })
+  }, [loadKBs, loadProviders])
+  useEffect(() => {
+    if (selected) void Promise.resolve().then(() => loadDocs(selected.id))
+  }, [selected, loadDocs])
 
-  // Poll every 5s while any document is still processing
   useEffect(() => {
     const hasProcessing = docs.some(d => d.status === 'processing')
     if (!hasProcessing) return
-    const timer = setInterval(() => { if (selected) loadDocs(selected.id) }, 5000)
+    const timer = setInterval(() => { if (selected) void loadDocs(selected.id) }, 5000)
     return () => clearInterval(timer)
-  }, [docs, selected?.id])
+  }, [docs, selected, loadDocs])
 
   const embeddingModels = providers.flatMap(p =>
     (p.models || [])

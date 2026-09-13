@@ -699,7 +699,7 @@ async def test_agent_executor_routes_internal_kind(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_internal_agent_dispatches_pool_tool(monkeypatch):
+async def test_internal_agent_dispatches_pool_tool(parent_conv_and_internal_agent, monkeypatch):
     from app.services import internal_agent as ia_mod
     from app.services.internal_agent import InternalAgentRunner
     from types import SimpleNamespace
@@ -712,7 +712,8 @@ async def test_internal_agent_dispatches_pool_tool(monkeypatch):
     fake_router = SimpleNamespace(chat=AsyncMock(side_effect=[step1, "done"]))
     monkeypatch.setattr(ia_mod, "get_llm_router", lambda: fake_router)
 
-    cfg = {"id": 1, "agent_name": "x", "system_prompt": "s", "llm_provider_id": 1,
+    ids = parent_conv_and_internal_agent
+    cfg = {"id": ids["agent_id"], "agent_name": "x", "system_prompt": "s", "llm_provider_id": 1,
            "llm_model": "m", "tool_loop_max_steps": 4, "memory_window": 0,
            "associated_skills": [], "metadata_json": {"tool_ids": [42]},
            "permission_level": "medium"}
@@ -727,7 +728,7 @@ async def test_internal_agent_dispatches_pool_tool(monkeypatch):
     monkeypatch.setattr(ia_mod, "execute_tool",
                         AsyncMock(return_value={"status": "completed", "stdout": "hi"}))
 
-    res = await runner.execute(task="go", conversation_id=None, user_id=1)
+    res = await runner.execute(task="go", conversation_id=None, user_id=ids["user_id"])
     assert res["status"] == "completed"
     assert any(c["name"] == "echo_test" for c in res["tool_calls"])
 

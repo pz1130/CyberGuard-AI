@@ -22,8 +22,14 @@ async def test_chat_redacts_pii_before_create():
     with patch.object(r, "get_client_async", AsyncMock(return_value=fake_client)), \
          patch.object(r, "_record_token_usage", AsyncMock()), \
          patch.object(r, "_load_master_config", AsyncMock(return_value={})), \
+         patch.object(r, "get_provider_config_async", AsyncMock(return_value={})), \
+         patch.object(r, "_should_strip_think", AsyncMock(return_value=False)), \
          patch("app.config.settings.MOCK_MODE", False):
-        await r.chat([{"role": "user", "content": "email me at a@b.com"}], provider_id=1)
+        await r.chat(
+            [{"role": "user", "content": "email me at a@b.com"}],
+            provider_id=1,
+            model="test-model",
+        )
     sent = captured["messages"][-1]["content"]
     assert "a@b.com" not in sent and "[REDACTED_EMAIL]" in sent
 
@@ -35,7 +41,11 @@ async def test_chat_blocks_secrets():
         create=AsyncMock(return_value=_resp()))))
     with patch.object(r, "get_client_async", AsyncMock(return_value=fake_client)), \
          patch.object(r, "_load_master_config", AsyncMock(return_value={})), \
+         patch.object(r, "get_provider_config_async", AsyncMock(return_value={})), \
          patch("app.config.settings.MOCK_MODE", False):
         with pytest.raises(SecretsDetectedError):
-            await r.chat([{"role": "user", "content": "use key AKIAIOSFODNN7EXAMPLE"}],
-                         provider_id=1)
+            await r.chat(
+                [{"role": "user", "content": "use key AKIAIOSFODNN7EXAMPLE"}],
+                provider_id=1,
+                model="test-model",
+            )

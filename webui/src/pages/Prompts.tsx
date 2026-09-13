@@ -1,4 +1,4 @@
-import { useEffect, useState, useContext } from 'react'
+import { useEffect, useState, useContext, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, Edit2, Trash2, Save, Copy, Check } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
@@ -61,8 +61,7 @@ export default function Prompts() {
   const [copiedId, setCopiedId] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
 
-  const load = async () => {
-    setLoading(true)
+  const load = useCallback(async () => {
     try {
       const data = await api.getPromptTemplates() as PromptTemplate[]
       setItems(data || [])
@@ -71,9 +70,9 @@ export default function Prompts() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [t])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { void Promise.resolve().then(() => load()) }, [load])
 
   const { searchTarget, setSearchTarget } = useContext(SearchContext)
   useEffect(() => {

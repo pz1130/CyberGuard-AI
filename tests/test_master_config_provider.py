@@ -31,6 +31,13 @@ def test_master_config_response_exposes_provider_id():
     assert response.model == "model-a"
 
 
+def test_fresh_master_config_does_not_name_a_model_without_a_provider():
+    from app.services.master_config import DEFAULT_LLM_MODEL, DEFAULT_LLM_PROVIDER_ID
+
+    assert DEFAULT_LLM_PROVIDER_ID is None
+    assert DEFAULT_LLM_MODEL is None
+
+
 @pytest.mark.asyncio
 async def test_master_config_rejects_model_from_another_provider(monkeypatch):
     current = _master_config()

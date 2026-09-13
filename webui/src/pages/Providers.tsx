@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useContext } from 'react'
+import { useState, useEffect, useMemo, useContext, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Plus, Loader2, Search, X, RefreshCw, Zap, Settings2, Database } from 'lucide-react'
@@ -718,7 +718,7 @@ export default function Providers() {
     return () => clearTimeout(timer)
   }, [searchTarget, setSearchTarget])
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const data = await api.getProviders() as any
       const list: any[] = data?.providers || data || []
@@ -727,9 +727,9 @@ export default function Providers() {
         models: (p.models || []).map((m: any) => typeof m === 'string' ? { name: m, model_type: 'chat' } : m),
       })))
     } catch { setProviders([]) } finally { setLoading(false) }
-  }
+  }, [])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { void Promise.resolve().then(() => load()) }, [load])
 
   const del = async (p: Provider) => {
     if (!confirm(t('providers.confirmDeleteName', { name: p.name }))) return

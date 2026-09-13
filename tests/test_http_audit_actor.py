@@ -164,16 +164,40 @@ async def test_overlong_user_agent_cannot_overflow_its_column():
     assert len(entry["request_path"]) == 500
 
 
-def test_login_names_the_actor_but_only_when_it_succeeds():
+@pytest.mark.asyncio
+async def test_login_names_the_actor_but_only_when_it_succeeds():
     """The login row is the one that matters most for credential attacks.
 
     It predates any get_current_user call, so the endpoint has to record the
     actor itself. A *failed* attempt must not: there is no authenticated user,
     and its 401 plus source IP is the signal.
+
+    The user is created in this test. A missing seed password is a failure,
+    not a skip — skipped coverage is not coverage.
     """
-    from fastapi.testclient import TestClient
+    import uuid
+
+    from httpx import ASGITransport, AsyncClient
 
     import app.main as main_module
+    from app.core.auth import get_password_hash
+    from app.core.database import get_db_context
+    from app.models.user import User
+
+    username = f"audit-login-{uuid.uuid4().hex[:8]}"
+    password = "AuditLogin-pass-1"
+    async with get_db_context() as session:
+        user = User(
+            username=username,
+            email=f"{username}@example.test",
+            hashed_password=get_password_hash(password),
+            role="viewer",
+            is_active=True,
+        )
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+        user_id = user.id
 
     captured = []
     real = main_module.log_audit
@@ -184,27 +208,28 @@ def test_login_names_the_actor_but_only_when_it_succeeds():
 
     main_module.log_audit = spy
     try:
-        with TestClient(main_module.app) as client:
-            ok = client.post(
+        transport = ASGITransport(app=main_module.app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            ok = await client.post(
                 "/api/v1/auth/login",
-                json={"username": "admin", "password": "admin123"},
+                json={"username": username, "password": password},
             )
-            if ok.status_code != 200:
-                pytest.skip("seeded admin credentials unavailable in this environment")
-            client.post(
+            assert ok.status_code == 200, ok.text
+            failed = await client.post(
                 "/api/v1/auth/login",
-                json={"username": "admin", "password": "definitely-wrong"},
+                json={"username": username, "password": "definitely-wrong"},
             )
+            assert failed.status_code == 401
     finally:
         main_module.log_audit = real
 
-    logins = [c for c in captured if c["request_path"] == "/api/v1/auth/login"]
+    logins = [c for c in captured if c.get("request_path") == "/api/v1/auth/login"]
     assert len(logins) == 2
     succeeded, failed = logins
 
     assert succeeded["metadata"]["status_code"] == 200
-    assert succeeded["user_id"] is not None
-    assert succeeded["metadata"]["username"] == "admin"
+    assert succeeded["user_id"] == user_id
+    assert succeeded["metadata"]["username"] == username
 
     assert failed["metadata"]["status_code"] == 401
     assert failed["user_id"] is None

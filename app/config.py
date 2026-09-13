@@ -35,8 +35,9 @@ class Settings(BaseSettings):
     WEBUI_URL: str = "http://localhost:3000"
     CORS_ORIGINS: str = '["http://localhost:3000","http://localhost:8000"]'
 
-    # Master Agent
-    MASTER_AGENT_MODEL: str = "gpt-4o"
+    # Master Agent. Routing uses the bound Provider+Model pair saved in
+    # Settings, not this fallback name.
+    MASTER_AGENT_MODEL: str = ""
     MASTER_AGENT_TEMPERATURE: float = 0.7
 
     # Context Compressor (master-agent conversation-history compression)

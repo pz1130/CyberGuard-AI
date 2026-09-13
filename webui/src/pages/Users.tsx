@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Trash2, Edit2 } from 'lucide-react'
@@ -30,13 +30,13 @@ export default function Users() {
   const [newMapping, setNewMapping] = useState({ azure_key: '', app_role: 'viewer', priority: 10 })
   const [secretEnvVars, setSecretEnvVars] = useState<{id: number; key: string; description?: string}[]>([])
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const data = await api.getUsers() as User[] | { users?: User[] }
       setItems(Array.isArray(data) ? data : data?.users || [])
     } catch { setItems([]) } finally { setLoading(false) }
-  }
-  useEffect(() => { load() }, [])
+  }, [])
+  useEffect(() => { void Promise.resolve().then(() => load()) }, [load])
 
   const submit = async () => {
     if (!form.username || form.username.trim().length < 3) {
@@ -80,7 +80,7 @@ export default function Users() {
   }
 
   // SSO data loading & mutation
-  const loadSso = async () => {
+  const loadSso = useCallback(async () => {
     try {
       const [cfg, mappings, envvars] = await Promise.all([
         api.getSsoConfig(),
@@ -89,7 +89,7 @@ export default function Users() {
       ])
       setSsoCfg(cfg); setSsoMappings(mappings || []); setSecretEnvVars(envvars || [])
     } catch { /* admin-only, let tabs gate access */ }
-  }
+  }, [])
 
   const saveSsoConfig = async (patch: Record<string, unknown>) => {
     setSsoSaving(true)
@@ -114,10 +114,9 @@ export default function Users() {
     await loadSso()
   }
 
-  // Tab switch
   useEffect(() => {
-    if (activeTab === 'sso') loadSso()
-  }, [activeTab])
+    if (activeTab === 'sso') void Promise.resolve().then(() => loadSso())
+  }, [activeTab, loadSso])
 
   const openForm = (u?: User) => {
     if (u) {

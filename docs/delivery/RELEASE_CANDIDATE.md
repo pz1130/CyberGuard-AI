@@ -41,7 +41,7 @@ A release candidate is acceptable only when all boxes below are evidenced:
       executes exactly once; rejection executes nothing.
 - [x] Audit-chain verification succeeds after the demonstrations.
 - [x] Backup creation and restore are exercised on disposable data.
-- [x] Dependency and container scans have no unaccepted critical finding.
+- [x] Dependency and container scans have no unaccepted High or Critical finding.
 - [x] Known limitations and accepted risks are recorded in the release notes.
 
 Machine and command evidence is in `RC_EVIDENCE.md`, including the 2026-09-12

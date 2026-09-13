@@ -29,7 +29,6 @@ export default function GovernanceDashboard() {
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
-    setLoading(true)
     try {
       const [m, h, rb, av, ap] = await Promise.allSettled([
         api.getGovernanceMetrics(30), api.getHaltStatus(), api.getRollbacks(),

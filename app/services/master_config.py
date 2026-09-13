@@ -7,6 +7,10 @@ from app.core.versioned_cache import VersionedCache
 # Cross-worker version-gated cache (replaces the old process-local global).
 _cache: VersionedCache[MasterAgentConfig] = VersionedCache("master_config")
 
+# Unbound on purpose: AUTO routing requires a saved Provider+Model pair.
+DEFAULT_LLM_PROVIDER_ID = None
+DEFAULT_LLM_MODEL = None
+
 
 async def _load_or_create(db: AsyncSession) -> MasterAgentConfig:
     """Load the single config row, creating the default if absent."""
@@ -26,7 +30,8 @@ Agent types: threat_intel, log_anomaly, vuln_scanner, remediation, osint, genera
         default_system = "You are CyberGuard, a security operations assistant. You help users with threat analysis, vulnerability assessment, log analysis, and incident response. Be precise and actionable."
         config = MasterAgentConfig(
             id=1,
-            llm_model="MiniMax-m2.7",
+            llm_provider_id=DEFAULT_LLM_PROVIDER_ID,
+            llm_model=DEFAULT_LLM_MODEL,
             temperature=0.7,
             system_prompt=default_system,
             intent_parser_prompt=default_intent,

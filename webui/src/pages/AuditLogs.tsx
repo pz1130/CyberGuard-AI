@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Download, Search, Loader2 } from 'lucide-react'
@@ -22,14 +22,13 @@ export default function AuditLogs() {
   const [filter, setFilter] = useState('')
   const [limit, setLimit] = useState(50)
 
-  const load = async () => {
-    setLoading(true)
+  const load = useCallback(async () => {
     try {
       const data = await api.getAuditLogs({ limit }) as Log[] | { logs?: Log[] }
       setLogs(Array.isArray(data) ? data : data?.logs || [])
     } catch { setLogs([]) } finally { setLoading(false) }
-  }
-  useEffect(() => { load() }, [limit])
+  }, [limit])
+  useEffect(() => { void Promise.resolve().then(() => load()) }, [load])
 
   const exportLogs = async () => {
     try {

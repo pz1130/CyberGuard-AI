@@ -18,7 +18,11 @@ class MasterConfigResponse(BaseModel):
         validation_alias='llm_provider_id',
         serialization_alias='provider_id',
     )
-    model: str = Field(validation_alias='llm_model', serialization_alias='model')
+    model: Optional[str] = Field(
+        default=None,
+        validation_alias='llm_model',
+        serialization_alias='model',
+    )
     temperature: float
     system_prompt: str
     intent_parser_prompt: str

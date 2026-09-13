@@ -103,13 +103,15 @@ export function splitReasoningContent(content: string): ReasoningContent {
   const reasoning: string[] = []
   let answer = ''
   let cursor = 0
-  const openingTag = /<(think|reasoning)>/gi
+  // Same family as packages/llm_router/utils.py: <think>, <think>0, <think>_1.
+  const openingTag = /<(think[^>]*|reasoning)>/gi
   let match: RegExpExecArray | null
 
   while ((match = openingTag.exec(content)) !== null) {
     answer += content.slice(cursor, match.index)
     const bodyStart = match.index + match[0].length
-    const closingTag = new RegExp(`</${match[1]}>`, 'i')
+    const closeName = match[1].toLowerCase().startsWith('think') ? 'think' : 'reasoning'
+    const closingTag = new RegExp(`</${closeName}>`, 'i')
     const closingMatch = closingTag.exec(content.slice(bodyStart))
     if (!closingMatch) {
       const partial = content.slice(bodyStart).trim()
@@ -193,7 +195,6 @@ export default function Chat() {
     system_prompt_override: '',
     intent_parser_prompt_override: '',
     summarizer_prompt_override: '',
-    model_override: '',
     temperature_override: 0.7,
     knowledge_base_id: null as number | null,
   })
@@ -207,15 +208,16 @@ export default function Chat() {
 
   // React to search target — open conversation when selected from GlobalSearch
   const { searchTarget, setSearchTarget } = useSearch()
+  const selectConversationRef = useRef<(convId: number) => Promise<void>>(async () => {})
   useEffect(() => {
     if (searchTarget && searchTarget.tab === 'chat' && searchTarget.id) {
       const convId = Number(searchTarget.id)
       if (convId && convId !== activeConvId) {
-        selectConversation(convId)
+        void selectConversationRef.current(convId)
       }
       setSearchTarget(null)
     }
-  }, [searchTarget])
+  }, [searchTarget, activeConvId, setSearchTarget])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -227,12 +229,15 @@ export default function Chat() {
     return () => { isMountedRef.current = false }
   }, [])
 
-  // Load conversations on mount
+  const loadConversationsRef = useRef<() => Promise<void>>(async () => {})
+  const loadKnowledgeBasesRef = useRef<() => Promise<void>>(async () => {})
+  const loadAvailableAgentsRef = useRef<() => Promise<void>>(async () => {})
+  const loadPromptTemplatesRef = useRef<() => Promise<void>>(async () => {})
   useEffect(() => {
-    loadConversations()
-    loadKnowledgeBases()
-    loadAvailableAgents()
-    loadPromptTemplates()
+    void loadConversationsRef.current()
+    void loadKnowledgeBasesRef.current()
+    void loadAvailableAgentsRef.current()
+    void loadPromptTemplatesRef.current()
   }, [])
 
   // (Active-conversation selection is handled in loadConversations once the
@@ -245,6 +250,7 @@ export default function Chat() {
       setPromptTemplates((data || []).filter(t => t.is_active))
     } catch { setPromptTemplates([]) }
   }
+  loadPromptTemplatesRef.current = loadPromptTemplates
 
   // Load registered sub-agents for the selector
   const loadAvailableAgents = async () => {
@@ -258,6 +264,7 @@ export default function Chat() {
       setAvailableAgents(list.filter(a => a.is_active !== false))
     } catch { setAvailableAgents([]) }
   }
+  loadAvailableAgentsRef.current = loadAvailableAgents
 
   // Load knowledge bases
   const loadKnowledgeBases = async () => {
@@ -266,6 +273,7 @@ export default function Chat() {
       setAvailableKBs(data?.bases || [])
     } catch { setAvailableKBs([]) }
   }
+  loadKnowledgeBasesRef.current = loadKnowledgeBases
 
   // Load conversations
   const loadConversations = async () => {
@@ -290,6 +298,7 @@ export default function Chat() {
       }
     } catch { setConversations([]) }
   }
+  loadConversationsRef.current = loadConversations
 
   // Load messages for active conversation
   const loadConversationMessages = async (convId: number) => {
@@ -312,7 +321,6 @@ export default function Chat() {
         system_prompt_override: '',
         intent_parser_prompt_override: '',
         summarizer_prompt_override: '',
-        model_override: '',
         temperature_override: 0.7,
         knowledge_base_id: null,
       })
@@ -336,13 +344,13 @@ export default function Chat() {
         system_prompt_override: conv.system_prompt_override || '',
         intent_parser_prompt_override: conv.intent_parser_prompt_override || '',
         summarizer_prompt_override: conv.summarizer_prompt_override || '',
-        model_override: conv.model_override || '',
         temperature_override: conv.temperature_override ?? 0.7,
         knowledge_base_id: conv.knowledge_base_id ?? null,
       })
     } catch (e) { console.error('Failed to load conversation:', e) }
     localStorage.removeItem('activeChatTaskId')
   }
+  selectConversationRef.current = selectConversation
 
   // Delete conversation
   const deleteConversation = async (convId: number, e: React.MouseEvent) => {
@@ -507,6 +515,8 @@ export default function Chat() {
   }
 
   const resumePolling = (taskId: string) => startPolling(taskId, 'RESUMING...')
+  const resumePollingRef = useRef(resumePolling)
+  resumePollingRef.current = resumePolling
 
   // Resume polling on mount if there's an active task from a previous session
   useEffect(() => {
@@ -514,7 +524,7 @@ export default function Chat() {
     if (stored) {
       setLoading(true)
       setPollingStatus('RESUMING...')
-      resumePolling(stored)
+      resumePollingRef.current(stored)
     }
   }, [])
 
@@ -783,7 +793,7 @@ export default function Chat() {
               style={{ width: 'auto', minWidth: 140, maxWidth: 260, height: 30, fontSize: 12 }}
               title={availableModels.length === 0 ? 'No verified models — go to Providers and click TEST' : undefined}
             >
-              <option value="auto">AUTO</option>
+              <option value="auto">AUTO (Master pair)</option>
               {availableModels.map(m => <option key={`${m.provider_id}:${m.model}`} value={`${m.provider_id}:${m.model}`}>{m.provider_name} / {m.model}</option>)}
             </select>
             {availableModels.length === 0 && (
@@ -854,16 +864,6 @@ export default function Chat() {
                 {availableKBs.map(kb => <option key={kb.id} value={kb.id}>{kb.name}</option>)}
               </select>
             </div>
-            <div className="chat-settings-section">
-              <div className="chat-settings-label">MODEL OVERRIDE</div>
-              <select
-                value={convSettings.model_override}
-                onChange={e => setConvSettings(s => ({ ...s, model_override: e.target.value }))}
-                className="chat-settings-select">
-                <option value="">— Global Default —</option>
-                {availableModels.map(m => <option key={`${m.provider_id}:${m.model}`} value={m.model}>{m.provider_name} / {m.model}</option>)}
-              </select>
-            </div>
             <div style={{ gridColumn: '1 / -1' }} className="chat-settings-section">
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                 <div className="chat-settings-label" style={{ marginBottom: 0 }}>CUSTOM SYSTEM PROMPT</div>
@@ -923,7 +923,6 @@ export default function Chat() {
                       system_prompt_override: convSettings.system_prompt_override || null,
                       intent_parser_prompt_override: convSettings.intent_parser_prompt_override || null,
                       summarizer_prompt_override: convSettings.summarizer_prompt_override || null,
-                      model_override: convSettings.model_override || null,
                       temperature_override: convSettings.temperature_override,
                       knowledge_base_id: convSettings.knowledge_base_id,
                     }

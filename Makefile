@@ -59,11 +59,11 @@ docker-config: ## Validate the Docker Compose release definition
 docker-build: ## Build all release images
 	docker compose build api tool-runner webui
 
-security-scan: ## Fail on known, fixed critical vulnerabilities in release images
+security-scan: ## Fail on known, fixed High or Critical vulnerabilities in release images
 	@for image in $(RELEASE_IMAGES); do \
 		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
 			-v cyberguard-trivy-cache:/root/.cache/ \
-			aquasec/trivy:0.72.0 image --scanners vuln --severity CRITICAL \
+			aquasec/trivy:0.72.0 image --scanners vuln --severity HIGH,CRITICAL \
 			--ignore-unfixed --exit-code 1 $$image || exit $$?; \
 	done
 

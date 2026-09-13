@@ -23,6 +23,48 @@ logger = logging.getLogger(__name__)
 from app.config import settings
 
 
+class UnboundSelectionError(RuntimeError):
+    """Provider and model must be selected as a pair."""
+
+
+def bound_provider_model(
+    *,
+    provider_id: Optional[int] = None,
+    model: Optional[str] = None,
+    master_config: Optional[dict] = None,
+) -> tuple[int, str]:
+    """Return a bound (provider_id, model) pair.
+
+    The chat toolbar pair wins when both halves are present. Otherwise AUTO
+    uses the Master Agent pair. A model name without its provider — including
+    the legacy session-level override — is never mixed with another provider.
+    """
+    cfg = master_config or {}
+    request_model = _model_name(model) if model else None
+    if isinstance(request_model, str):
+        request_model = request_model.strip() or None
+
+    has_request_provider = provider_id is not None
+    has_request_model = request_model is not None
+    if has_request_provider and has_request_model:
+        return int(provider_id), request_model
+    if has_request_provider or has_request_model:
+        raise UnboundSelectionError(
+            "Provider and model must be selected together."
+        )
+
+    master_provider = cfg.get("provider_id")
+    master_model = _model_name(cfg.get("model")) if cfg.get("model") else None
+    if isinstance(master_model, str):
+        master_model = master_model.strip() or None
+    if master_provider is not None and master_model:
+        return int(master_provider), master_model
+    raise UnboundSelectionError(
+        "Master Agent has no bound Provider and model. "
+        "Configure both in Settings before using AUTO."
+    )
+
+
 def _record_generation(name, model, input_messages, output, response,
                        provider_id) -> None:
     """Best-effort Langfuse generation record. No-op unless Langfuse is set up."""
@@ -518,9 +560,12 @@ class LLMRouter:
             }
 
         master_config = await self._load_master_config()
-        active_provider_id = provider_id or master_config.get("provider_id")
+        active_provider_id, active_model = bound_provider_model(
+            provider_id=provider_id,
+            model=model,
+            master_config=master_config,
+        )
         client = await self.get_client_async(provider_id=active_provider_id)
-        active_model = _model_name(model_override or model or master_config.get("model") or settings.MASTER_AGENT_MODEL)
 
         # Load available sub-agents from DB to include in prompt
         agents_info = await self._get_agents_info()
@@ -614,6 +659,7 @@ Examples:
         self,
         results: List[Dict[str, Any]],
         provider_id: Optional[int] = None,
+        model: Optional[str] = None,
         summarizer_prompt_override: Optional[str] = None,
         temperature_override: Optional[float] = None,
         model_override: Optional[str] = None,
@@ -627,20 +673,13 @@ Examples:
             lines = [f"**{r.get('agent_name', 'Agent')}**:\n{r.get('output', 'No output')}" for r in results]
             return "📊 **CyberGuard 分析报告**\n\n" + "\n\n".join(lines) + "\n\n_此结果为 Mock 模式输出，配置真实 AI Provider 后可获得更智能的分析。_"
 
-        # Get model from config (before span so active_model is defined)
         master_config = await self._load_master_config()
-        active_provider_id = provider_id or master_config.get("provider_id")
-        client = await self.get_client_async(provider_id=active_provider_id)
-        active_model = (
-            model_override
-            or master_config.get("model")
-            or settings.MASTER_AGENT_MODEL
+        active_provider_id, active_model = bound_provider_model(
+            provider_id=provider_id,
+            model=model,
+            master_config=master_config,
         )
-        if not active_model and active_provider_id:
-            provider_config = await self.get_provider_config_async(active_provider_id)
-            if provider_config and provider_config.get("models"):
-                active_model = provider_config["models"][0]
-        active_model = _model_name(active_model)
+        client = await self.get_client_async(provider_id=active_provider_id)
 
         results_text = "\n".join([
             f"Agent {r.get('agent_name', 'unknown')}: {r.get('output', 'No output')}"
@@ -724,17 +763,6 @@ Examples:
 
         master_config = await self._load_master_config()
 
-        # Determine active provider/model. Explicit conversation or request
-        # values win; otherwise use the validated Master Agent selection.
-        active_provider_id = provider_id or master_config.get("provider_id")
-        active_model = model_override or model or master_config.get("model")
-        provider_config = None
-        if not active_model and active_provider_id:
-            provider_config = await self.get_provider_config_async(active_provider_id)
-            if provider_config and provider_config.get("models"):
-                active_model = provider_config["models"][0]
-        active_model = _model_name(active_model or settings.MASTER_AGENT_MODEL)
-
         # Drop exclude_from_context before any provider call (M0a-2)
         messages = messages_for_model(messages)
 
@@ -746,9 +774,15 @@ Examples:
                 return SimpleNamespace(content=mock_text, tool_calls=None)
             return mock_text
 
+        # Toolbar pair wins; AUTO uses the Master Agent pair. Session-level
+        # model_override is a model name only and is ignored.
+        active_provider_id, active_model = bound_provider_model(
+            provider_id=provider_id,
+            model=model,
+            master_config=master_config,
+        )
         client = await self.get_client_async(provider_id=active_provider_id)
-        if provider_config is None and active_provider_id:
-            provider_config = await self.get_provider_config_async(active_provider_id)
+        provider_config = await self.get_provider_config_async(active_provider_id)
         provider_type = (provider_config or {}).get("provider_type") or (
             provider_config or {}
         ).get("name")
@@ -824,13 +858,6 @@ Examples:
         """
         messages = self._guard_messages(messages, pii_policy)
         master_config = await self._load_master_config()
-        active_provider_id = provider_id or master_config.get("provider_id")
-        active_model = model_override or model or master_config.get("model")
-        if not active_model and active_provider_id:
-            config = await self.get_provider_config_async(active_provider_id)
-            if config and config.get("models"):
-                active_model = config["models"][0]
-        active_model = _model_name(active_model or settings.MASTER_AGENT_MODEL)
 
         if settings.MOCK_MODE:
             last_msg = messages[-1]["content"] if messages else ""
@@ -844,6 +871,11 @@ Examples:
                 await asyncio.sleep(0.02)
             return
 
+        active_provider_id, active_model = bound_provider_model(
+            provider_id=provider_id,
+            model=model,
+            master_config=master_config,
+        )
         client = await self.get_client_async(provider_id=active_provider_id)
         temperature = (
             temperature_override

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Database, Download, Trash2, Plus, RefreshCw, Loader2 } from 'lucide-react'
@@ -53,14 +53,14 @@ export default function Backup() {
   const [deleting, setDeleting] = useState<string | null>(null)
   const [excludeChat, setExcludeChat] = useState(false)
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const data = await api.listBackups() as BackupApiRecord[] | { backups?: BackupApiRecord[] }
       const records = Array.isArray(data) ? data : data?.backups || []
       setItems(records.map(mapBackup))
     } catch { setItems([]) } finally { setLoading(false) }
-  }
-  useEffect(() => { load() }, [])
+  }, [])
+  useEffect(() => { void Promise.resolve().then(() => load()) }, [load])
 
   const create = async () => {
     setCreating(true)

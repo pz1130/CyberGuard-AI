@@ -37,19 +37,32 @@ const TAB_LABELS: Record<string, string> = {
 export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Props) {
   const [query, setQuery] = useState('')
   const [allItems, setAllItems] = useState<SearchItem[]>([])
-  const [loadingData, setLoadingData] = useState(false)
+  const [catalogReady, setCatalogReady] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(0)
+  const [prevOpen, setPrevOpen] = useState(open)
+  const [prevQuery, setPrevQuery] = useState(query)
   const { setSearchTarget } = useSearch()
   const inputRef = useRef<HTMLInputElement>(null)
   const loadedAtRef = useRef(0)
   const CACHE_TTL = 60_000
+
+  if (open !== prevOpen) {
+    setPrevOpen(open)
+    if (open) {
+      setQuery('')
+      setSelectedIndex(0)
+    }
+  }
+  if (query !== prevQuery) {
+    setPrevQuery(query)
+    setSelectedIndex(0)
+  }
 
   // Load all searchable data; re-fetch when cache is stale (> 60s old)
   useEffect(() => {
     if (!open) return
     const stale = Date.now() - loadedAtRef.current > CACHE_TTL
     if (!stale) return
-    if (allItems.length === 0) setLoadingData(true)
     Promise.allSettled([
       api.getAgents(),
       api.getProviders(),
@@ -162,17 +175,15 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
       }
 
       setAllItems(items)
-      setLoadingData(false)
+      setCatalogReady(true)
       loadedAtRef.current = Date.now()
     })
   }, [open])
 
-  // Focus input and reset state when opened
   useEffect(() => {
     if (open) {
-      setQuery('')
-      setSelectedIndex(0)
-      setTimeout(() => inputRef.current?.focus(), 30)
+      const timer = setTimeout(() => inputRef.current?.focus(), 30)
+      return () => clearTimeout(timer)
     }
   }, [open])
 
@@ -225,7 +236,7 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
     return () => window.removeEventListener('keydown', handler)
   }, [open, flat, selectedIndex, onClose, select])
 
-  useEffect(() => { setSelectedIndex(0) }, [query])
+  const catalogLoading = !catalogReady && allItems.length === 0
 
   if (!open) return null
 
@@ -273,14 +284,14 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
 
         {/* Results area */}
         <div style={{ overflowY: 'auto', flex: 1 }}>
-          {loadingData && (
+          {catalogLoading && (
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-dim)', fontSize: 12, letterSpacing: '0.1em' }}>
               LOADING...
             </div>
           )}
 
           {/* Recent tabs (shown when query is empty) */}
-          {!loadingData && !q && recentTabs.length > 0 && (
+          {!catalogLoading && !q && recentTabs.length > 0 && (
             <div>
               <div style={{ padding: '8px 16px 4px', fontSize: 11, letterSpacing: '0.15em', color: 'var(--text-dim)' }}>
                 RECENT
@@ -306,20 +317,20 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
             </div>
           )}
 
-          {!loadingData && !q && recentTabs.length === 0 && (
+          {!catalogLoading && !q && recentTabs.length === 0 && (
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-dim)', fontSize: 12, letterSpacing: '0.1em' }}>
               TYPE TO SEARCH ACROSS AGENTS, PROVIDERS, SKILLS, TOOLS, KNOWLEDGE, MCP, PROMPTS
             </div>
           )}
 
-          {!loadingData && q && categories.length === 0 && (
+          {!catalogLoading && q && categories.length === 0 && (
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-dim)', fontSize: 12, letterSpacing: '0.1em' }}>
               NO RESULTS — TRY ANOTHER QUERY
             </div>
           )}
 
           {/* Grouped results */}
-          {!loadingData && categories.map(cat => (
+          {!catalogLoading && categories.map(cat => (
             <div key={cat}>
               <div style={{ padding: '8px 16px 4px', fontSize: 11, letterSpacing: '0.15em', color: 'var(--text-dim)' }}>
                 {cat}

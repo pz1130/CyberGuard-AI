@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useContext } from 'react'
+import { useState, useEffect, useRef, useContext, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Trash2, Plus, Edit2, Wrench, X, Loader2, Link, Upload } from 'lucide-react'
@@ -60,13 +60,13 @@ export default function Skills() {
     return () => clearTimeout(timer)
   }, [searchTarget, setSearchTarget])
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const data = await api.getSkills(tagFilter ? `?tag=${encodeURIComponent(tagFilter)}` : '') as Skill[] | { skills?: Skill[] }
       setItems(Array.isArray(data) ? data : data?.skills || [])
     } catch { setItems([]) } finally { setLoading(false) }
-  }
-  useEffect(() => { load() }, [])
+  }, [tagFilter])
+  useEffect(() => { void Promise.resolve().then(() => load()) }, [load])
 
   const submit = async () => {
     if (!form.name) return

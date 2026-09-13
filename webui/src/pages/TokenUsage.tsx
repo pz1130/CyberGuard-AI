@@ -46,6 +46,13 @@ export default function TokenUsage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [rangeDays, setRangeDays] = useState(30)
+  const [prevRangeDays, setPrevRangeDays] = useState(rangeDays)
+
+  if (rangeDays !== prevRangeDays) {
+    setPrevRangeDays(rangeDays)
+    setLoading(true)
+    setError(null)
+  }
 
   useEffect(() => {
     const start = new Date()
@@ -55,12 +62,12 @@ export default function TokenUsage() {
       String(start.getMonth() + 1).padStart(2, '0'),
       String(start.getDate()).padStart(2, '0'),
     ].join('-')
-    setLoading(true)
-    setError(null)
+    let cancelled = false
     api.getTokenUsageSummary(startDate)
-      .then(result => setData(result as TokenUsageSummary))
-      .catch(e => setError(e instanceof Error ? e.message : 'Unknown error'))
-      .finally(() => setLoading(false))
+      .then(result => { if (!cancelled) setData(result as TokenUsageSummary) })
+      .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : 'Unknown error') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
   }, [rangeDays])
 
   if (loading) {

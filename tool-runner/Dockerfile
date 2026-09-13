@@ -4,7 +4,8 @@ WORKDIR /app
 
 # Runner deps only (kept minimal; add security tools below as needed).
 COPY tool-runner/requirements.lock ./requirements.lock
-RUN pip install --no-cache-dir -r requirements.lock
+RUN pip install --no-cache-dir --upgrade 'setuptools>=84.0.0' \
+    && pip install --no-cache-dir -r requirements.lock
 
 # --- Security tools layer (extend this list as your team needs) ---
 RUN apt-get update \

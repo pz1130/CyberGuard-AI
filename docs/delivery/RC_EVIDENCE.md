@@ -6,12 +6,14 @@ Verification date: 2026-09-13 (Asia/Shanghai)
 
 ## Automated gate
 
-- `make check`: 594 passed, 1 skipped; frontend type check and lint ratchet
-  passed; production npm audit reported 0 vulnerabilities.
+- `make check`: 610 passed, 0 skipped; frontend type check and lint ratchet
+  passed (eslint baseline 126 errors / 0 warnings after hook cleanup);
+  production npm audit reported 0 vulnerabilities.
 - Fresh Alembic migration: `036_knowledge_provider_binding (head)`, with one head.
 - Compose configuration validation: passed with explicit non-default secrets.
 - Release image build: API, tool-runner, and WebUI built successfully.
-- Container scan: no known, fixed Critical finding in the three release images.
+- Container scan: `make security-scan` (HIGH,CRITICAL, ignore-unfixed) passed
+  on the rebuilt images — 0 High, 0 Critical in API, tool-runner, and WebUI.
 
 ## Runtime smoke test
 
@@ -23,6 +25,9 @@ The following checks passed:
 - `/health` returned version `1.0.0-rc.1`.
 - `/health/ready` reported PostgreSQL and Redis healthy.
 - The explicitly configured bootstrap administrator could sign in.
+- A conversation override could be saved and then cleared with explicit JSON
+  `null`; the update returned HTTP 200 and PostgreSQL persisted both cleared
+  fields.
 - The OpenAPI surface contains no GRC Assessment, Group Chat, Schedule, N8N,
   or Webhook route.
 - The WebUI root returned HTTP 200.
@@ -42,11 +47,11 @@ review. No existing project volume was used.
 ## Local image identifiers
 
 - `cyberguard-api:1.0.0-rc.1` —
-  `sha256:9faaf838bf619b90c767fd8b0b38d2266c024108232a13af2b1a84df46067f0e`
+  `sha256:bdcf9941c8e79b7f476e8b18d631108ea282ca4b3cd22376cd663653ae4824f6`
 - `cyberguard-tool-runner:1.0.0-rc.1` —
-  `sha256:8c1dc1c9d1972c50c6726edac830871fb2315295cf816753202f0a649dc2a964`
+  `sha256:f53b79e5bdfd4481a93a4a410ea9b9edc423cc952c5ad5d85cc11235bfea9939`
 - `cyberguard-webui:1.0.0-rc.1` —
-  `sha256:6400f8ff736d915e77c7cd66a21bcc5e78d93eff5601c054b1ce2816d768dc67`
+  `sha256:fe078783ee386dca2885f27d125a643e99937bc5ac497fed6b188a2283582a63`
 
 These are local image identifiers, not registry digests. Record immutable
 registry digests after publishing.

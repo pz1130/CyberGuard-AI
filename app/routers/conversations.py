@@ -60,6 +60,23 @@ class ConversationUpdate(BaseModel):
     knowledge_base_id: Optional[int] = None
 
 
+_REQUIRED_UPDATE_FIELDS = {"title", "messages_json"}
+
+
+def apply_conversation_update(conv, body: ConversationUpdate) -> None:
+    """Apply fields the client actually sent, including explicit JSON null.
+
+    `is not None` skips clearing: the session UI sends null to drop a knowledge
+    base or custom prompt, and that write must land.
+    """
+    data = body.model_dump(exclude_unset=True)
+    for key in _REQUIRED_UPDATE_FIELDS:
+        if data.get(key) is None:
+            data.pop(key, None)
+    for key, value in data.items():
+        setattr(conv, key, value)
+
+
 class AppendMessageRequest(BaseModel):
     role: str  # "user" or "assistant"
     content: str
@@ -152,24 +169,11 @@ async def update_conversation(
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    if body.title is not None:
-        conv.title = body.title
-    if body.messages_json is not None:
-        conv.messages_json = body.messages_json
-    if body.system_prompt_override is not None:
-        conv.system_prompt_override = body.system_prompt_override
-    if body.intent_parser_prompt_override is not None:
-        conv.intent_parser_prompt_override = body.intent_parser_prompt_override
-    if body.summarizer_prompt_override is not None:
-        conv.summarizer_prompt_override = body.summarizer_prompt_override
-    if body.model_override is not None:
-        conv.model_override = body.model_override
-    if body.temperature_override is not None:
-        conv.temperature_override = body.temperature_override
-    if body.knowledge_base_id is not None:
-        conv.knowledge_base_id = body.knowledge_base_id
+    apply_conversation_update(conv, body)
 
-    conv.updated_at = datetime.now(timezone.utc)
+    # The schema stores TIMESTAMP WITHOUT TIME ZONE. Keep the value in UTC,
+    # but strip tzinfo so asyncpg does not reject the update.
+    conv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
     await db.refresh(conv)
     return ConversationResponse.model_validate(conv)
