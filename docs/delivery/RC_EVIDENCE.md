@@ -7,7 +7,7 @@ Verification date: 2026-09-13 (Asia/Shanghai)
 ## Automated gate
 
 - `make check`: 611 passed, 0 skipped; frontend type check and lint ratchet
-  passed (eslint baseline 126 errors / 0 warnings after hook cleanup);
+  passed (eslint baseline 124 errors / 0 warnings after cleanup);
   production npm audit reported 0 vulnerabilities.
 - Fresh Alembic migration: `036_knowledge_provider_binding (head)`, with one head.
 - Compose configuration validation: passed with explicit non-default secrets.
@@ -51,7 +51,7 @@ review. No existing project volume was used.
 - `cyberguard-tool-runner:1.0.0-rc.1` —
   `sha256:a961139da410bb3b11aed736353c0599b239d64dd38a626a69e02e9206cc90fa`
 - `cyberguard-webui:1.0.0-rc.1` —
-  `sha256:1201349b4864ca28feb43ca1ee334c99dfa6d587f10f3e0b9a833e2285274f9e`
+  `sha256:1b1ef6a26a57583e1cc5825b314306d8c83083c3be3d18a779255dd6a92c3268`
 
 These are local image identifiers, not registry digests. Record immutable
 registry digests after publishing.

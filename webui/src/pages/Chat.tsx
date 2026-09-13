@@ -444,7 +444,7 @@ export default function Chat() {
   const handleTaskResult = (task: TaskResponse) => {
     if (task?.status === 'completed') {
       const raw = task.output_data
-      let output = ''
+      let output: string
       if (typeof raw === 'string') output = raw
       else if (raw?.response) output = raw.response
       else if (raw?.final_summary) output = raw.final_summary

@@ -158,7 +158,7 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
           let msgs: Array<{ role: string; content: string }> = []
           try {
             msgs = typeof c.messages_json === 'string' ? JSON.parse(c.messages_json || '[]') : []
-          } catch { msgs = [] }
+          } catch { /* keep the empty fallback for malformed history */ }
           // Build a searchable text from the last few messages
           const lastMsgs = msgs.slice(-6)
           const previewText = lastMsgs.map(m => m.content || '').join(' ').slice(0, 200)
