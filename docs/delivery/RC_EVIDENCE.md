@@ -38,6 +38,12 @@ archive.
   reported 0 High / 0 Critical, and all three SBOMs were regenerated. Fixed
   check-only values are used only for Compose interpolation and are not baked
   into images or accepted for runtime startup.
+- 2026-09-14 GitHub Actions release gate passed on commit
+  `ea1e67cb17c2e21b35575233fb7a2a865f580cbb`: all tests and checks passed,
+  the three release images were built and runtime-tested on Linux AMD64,
+  container scans reported no unaccepted High or Critical findings, and the
+  three CycloneDX SBOMs were uploaded as the
+  `cyberguard-1.0.0-rc.1-sbom` workflow artifact.
 
 ## Runtime smoke test
 
@@ -98,17 +104,19 @@ source delivery.
 | `cyberguard-tool-runner:1.0.0-rc.1` | `sha256:8280ed1376393a289293e1adfeb76b0eaeebd27c3559f47a56ea155a1a64e888` |
 | `cyberguard-webui:1.0.0-rc.1` | `sha256:6aa092e3080413ec7ea147b72332f2988102bb899c04eab2d633d005aa1014f1` |
 
-The pending Linux AMD64 workflow run will record its commit and workflow URL
-below. Operators who independently publish images should pin their own
-registry digests as described in `OPERATIONS.md`.
+Operators who independently publish images should pin their own registry
+digests as described in `OPERATIONS.md`.
 
 ## Linux AMD64 source-build acceptance
 
-- Git commit: pending
-- GitHub Actions workflow URL: pending
-- Runner architecture assertion (`uname -m = x86_64`): pending
-- Source-built image architecture assertions (`amd64`): pending
-- Compose health, bootstrap login, authenticated API smoke, and WebUI: pending
+- Git commit: `ea1e67cb17c2e21b35575233fb7a2a865f580cbb`
+- GitHub Actions workflow:
+  <https://github.com/pz1130/CyberGuard-AI/actions/runs/34804319599>
+- Runner architecture assertion (`uname -m = x86_64`): passed
+- Source-built API, tool-runner, and WebUI image architecture assertions
+  (`amd64`): passed
+- Compose health, bootstrap login, authenticated API smoke, and WebUI: passed
+- Security scan and CycloneDX SBOM artifact generation: passed
 
 ## Tagged source package
 

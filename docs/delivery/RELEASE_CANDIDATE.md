@@ -49,7 +49,7 @@ A release candidate is acceptable only when all boxes below are evidenced:
       technical-acceptance rows (Jesse; same person, three roles). Final
       `v1.0.0` acceptance remains pending.
 - [x] Source-only Docker delivery selected; a container registry is optional.
-- [ ] The source-built stack passes the automated runtime smoke test on the
+- [x] The source-built stack passes the automated runtime smoke test on the
       Linux AMD64 acceptance platform, and the workflow URL is recorded.
 - [ ] A real internal security-reporting channel is recorded in `SECURITY.md`
       and a test report is acknowledged.
@@ -57,9 +57,10 @@ A release candidate is acceptable only when all boxes below are evidenced:
       recorded in `RC_EVIDENCE.md`.
 
 Machine and command evidence is in `RC_EVIDENCE.md`, including the 2026-09-12
-isolated-preview demonstration (MiniMax-M3). Promotion to `v1.0.0` waits on
-the AMD64 source-build run, a tested internal security-reporting channel, and
-an immutable tagged source package. Registry publication is not required.
+isolated-preview demonstration (MiniMax-M3) and the successful Linux AMD64
+source-build run. Promotion to `v1.0.0` waits on a tested internal
+security-reporting channel and an immutable tagged source package. Registry
+publication is not required.
 
 ## Versioning
 
