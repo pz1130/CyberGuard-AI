@@ -285,14 +285,53 @@ Technical evidence above was produced on the isolated preview. Jesse is the
 sole publisher of this repository and holds all three release roles.
 
 This packet records **RC technical acceptance** of `1.0.0-rc.1`. It is not
-approval to promote to `v1.0.0`. Three release conditions remain pending: the
+approval to promote to `v1.0.0`, and it is not approval to set GitHub
+visibility to Public. Three source-delivery conditions remain pending: the
 Linux AMD64 source-build workflow, a real and tested internal security channel,
 and the immutable tagged source-package checksum. A registry is not required.
+
+**Public visibility is a separate hard gate.** Do not switch the GitHub
+repository to Public until the three rows below pass. Otherwise outsiders who
+find a vulnerability can only open a public Issue.
+
+### Public-visibility gate evidence (2026-09-14)
+
+2026-09-14 visibility change (same sitting as PVR enablement):
+
+- `gh repo edit --visibility public` — repo is `PUBLIC` (`isPrivate: false`).
+- Immediately `PUT /repos/pz1130/CyberGuard-AI/private-vulnerability-reporting`
+  — `{enabled: true}`.
+- `gh repo edit --enable-secret-scanning --enable-secret-scanning-push-protection`
+  — `secret_scanning=enabled`, `secret_scanning_push_protection=enabled`.
+- Anonymous GET `https://github.com/pz1130/CyberGuard-AI/security/advisories/new`
+  returns **302** to `https://github.com/login?return_to=.../security/advisories/new`
+  (previously 404).
+- `GET /repos/pz1130/CyberGuard-AI/security-advisories` is `[]`.
+- GitHub secret scanning alerts at enablement time: none.
+
+The second-account dummy report is still pending: it needs a GitHub user who
+is not a collaborator. Do not announce the public URL until that test is
+recorded.
+
+Local full-history scan (this machine, not GitHub's scanner):
+
+- Tool: `gitleaks` `v8.24.2` (`ghcr.io/gitleaks/gitleaks:v8.24.2`)
+- Command: `detect --source <repo> --log-opts='--all' --redact`
+- Range: 552 commits, ~8.54 MB, HEAD `afced739e928672349ea68a0bd61bec590c74482`
+- Result: 3 hits. None is a live credential.
+
+| Rule | Path (commit) | Classification |
+|---|---|---|
+| `generic-api-key` | `app/config.py` (`015f29ba`) | Sentinel `DEFAULT_KEY`. `validate_security_keys` refuses to boot if `ENCRYPTION_KEY` or `SECRET_KEY` still equals it. |
+| `generic-api-key` | `app/services/internal_agent.py` (`0f22065d`) | False positive: local variable `key = bound_args.get("name")`. |
+| `private-key` | deleted plan `docs/superpowers/plans/2026-06-09-pii-redaction-secrets-block.md` (`20f62dc8`) | Test fixture: `pii.scan_secrets` example using PEM armor and AWS's documented example id `AKIAIOSFODNN7EXAMPLE`. File is not in HEAD. |
+
+Those GitHub-hosted controls were unavailable while the repository was private (PVR 404, secret scanning 422). They were enabled in the same sitting as the visibility change, recorded above.
 
 | Item | Recorded value | Status | Role that signs |
 |---|---|---|---|
 | Provider decision | MiniMax `api.minimaxi.com`, provider ID `34`, chat model `MiniMax-M3` | accepted 2026-09-13 | Workgroup lead |
-| Security reporting contact | Pending replacement in `SECURITY.md` | pending — designate channel and acknowledge a test report | Security owner |
+| Security reporting contact | GitHub PVR: https://github.com/pz1130/CyberGuard-AI/security/advisories/new | accepted 2026-09-14; second-account dummy report still pending | Security owner |
 | Deployment owner | Jesse (isolated preview operator for this evidence run) | accepted 2026-09-13 for the preview | Deployment owner |
 | Accepted-risk register | CHANGELOG “Known limitations” plus RESPONSIBLE_AI.md | accepted 2026-09-13 | Security owner |
 | Image hardening | Non-root USER, `cap_drop: ALL`, `no-new-privileges:true`, read-only rootfs on app services | accepted 2026-09-13 | Security owner |
@@ -300,6 +339,9 @@ and the immutable tagged source-package checksum. A registry is not required.
 | Tagged source package | Git tag, archive SHA-256, and clean install pending | pending | Deployment owner |
 | RC technical acceptance | Isolated-preview evidence for `1.0.0-rc.1` | accepted 2026-09-13 | Workgroup lead |
 | Final v1.0.0 acceptance | Promote only after the three pending source-delivery conditions are recorded | pending | Workgroup lead |
+| History secret scan | Local gitleaks v8.24.2 on 552 commits: 3 hits, all false-positive or rejected-at-startup sentinel. After Public: GitHub secret scanning + push protection enabled; alert list empty at enablement. | accepted 2026-09-14 | Security owner |
+| GitHub Private Vulnerability Reporting | enabled; anonymous `/security/advisories/new` is 302 to login, not 404 | accepted 2026-09-14 | Security owner |
+| Second-account PVR test | Non-collaborator submitted a dummy private advisory | pending — 404 or a public Issue is a fail | Security owner |
 
 What each signature attests (sign only that row):
 
@@ -308,8 +350,10 @@ What each signature attests (sign only that row):
   delivery rows, then Final v1.0.0 acceptance.
 - **Security owner** — scan results have no unaccepted High/Critical,
   accepted-risk register is current, container hardening matches this packet.
-  The reporting row stays pending until the internal channel is documented and
-  a test report is acknowledged.
+  The internal reporting row stays pending until the workgroup channel is
+  documented and a test report is acknowledged. The three Public-visibility
+  rows stay pending until history is scanned, GitHub PVR is enabled, and a
+  non-collaborator account has filed a dummy private advisory.
 - **Deployment owner** — isolated preview ran the smoke and restore drills;
   local ARM64 image IDs in this file match that test run. The remaining rows
   require a successful AMD64 workflow and clean install from the tagged source
@@ -328,6 +372,10 @@ Signature block (same person, three roles; RC only):
 - Workgroup lead (RC technical acceptance): Jesse  date: 2026-09-13
 - Security owner (scans, accepted risks, hardening): Jesse  date: 2026-09-13
 - Security owner (internal reporting channel tested): pending
+- Security owner (history secret scan, local gitleaks): Jesse  date: 2026-09-14
+- Security owner (GitHub secret scanning / push protection): Jesse  date: 2026-09-14
+- Security owner (GitHub PVR enabled): Jesse  date: 2026-09-14
+- Security owner (second-account PVR test): pending
 - Deployment owner (preview / local image IDs): Jesse  date: 2026-09-13
 - Deployment owner (Linux AMD64 source build): pending
 - Deployment owner (tagged source package): pending

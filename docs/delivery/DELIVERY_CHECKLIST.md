@@ -60,3 +60,25 @@ provider credential.
 Upgrade, backup/restore, incident response, and irreversible volume deletion
 are covered in `OPERATIONS.md`. Never ship a populated `.env`, fixed shared
 administrator password, provider key, database volume, or backup file.
+
+## Hard gate: GitHub visibility Public
+
+IFI workgroup RC delivery may stay on a private repository. **Do not set
+GitHub visibility to Public, and do not announce the URL, until every box
+below is recorded as passed in `RC_EVIDENCE.md`.** If any item is still
+pending, outsiders who find a vulnerability have only a public Issue.
+
+- [x] **Historical sensitive-information scan.** Local gitleaks v8.24.2 on
+      552 commits (2026-09-14): 3 hits, all false-positive or
+      rejected-at-startup sentinel. After visibility=Public, GitHub secret
+      scanning and push protection are enabled. Recorded in `RC_EVIDENCE.md`.
+- [x] **Private Vulnerability Reporting enabled.** 2026-09-14, immediately
+      after visibility=Public. `GET /private-vulnerability-reporting` returns
+      `{enabled: true}`. Unauthenticated GET of `/security/advisories/new`
+      is 302 to GitHub login (not 404). `SECURITY.md` names that URL.
+- [ ] **Second-account test.** From a GitHub account that is **not** a
+      collaborator, open `/security/advisories/new`. The form must load
+      (not 404). Submit a dummy private report, confirm it is *not* a public
+      Issue, then close it. A collaborator-only test does not count.
+
+Do not announce the public URL until the second-account box is ticked.

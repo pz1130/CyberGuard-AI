@@ -62,6 +62,25 @@ source-build run. Promotion to `v1.0.0` waits on a tested internal
 security-reporting channel and an immutable tagged source package. Registry
 publication is not required.
 
+## Public-visibility gate (hard)
+
+A private IFI RC does **not** authorise making the GitHub repository public.
+Until the three items below pass, set visibility to Public is forbidden:
+outsiders would have no private reporting path and could only open a public
+Issue.
+
+- [x] Full-history sensitive-information scan is clean, or every finding is
+      rotated and recorded. GitHub secret scanning and push protection are on.
+- [x] GitHub Private Vulnerability Reporting is enabled. An unauthenticated
+      GET of `/security/advisories/new` no longer returns 404.
+- [ ] A second GitHub account that is not a collaborator submitted a dummy
+      private advisory. The report did not appear as a public Issue.
+
+Procedure and pass criteria are in `DELIVERY_CHECKLIST.md`. Record results in
+`RC_EVIDENCE.md`. If PVR can be enabled only after the repo is public, enable
+it and finish the second-account test in the same sitting as the visibility
+change, before any announcement.
+
 ## Versioning
 
 Use `v1.0.0-rc.1` for the first frozen candidate. Do not reuse a tag. Promote
