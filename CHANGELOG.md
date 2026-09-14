@@ -56,10 +56,7 @@ Removed modules expose no API routes or WebUI pages.
   external secret management, backup custody, and provider governance.
 - The audit hash chain is tamper-evident application storage, not independent
   WORM retention.
-- The private repository still needs a real, tested internal vulnerability
-  reporting channel (see SECURITY.md). RC technical acceptance is recorded in
-  RC_EVIDENCE.md; final `v1.0.0` acceptance also waits on the Linux AMD64
-  source-build run and the immutable tagged source-package checksum.
-- The GitHub repository is Public. Private Vulnerability Reporting is
-  enabled and was tested with a non-collaborator dummy advisory
-  (`GHSA-w68c-j89p-34mc`, unpublished). See SECURITY.md.
+- GitHub Private Vulnerability Reporting is enabled and was tested with a
+  non-collaborator dummy advisory (`GHSA-w68c-j89p-34mc`, unpublished).
+  See SECURITY.md. Final `v1.0.0` acceptance still waits on the immutable
+  tagged source-package checksum.

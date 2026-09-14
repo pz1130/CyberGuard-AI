@@ -51,8 +51,8 @@ A release candidate is acceptable only when all boxes below are evidenced:
 - [x] Source-only Docker delivery selected; a container registry is optional.
 - [x] The source-built stack passes the automated runtime smoke test on the
       Linux AMD64 acceptance platform, and the workflow URL is recorded.
-- [ ] A real internal security-reporting channel is recorded in `SECURITY.md`
-      and a test report is acknowledged.
+- [x] GitHub Private Vulnerability Reporting is recorded in `SECURITY.md`
+      and a non-collaborator dummy report was acknowledged.
 - [ ] The immutable RC tag is created and the source archive SHA-256 is
       recorded in `RC_EVIDENCE.md`.
 

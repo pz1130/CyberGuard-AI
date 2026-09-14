@@ -74,9 +74,32 @@ docker compose up -d
 Compose runs database migrations as a one-shot service before starting the API
 and workers.
 
-Open `http://localhost:3000` and sign in with `BOOTSTRAP_ADMIN_USERNAME` and
-`BOOTSTRAP_ADMIN_PASSWORD`. The bootstrap user is created only when the
-database has no user with that name; CyberGuard contains no built-in password.
+### First administrator
+
+There is **no default login**. Compose refuses to start until
+`BOOTSTRAP_ADMIN_PASSWORD` is set in `.env`. CyberGuard never ships a
+built-in password.
+
+On the first API start, if the database has no user named
+`BOOTSTRAP_ADMIN_USERNAME`, it creates that administrator. Later restarts do
+not reset the password.
+
+| Variable | `.env.example` | What to do |
+|---|---|---|
+| `BOOTSTRAP_ADMIN_USERNAME` | `admin` | Keep this, or change it before the first start |
+| `BOOTSTRAP_ADMIN_EMAIL` | `admin@example.org` | Change if you want |
+| `BOOTSTRAP_ADMIN_PASSWORD` | placeholder only | **Required.** Set your own value |
+
+Generate a one-time password:
+
+```bash
+python -c 'import secrets; print(secrets.token_urlsafe(18))'
+```
+
+Open `http://localhost:3000` and sign in with that username and password.
+Change the password after the first login. If you skip
+`BOOTSTRAP_ADMIN_PASSWORD`, the stack will not start; if the username already
+exists, bootstrap does nothing.
 
 Check service health:
 
