@@ -11,6 +11,8 @@ import bcrypt
 from sqlalchemy import select
 
 from app.core.database import get_db_context
+from app.core.security import CredentialField, encrypt_data
+from app.models.provider import Provider
 from app.models.user import User
 
 
@@ -27,12 +29,16 @@ def _request(method: str, path: str, body: dict | None = None, token: str | None
     req.add_header("Content-Type", "application/json")
     if token:
         req.add_header("Authorization", f"Bearer {token}")
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        raw = resp.read().decode("utf-8")
-        return resp.status, (json.loads(raw) if raw else None)
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = resp.read().decode("utf-8")
+            return resp.status, (json.loads(raw) if raw else None)
+    except urllib.error.HTTPError as exc:
+        raw = exc.read().decode("utf-8")
+        return exc.code, (json.loads(raw) if raw else None)
 
 
-async def _ensure_smoke_admin():
+async def _ensure_smoke_fixtures() -> int:
     hashed = bcrypt.hashpw(SMOKE_PASSWORD.encode(), bcrypt.gensalt()).decode()
     async with get_db_context() as session:
         result = await session.execute(select(User).where(User.username == SMOKE_USER))
@@ -55,13 +61,49 @@ async def _ensure_smoke_admin():
             )
         await session.commit()
 
+        result = await session.execute(
+            select(Provider).where(Provider.name == "Smoke Provider")
+        )
+        provider = result.scalar_one_or_none()
+        models = [
+            {"name": "smoke-chat", "model_type": "chat", "verified": True},
+            {
+                "name": "smoke-embedding",
+                "model_type": "embedding",
+                "verified": True,
+            },
+        ]
+        if provider:
+            provider.provider_type = "custom"
+            provider.api_key_encrypted = encrypt_data(
+                "smoke-test-key", CredentialField.PROVIDER_API_KEY
+            )
+            provider.base_url = "https://example.com/v1"
+            provider.models = models
+            provider.is_active = True
+        else:
+            provider = Provider(
+                name="Smoke Provider",
+                provider_type="custom",
+                api_key_encrypted=encrypt_data(
+                    "smoke-test-key", CredentialField.PROVIDER_API_KEY
+                ),
+                base_url="https://example.com/v1",
+                models=models,
+                is_active=True,
+            )
+            session.add(provider)
+        await session.commit()
+        await session.refresh(provider)
+        return provider.id
+
 
 class TestAPISmoke(unittest.TestCase):
     token: str
 
     @classmethod
     def setUpClass(cls):
-        asyncio.run(_ensure_smoke_admin())
+        cls.provider_id = asyncio.run(_ensure_smoke_fixtures())
         code, data = _request(
             "POST",
             "/auth/login",
@@ -90,7 +132,8 @@ class TestAPISmoke(unittest.TestCase):
             {
                 "name": name,
                 "description": "smoke kb",
-                "embedding_model": "text-embedding-3-small",
+                "provider_id": self.provider_id,
+                "embedding_model": "smoke-embedding",
                 "rerank_model": "none",
                 "chunk_size": 500,
                 "chunk_overlap": 100,
@@ -153,14 +196,15 @@ class TestAPISmoke(unittest.TestCase):
         """Create internal agent, verify kind=internal, reject invalid internal."""
         name = f"smoke-int-{uuid.uuid4().hex[:8]}"
 
-        # Create internal agent (requires llm_provider_id — use placeholder that passes schema)
+        # Create internal agent with the configured smoke provider.
         code, created = _request(
             "POST",
             "/agents",
             {
                 "agent_name": name,
                 "kind": "internal",
-                "llm_provider_id": 999,  # may not exist but passes validation
+                "llm_provider_id": self.provider_id,
+                "llm_model": "smoke-chat",
                 "system_prompt": "You are a smoke test internal agent.",
                 "permission_level": "medium",
             },
