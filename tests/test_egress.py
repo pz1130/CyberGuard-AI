@@ -12,6 +12,7 @@ def test_disabled_passthrough_still_blocks_ssrf(monkeypatch):
 
 
 def test_allowlist_denies_unlisted(monkeypatch):
+    monkeypatch.setattr(egress, "validate_outbound_url", lambda url: url)
     monkeypatch.setattr("app.config.settings.EGRESS_ALLOWLIST_ENABLED", True)
     monkeypatch.setattr("app.config.settings.EGRESS_ALLOWLIST", "example.com")
     assert egress.enforce_egress("https://api.example.com/v3") == "https://api.example.com/v3"
@@ -20,6 +21,7 @@ def test_allowlist_denies_unlisted(monkeypatch):
 
 
 def test_extra_allow_per_call(monkeypatch):
+    monkeypatch.setattr(egress, "validate_outbound_url", lambda url: url)
     monkeypatch.setattr("app.config.settings.EGRESS_ALLOWLIST_ENABLED", True)
     monkeypatch.setattr("app.config.settings.EGRESS_ALLOWLIST", "")
     with pytest.raises(egress.EgressBlocked):
@@ -28,6 +30,7 @@ def test_extra_allow_per_call(monkeypatch):
 
 
 def test_exact_host_not_overmatched(monkeypatch):
+    monkeypatch.setattr(egress, "validate_outbound_url", lambda url: url)
     monkeypatch.setattr("app.config.settings.EGRESS_ALLOWLIST_ENABLED", True)
     monkeypatch.setattr("app.config.settings.EGRESS_ALLOWLIST", "example.com")
     with pytest.raises(egress.EgressBlocked):

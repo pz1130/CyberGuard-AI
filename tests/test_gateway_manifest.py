@@ -333,7 +333,13 @@ async def test_subagent_wrapper_injects_manifest_url_when_base_url_set():
         resp.json.return_value = {"output": "done"}
         return resp
 
-    with patch("app.config.settings.BASE_URL", "https://cyberguard.example.com"):
+    with (
+        patch("app.config.settings.BASE_URL", "https://cyberguard.example.com"),
+        patch(
+            "app.services.agent_executor._validate_endpoint_url",
+            return_value=config["endpoint_url"],
+        ),
+    ):
         wrapper = SubAgentWrapper(config)
         with patch("httpx.AsyncClient") as mock_client_cls:
             mock_client = AsyncMock()
@@ -370,7 +376,13 @@ async def test_subagent_wrapper_omits_manifest_url_when_base_url_empty():
         resp.json.return_value = {"output": "done"}
         return resp
 
-    with patch("app.config.settings.BASE_URL", ""):
+    with (
+        patch("app.config.settings.BASE_URL", ""),
+        patch(
+            "app.services.agent_executor._validate_endpoint_url",
+            return_value=config["endpoint_url"],
+        ),
+    ):
         wrapper = SubAgentWrapper(config)
         with patch("httpx.AsyncClient") as mock_client_cls:
             mock_client = AsyncMock()
