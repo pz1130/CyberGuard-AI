@@ -45,7 +45,10 @@ audit event. AI output is advisory unless an authorised tool path is used.
 
 ## Docker quick start
 
-Prerequisites: Docker Engine with Docker Compose v2.
+The delivery is a source archive. Operators build all Docker images locally;
+no container registry is required. The formal deployment target is a Linux
+AMD64 host with Docker Engine and Docker Compose v2. Apple Silicon/ARM64 is
+useful for local evaluation but is not the workgroup acceptance platform.
 
 ```bash
 cp .env.example .env
@@ -97,7 +100,7 @@ uv sync --extra test
 npm --prefix webui ci
 ```
 
-Run the release gate:
+Run the application test gate:
 
 ```bash
 make check
@@ -111,14 +114,24 @@ release database.
 Additional checks:
 
 ```bash
-make docker-config
-make docker-build
-make security-scan
-make sbom
+make rc-check
 ```
 
-The scan gate rejects known, fixed critical vulnerabilities. CycloneDX SBOMs
-are written to `artifacts/` for release evidence.
+The full RC gate also validates Compose, builds the three images, rejects
+known fixed High/Critical vulnerabilities, and writes CycloneDX SBOMs under
+`artifacts/`. The GitHub release gate additionally starts the source-built
+stack on AMD64 and runs authenticated API smoke tests.
+
+After acceptance and creation of an immutable tag, build the source delivery
+archive with:
+
+```bash
+make source-package VERSION=1.0.0-rc.1 REF=v1.0.0-rc.1
+```
+
+This writes the archive, its SHA-256 file, and a provenance manifest under
+`artifacts/`. It never includes `.env`, local volumes, credentials, or other
+untracked files.
 
 ## Delivery documentation
 
@@ -130,6 +143,7 @@ are written to `artifacts/` for release evidence.
 - [Responsible AI statement](docs/delivery/RESPONSIBLE_AI.md)
 - [Operations guide](docs/delivery/OPERATIONS.md)
 - [Security policy](SECURITY.md)
+- [Delivery checklist](docs/delivery/DELIVERY_CHECKLIST.md)
 
 ## Limitations
 

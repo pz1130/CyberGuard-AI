@@ -4,6 +4,14 @@ Candidate: `1.0.0-rc.1`
 Branch: `codex/release-candidate`  
 Verification date: 2026-09-14 (Asia/Shanghai)
 
+## Delivery model
+
+This is a source-only Docker delivery. Reviewers build the API, tool-runner,
+and WebUI images inside their own controlled environment. Registry publication
+and registry digests are optional and are not release conditions. The durable
+delivery identity is the immutable Git tag and the SHA-256 of its source
+archive.
+
 ## Automated gate
 
 - `make check`: backend 620 passed, 0 skipped; frontend 8 passed;
@@ -24,6 +32,12 @@ Verification date: 2026-09-14 (Asia/Shanghai)
   theme/lang boot changes. `make check` on this tree: backend 620 passed,
   frontend 8 passed. `make docker-build` then `make security-scan`
   (HIGH,CRITICAL, ignore-unfixed): 0 High / 0 Critical on all three images.
+- 2026-09-14 source-delivery closeout: `make rc-check` passed as a single
+  command without requiring a local `.env`: backend 620 passed, frontend 8
+  passed, Compose validated, all three ARM64 images rebuilt, all three scans
+  reported 0 High / 0 Critical, and all three SBOMs were regenerated. Fixed
+  check-only values are used only for Compose interpolation and are not baked
+  into images or accepted for runtime startup.
 
 ## Runtime smoke test
 
@@ -74,18 +88,35 @@ API smoke on that stack:
 
 ## Local image identifiers
 
-Recorded 2026-09-14 after `make docker-build`. These are local image IDs, not
-registry digests. Re-run `make release-digests` after `docker push` and paste
-the `repo@sha256:...` values into the registry column.
+Recorded 2026-09-14 after `make docker-build`. These identify the locally
+tested ARM64 images only; they are evidence for that run, not artifacts in the
+source delivery.
 
-| Image | Local ID | Registry digest |
-|---|---|---|
-| `cyberguard-api:1.0.0-rc.1` | `sha256:24a27296634f4e953c7a5c33675cacdb3fbec3d4ec3cdaf54c3c8809df3e1520` | not-pushed |
-| `cyberguard-tool-runner:1.0.0-rc.1` | `sha256:8280ed1376393a289293e1adfeb76b0eaeebd27c3559f47a56ea155a1a64e888` | not-pushed |
-| `cyberguard-webui:1.0.0-rc.1` | `sha256:6aa092e3080413ec7ea147b72332f2988102bb899c04eab2d633d005aa1014f1` | not-pushed |
+| Image | Local ARM64 ID |
+|---|---|
+| `cyberguard-api:1.0.0-rc.1` | `sha256:24a27296634f4e953c7a5c33675cacdb3fbec3d4ec3cdaf54c3c8809df3e1520` |
+| `cyberguard-tool-runner:1.0.0-rc.1` | `sha256:8280ed1376393a289293e1adfeb76b0eaeebd27c3559f47a56ea155a1a64e888` |
+| `cyberguard-webui:1.0.0-rc.1` | `sha256:6aa092e3080413ec7ea147b72332f2988102bb899c04eab2d633d005aa1014f1` |
 
-Production deployments should pin `image@sha256:...` from the registry column,
-not the moving `:1.0.0-rc.1` tag. The publish commands are in OPERATIONS.md.
+The pending Linux AMD64 workflow run will record its commit and workflow URL
+below. Operators who independently publish images should pin their own
+registry digests as described in `OPERATIONS.md`.
+
+## Linux AMD64 source-build acceptance
+
+- Git commit: pending
+- GitHub Actions workflow URL: pending
+- Runner architecture assertion (`uname -m = x86_64`): pending
+- Source-built image architecture assertions (`amd64`): pending
+- Compose health, bootstrap login, authenticated API smoke, and WebUI: pending
+
+## Tagged source package
+
+- Tag: `v1.0.0-rc.1` (pending; do not create until the rows above are complete)
+- Git commit: pending
+- Archive: `cyberguard-1.0.0-rc.1-source.tar.gz` (pending)
+- Archive SHA-256: pending
+- Clean install from the archive: pending
 
 ## Container hardening evidence
 
@@ -115,11 +146,11 @@ CycloneDX files are generated locally under `artifacts/` and intentionally not
 committed. Their hashes for this build are:
 
 - `cyberguard-api.cdx.json` —
-  `sha256:fc4b2974fb00943f968ebbbd9562c2f2c88fcb0fe9d7e29a688e2a338e3835b6`
+  `sha256:da6075b12be701a223ea7a7b2bc6356aa218b899d78361d6bbc06ed2c8f67ad6`
 - `cyberguard-tool-runner.cdx.json` —
-  `sha256:dbfe4348c475c320f5c55a73d0785391764e12478df5b472cf184aae24454dcb`
+  `sha256:ef4934a1b403d878bc8a5e77dc3a31c1f1f19493978a532fad23350acb4fd02c`
 - `cyberguard-webui.cdx.json` —
-  `sha256:a8ae6797391d2eee147b627a825bb63b532a011e0d8c13396f56e00878b565e5`
+  `sha256:eeef77f509963807fcbdfe4543583ed0d84a6b36321049b96b417a7d0b741b67`
 
 ## Demonstration run (isolated preview)
 
@@ -246,35 +277,35 @@ Technical evidence above was produced on the isolated preview. Jesse is the
 sole publisher of this repository and holds all three release roles.
 
 This packet records **RC technical acceptance** of `1.0.0-rc.1`. It is not
-approval to promote to `v1.0.0`. Two release conditions remain pending:
-GitHub Private Vulnerability Reporting is not enabled (anonymous GET of
-https://github.com/pz1130/CyberGuard-AI/security/advisories/new returns 404),
-and registry immutable digests remain `not-pushed` until `docker push`.
+approval to promote to `v1.0.0`. Three release conditions remain pending: the
+Linux AMD64 source-build workflow, a real and tested internal security channel,
+and the immutable tagged source-package checksum. A registry is not required.
 
 | Item | Recorded value | Status | Role that signs |
 |---|---|---|---|
 | Provider decision | MiniMax `api.minimaxi.com`, provider ID `34`, chat model `MiniMax-M3` | accepted 2026-09-13 | Workgroup lead |
-| Security reporting contact | GitHub Private Vulnerability Reporting: https://github.com/pz1130/CyberGuard-AI/security/advisories/new | pending — enable Settings → Code security → Private vulnerability reporting | Security owner |
+| Security reporting contact | Pending replacement in `SECURITY.md` | pending — designate channel and acknowledge a test report | Security owner |
 | Deployment owner | Jesse (isolated preview operator for this evidence run) | accepted 2026-09-13 for the preview | Deployment owner |
 | Accepted-risk register | CHANGELOG “Known limitations” plus RESPONSIBLE_AI.md | accepted 2026-09-13 | Security owner |
 | Image hardening | Non-root USER, `cap_drop: ALL`, `no-new-privileges:true`, read-only rootfs on app services | accepted 2026-09-13 | Security owner |
-| Registry immutable digest | not-pushed until `docker push`; then `make release-digests` | pending | Deployment owner |
+| Linux AMD64 source build | Workflow URL and commit pending | pending | Deployment owner |
+| Tagged source package | Git tag, archive SHA-256, and clean install pending | pending | Deployment owner |
 | RC technical acceptance | Isolated-preview evidence for `1.0.0-rc.1` | accepted 2026-09-13 | Workgroup lead |
-| Final v1.0.0 acceptance | Promote only after PVR is live and registry digests are recorded | pending | Workgroup lead |
+| Final v1.0.0 acceptance | Promote only after the three pending source-delivery conditions are recorded | pending | Workgroup lead |
 
 What each signature attests (sign only that row):
 
 - **Workgroup lead** — demo paths and provider decision are accepted for this
-  RC. Promotion to `v1.0.0` requires the pending Security owner (PVR) and
-  Deployment owner (registry digest) rows, then Final v1.0.0 acceptance.
+  RC. Promotion to `v1.0.0` requires the pending Security owner and source
+  delivery rows, then Final v1.0.0 acceptance.
 - **Security owner** — scan results have no unaccepted High/Critical,
   accepted-risk register is current, container hardening matches this packet.
-  The PVR row stays pending until an anonymous visit to
-  `/security/advisories/new` no longer returns 404.
+  The reporting row stays pending until the internal channel is documented and
+  a test report is acknowledged.
 - **Deployment owner** — isolated preview ran the smoke and restore drills;
-  local image IDs in this file match the built artifacts. The registry digest
-  row stays pending until `docker push` and `make release-digests` fill the
-  registry column; production will pin by digest.
+  local ARM64 image IDs in this file match that test run. The remaining rows
+  require a successful AMD64 workflow and clean install from the tagged source
+  archive.
 
 Accepted risks carried into this candidate (not newly invented):
 
@@ -288,7 +319,8 @@ Signature block (same person, three roles; RC only):
 
 - Workgroup lead (RC technical acceptance): Jesse  date: 2026-09-13
 - Security owner (scans, accepted risks, hardening): Jesse  date: 2026-09-13
-- Security owner (PVR live): pending
+- Security owner (internal reporting channel tested): pending
 - Deployment owner (preview / local image IDs): Jesse  date: 2026-09-13
-- Deployment owner (registry digest): pending
+- Deployment owner (Linux AMD64 source build): pending
+- Deployment owner (tagged source package): pending
 - Workgroup lead (Final v1.0.0 acceptance): pending

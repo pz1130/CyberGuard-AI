@@ -10,19 +10,17 @@ stable release only.
 Do not open a public issue containing exploit details, credentials, personal
 data, or affected deployment information.
 
-The designated channel for this repository is GitHub Private Vulnerability
-Reporting:
+The repository is private, so the workgroup must designate an internal,
+access-controlled reporting channel before delivery. The channel is currently:
 
-https://github.com/pz1130/CyberGuard-AI/security/advisories/new
+> **PENDING — replace this line with the IFI/workgroup security mailbox,
+> ServiceNow queue, or named private collaboration channel.**
 
 Include the affected version, reproduction steps, impact, and any suggested
-mitigation. Do not attach live credentials or customer data.
-
-The Security owner must enable Private vulnerability reporting in the GitHub
-repository settings before public release (Settings → Code security). Until
-that toggle is on, reports go to the Security owner named in
-`docs/delivery/RC_EVIDENCE.md` by a private out-of-band channel the workgroup
-already uses. Do not invent a personal mailbox in this file.
+mitigation. Do not attach live credentials or customer data. The Security
+owner must send and acknowledge a test report before signing the release
+evidence. GitHub issues and public discussion are not approved reporting
+channels.
 
 ## Deployment responsibility
 

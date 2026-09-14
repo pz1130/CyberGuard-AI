@@ -5,15 +5,18 @@ PY := .venv/bin/python
 ALEMBIC := .venv/bin/alembic
 export PYTHONPATH := packages:$(CURDIR)
 
-.PHONY: help check test test-env-up test-env-down invariants web-typecheck web-lint web-audit web-test web deps docker-config docker-build security-scan sbom release-digests clean
+.PHONY: help check rc-check test test-env-up test-env-down invariants web-typecheck web-lint web-audit web-test web deps docker-config docker-build security-scan sbom release-digests source-package clean
 
 RELEASE_IMAGES := cyberguard-api:1.0.0-rc.1 cyberguard-tool-runner:1.0.0-rc.1 cyberguard-webui:1.0.0-rc.1
+VERSION ?= 1.0.0-rc.1
+REF ?= HEAD
 
 TEST_DATABASE_URL := postgresql+asyncpg://postgres:cyberguard-test-only@localhost:55432/cyberguard_test
 TEST_REDIS_URL := redis://:cyberguard-test-only@localhost:56379/0
 TEST_ENCRYPTION_KEY := 1111111111111111111111111111111111111111111111111111111111111111
 TEST_SECRET_KEY := 2222222222222222222222222222222222222222222222222222222222222222
 TEST_ENV := DATABASE_URL=$(TEST_DATABASE_URL) REDIS_URL=$(TEST_REDIS_URL) REDIS_PASSWORD=cyberguard-test-only ENCRYPTION_KEY=$(TEST_ENCRYPTION_KEY) SECRET_KEY=$(TEST_SECRET_KEY) ENVIRONMENT=testing AUTO_APPROVE=false
+COMPOSE_CHECK_ENV := CYBERGUARD_ENV_FILE=/dev/null POSTGRES_PASSWORD=compose-check-only REDIS_PASSWORD=compose-check-only RUNNER_TOKEN=compose-check-only BOOTSTRAP_ADMIN_PASSWORD=compose-check-only ENCRYPTION_KEY=$(TEST_ENCRYPTION_KEY) SECRET_KEY=$(TEST_SECRET_KEY)
 
 help:
 	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -22,6 +25,10 @@ help:
 check: test web ## Everything: Python suite + invariants + frontend gates
 	@echo
 	@echo "✓ all checks passed"
+
+rc-check: check docker-config docker-build security-scan sbom ## Full source-release gate
+	@echo
+	@echo "✓ release-candidate checks passed"
 
 test: test-env-up ## Full pytest suite against disposable Postgres/Redis
 	@set -e; trap '$(MAKE) test-env-down >/dev/null' EXIT; \
@@ -60,10 +67,10 @@ deps: ## Install frontend dependencies
 	npm --prefix webui ci
 
 docker-config: ## Validate the Docker Compose release definition
-	docker compose config --quiet
+	$(COMPOSE_CHECK_ENV) docker compose config --quiet
 
 docker-build: ## Build all release images
-	docker compose build api tool-runner webui
+	$(COMPOSE_CHECK_ENV) docker compose build api tool-runner webui
 
 security-scan: ## Fail on known, fixed High or Critical vulnerabilities in release images
 	@for image in $(RELEASE_IMAGES); do \
@@ -75,6 +82,9 @@ security-scan: ## Fail on known, fixed High or Critical vulnerabilities in relea
 
 release-digests: ## Record local image IDs and registry digests (not-pushed until docker push)
 	bash scripts/record_release_digests.sh
+
+source-package: ## Build a source archive and SHA-256 manifest (VERSION=... REF=...)
+	VERSION="$(VERSION)" REF="$(REF)" bash scripts/create_source_package.sh
 
 sbom: ## Write CycloneDX SBOMs for the release images to artifacts/
 	@mkdir -p artifacts

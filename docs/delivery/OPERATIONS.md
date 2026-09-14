@@ -1,6 +1,8 @@
 # Docker Operations Guide
 
-Release images are versioned as `cyberguard-api:1.0.0-rc.1`,
+The workgroup distributes a source archive. Operators build the images inside
+their controlled environment; publishing them to a registry is optional.
+Locally built images are versioned as `cyberguard-api:1.0.0-rc.1`,
 `cyberguard-tool-runner:1.0.0-rc.1`, and
 `cyberguard-webui:1.0.0-rc.1`.
 
@@ -67,21 +69,30 @@ docker inspect "$(docker compose ps -q api)" \
 Expect `User=10001:10001`, `CapDrop=["ALL"]`, `no-new-privileges:true`,
 `Readonly=true`. WebUI user is `101:101`.
 
-## Publish and record immutable digests
+## Build the source delivery package
 
-Local image IDs are not registry digests. After the workgroup accepts the
-candidate:
-
-1. `make docker-build && make security-scan && make sbom`
-2. `make release-digests` — writes `artifacts/release-digests.md`
-3. Tag and push each image to the chosen registry
-4. Re-run `make release-digests` and copy the `repo@sha256:...` values into
-   `docs/delivery/RC_EVIDENCE.md`
-5. Prefer pulling by digest (`image@sha256:...`) in production, not the
-   moving `:1.0.0-rc.1` tag
+After AMD64 acceptance, commit the final documentation and create a unique
+annotated tag. Package that exact tag:
 
 ```bash
-REGISTRY=ghcr.io/pz1130/
+git status --short
+git tag -a v1.0.0-rc.1 -m "CyberGuard 1.0.0-rc.1"
+make source-package VERSION=1.0.0-rc.1 REF=v1.0.0-rc.1
+```
+
+Retain the generated archive, `.sha256`, manifest, SBOMs, scan output, and
+`RC_EVIDENCE.md` together. The archive contains tracked files from the tag
+only, so `.env`, provider keys, local databases, and backups are excluded.
+
+## Optional registry publication
+
+Registry publication is not an acceptance condition for this source-only
+delivery. If an operator later publishes images, record immutable registry
+digests and deploy by `image@sha256:...`, not a moving tag. The optional
+`make release-digests` command writes `artifacts/release-digests.md`.
+
+```bash
+REGISTRY=<approved-registry>/
 for image in cyberguard-api:1.0.0-rc.1 cyberguard-tool-runner:1.0.0-rc.1 cyberguard-webui:1.0.0-rc.1; do
   docker tag "$image" "${REGISTRY}${image}"
   docker push "${REGISTRY}${image}"
@@ -94,7 +105,8 @@ done
 1. Create and verify a backup.
    Before migration 033, export any GRC assessment records that must be moved
    to the companion GRC product; the migration removes the duplicated tables.
-2. Record the running image digests and Alembic revision.
+2. Record the running image IDs (or registry digests, if used) and Alembic
+   revision.
 3. Pull/build the new immutable version.
 4. Run migrations as a one-off command.
 5. Restart services and run health plus golden-path smoke checks.

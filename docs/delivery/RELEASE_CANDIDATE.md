@@ -48,15 +48,18 @@ A release candidate is acceptable only when all boxes below are evidenced:
 - [x] Named workgroup / security / deployment signatures on the RC
       technical-acceptance rows (Jesse; same person, three roles). Final
       `v1.0.0` acceptance remains pending.
-- [ ] GitHub Private Vulnerability Reporting enabled (anonymous
-      `/security/advisories/new` no longer 404).
-- [ ] Registry immutable digests recorded after `docker push`.
+- [x] Source-only Docker delivery selected; a container registry is optional.
+- [ ] The source-built stack passes the automated runtime smoke test on the
+      Linux AMD64 acceptance platform, and the workflow URL is recorded.
+- [ ] A real internal security-reporting channel is recorded in `SECURITY.md`
+      and a test report is acknowledged.
+- [ ] The immutable RC tag is created and the source archive SHA-256 is
+      recorded in `RC_EVIDENCE.md`.
 
 Machine and command evidence is in `RC_EVIDENCE.md`, including the 2026-09-12
-isolated-preview demonstration (MiniMax-M3). The designated security-reporting
-channel is GitHub Private Vulnerability Reporting (`SECURITY.md`); the repo
-toggle is not yet on. Promotion to `v1.0.0` waits on PVR enablement and
-registry immutable digests after `docker push`.
+isolated-preview demonstration (MiniMax-M3). Promotion to `v1.0.0` waits on
+the AMD64 source-build run, a tested internal security-reporting channel, and
+an immutable tagged source package. Registry publication is not required.
 
 ## Versioning
 

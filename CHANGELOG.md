@@ -56,8 +56,7 @@ Removed modules expose no API routes or WebUI pages.
   external secret management, backup custody, and provider governance.
 - The audit hash chain is tamper-evident application storage, not independent
   WORM retention.
-- A named Security owner must enable GitHub Private Vulnerability Reporting
-  on this repository before public release (see SECURITY.md). RC technical
-  acceptance is recorded in RC_EVIDENCE.md; Final `v1.0.0` acceptance,
-  the live PVR channel, and registry immutable digests remain pending
-  until those humans sign and after `docker push`.
+- The private repository still needs a real, tested internal vulnerability
+  reporting channel (see SECURITY.md). RC technical acceptance is recorded in
+  RC_EVIDENCE.md; final `v1.0.0` acceptance also waits on the Linux AMD64
+  source-build run and the immutable tagged source-package checksum.
