@@ -73,7 +73,7 @@ Issue.
       rotated and recorded. GitHub secret scanning and push protection are on.
 - [x] GitHub Private Vulnerability Reporting is enabled. An unauthenticated
       GET of `/security/advisories/new` no longer returns 404.
-- [ ] A second GitHub account that is not a collaborator submitted a dummy
+- [x] A second GitHub account that is not a collaborator submitted a dummy
       private advisory. The report did not appear as a public Issue.
 
 Procedure and pass criteria are in `DELIVERY_CHECKLIST.md`. Record results in

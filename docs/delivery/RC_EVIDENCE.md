@@ -309,9 +309,15 @@ find a vulnerability can only open a public Issue.
 - `GET /repos/pz1130/CyberGuard-AI/security-advisories` is `[]`.
 - GitHub secret scanning alerts at enablement time: none.
 
-The second-account dummy report is still pending: it needs a GitHub user who
-is not a collaborator. Do not announce the public URL until that test is
-recorded.
+Second-account dummy report, 2026-09-14T11:18:02Z:
+
+- Reporter `jp393211153-cell` is not a collaborator (`GET .../collaborators/jp393211153-cell` → 404).
+- Advisory `GHSA-w68c-j89p-34mc`, summary `PVR channel test — discard`,
+  `state=triage`, `published_at=null`, `submission.accepted=false`.
+- Unauthenticated GET of the advisory HTML is 404; unauthenticated
+  `GET /repos/pz1130/CyberGuard-AI/security-advisories` returns `[]`.
+- No public Issue carries that title. The dummy was then closed without
+  publishing.
 
 Local full-history scan (this machine, not GitHub's scanner):
 
@@ -331,7 +337,7 @@ Those GitHub-hosted controls were unavailable while the repository was private (
 | Item | Recorded value | Status | Role that signs |
 |---|---|---|---|
 | Provider decision | MiniMax `api.minimaxi.com`, provider ID `34`, chat model `MiniMax-M3` | accepted 2026-09-13 | Workgroup lead |
-| Security reporting contact | GitHub PVR: https://github.com/pz1130/CyberGuard-AI/security/advisories/new | accepted 2026-09-14; second-account dummy report still pending | Security owner |
+| Security reporting contact | GitHub PVR: https://github.com/pz1130/CyberGuard-AI/security/advisories/new | accepted 2026-09-14 | Security owner |
 | Deployment owner | Jesse (isolated preview operator for this evidence run) | accepted 2026-09-13 for the preview | Deployment owner |
 | Accepted-risk register | CHANGELOG “Known limitations” plus RESPONSIBLE_AI.md | accepted 2026-09-13 | Security owner |
 | Image hardening | Non-root USER, `cap_drop: ALL`, `no-new-privileges:true`, read-only rootfs on app services | accepted 2026-09-13 | Security owner |
@@ -341,7 +347,7 @@ Those GitHub-hosted controls were unavailable while the repository was private (
 | Final v1.0.0 acceptance | Promote only after the three pending source-delivery conditions are recorded | pending | Workgroup lead |
 | History secret scan | Local gitleaks v8.24.2 on 552 commits: 3 hits, all false-positive or rejected-at-startup sentinel. After Public: GitHub secret scanning + push protection enabled; alert list empty at enablement. | accepted 2026-09-14 | Security owner |
 | GitHub Private Vulnerability Reporting | enabled; anonymous `/security/advisories/new` is 302 to login, not 404 | accepted 2026-09-14 | Security owner |
-| Second-account PVR test | Non-collaborator submitted a dummy private advisory | pending — 404 or a public Issue is a fail | Security owner |
+| Second-account PVR test | `jp393211153-cell` filed GHSA-w68c-j89p-34mc (`PVR channel test — discard`); unauthenticated 404; not a public Issue; closed unpublished | accepted 2026-09-14 | Security owner |
 
 What each signature attests (sign only that row):
 
@@ -350,10 +356,9 @@ What each signature attests (sign only that row):
   delivery rows, then Final v1.0.0 acceptance.
 - **Security owner** — scan results have no unaccepted High/Critical,
   accepted-risk register is current, container hardening matches this packet.
-  The internal reporting row stays pending until the workgroup channel is
-  documented and a test report is acknowledged. The three Public-visibility
-  rows stay pending until history is scanned, GitHub PVR is enabled, and a
-  non-collaborator account has filed a dummy private advisory.
+  The IFI internal-mailbox row is superseded by GitHub PVR. The three
+  Public-visibility rows are accepted: history scanned, PVR enabled, and a
+  non-collaborator dummy advisory filed and closed unpublished.
 - **Deployment owner** — isolated preview ran the smoke and restore drills;
   local ARM64 image IDs in this file match that test run. The remaining rows
   require a successful AMD64 workflow and clean install from the tagged source
@@ -375,7 +380,7 @@ Signature block (same person, three roles; RC only):
 - Security owner (history secret scan, local gitleaks): Jesse  date: 2026-09-14
 - Security owner (GitHub secret scanning / push protection): Jesse  date: 2026-09-14
 - Security owner (GitHub PVR enabled): Jesse  date: 2026-09-14
-- Security owner (second-account PVR test): pending
+- Security owner (second-account PVR test): Jesse  date: 2026-09-14
 - Deployment owner (preview / local image IDs): Jesse  date: 2026-09-13
 - Deployment owner (Linux AMD64 source build): pending
 - Deployment owner (tagged source package): pending

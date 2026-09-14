@@ -76,9 +76,8 @@ pending, outsiders who find a vulnerability have only a public Issue.
       after visibility=Public. `GET /private-vulnerability-reporting` returns
       `{enabled: true}`. Unauthenticated GET of `/security/advisories/new`
       is 302 to GitHub login (not 404). `SECURITY.md` names that URL.
-- [ ] **Second-account test.** From a GitHub account that is **not** a
-      collaborator, open `/security/advisories/new`. The form must load
-      (not 404). Submit a dummy private report, confirm it is *not* a public
-      Issue, then close it. A collaborator-only test does not count.
-
-Do not announce the public URL until the second-account box is ticked.
+- [x] **Second-account test.** 2026-09-14 `jp393211153-cell` (not a
+      collaborator) opened GHSA-w68c-j89p-34mc, title `PVR channel test —
+      discard`, state `triage`, `published_at` null. Unauthenticated GET of
+      that advisory is 404; it is not a public Issue. Dummy then closed
+      without publishing.

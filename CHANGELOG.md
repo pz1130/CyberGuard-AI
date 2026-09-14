@@ -60,6 +60,6 @@ Removed modules expose no API routes or WebUI pages.
   reporting channel (see SECURITY.md). RC technical acceptance is recorded in
   RC_EVIDENCE.md; final `v1.0.0` acceptance also waits on the Linux AMD64
   source-build run and the immutable tagged source-package checksum.
-- The GitHub repository is Public with Private Vulnerability Reporting
-  enabled. A second non-collaborator account must still file a dummy
-  private advisory before the URL is announced (see SECURITY.md).
+- The GitHub repository is Public. Private Vulnerability Reporting is
+  enabled and was tested with a non-collaborator dummy advisory
+  (`GHSA-w68c-j89p-34mc`, unpublished). See SECURITY.md.
