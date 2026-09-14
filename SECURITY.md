@@ -8,11 +8,21 @@ stable release only.
 ## Reporting a vulnerability
 
 Do not open a public issue containing exploit details, credentials, personal
-data, or affected deployment information. Contact the repository maintainers
-privately through the security-reporting channel designated by the IFI
-workgroup. Include the affected version, reproduction steps, impact, and any
-suggested mitigation. The workgroup must name that channel before public
-release.
+data, or affected deployment information.
+
+The designated channel for this repository is GitHub Private Vulnerability
+Reporting:
+
+https://github.com/pz1130/CyberGuard-AI/security/advisories/new
+
+Include the affected version, reproduction steps, impact, and any suggested
+mitigation. Do not attach live credentials or customer data.
+
+The Security owner must enable Private vulnerability reporting in the GitHub
+repository settings before public release (Settings → Code security). Until
+that toggle is on, reports go to the Security owner named in
+`docs/delivery/RC_EVIDENCE.md` by a private out-of-band channel the workgroup
+already uses. Do not invent a personal mailbox in this file.
 
 ## Deployment responsibility
 

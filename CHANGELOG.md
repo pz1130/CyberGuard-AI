@@ -28,6 +28,14 @@ First IFI workgroup release candidate of the Docker reference implementation.
 - Collapsed rendering for provider `<think>` and `<reasoning>` output in chat.
 - Disposable integration-test stack, CI gate, delivery runbook, evaluation
   framework, responsible-AI statement, architecture, and operations guidance.
+- Release images run as non-root (uid 10001 / nginx 101). Compose drops all
+  capabilities, sets `no-new-privileges:true`, and uses a read-only rootfs
+  for application services.
+- HTTP audit middleware is fail-closed for ordinary requests: a `log_audit`
+  flush error propagates instead of returning a successful handler response
+  with no durable audit row. Health probes stay exempt.
+- Frontend tests are in the typecheck and ESLint gates (`tsconfig.test.json`;
+  eslint no longer ignores `*.test.ts(x)`).
 
 ### Removed from the release surface
 
@@ -48,5 +56,8 @@ Removed modules expose no API routes or WebUI pages.
   external secret management, backup custody, and provider governance.
 - The audit hash chain is tamper-evident application storage, not independent
   WORM retention.
-- A deployment-specific security reporting contact is required before public
-  release.
+- A named Security owner must enable GitHub Private Vulnerability Reporting
+  on this repository before public release (see SECURITY.md). RC technical
+  acceptance is recorded in RC_EVIDENCE.md; Final `v1.0.0` acceptance,
+  the live PVR channel, and registry immutable digests remain pending
+  until those humans sign and after `docker push`.

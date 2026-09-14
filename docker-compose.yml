@@ -1,3 +1,26 @@
+# Official Postgres/Redis entrypoints start as root then gosu. cap_drop ALL
+# removes everything except the few caps gosu needs to drop uid.
+x-data-hardening: &data-hardening
+  cap_drop:
+    - ALL
+  cap_add:
+    - CHOWN
+    - FOWNER
+    - SETGID
+    - SETUID
+    - DAC_OVERRIDE
+  security_opt:
+    - no-new-privileges:true
+
+# Application images already USER non-root. Drop remaining capabilities,
+# forbid privilege re-gain, and make the container rootfs read-only.
+x-app-hardening: &app-hardening
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  read_only: true
+
 services:
   postgres:
     image: pgvector/pgvector:pg16@sha256:7d400e340efb42f4d8c9c12c6427adb253f726881a9985d2a471bf0eed824dff
@@ -16,6 +39,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    <<: *data-hardening
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
@@ -31,6 +56,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    <<: *data-hardening
+    restart: unless-stopped
 
   api:
     image: cyberguard-api:1.0.0-rc.1
@@ -61,12 +88,15 @@ services:
         condition: service_healthy
     volumes:
       - backup_data:/backups
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=1777,size=64m
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=5)"]
       interval: 10s
       timeout: 6s
       retries: 12
       start_period: 20s
+    <<: *app-hardening
     restart: unless-stopped
 
   migrate:
@@ -84,6 +114,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=1777,size=32m
+    <<: *app-hardening
     restart: "no"
 
   tool-runner:
@@ -96,6 +129,9 @@ services:
     environment:
       RUNNER_TOKEN: ${RUNNER_TOKEN:?Set RUNNER_TOKEN in .env}
     # No host port: only reachable on the compose network as tool-runner:9000.
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=1777,size=64m
+    <<: *app-hardening
     restart: unless-stopped
 
   celery_worker:
@@ -116,11 +152,14 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=1777,size=64m
+    <<: *app-hardening
     restart: unless-stopped
 
   celery_beat:
     image: cyberguard-api:1.0.0-rc.1
-    command: celery -A app.workers.celery_app beat --loglevel=info --scheduler celery.beat:PersistentScheduler
+    command: celery -A app.workers.celery_app beat --loglevel=info --scheduler celery.beat:PersistentScheduler --schedule /var/run/celerybeat/celerybeat-schedule --pidfile /var/run/celerybeat/celerybeat.pid
     env_file:
       - ${CYBERGUARD_ENV_FILE:-.env}
     environment:
@@ -138,6 +177,9 @@ services:
         condition: service_healthy
     volumes:
       - celerybeat_data:/var/run/celerybeat
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=1777,size=32m
+    <<: *app-hardening
     restart: unless-stopped
 
   webui:
@@ -146,15 +188,20 @@ services:
       context: ./webui
       dockerfile: Dockerfile
     ports:
-      - "${WEBUI_PORT:-3000}:80"
+      - "${WEBUI_PORT:-3000}:8080"
     depends_on:
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/"]
       interval: 10s
       timeout: 5s
       retries: 5
+    tmpfs:
+      - /tmp:uid=101,gid=101,mode=1777,size=16m
+      - /var/cache/nginx:uid=101,gid=101,mode=0755,size=16m
+      - /run:uid=101,gid=101,mode=0755,size=16m
+    <<: *app-hardening
     restart: unless-stopped
 
 volumes:

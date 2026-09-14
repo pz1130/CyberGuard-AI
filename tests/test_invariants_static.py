@@ -100,3 +100,184 @@ def test_no_discovery_or_p2p_node_dependency(manifest):
         declared |= {k.lower() for k in (data.get(key) or {})}
     banned = declared & {b.lower() for b in BANNED_DEPENDENCIES}
     assert banned == set(), f"INV-09 violated by {manifest}: {sorted(banned)}"
+
+
+# --------------------------------------------------------------------------
+# Long-lived Compose services must survive a Docker daemon restart
+# --------------------------------------------------------------------------
+
+LONG_LIVED_COMPOSE_SERVICES = (
+    "postgres",
+    "redis",
+    "api",
+    "tool-runner",
+    "celery_worker",
+    "celery_beat",
+    "webui",
+)
+
+
+def _compose_restart_policies(text: str) -> dict[str, str | None]:
+    """Map top-level Compose service names to their `restart:` value."""
+    policies: dict[str, str | None] = {}
+    current: str | None = None
+    in_services = False
+    for line in text.splitlines():
+        if line == "services:":
+            in_services = True
+            continue
+        if in_services and line and not line.startswith((" ", "\t")):
+            break
+        service = re.match(r"^  ([A-Za-z0-9_-]+):\s*$", line)
+        if service:
+            current = service.group(1)
+            policies[current] = None
+            continue
+        restart = re.match(r"^    restart:\s*[\"']?([^\"'\s]+)[\"']?\s*$", line)
+        if restart and current is not None:
+            policies[current] = restart.group(1)
+    return policies
+
+
+def test_long_lived_compose_services_restart_unless_stopped():
+    """Postgres/Redis must come back after a Docker restart, same as API/Celery.
+
+    A daemon reboot that only restarts API/Celery leaves them hammering dead
+    backends. The one-shot migrate job stays `restart: no`.
+    """
+    policies = _compose_restart_policies(
+        (REPO / "docker-compose.yml").read_text(encoding="utf-8")
+    )
+    missing = [name for name in LONG_LIVED_COMPOSE_SERVICES if name not in policies]
+    assert missing == [], f"unknown compose services: {missing}"
+    offenders = [
+        f"{name}={policies[name]!r}"
+        for name in LONG_LIVED_COMPOSE_SERVICES
+        if policies[name] != "unless-stopped"
+    ]
+    assert offenders == [], (
+        "long-lived services must set restart: unless-stopped:\n"
+        + "\n".join(offenders)
+    )
+    assert policies.get("migrate") == "no"
+
+
+# --------------------------------------------------------------------------
+# Runtime hardening — non-root, cap_drop, no-new-privileges
+# --------------------------------------------------------------------------
+
+ALL_COMPOSE_SERVICES = LONG_LIVED_COMPOSE_SERVICES + ("migrate",)
+APP_COMPOSE_SERVICES = (
+    "api",
+    "migrate",
+    "tool-runner",
+    "celery_worker",
+    "celery_beat",
+    "webui",
+)
+RELEASE_DOCKERFILES = (
+    ("Dockerfile", "10001:10001"),
+    ("tool-runner/Dockerfile", "10001:10001"),
+    ("webui/Dockerfile", "101:101"),
+)
+
+
+def _compose_service_blocks(text: str) -> dict[str, str]:
+    """Map service name -> raw YAML body (lines under the service key)."""
+    blocks: dict[str, str] = {}
+    current: str | None = None
+    buf: list[str] = []
+    in_services = False
+    for line in text.splitlines():
+        if line == "services:":
+            in_services = True
+            continue
+        if in_services and line and not line.startswith((" ", "\t", "#")):
+            break
+        service = re.match(r"^  ([A-Za-z0-9_-]+):\s*$", line)
+        if service:
+            if current is not None:
+                blocks[current] = "\n".join(buf)
+            current = service.group(1)
+            buf = []
+            continue
+        if current is not None:
+            buf.append(line)
+    if current is not None:
+        blocks[current] = "\n".join(buf)
+    return blocks
+
+
+def _final_user_instruction(dockerfile: str) -> str | None:
+    users = re.findall(r"^USER\s+(\S+)\s*$", dockerfile, flags=re.M)
+    return users[-1] if users else None
+
+
+def test_release_dockerfiles_run_as_numeric_non_root():
+    """A missing USER leaves the process as root inside the image."""
+    for relative, expected in RELEASE_DOCKERFILES:
+        text = (REPO / relative).read_text(encoding="utf-8")
+        user = _final_user_instruction(text)
+        assert user == expected, f"{relative} final USER={user!r}, expected {expected}"
+        uid = int(expected.split(":")[0])
+        assert uid != 0
+
+
+def test_compose_runtime_hardening_drops_caps_and_forbids_new_privileges():
+    """Every Compose service must drop capabilities and set no-new-privileges.
+
+    Official Postgres/Redis entrypoints still start as root to gosu; they keep
+    cap_drop ALL plus the few caps gosu needs. Application services also get a
+    read-only rootfs.
+    """
+    blocks = _compose_service_blocks(
+        (REPO / "docker-compose.yml").read_text(encoding="utf-8")
+    )
+    missing = [name for name in ALL_COMPOSE_SERVICES if name not in blocks]
+    assert missing == [], f"unknown compose services: {missing}"
+    compose = (REPO / "docker-compose.yml").read_text(encoding="utf-8")
+    assert re.search(
+        r"x-app-hardening: &app-hardening\n"
+        r"  cap_drop:\n"
+        r"    - ALL\n"
+        r"  security_opt:\n"
+        r"    - no-new-privileges:true\n"
+        r"  read_only: true\n",
+        compose,
+    )
+    assert re.search(
+        r"x-data-hardening: &data-hardening\n"
+        r"  cap_drop:\n"
+        r"    - ALL\n",
+        compose,
+    )
+    assert "no-new-privileges:true" in compose.split("x-app-hardening", 1)[0]
+
+    offenders = []
+    for name in ALL_COMPOSE_SERVICES:
+        body = blocks[name]
+        uses_app = "<<: *app-hardening" in body
+        uses_data = "<<: *data-hardening" in body
+        inline = "cap_drop:" in body and "no-new-privileges:true" in body
+        if name in ("postgres", "redis"):
+            if not (uses_data or inline):
+                offenders.append(f"{name}: missing data hardening")
+        elif not (uses_app or inline):
+            offenders.append(f"{name}: missing app hardening")
+    assert offenders == [], "compose hardening gaps:\n" + "\n".join(offenders)
+    ro_missing = [
+        name
+        for name in APP_COMPOSE_SERVICES
+        if "<<: *app-hardening" not in blocks[name]
+        and "read_only: true" not in blocks[name]
+    ]
+    assert ro_missing == [], f"app services missing read_only: {ro_missing}"
+
+
+def test_webui_listens_unprivileged():
+    """Non-root nginx cannot bind :80; the published host port stays 3000."""
+    nginx = (REPO / "webui" / "nginx.conf").read_text(encoding="utf-8")
+    compose = (REPO / "docker-compose.yml").read_text(encoding="utf-8")
+    assert re.search(r"listen\s+8080\s*;", nginx)
+    assert not re.search(r"listen\s+80\s*;", nginx)
+    assert re.search(r"WEBUI_PORT:-3000}:8080", compose)

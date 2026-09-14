@@ -5,7 +5,7 @@ PY := .venv/bin/python
 ALEMBIC := .venv/bin/alembic
 export PYTHONPATH := packages:$(CURDIR)
 
-.PHONY: help check test test-env-up test-env-down invariants web-typecheck web-lint web-audit web deps docker-config docker-build security-scan sbom clean
+.PHONY: help check test test-env-up test-env-down invariants web-typecheck web-lint web-audit web-test web deps docker-config docker-build security-scan sbom release-digests clean
 
 RELEASE_IMAGES := cyberguard-api:1.0.0-rc.1 cyberguard-tool-runner:1.0.0-rc.1 cyberguard-webui:1.0.0-rc.1
 
@@ -37,18 +37,24 @@ test-env-down: ## Remove the isolated test services and data
 invariants: ## Just the static invariant checks (fast, no services needed)
 	$(TEST_ENV) $(PY) -m pytest -q tests/test_invariants_static.py
 
-web: web-typecheck web-lint web-audit ## Frontend gates
+web: web-typecheck web-lint web-audit web-test ## Frontend gates
 
-web-typecheck: ## webui tsc — must stay clean
+web-typecheck: ## webui tsc — app and tests must stay clean
 	@if [ ! -d webui/node_modules ]; then \
 		echo "webui/node_modules missing — run 'make deps'"; exit 2; fi
 	cd webui && npx tsc --noEmit -p tsconfig.app.json
+	cd webui && npx tsc --noEmit -p tsconfig.test.json
 
 web-lint: ## webui eslint — must not regress past scripts/eslint_baseline.json
 	$(PY) scripts/eslint_ratchet.py
 
 web-audit: ## Reject high/critical production dependency advisories
 	npm --prefix webui audit --omit=dev --audit-level=high
+
+web-test: ## webui vitest — login, model select, chat stream, thinking, token usage
+	@if [ ! -d webui/node_modules ]; then \
+		echo "webui/node_modules missing — run 'make deps'"; exit 2; fi
+	cd webui && npm test
 
 deps: ## Install frontend dependencies
 	npm --prefix webui ci
@@ -66,6 +72,9 @@ security-scan: ## Fail on known, fixed High or Critical vulnerabilities in relea
 			aquasec/trivy:0.72.0 image --scanners vuln --severity HIGH,CRITICAL \
 			--ignore-unfixed --exit-code 1 $$image || exit $$?; \
 	done
+
+release-digests: ## Record local image IDs and registry digests (not-pushed until docker push)
+	bash scripts/record_release_digests.sh
 
 sbom: ## Write CycloneDX SBOMs for the release images to artifacts/
 	@mkdir -p artifacts

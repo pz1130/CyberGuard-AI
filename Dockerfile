@@ -29,9 +29,17 @@ COPY alembic.ini ./alembic.ini
 COPY alembic/ ./alembic/
 
 # Keep both the application and reusable agent kernel importable at runtime.
-ENV PYTHONPATH=/app:/app/packages
+ENV PYTHONPATH=/app:/app/packages \
+    PYTHONDONTWRITEBYTECODE=1
 
-# Expose port
+RUN groupadd --gid 10001 cyberguard \
+    && useradd --uid 10001 --gid 10001 --no-create-home \
+        --shell /usr/sbin/nologin cyberguard \
+    && mkdir -p /backups /var/run/celerybeat \
+    && chown cyberguard:cyberguard /backups /var/run/celerybeat
+
+USER 10001:10001
+
 EXPOSE 8000
 
 CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${API_WORKERS:-4}"]

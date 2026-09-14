@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 import { lazy, Suspense, useState, useEffect } from 'react'
 import type { ComponentType, LazyExoticComponent } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -8,6 +7,7 @@ import GlobalSearch from './components/GlobalSearch'
 import { SearchProvider } from './context/SearchContext'
 import { api } from './api/client'
 import Login from './pages/Login'
+import { applyTheme, readStoredDark } from './theme'
 
 const PAGES: Record<Tab, { labelKey: string; component: LazyExoticComponent<ComponentType> }> = {
   chat: { labelKey: 'nav.chat', component: lazy(() => import('./pages/Chat')) },
@@ -36,8 +36,14 @@ export default function App() {
     return saved && PAGES[saved] ? saved : 'chat'
   })
   const [authed, setAuthed] = useState(false)
-  const [checking, setChecking] = useState(true)
-  const [dark, setDark] = useState(true)
+  const [checking, setChecking] = useState(() => {
+    try {
+      return !!localStorage.getItem('token') || /sso_token=/.test(window.location.hash)
+    } catch {
+      return false
+    }
+  })
+  const [dark, setDark] = useState(readStoredDark)
   const [searchOpen, setSearchOpen] = useState(false)
   const [recentTabs, setRecentTabs] = useState<Tab[]>(() => {
     try {
@@ -54,13 +60,6 @@ export default function App() {
   const ActivePage = PAGES[tab].component
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem('theme')
-    if (savedTheme === 'light') {
-      setDark(false)
-      document.documentElement.setAttribute('data-theme', 'light')
-    } else {
-      document.documentElement.removeAttribute('data-theme')
-    }
     // SSO callback delivers the JWT in the URL fragment (#sso_token=...).
     const ssoMatch = window.location.hash.match(/sso_token=([^&]+)/)
     if (ssoMatch) {
@@ -69,11 +68,13 @@ export default function App() {
       window.history.replaceState(null, '', window.location.pathname + window.location.search)
     }
     const token = localStorage.getItem('token')
-    if (!token) { setChecking(false); return }
+    if (!token) return
+    let cancelled = false
     api.getAuthMe()
-      .then(() => setAuthed(true))
-      .catch(() => localStorage.removeItem('token'))
-      .finally(() => setChecking(false))
+      .then(() => { if (!cancelled) setAuthed(true) })
+      .catch(() => { localStorage.removeItem('token') })
+      .finally(() => { if (!cancelled) setChecking(false) })
+    return () => { cancelled = true }
   }, [])
 
   // Global CTRL+K listener
@@ -107,7 +108,7 @@ export default function App() {
   const toggleDark = () => {
     const next = !dark
     setDark(next)
-    document.documentElement.setAttribute('data-theme', next ? 'dark' : 'light')
+    applyTheme(next)
     localStorage.setItem('theme', next ? 'dark' : 'light')
   }
 

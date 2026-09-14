@@ -26,6 +26,69 @@ docker compose logs --since=15m api celery_worker tool-runner webui
 curl --fail http://localhost:8000/health/ready
 ```
 
+## Restart recovery
+
+PostgreSQL and Redis use `restart: unless-stopped`, matching API, Celery,
+tool-runner, and WebUI. After a Docker daemon restart the long-lived services
+must return to running/healthy without a manual `compose up`. The one-shot
+`migrate` service stays exited (0).
+
+Verify:
+
+```bash
+docker compose ps
+curl --fail http://localhost:8000/health/ready
+```
+
+`postgres` and `redis` must be `running` (healthy). API `/health/ready` must
+return HTTP 200. Celery workers must reconnect to Redis without a restart.
+
+## Runtime hardening
+
+Application containers (API, migrate, Celery, tool-runner, WebUI) run as a
+non-root numeric user, drop all Linux capabilities, set
+`no-new-privileges:true`, and use a read-only root filesystem. Writable state
+is limited to named volumes (`/backups`, `/var/run/celerybeat`) and `tmpfs`.
+WebUI nginx listens on 8080 inside the container; the host port remains
+`${WEBUI_PORT:-3000}`.
+
+PostgreSQL and Redis keep their official entrypoints (root → gosu). They still
+`cap_drop: ALL` and set `no-new-privileges:true`, with only the capabilities
+gosu needs added back.
+
+Verify a running stack:
+
+```bash
+docker compose ps
+docker inspect "$(docker compose ps -q api)" \
+  --format 'User={{.Config.User}} CapDrop={{json .HostConfig.CapDrop}} Sec={{json .HostConfig.SecurityOpt}} Readonly={{.HostConfig.ReadonlyRootfs}}'
+```
+
+Expect `User=10001:10001`, `CapDrop=["ALL"]`, `no-new-privileges:true`,
+`Readonly=true`. WebUI user is `101:101`.
+
+## Publish and record immutable digests
+
+Local image IDs are not registry digests. After the workgroup accepts the
+candidate:
+
+1. `make docker-build && make security-scan && make sbom`
+2. `make release-digests` — writes `artifacts/release-digests.md`
+3. Tag and push each image to the chosen registry
+4. Re-run `make release-digests` and copy the `repo@sha256:...` values into
+   `docs/delivery/RC_EVIDENCE.md`
+5. Prefer pulling by digest (`image@sha256:...`) in production, not the
+   moving `:1.0.0-rc.1` tag
+
+```bash
+REGISTRY=ghcr.io/pz1130/
+for image in cyberguard-api:1.0.0-rc.1 cyberguard-tool-runner:1.0.0-rc.1 cyberguard-webui:1.0.0-rc.1; do
+  docker tag "$image" "${REGISTRY}${image}"
+  docker push "${REGISTRY}${image}"
+  docker buildx imagetools inspect "${REGISTRY}${image}" --format '{{json .Manifest.Digest}}'
+done
+```
+
 ## Upgrade
 
 1. Create and verify a backup.

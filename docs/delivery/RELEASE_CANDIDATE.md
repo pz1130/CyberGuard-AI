@@ -43,11 +43,20 @@ A release candidate is acceptable only when all boxes below are evidenced:
 - [x] Backup creation and restore are exercised on disposable data.
 - [x] Dependency and container scans have no unaccepted High or Critical finding.
 - [x] Known limitations and accepted risks are recorded in the release notes.
+- [x] Release images run as non-root; Compose drops capabilities and sets
+      `no-new-privileges:true`.
+- [x] Named workgroup / security / deployment signatures on the RC
+      technical-acceptance rows (Jesse; same person, three roles). Final
+      `v1.0.0` acceptance remains pending.
+- [ ] GitHub Private Vulnerability Reporting enabled (anonymous
+      `/security/advisories/new` no longer 404).
+- [ ] Registry immutable digests recorded after `docker push`.
 
 Machine and command evidence is in `RC_EVIDENCE.md`, including the 2026-09-12
-isolated-preview demonstration (MiniMax-M3). Named workgroup signatures,
-security-reporting contact, and promotion to `v1.0.0` remain human
-acceptance steps in that file's acceptance packet.
+isolated-preview demonstration (MiniMax-M3). The designated security-reporting
+channel is GitHub Private Vulnerability Reporting (`SECURITY.md`); the repo
+toggle is not yet on. Promotion to `v1.0.0` waits on PVR enablement and
+registry immutable digests after `docker push`.
 
 ## Versioning
 

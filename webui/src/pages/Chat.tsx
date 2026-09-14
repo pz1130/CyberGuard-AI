@@ -767,6 +767,7 @@ export default function Chat() {
             <span className="chat-toolbar-label">MODEL</span>
             <select value={providerModel} onChange={e => { localStorage.setItem('lastProviderModel', e.target.value); setProviderModel(e.target.value) }}
               className="chat-settings-select"
+              aria-label="Model"
               style={{ width: 'auto', minWidth: 140, maxWidth: 260, height: 30, fontSize: 12 }}
               title={availableModels.length === 0 ? 'No verified models — go to Providers and click TEST' : undefined}
             >
@@ -1066,6 +1067,7 @@ export default function Chat() {
               }
             }}
             disabled={!activeConvId || (!loading && !input.trim() && attachments.length === 0)}
+            aria-label={t('chat.send')}
             className={`chat-send-btn ${loading ? 'cancel' : ''}`}>
             {loading ? (
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

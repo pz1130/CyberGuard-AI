@@ -112,11 +112,50 @@ async def test_a_failed_request_is_still_audited(recorded):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("path", ["/health", "/docs", "/openapi.json"])
+@pytest.mark.parametrize(
+    "path",
+    ["/health", "/health/ready", "/health/started", "/docs", "/openapi.json"],
+)
 async def test_probe_endpoints_stay_out_of_the_audit_trail(recorded, path):
-    """Liveness probes would otherwise bury the signal."""
+    """Liveness and readiness probes would otherwise bury the signal.
+
+    `/health/ready` is the Docker healthcheck. Auditing it both floods the
+    trail and, when the audit flush itself fails, replaces a structured 503
+    with an unhandled 500.
+    """
     await _run(_StubRequest(path=path))
     assert recorded == []
+
+
+@pytest.mark.asyncio
+async def test_audit_write_failure_propagates_for_business_requests(monkeypatch):
+    """INV-29: a successful handler must not hide a failed durable audit write.
+
+    Health probes skip this middleware, so there is no remaining reason to
+    swallow `log_audit` errors on ordinary requests.
+    """
+
+    async def _boom(**kwargs):
+        raise RuntimeError("audit flush exploded")
+
+    monkeypatch.setattr(app_main, "log_audit", _boom)
+    with pytest.raises(RuntimeError, match="audit flush exploded"):
+        await _run(_StubRequest(), response=_StubResponse(200))
+
+
+@pytest.mark.asyncio
+async def test_probe_paths_still_return_when_audit_would_fail(monkeypatch):
+    """Readiness must stay a structured 503 even if log_audit is broken."""
+
+    async def _boom(**kwargs):
+        raise RuntimeError("audit flush exploded")
+
+    monkeypatch.setattr(app_main, "log_audit", _boom)
+    response = await _run(
+        _StubRequest(path="/health/ready"),
+        response=_StubResponse(503),
+    )
+    assert response.status_code == 503
 
 
 # --- the writer must actually persist the new columns ------------------------

@@ -32,6 +32,16 @@ compromised. Approval reduces agent error but is only separation of duties when
 the approver is organisationally independent. A deployment must supply TLS,
 host hardening, monitoring, backup custody, and provider governance.
 
+## Container runtime hardening
+
+Release images do not run as root. API, Celery, migrate, and tool-runner use
+uid/gid `10001`; WebUI nginx uses uid/gid `101` and binds 8080. Compose drops
+all capabilities, sets `no-new-privileges:true`, and mounts a read-only root
+filesystem for those services. PostgreSQL and Redis still start as root only
+long enough for their official entrypoints to gosu, with `cap_drop: ALL` plus
+the gosu capabilities. This is process containment, not a substitute for host
+TLS, network policy, or secret custody.
+
 ## Data flow review
 
 Before deployment, document for each provider or MCP connection: data classes,

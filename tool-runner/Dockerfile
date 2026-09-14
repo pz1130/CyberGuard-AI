@@ -16,5 +16,13 @@ RUN apt-get update \
 
 COPY tool_runner/ ./tool_runner/
 
+ENV PYTHONDONTWRITEBYTECODE=1
+
+RUN groupadd --gid 10001 cyberguard \
+    && useradd --uid 10001 --gid 10001 --no-create-home \
+        --shell /usr/sbin/nologin cyberguard
+
+USER 10001:10001
+
 EXPOSE 9000
 CMD ["uvicorn", "tool_runner.main:app", "--host", "0.0.0.0", "--port", "9000"]

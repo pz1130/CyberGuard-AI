@@ -2,18 +2,28 @@
 
 Candidate: `1.0.0-rc.1`  
 Branch: `codex/release-candidate`  
-Verification date: 2026-09-13 (Asia/Shanghai)
+Verification date: 2026-09-14 (Asia/Shanghai)
 
 ## Automated gate
 
-- `make check`: 611 passed, 0 skipped; frontend type check and lint ratchet
-  passed (eslint baseline 0 errors / 0 warnings after cleanup);
-  production npm audit reported 0 vulnerabilities.
+- `make check`: backend 620 passed, 0 skipped; frontend 8 passed;
+  frontend type check covers app and tests (`tsconfig.app.json` and
+  `tsconfig.test.json`); lint ratchet passed (eslint baseline 0 errors /
+  0 warnings, including test files); production npm audit reported 0
+  vulnerabilities.
 - Fresh Alembic migration: `036_knowledge_provider_binding (head)`, with one head.
 - Compose configuration validation: passed with explicit non-default secrets.
 - Release image build: API, tool-runner, and WebUI built successfully.
 - Container scan: `make security-scan` (HIGH,CRITICAL, ignore-unfixed) passed
   on the rebuilt images — 0 High, 0 Critical in API, tool-runner, and WebUI.
+- 2026-09-13 hardening rebuild: images run as `10001:10001` / nginx `101:101`;
+  Compose `cap_drop: ALL` and `no-new-privileges:true`; app services
+  `read_only: true`. Isolated preview recreated healthy. `make security-scan`
+  on the hardened images still 0 High / 0 Critical.
+- 2026-09-14 rebuild after HTTP-audit fail-closed, frontend test gates, and
+  theme/lang boot changes. `make check` on this tree: backend 620 passed,
+  frontend 8 passed. `make docker-build` then `make security-scan`
+  (HIGH,CRITICAL, ignore-unfixed): 0 High / 0 Critical on all three images.
 
 ## Runtime smoke test
 
@@ -44,17 +54,60 @@ The following checks passed:
 The isolated preview remains available locally on port `53000` for workgroup
 review. No existing project volume was used.
 
+2026-09-14 re-smoke after rebuilding the three images and recreating the
+preview (`--force-recreate --wait`). Containers ran the new local IDs
+(`api`/`celery` `24a27296…`, `tool-runner` `8280ed13…`, `webui` `6aa092e3…`)
+as non-root with read-only rootfs. `/health` returned `1.0.0-rc.1`;
+`/health/ready` reported PostgreSQL and Redis ok; WebUI `:53000` returned
+HTTP 200 and no longer loads Font Awesome.
+
+API smoke on that stack:
+
+- Bootstrap `admin` signed in.
+- Master Agent remained MiniMax provider ID `34` / `MiniMax-M3`.
+- A streamed chat completed (`POST /api/v1/chat/stream`).
+- EXPERT-mode Celery task `5225cd61-a946-476a-92f4-465fb9fae1a3` completed.
+- `GET /api/v1/token-usage/summary` reported 17349 tokens / 21 calls.
+- Backup `42629152-a578-46b3-920e-cda9c633200c` completed (2070175 encrypted
+  bytes). A post-backup `users.full_name` marker reverted after
+  `POST /api/v1/backup/{id}/restore` `{confirm: true}`; login still worked.
+
 ## Local image identifiers
 
-- `cyberguard-api:1.0.0-rc.1` —
-  `sha256:b7295c87c1ce650bbcb02a8897a584b4ae90df726672806fbdc2d9edc793517a`
-- `cyberguard-tool-runner:1.0.0-rc.1` —
-  `sha256:a961139da410bb3b11aed736353c0599b239d64dd38a626a69e02e9206cc90fa`
-- `cyberguard-webui:1.0.0-rc.1` —
-  `sha256:92f515fb7299a11d74b22dffe78d3bfd944465d87ba76c7c12856b3ecadf4cb6`
+Recorded 2026-09-14 after `make docker-build`. These are local image IDs, not
+registry digests. Re-run `make release-digests` after `docker push` and paste
+the `repo@sha256:...` values into the registry column.
 
-These are local image identifiers, not registry digests. Record immutable
-registry digests after publishing.
+| Image | Local ID | Registry digest |
+|---|---|---|
+| `cyberguard-api:1.0.0-rc.1` | `sha256:24a27296634f4e953c7a5c33675cacdb3fbec3d4ec3cdaf54c3c8809df3e1520` | not-pushed |
+| `cyberguard-tool-runner:1.0.0-rc.1` | `sha256:8280ed1376393a289293e1adfeb76b0eaeebd27c3559f47a56ea155a1a64e888` | not-pushed |
+| `cyberguard-webui:1.0.0-rc.1` | `sha256:6aa092e3080413ec7ea147b72332f2988102bb899c04eab2d633d005aa1014f1` | not-pushed |
+
+Production deployments should pin `image@sha256:...` from the registry column,
+not the moving `:1.0.0-rc.1` tag. The publish commands are in OPERATIONS.md.
+
+## Container hardening evidence
+
+Recorded 2026-09-13 on the isolated preview after recreate (`docker inspect`
+plus `/proc/<pid>/status` for the server process). Application images set a
+numeric `USER`. Compose merges `cap_drop: ALL`, `no-new-privileges:true`, and
+(for app services) `read_only: true`.
+
+| Service | Image USER | PID 1 uid | CapDrop | no-new-privileges | read-only rootfs | Status |
+|---|---|---|---|---|---|---|
+| api | `10001:10001` | 10001 | ALL | true | true | healthy |
+| webui | `101:101` | 101 | ALL | true | true | healthy |
+| tool-runner | `10001:10001` | 10001 | ALL | true | true | running |
+| celery_worker | `10001:10001` | 10001 | ALL | true | true | running |
+| celery_beat | `10001:10001` | 10001 | ALL | true | true | running |
+| migrate | `10001:10001` | 10001 | ALL | true | true | exited 0 |
+| postgres | (entrypoint root→gosu) | 999 | ALL + gosu caps | true | false | healthy |
+| redis | (entrypoint root→gosu) | 999 | ALL + gosu caps | true | false | healthy |
+
+`/health/ready` HTTP 200. WebUI `:53000` HTTP 200 (container port 8080).
+Postgres/Redis PID 1 is uid 999 after gosu; `docker exec` without `--user`
+still opens as root because that is the image USER.
 
 ## SBOM evidence
 
@@ -62,11 +115,11 @@ CycloneDX files are generated locally under `artifacts/` and intentionally not
 committed. Their hashes for this build are:
 
 - `cyberguard-api.cdx.json` —
-  `sha256:5678416aa56605addbde36ab86e15bf52ebc5b534bcf2b7ca4371d9152d91889`
+  `sha256:fc4b2974fb00943f968ebbbd9562c2f2c88fcb0fe9d7e29a688e2a338e3835b6`
 - `cyberguard-tool-runner.cdx.json` —
-  `sha256:e432b9636a3532e2fbe8f0f6b19a00292a18c6ba3fd984abd8a13c72de253ea8`
+  `sha256:dbfe4348c475c320f5c55a73d0785391764e12478df5b472cf184aae24454dcb`
 - `cyberguard-webui.cdx.json` —
-  `sha256:38f01dff66ef423b2267f340b6a5143c231259d87ba3740db7a066cd45bdc91e`
+  `sha256:a8ae6797391d2eee147b627a825bb63b532a011e0d8c13396f56e00878b565e5`
 
 ## Demonstration run (isolated preview)
 
@@ -187,18 +240,41 @@ post-backup marker row disappeared after restore; the backup manifest remained
 completed. A Redis maintenance gate prevented other API workers from starting
 new database transactions during each restore.
 
-## Acceptance packet (named humans still required)
+## Acceptance packet
 
-Technical evidence above was produced on the isolated preview. Promotion
-to `v1.0.0` still needs named workgroup sign-off. Do not invent names.
+Technical evidence above was produced on the isolated preview. Jesse is the
+sole publisher of this repository and holds all three release roles.
 
-| Item | Recorded value | Named sign-off |
-|---|---|---|
-| Provider decision | MiniMax `api.minimaxi.com`, provider ID `34`, chat model `MiniMax-M3` | Workgroup lead |
-| Security reporting contact | Not set in this candidate; required before public release (see CHANGELOG) | Security owner |
-| Deployment owner | Isolated preview operator for this evidence run | Deployment owner |
-| Accepted-risk register | CHANGELOG “Known limitations” plus RESPONSIBLE_AI.md | Security owner |
-| Final acceptance | Pending | Workgroup lead |
+This packet records **RC technical acceptance** of `1.0.0-rc.1`. It is not
+approval to promote to `v1.0.0`. Two release conditions remain pending:
+GitHub Private Vulnerability Reporting is not enabled (anonymous GET of
+https://github.com/pz1130/CyberGuard-AI/security/advisories/new returns 404),
+and registry immutable digests remain `not-pushed` until `docker push`.
+
+| Item | Recorded value | Status | Role that signs |
+|---|---|---|---|
+| Provider decision | MiniMax `api.minimaxi.com`, provider ID `34`, chat model `MiniMax-M3` | accepted 2026-09-13 | Workgroup lead |
+| Security reporting contact | GitHub Private Vulnerability Reporting: https://github.com/pz1130/CyberGuard-AI/security/advisories/new | pending — enable Settings → Code security → Private vulnerability reporting | Security owner |
+| Deployment owner | Jesse (isolated preview operator for this evidence run) | accepted 2026-09-13 for the preview | Deployment owner |
+| Accepted-risk register | CHANGELOG “Known limitations” plus RESPONSIBLE_AI.md | accepted 2026-09-13 | Security owner |
+| Image hardening | Non-root USER, `cap_drop: ALL`, `no-new-privileges:true`, read-only rootfs on app services | accepted 2026-09-13 | Security owner |
+| Registry immutable digest | not-pushed until `docker push`; then `make release-digests` | pending | Deployment owner |
+| RC technical acceptance | Isolated-preview evidence for `1.0.0-rc.1` | accepted 2026-09-13 | Workgroup lead |
+| Final v1.0.0 acceptance | Promote only after PVR is live and registry digests are recorded | pending | Workgroup lead |
+
+What each signature attests (sign only that row):
+
+- **Workgroup lead** — demo paths and provider decision are accepted for this
+  RC. Promotion to `v1.0.0` requires the pending Security owner (PVR) and
+  Deployment owner (registry digest) rows, then Final v1.0.0 acceptance.
+- **Security owner** — scan results have no unaccepted High/Critical,
+  accepted-risk register is current, container hardening matches this packet.
+  The PVR row stays pending until an anonymous visit to
+  `/security/advisories/new` no longer returns 404.
+- **Deployment owner** — isolated preview ran the smoke and restore drills;
+  local image IDs in this file match the built artifacts. The registry digest
+  row stays pending until `docker push` and `make release-digests` fill the
+  registry column; production will pin by digest.
 
 Accepted risks carried into this candidate (not newly invented):
 
@@ -208,8 +284,11 @@ Accepted risks carried into this candidate (not newly invented):
 - Audit hash chain is application tamper-evidence, not independent WORM.
 - Encrypted backup is useless without the separately stored encryption key.
 
-Signature block (wet-ink or IdP; leave blank until a named human signs):
+Signature block (same person, three roles; RC only):
 
-- Workgroup lead: ________________  date: ________
-- Security owner: ________________  date: ________
-- Deployment owner: ________________  date: ________
+- Workgroup lead (RC technical acceptance): Jesse  date: 2026-09-13
+- Security owner (scans, accepted risks, hardening): Jesse  date: 2026-09-13
+- Security owner (PVR live): pending
+- Deployment owner (preview / local image IDs): Jesse  date: 2026-09-13
+- Deployment owner (registry digest): pending
+- Workgroup lead (Final v1.0.0 acceptance): pending

@@ -201,6 +201,19 @@ app.add_middleware(
 )
 
 
+_AUDIT_SKIP_PATHS = frozenset({"/docs", "/openapi.json", "/redoc"})
+
+
+def _skip_http_audit(path: str) -> bool:
+    """Health probes and OpenAPI chrome must not enter the audit trail.
+
+    `/health/ready` is the Compose healthcheck. Auditing it both floods the
+    trail and, when the audit flush itself fails (DB and Redis down), a
+    `finally` that re-raises replaces the structured 503 with HTTP 500.
+    """
+    return path in _AUDIT_SKIP_PATHS or path == "/health" or path.startswith("/health/")
+
+
 @app.middleware("http")
 async def audit_middleware(request: Request, call_next):
     """Log all HTTP requests to the audit trail.
@@ -215,9 +228,12 @@ async def audit_middleware(request: Request, call_next):
 
     The cost is one Redis lpush per request; `log_audit` degrades to the DB
     buffer (loudly) when Redis is unavailable, so a Redis stall cannot wedge
-    request handling.
+    request handling. Health probes skip this middleware so a failed audit
+    flush cannot turn a structured readiness 503 into 500. Ordinary requests
+    must not swallow `log_audit` failures: a successful handler with no
+    durable audit row would reintroduce an unrecorded operation.
     """
-    if request.url.path in ["/health", "/docs", "/openapi.json"]:
+    if _skip_http_audit(request.url.path):
         return await call_next(request)
 
     # A restore replaces the entire application schema. Stop all other API
@@ -245,6 +261,7 @@ async def audit_middleware(request: Request, call_next):
         # runs before dependencies resolve) and how it ended. An audit row
         # naming neither the actor nor the outcome answers no question anyone
         # would ask of it. `finally` so a raised request is still recorded.
+        # A flush exception must propagate: INV-29 is fail-closed.
         await log_audit(
             user_id=getattr(request.state, "user_id", None),
             agent_id=None,
@@ -286,22 +303,24 @@ async def readiness_probe():
     checks = {}
     all_healthy = True
 
-    # DB check
+    # DB check — never echo the exception; it can contain DSN passwords.
     try:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         checks["postgres"] = "ok"
     except Exception as e:
-        checks["postgres"] = f"error: {e}"
+        logger.warning("readiness postgres check failed: %s", e)
+        checks["postgres"] = "unavailable"
         all_healthy = False
 
-    # Redis check
+    # Redis check — same rule: operator-visible status, details stay in logs.
     try:
         r = await get_redis()
         await r.ping()
         checks["redis"] = "ok"
     except Exception as e:
-        checks["redis"] = f"error: {e}"
+        logger.warning("readiness redis check failed: %s", e)
+        checks["redis"] = "unavailable"
         all_healthy = False
 
     if not all_healthy:
