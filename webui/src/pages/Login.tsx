@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react'
 import { ShieldCheck } from 'lucide-react'
 import { api } from '../api/client'
-import { useTranslation } from 'react-i18next'
+import i18n from '../i18n'
+
+function tLogin(key: string) {
+  return i18n.t(key, { lng: 'en' })
+}
 
 export default function Login() {
-  const { t } = useTranslation()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(() => {
     const err = new URLSearchParams(window.location.search).get('error')
-    return err ? (t(`login.${err}` as never) || t('login.ssoError')) : ''
+    return err ? (tLogin(`login.${err}`) || tLogin('login.ssoError')) : ''
   })
   const [loading, setLoading] = useState(false)
   const [ssoEnabled, setSsoEnabled] = useState(false)
@@ -35,7 +38,7 @@ export default function Login() {
       localStorage.setItem('token', data.access_token)
       window.location.reload()
     } catch {
-      setError(t('login.authFailed'))
+      setError(tLogin('login.authFailed'))
     } finally { setLoading(false) }
   }
 
@@ -148,7 +151,7 @@ export default function Login() {
             <label style={{
               display: 'block', fontSize: 12, letterSpacing: '0.08em', color: 'var(--shell-text-muted)', marginBottom: 8,
             }}>
-              {t('login.username').toUpperCase()}
+              {tLogin('login.username').toUpperCase()}
             </label>
             <input
               type="text"
@@ -171,7 +174,7 @@ export default function Login() {
 
           <div>
             <label style={{ display: 'block', fontSize: 12, letterSpacing: '0.08em', color: 'var(--shell-text-muted)', marginBottom: 8 }}>
-              {t('login.password').toUpperCase()}
+              {tLogin('login.password').toUpperCase()}
             </label>
             <input
               type="password"
@@ -216,7 +219,7 @@ export default function Login() {
               transition: 'all 0.15s',               boxShadow: loading ? 'none' : '0 0 20px rgba(0,212,106,0.2)',
             }}
           >
-            {loading ? t('login.authenticating').toUpperCase() : t('login.authenticate').toUpperCase()}
+            {loading ? tLogin('login.authenticating').toUpperCase() : tLogin('login.authenticate').toUpperCase()}
           </button>
         </form>
 

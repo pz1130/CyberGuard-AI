@@ -101,7 +101,7 @@
     "reissueKeyShort": "重新生成 API Key？旧 Key 将立即失效。",
     "connectionOk": "连接正常",
     "connectionFail": "连接失败",
-    "readyProcess": "READY · 进程内运行",
+    "readyProcess": "READY · In-process",
     "lastSeen": "最近: ",
     "reissueTitle": "重新生成 API Key",
     "savedKeyClose": "我已保存 KEY，关闭",

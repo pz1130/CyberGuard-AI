@@ -355,32 +355,35 @@ async def test_agent_connection(
         # 内部 Agent 在系统进程内运行，没有外部连通性概念（offline/poll）。
         # 唯一会"断"的是其 LLM Provider，所以校验它即可。
         if not agent.llm_provider_id:
-            return AgentTestResponse(success=False, error="内部 Agent 未配置 LLM Provider")
+            return AgentTestResponse(success=False, error="Internal agent has no LLM provider")
         prov = await db.execute(select(Provider).where(Provider.id == agent.llm_provider_id))
         p = prov.scalar_one_or_none()
         if p is None:
-            return AgentTestResponse(success=False, error="所配置的 LLM Provider 不存在")
+            return AgentTestResponse(success=False, error="Configured LLM provider does not exist")
         if not p.is_active:
-            return AgentTestResponse(success=False, error=f"LLM Provider「{p.name}」已禁用")
-        return AgentTestResponse(success=True, error=f"就绪 · 进程内运行（LLM Provider：{p.name}）")
+            return AgentTestResponse(success=False, error=f"LLM provider '{p.name}' is disabled")
+        return AgentTestResponse(
+            success=True,
+            error=f"Ready · in-process (LLM provider: {p.name})",
+        )
 
     if agent.backend_type == "openclaw":
         if not agent.api_key_hash:
-            return AgentTestResponse(success=False, error="尚未生成 API Key，无法判断在线状态")
+            return AgentTestResponse(success=False, error="No API key yet; cannot determine online status")
         last_seen = agent.openclaw_last_seen
         if last_seen is None:
-            return AgentTestResponse(success=False, error="OpenClaw 节点从未上线（尚未首次 poll）")
+            return AgentTestResponse(success=False, error="OpenClaw node has never come online")
         delta = (utc_now() - last_seen).total_seconds()
-        if delta < 300:   # 5 分钟内 poll 过 = 在线
+        if delta < 300:   # polled within 5 minutes = online
             return AgentTestResponse(success=True, latency_ms=None,
-                                     error=f"在线（最近活跃：{int(delta)} 秒前）")
+                                     error=f"Online (last seen {int(delta)}s ago)")
         return AgentTestResponse(success=False,
-                                 error=f"离线（最近活跃：{int(delta)} 秒前，超过 5 分钟）")
+                                 error=f"Offline (last seen {int(delta)}s ago, over 5 minutes)")
 
-    # 其他后端：HTTP ping
+    # Other backends: HTTP ping
     endpoint = agent.endpoint_url or ""
     if not endpoint:
-        return AgentTestResponse(success=False, error="未配置 endpoint_url")
+        return AgentTestResponse(success=False, error="endpoint_url is not configured")
 
     # SSRF protection — validate before making outbound request
     from app.core.ssrf import validate_outbound_url, SSRFError

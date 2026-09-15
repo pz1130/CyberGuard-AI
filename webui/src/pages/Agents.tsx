@@ -714,7 +714,7 @@ export default function Agents() {
                 {isInternal && (
                   <div className="item-card-status" style={{ color: '#60a5fa' }}>
                     <Cpu size={13} />
-                    <span>{t('agents.readyProcess')}</span>
+                    <span>READY · In-process</span>
                   </div>
                 )}
 

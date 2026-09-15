@@ -3,7 +3,7 @@ import { initReactI18next } from 'react-i18next'
 import zh from './zh.json'
 import en from './en.json'
 
-const saved = localStorage.getItem('lang') || 'zh'
+const saved = localStorage.getItem('lang') || 'en'
 
 function syncDocumentLang(lng: string) {
   document.documentElement.lang = lng.startsWith('zh') ? 'zh' : 'en'
@@ -12,7 +12,7 @@ function syncDocumentLang(lng: string) {
 i18n.use(initReactI18next).init({
   resources: { zh: { translation: zh }, en: { translation: en } },
   lng: saved,
-  fallbackLng: 'zh',
+  fallbackLng: 'en',
   interpolation: { escapeValue: false },
 })
 

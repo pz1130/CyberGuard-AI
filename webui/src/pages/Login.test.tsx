@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import i18n from '../i18n'
 import Login from './Login'
 
 const login = vi.fn()
@@ -55,5 +56,15 @@ describe('Login', () => {
 
     expect(await screen.findByText(/authentication failed/i)).toBeInTheDocument()
     expect(localStorage.getItem('token')).toBeNull()
+  })
+
+  it('stays English even when the saved language is Chinese', async () => {
+    localStorage.setItem('lang', 'zh')
+    await i18n.changeLanguage('zh')
+    render(<Login />)
+    expect(screen.getByText('USERNAME')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /authenticate/i })).toBeInTheDocument()
+    expect(screen.queryByText('用户名')).not.toBeInTheDocument()
+    expect(screen.queryByText('登录')).not.toBeInTheDocument()
   })
 })
