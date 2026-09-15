@@ -281,3 +281,60 @@ def test_webui_listens_unprivileged():
     assert re.search(r"listen\s+8080\s*;", nginx)
     assert not re.search(r"listen\s+80\s*;", nginx)
     assert re.search(r"WEBUI_PORT:-3000}:8080", compose)
+
+
+# --------------------------------------------------------------------------
+# INV-40 · skill scripts run in an isolated sandbox, not beside the data plane
+# --------------------------------------------------------------------------
+
+def _compose() -> dict:
+    import yaml
+    return yaml.safe_load((REPO / "docker-compose.yml").read_text())
+
+
+def test_inv40_skill_runner_is_sandboxed():
+    """INV-40: the script sandbox must not share a network with postgres/redis."""
+    compose = _compose()
+    services = compose["services"]
+    assert "skill-runner" in services, "skill-runner service is missing"
+
+    sandbox_nets = set(services["skill-runner"].get("networks") or [])
+    assert sandbox_nets, "skill-runner must declare its networks explicitly"
+
+    for data_service in ("postgres", "redis"):
+        shared = sandbox_nets & set(services[data_service].get("networks") or [])
+        assert not shared, f"skill-runner shares network {shared} with {data_service}"
+
+    # The sandbox segment must have no route off the host network.
+    for net in sandbox_nets:
+        assert compose["networks"][net].get("internal") is True, (
+            f"network {net} must be internal: true"
+        )
+
+
+def test_inv40_skill_runner_does_not_receive_the_tool_runner_token():
+    services = _compose()["services"]
+    env = services["skill-runner"].get("environment") or {}
+    keys = set(env if isinstance(env, dict) else [e.split("=", 1)[0] for e in env])
+    assert "RUNNER_TOKEN" not in keys, "skill-runner must not hold the tool-runner token"
+    assert "SKILL_RUNNER_TOKEN" in keys
+    assert "env_file" not in services["skill-runner"], (
+        "skill-runner must not be handed the app's .env"
+    )
+
+
+def test_inv40_skill_runner_package_is_standalone():
+    """It must not import app/agent_core, same rule tool_runner follows."""
+    offenders = []
+    for path in _py_files(REPO / "skill_runner"):
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            mods = []
+            if isinstance(node, ast.Import):
+                mods = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                mods = [node.module]
+            for m in mods:
+                if m.split(".")[0] in ("app", "agent_core", "tool_runner"):
+                    offenders.append(f"{path.relative_to(REPO)}: {m}")
+    assert offenders == [], "INV-40 violated:\n" + "\n".join(offenders)

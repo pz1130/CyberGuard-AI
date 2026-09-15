@@ -39,6 +39,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - backend
     <<: *data-hardening
     restart: unless-stopped
 
@@ -56,6 +58,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - backend
     <<: *data-hardening
     restart: unless-stopped
 
@@ -78,6 +82,8 @@ services:
       ENVIRONMENT: production
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?Set BOOTSTRAP_ADMIN_PASSWORD in .env}
       TOOL_RUNNER_URL: http://tool-runner:9000
+      SKILL_RUNNER_URL: http://skill-runner:9000
+      SKILL_RUNNER_TOKEN: ${SKILL_RUNNER_TOKEN:?Set SKILL_RUNNER_TOKEN in .env}
       # RUNNER_TOKEN and others come from .env or defaults in compose
     depends_on:
       migrate:
@@ -96,6 +102,9 @@ services:
       timeout: 6s
       retries: 12
       start_period: 20s
+    networks:
+      - backend
+      - sandbox
     <<: *app-hardening
     restart: unless-stopped
 
@@ -116,6 +125,8 @@ services:
         condition: service_healthy
     tmpfs:
       - /tmp:uid=10001,gid=10001,mode=1777,size=32m
+    networks:
+      - backend
     <<: *app-hardening
     restart: "no"
 
@@ -131,6 +142,27 @@ services:
     # No host port: only reachable on the compose network as tool-runner:9000.
     tmpfs:
       - /tmp:uid=10001,gid=10001,mode=1777,size=64m
+    networks:
+      - backend
+    <<: *app-hardening
+    restart: unless-stopped
+
+  skill-runner:
+    image: cyberguard-skill-runner:1.0.0-rc.1
+    build:
+      context: .
+      dockerfile: skill-runner/Dockerfile
+    environment:
+      SKILL_RUNNER_TOKEN: ${SKILL_RUNNER_TOKEN:?Set SKILL_RUNNER_TOKEN in .env}
+    # Deliberately no env_file: this container must never see the app's secrets.
+    # Only `sandbox`, which is internal: true — no postgres, no redis, no egress.
+    networks:
+      - sandbox
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=1777,size=64m
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 1.0
     <<: *app-hardening
     restart: unless-stopped
 
@@ -154,6 +186,8 @@ services:
         condition: service_healthy
     tmpfs:
       - /tmp:uid=10001,gid=10001,mode=1777,size=64m
+    networks:
+      - backend
     <<: *app-hardening
     restart: unless-stopped
 
@@ -179,6 +213,8 @@ services:
       - celerybeat_data:/var/run/celerybeat
     tmpfs:
       - /tmp:uid=10001,gid=10001,mode=1777,size=32m
+    networks:
+      - backend
     <<: *app-hardening
     restart: unless-stopped
 
@@ -201,8 +237,18 @@ services:
       - /tmp:uid=101,gid=101,mode=1777,size=16m
       - /var/cache/nginx:uid=101,gid=101,mode=0755,size=16m
       - /run:uid=101,gid=101,mode=0755,size=16m
+    networks:
+      - backend
     <<: *app-hardening
     restart: unless-stopped
+
+networks:
+  backend:
+  # api reaches skill-runner here. Compose network membership is bidirectional,
+  # so api:8000 stays reachable from a script — see the design's 5.3.1. What
+  # this removes is postgres, redis, and all egress.
+  sandbox:
+    internal: true
 
 volumes:
   postgres_data:
