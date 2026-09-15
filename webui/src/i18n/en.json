@@ -455,6 +455,8 @@
   },
   "approvals": {
     "title": "Approvals",
+    "proposedCode": "Proposed code",
+    "proposedCodeHint": "This program will run in an isolated sandbox with no network access.",
     "subtitle": "Human approval queue · Admin only",
     "pending": "Pending",
     "approved": "Approved",

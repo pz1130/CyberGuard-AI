@@ -281,6 +281,23 @@ export default function Approvals() {
                       </div>
                     )}
 
+                    {typeof item.payload?.code === 'string' && (
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={{ fontSize: 10, color: 'var(--accent)', letterSpacing: '0.12em', marginBottom: 4 }}>
+                          {t('approvals.proposedCode').toUpperCase()}
+                        </div>
+                        <pre style={{
+                          fontSize: 12, color: 'var(--text-primary)', background: 'var(--bg-base)',
+                          border: '1px solid var(--border-bright)', padding: '10px 12px',
+                          overflow: 'auto', maxHeight: 320, margin: 0,
+                          whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                        }}>{item.payload.code as string}</pre>
+                        <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4, lineHeight: 1.6 }}>
+                          {t('approvals.proposedCodeHint')}
+                        </div>
+                      </div>
+                    )}
+
                     {item.payload && Object.keys(item.payload).length > 0 && (
                       <div style={{ marginBottom: 14 }}>
                         <div style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.12em', marginBottom: 4 }}>PAYLOAD</div>

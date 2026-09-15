@@ -52,8 +52,8 @@ class AgentConfigBase(BaseModel):
 
     _url_validator = field_validator("endpoint_url", mode="before")(_validate_endpoint_url)
     _kind_validator = field_validator("kind", mode="before")(lambda v: (v or "external").lower())
-
-
+    # off | approval | auto — whether this agent may run code the model wrote.
+    code_execution_mode: Optional[str] = None
 class AgentConfigCreate(AgentConfigBase):
     """Create a new agent.
 
@@ -112,8 +112,8 @@ class AgentConfigUpdate(BaseModel):
     _kind_validator = field_validator("kind", mode="before")(lambda v: v or None)
 
     model_config = {"extra": "forbid"}
-
-
+    # off | approval | auto — whether this agent may run code the model wrote.
+    code_execution_mode: Optional[str] = None
 class AgentConfigRead(BaseModel):
     """Agent config returned by the API.
 
@@ -163,8 +163,7 @@ class AgentConfigRead(BaseModel):
         return inst
 
     model_config = ConfigDict(from_attributes=True)
-
-
+    code_execution_mode: Optional[str] = "approval"
 class AgentConfigListResponse(BaseModel):
     total: int
     agents: List[AgentConfigRead]

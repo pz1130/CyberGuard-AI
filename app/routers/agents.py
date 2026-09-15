@@ -23,6 +23,20 @@ from app.models.provider import Provider
 
 router = APIRouter()
 
+CODE_EXECUTION_MODES = ("off", "approval", "auto")
+
+
+def validate_code_execution_mode(value):
+    """Reject unknown modes at the edge; `None` leaves the stored value alone."""
+    if value is None:
+        return None
+    if value not in CODE_EXECUTION_MODES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"code_execution_mode must be one of {', '.join(CODE_EXECUTION_MODES)}",
+        )
+    return value
+
 
 # ---------------------------------------------------------------------------
 # Startup seed
@@ -226,7 +240,7 @@ async def update_agent(
     agent_id: int,
     body: AgentConfigUpdate,
     db: AsyncSession = Depends(get_db),
-    _=Depends(require_permission(Permission.AGENT_WRITE)),
+    current_user=Depends(require_permission(Permission.AGENT_WRITE)),
 ):
     result = await db.execute(select(AgentConfig).where(AgentConfig.id == agent_id))
     agent = result.scalar_one_or_none()
@@ -236,6 +250,21 @@ async def update_agent(
     _validate_agent_payload(body, existing=agent)
 
     body_dict = body.model_dump(exclude_unset=True)
+
+    # Letting an agent run model-authored code without a human is a decision
+    # someone should be answerable for, so the change is recorded before it
+    # takes effect.
+    incoming_mode = validate_code_execution_mode(body_dict.get("code_execution_mode"))
+    if incoming_mode is not None and incoming_mode != agent.code_execution_mode:
+        from app.core.audit import record_action
+        await record_action(
+            user_id=current_user.user_id, action="agent.code_execution_mode",
+            agent_id=agent.id, agent_name=agent.agent_name,
+            risk_tier="high" if incoming_mode == "auto" else "medium",
+            human_reviewer=str(current_user.user_id),
+            input_data={"from": agent.code_execution_mode, "to": incoming_mode},
+            output_data={"changed": True},
+        )
 
     if "env_vars" in body_dict:
         ev = body_dict.pop("env_vars")

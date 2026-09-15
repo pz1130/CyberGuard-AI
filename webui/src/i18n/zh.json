@@ -455,6 +455,8 @@
   },
   "approvals": {
     "title": "审批管理",
+    "proposedCode": "待执行代码",
+    "proposedCodeHint": "该程序将在无网络访问的隔离沙箱中运行。",
     "subtitle": "人工审批队列 · 仅管理员",
     "pending": "待审批",
     "approved": "已通过",
