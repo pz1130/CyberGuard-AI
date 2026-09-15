@@ -134,6 +134,10 @@ class InternalAgentRunner:
             config.get("code_execution_mode") or "approval"
         )
         self._run_request_id: Optional[str] = None
+        # Set when a tool asked for human approval during this run. The run's
+        # own status has to carry it: master decides whether to suspend from
+        # the sub-agent result, and a tool result never reaches that decision.
+        self._pending_approval_reason: Optional[str] = None
         self.permission_level: str = config.get("permission_level") or "medium"
         # OSINT search tools (web_search / vuln_search) opt-in per agent.
         self.enable_search: bool = bool(
@@ -524,10 +528,15 @@ class InternalAgentRunner:
                 )
                 return None
             await self._request_approval(name, args, verdict.risk_tier)
+            reason = (f"tool {name!r} requires human approval — {verdict.reason}")
+            # The loop carries on and the model writes some closing text, so the
+            # run would otherwise report "completed" and the graph would never
+            # suspend — leaving the approval record with nothing to resume.
+            # This applies to every gated tool, not only run_python.
+            self._pending_approval_reason = reason
             return BlockedResult(
                 payload={"status": "needs_approval", "is_error": True,
-                         "error": (f"tool {name!r} requires human approval — "
-                                   f"{verdict.reason}")},
+                         "error": reason},
                 reason="needs_approval")
         return None
 
@@ -598,11 +607,13 @@ class InternalAgentRunner:
                 agent_id=self.agent_id, agent_name=self.agent_name,
             )
 
-        return {
-            "status": "needs_approval", "is_error": True,
-            "error": ("this code needs human approval before it can run; "
-                      "propose the identical code again after it is approved"),
-        }
+        reason = ("this code needs human approval before it can run; "
+                  "propose the identical code again after it is approved")
+        # The loop will carry on and the model will write some closing text, so
+        # the run would otherwise report "completed" and the graph would never
+        # suspend. Record it here; execute() turns it into the run's status.
+        self._pending_approval_reason = reason
+        return {"status": "needs_approval", "is_error": True, "error": reason}
 
     # -------- Tool dispatch --------
 
@@ -828,6 +839,7 @@ class InternalAgentRunner:
         # Scopes a code approval to this graph run. Without it run_python has no
         # key to ask "was this exact code approved for this run?".
         self._run_request_id = run_request_id
+        self._pending_approval_reason = None
 
         # A prior human approval covers this dispatch; without honouring it the
         # graph's post-approval re-dispatch hits the same refusal and the
@@ -897,8 +909,12 @@ class InternalAgentRunner:
         )
 
         return {
-            "status": "completed",
+            # A tool that asked for approval makes the whole run ask: master
+            # reads the sub-agent status to decide whether to suspend, and a
+            # tool result never reaches that decision on its own.
+            "status": "needs_approval" if self._pending_approval_reason else "completed",
             "output": final_text,
+            "error": self._pending_approval_reason,
             "agent_id": self.agent_id,
             "agent_name": self.agent_name,
             "execution_time": round(time.monotonic() - start, 2),
