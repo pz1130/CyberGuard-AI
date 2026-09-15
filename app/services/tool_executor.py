@@ -6,7 +6,9 @@ M0a-2: schema validation runs in the pipeline (INV-30); build_argv still
 validates placeholders. Results include ``is_error`` (INV-32).
 """
 import json
+import logging
 import os
+import secrets
 import shlex
 import uuid
 from typing import Any, Dict, List, Optional
@@ -23,6 +25,15 @@ RUNNER_TOKEN = os.environ.get("RUNNER_TOKEN", "")
 # own token. See docs/superpowers/specs/2026-09-15-skill-script-execution-design.md
 SKILL_RUNNER_URL = os.environ.get("SKILL_RUNNER_URL", "http://skill-runner:9000")
 SKILL_RUNNER_TOKEN = os.environ.get("SKILL_RUNNER_TOKEN", "")
+# Phase 2: scripts approved with an egress allowlist run in a second runner whose
+# only reachable endpoint is the proxy. See
+# docs/superpowers/specs/2026-09-15-skill-script-egress-allowlist-design.md
+SKILL_RUNNER_NET_URL = os.environ.get("SKILL_RUNNER_NET_URL", "http://skill-runner-net:9000")
+EGRESS_PROXY_URL = os.environ.get("EGRESS_PROXY_URL", "egress-proxy:3128")
+EGRESS_PROXY_CONTROL_URL = os.environ.get("EGRESS_PROXY_CONTROL_URL", "http://egress-proxy:3129")
+EGRESS_PROXY_TOKEN = os.environ.get("EGRESS_PROXY_TOKEN", "")
+# A grant must outlive its execution, but only just.
+GRANT_TTL_MARGIN_SECONDS = 30
 OUTPUT_MAX_CHARS = 8000  # mirror internal_agent.TOOL_RESULT_MAX_CHARS
 # Shell / scanner outputs often put signal at the end (errors, findings).
 # mode "head" drops the start and keeps the tail (see agent_core.truncate).
@@ -178,6 +189,61 @@ async def _load_bundle_for_tool(skill_id: int):
         return await load_bundle(db, skill_id)
 
 
+async def _post_to_runner(base_url: str, payload: Dict[str, Any], timeout: int) -> Dict[str, Any]:
+    """POST a run to a skill runner and normalize its reply."""
+    try:
+        async with httpx.AsyncClient(timeout=timeout + 10) as client:
+            r = await client.post(
+                f"{base_url}/run", json=payload,
+                headers={"X-Skill-Runner-Token": SKILL_RUNNER_TOKEN},
+            )
+    except Exception as e:
+        return {"status": "error", "is_error": True, "error": f"skill-runner unreachable: {e}"}
+
+    if r.status_code != 200:
+        return {"status": "error", "is_error": True,
+                "error": f"skill-runner {r.status_code}: {r.text[:200]}"}
+
+    data = r.json()
+    exit_code = data.get("exit_code")
+    timed_out = data.get("timed_out", False)
+    is_error = bool(timed_out) or (exit_code not in (0, None))
+    return {
+        "status": "error" if is_error else "completed",
+        "stdout": _truncate(data.get("stdout", "")),
+        "stderr": _truncate(data.get("stderr", "")),
+        "exit_code": exit_code,
+        "duration_ms": data.get("duration_ms"),
+        "timed_out": timed_out,
+        "is_error": is_error,
+    }
+
+
+async def _grant_egress(nonce: str, allowlist: List[str], ttl: float) -> None:
+    """Register one execution's allowlist with the proxy. Raises on failure."""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        r = await client.post(
+            f"{EGRESS_PROXY_CONTROL_URL}/grant",
+            json={"nonce": nonce, "allowlist": list(allowlist), "ttl": ttl},
+            headers={"X-Egress-Token": EGRESS_PROXY_TOKEN},
+        )
+    if r.status_code != 200:
+        raise RuntimeError(f"egress grant refused: {r.status_code} {r.text[:200]}")
+
+
+async def _revoke_egress(nonce: str) -> None:
+    """Best-effort revoke. Grants also expire on their own TTL."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            await client.post(
+                f"{EGRESS_PROXY_CONTROL_URL}/revoke",
+                json={"nonce": nonce},
+                headers={"X-Egress-Token": EGRESS_PROXY_TOKEN},
+            )
+    except Exception as e:  # noqa: BLE001 - revoke must not mask the run's result
+        logging.getLogger(__name__).warning("egress revoke failed for %s: %s", nonce, e)
+
+
 async def _execute_skill_script(tool, argv: List[str], timeout: int) -> Dict[str, Any]:
     """Verify the bundle still matches the approval, then run it in the sandbox."""
     import base64
@@ -205,32 +271,28 @@ async def _execute_skill_script(tool, argv: List[str], timeout: int) -> Dict[str
             for path, content in files
         ],
     }
-    try:
-        async with httpx.AsyncClient(timeout=timeout + 10) as client:
-            r = await client.post(
-                f"{SKILL_RUNNER_URL}/run", json=payload,
-                headers={"X-Skill-Runner-Token": SKILL_RUNNER_TOKEN},
-            )
-    except Exception as e:
-        return {"status": "error", "is_error": True, "error": f"skill-runner unreachable: {e}"}
+    if (getattr(tool, "script_network", None) or "none") != "allowlist":
+        return await _post_to_runner(SKILL_RUNNER_URL, payload, timeout)
 
-    if r.status_code != 200:
+    allowlist = list(getattr(tool, "script_network_allowlist", None) or [])
+    if not allowlist:
         return {"status": "error", "is_error": True,
-                "error": f"skill-runner {r.status_code}: {r.text[:200]}"}
+                "error": "tool requests allowlist networking but its allowlist is empty"}
 
-    data = r.json()
-    exit_code = data.get("exit_code")
-    timed_out = data.get("timed_out", False)
-    is_error = bool(timed_out) or (exit_code not in (0, None))
-    return {
-        "status": "error" if is_error else "completed",
-        "stdout": _truncate(data.get("stdout", "")),
-        "stderr": _truncate(data.get("stderr", "")),
-        "exit_code": exit_code,
-        "duration_ms": data.get("duration_ms"),
-        "timed_out": timed_out,
-        "is_error": is_error,
-    }
+    nonce = secrets.token_urlsafe(32)
+    try:
+        await _grant_egress(nonce, allowlist, timeout + GRANT_TTL_MARGIN_SECONDS)
+    except Exception as e:
+        # Never silently downgrade to "run it without network": the script was
+        # approved on the understanding that it can reach those hosts.
+        return {"status": "error", "is_error": True,
+                "error": f"could not establish egress grant: {e}"}
+
+    payload["proxy_url"] = f"http://{nonce}:x@{EGRESS_PROXY_URL}"
+    try:
+        return await _post_to_runner(SKILL_RUNNER_NET_URL, payload, timeout)
+    finally:
+        await _revoke_egress(nonce)
 
 
 async def _pool_execute(ctx: ToolCallContext, args: Dict[str, Any]) -> Dict[str, Any]:
