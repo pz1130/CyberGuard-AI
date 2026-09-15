@@ -99,6 +99,16 @@ async def run(body: dict, x_skill_runner_token: str = Header(default="")):
             raise HTTPException(status_code=400, detail=f"cannot write bundle: {e}") from e
 
         env = dict(MINIMAL_ENV_BASE, HOME=scratch, TMPDIR=scratch)
+        # Phase 2: per-execution egress. The URL carries the nonce as proxy
+        # credentials, so an ordinary urllib call is scoped without the script
+        # author doing anything. It is a convenience, not the boundary — the
+        # boundary is that this container has no other route out.
+        proxy_url = body.get("proxy_url")
+        if proxy_url:
+            env.update({
+                "HTTP_PROXY": proxy_url, "HTTPS_PROXY": proxy_url,
+                "http_proxy": proxy_url, "https_proxy": proxy_url,
+            })
         t0 = time.monotonic()
         try:
             proc = await asyncio.create_subprocess_exec(

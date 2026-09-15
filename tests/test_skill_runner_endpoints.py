@@ -16,6 +16,16 @@ def _f(path: str, body: str) -> dict:
     return {"path": path, "content_b64": base64.b64encode(body.encode()).decode()}
 
 
+def _os_injected_env() -> set:
+    """Variables this platform hands every child regardless of the env passed."""
+    import subprocess
+
+    out = subprocess.run(
+        ["python3", "-c", "import os; print(sorted(os.environ))"],
+        env={}, capture_output=True, text=True).stdout.strip()
+    return set(eval(out)) if out else set()
+
+
 class TestSkillRunner(unittest.TestCase):
     def setUp(self):
         self._ctx = TestClient(app)
@@ -96,6 +106,40 @@ class TestSkillRunner(unittest.TestCase):
         cwd = r.json()["stdout"].strip()
         self.assertTrue(cwd)
         self.assertFalse(os.path.exists(cwd))
+
+    def test_proxy_url_reaches_the_child_environment(self):
+        r = self._run(argv=["python3", "scripts/x.py"], timeout=20,
+                      proxy_url="http://nonce123:x@egress-proxy:3128", files=[
+            _f("scripts/x.py",
+               "import os\n"
+               "print(os.environ.get('HTTP_PROXY'), os.environ.get('https_proxy'))\n"),
+        ])
+        self.assertEqual(r.json()["stdout"].strip(),
+                         "http://nonce123:x@egress-proxy:3128 "
+                         "http://nonce123:x@egress-proxy:3128")
+
+    def test_proxy_url_adds_nothing_else_to_the_environment(self):
+        r = self._run(argv=["python3", "scripts/x.py"], timeout=20,
+                      proxy_url="http://nonce123:x@egress-proxy:3128", files=[
+            _f("scripts/x.py",
+               "import os; print(sorted(k for k in os.environ))"),
+        ])
+        seen = set(eval(r.json()["stdout"].strip()))
+        # Some platforms inject variables into every child no matter what env
+        # is passed (macOS adds SDKROOT, __CF_USER_TEXT_ENCODING and friends).
+        # Measure that baseline rather than hard-coding one platform's list, so
+        # the assertion stays about what the runner controls.
+        self.assertEqual(
+            seen - _os_injected_env(),
+            {"PATH", "LANG", "PYTHONDONTWRITEBYTECODE", "HOME", "TMPDIR",
+             "HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"})
+
+    def test_without_a_proxy_url_the_child_has_no_proxy_variables(self):
+        r = self._run(argv=["python3", "scripts/x.py"], timeout=20, files=[
+            _f("scripts/x.py",
+               "import os; print([k for k in os.environ if 'PROXY' in k.upper()])"),
+        ])
+        self.assertEqual(r.json()["stdout"].strip(), "[]")
 
     def test_temp_root_is_removed_after_a_timeout_too(self):
         r = self._run(argv=["python3", "scripts/x.py"], timeout=1, files=[
