@@ -30,6 +30,11 @@ class AgentConfig(Base):
     allowed_categories = Column(JSON, nullable=True)
     auto_execute_min_confidence = Column(Float, nullable=False, server_default="0.85", default=0.85)
     escalate_to_human_below = Column(Float, nullable=False, server_default="0.60", default=0.60)
+    # off | approval | auto. Default `approval`: an existing agent gains the
+    # capability in its gated form and nothing opens without someone saying so.
+    code_execution_mode = Column(
+        String(20), nullable=False, server_default="approval", default="approval"
+    )
     pii_handling_policy = Column(String(20), nullable=False, server_default="redact", default="redact")
     kill_switch_enabled = Column(Boolean, nullable=False, server_default="true", default=True)
     is_poc = Column(Boolean, nullable=False, server_default="true", default=True)
