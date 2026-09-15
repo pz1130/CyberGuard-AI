@@ -212,7 +212,12 @@
     "promoteReview": "Review this script. Once promoted it becomes an executable tool, gated like any other.",
     "promoteDigestNote": "The tool is pinned to this bundle. Re-importing the skill with different contents deactivates it until you review it again.",
     "promoteNoNetwork": "Scripts run with no network access and the Python standard library only.",
-    "promoteNoScripts": "This bundle has no .py or .sh files."
+    "promoteNoScripts": "This bundle has no .py or .sh files.",
+    "promoteNetwork": "Network",
+    "promoteNetworkNone": "No network",
+    "promoteNetworkAllowlist": "Allowlisted hosts only",
+    "promoteAllowlist": "Allowed hosts (one per line)",
+    "promoteAllowlistHint": "example.com for one host, .example.com for its subdomains. Ports 80 and 443 only. A host that resolves to a private or metadata address is refused at request time."
   },
   "knowledge": {
     "title": "Knowledge Base",

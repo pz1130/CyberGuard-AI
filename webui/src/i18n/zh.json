@@ -212,7 +212,12 @@
     "promoteReview": "请审阅这个脚本。核准后它将成为可执行工具，与其他工具受同样的闸门约束。",
     "promoteDigestNote": "该工具绑定到当前 bundle。重新导入内容不同的同名 skill 会使其停用，直到你重新审阅。",
     "promoteNoNetwork": "脚本在无网络环境中运行，且只能使用 Python 标准库。",
-    "promoteNoScripts": "该 bundle 中没有 .py 或 .sh 文件。"
+    "promoteNoScripts": "该 bundle 中没有 .py 或 .sh 文件。",
+    "promoteNetwork": "网络",
+    "promoteNetworkNone": "无网络",
+    "promoteNetworkAllowlist": "仅白名单主机",
+    "promoteAllowlist": "允许的主机（每行一个）",
+    "promoteAllowlistHint": "example.com 精确匹配单个主机，.example.com 匹配其子域。仅开放 80 和 443 端口。解析到私有地址或元数据地址的主机会在请求时被拒绝。"
   },
   "knowledge": {
     "title": "知识库",

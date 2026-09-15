@@ -40,12 +40,14 @@ interface PromoteForm {
   permission_level: string
   timeout_seconds: number
   script_network: string
+  script_network_allowlist: string
 }
 
 const EMPTY_PROMOTE_FORM: PromoteForm = {
   name: '', description: '', command_template: '', input_schema_json: '',
   required_permission: '', action_category: 'observe', risk_tier: 'low',
   permission_level: 'medium', timeout_seconds: 60, script_network: 'none',
+  script_network_allowlist: '',
 }
 
 interface ImportFailure {
@@ -228,6 +230,9 @@ export default function Skills() {
         ...promoteForm,
         required_permission: promoteForm.required_permission || null,
         input_schema_json: promoteForm.input_schema_json || null,
+        script_network_allowlist: promoteForm.script_network === 'allowlist'
+          ? promoteForm.script_network_allowlist.split('\n').map(h => h.trim()).filter(Boolean)
+          : null,
       })
       setPromoteSkill(null)
     } catch (e: unknown) { setPromoteError(errorMessage(e)) }
@@ -375,7 +380,7 @@ export default function Skills() {
           onClose={() => { setPromoteSkill(null); setPromoteError('') }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6 }}>
-              {t('skills.promoteReview')} {t('skills.promoteNoNetwork')}
+              {t('skills.promoteReview')}
             </div>
             {bundleFiles.filter(f => /\.(py|sh)$/.test(f.path)).length === 0 ? (
               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
@@ -419,6 +424,29 @@ export default function Skills() {
                     <input className="form-input" value={promoteForm.risk_tier}
                       onChange={e => setPromoteForm(f => ({ ...f, risk_tier: e.target.value }))} />
                   </div>
+                  <div>
+                    <label className="form-label">{t('skills.promoteNetwork').toUpperCase()}</label>
+                    <select className="form-input" value={promoteForm.script_network}
+                      onChange={e => setPromoteForm(f => ({ ...f, script_network: e.target.value }))}>
+                      <option value="none">{t('skills.promoteNetworkNone')}</option>
+                      <option value="allowlist">{t('skills.promoteNetworkAllowlist')}</option>
+                    </select>
+                  </div>
+                  <div />
+                  {promoteForm.script_network === 'allowlist' && (
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <label className="form-label">{t('skills.promoteAllowlist').toUpperCase()}</label>
+                      <textarea className="form-input" rows={3}
+                        style={{ fontFamily: 'inherit', resize: 'vertical' }}
+                        value={promoteForm.script_network_allowlist}
+                        placeholder={'vendor.example\n.api.vendor.example'}
+                        onChange={e => setPromoteForm(f => ({
+                          ...f, script_network_allowlist: e.target.value }))} />
+                      <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4, lineHeight: 1.6 }}>
+                        {t('skills.promoteAllowlistHint')}
+                      </div>
+                    </div>
+                  )}
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label className="form-label">INPUT SCHEMA (JSON)</label>
                     <input className="form-input" value={promoteForm.input_schema_json}

@@ -56,10 +56,10 @@ cp .env.example .env
 
 Edit `.env` and replace every `replace-with-...` value. In particular, set
 unique `ENCRYPTION_KEY`, `SECRET_KEY`, `POSTGRES_PASSWORD`, `REDIS_PASSWORD`,
-`RUNNER_TOKEN`, `SKILL_RUNNER_TOKEN`, and `BOOTSTRAP_ADMIN_PASSWORD` values.
-`SKILL_RUNNER_TOKEN` must differ from `RUNNER_TOKEN` — it is the token for the
-skill-script sandbox, and keeping it separate is what bounds what a script can
-reach. Generate the two
+`RUNNER_TOKEN`, `SKILL_RUNNER_TOKEN`, `EGRESS_PROXY_TOKEN`, and
+`BOOTSTRAP_ADMIN_PASSWORD` values. `SKILL_RUNNER_TOKEN` and `EGRESS_PROXY_TOKEN`
+must each differ from `RUNNER_TOKEN` and from one another — keeping them separate
+is what bounds what a sandboxed script can reach. Generate the two
 application keys with:
 
 ```bash

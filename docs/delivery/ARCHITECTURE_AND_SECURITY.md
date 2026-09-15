@@ -55,19 +55,30 @@ The `Tool` pins the sha256 of the bundle it was approved against. Re-importing
 the skill with different contents deactivates the tool until it is reviewed
 again, so an approval cannot be reused for code nobody read.
 
-Scripts execute in `skill-runner`, a separate container on an `internal: true`
-network: no postgres, no redis, no egress, `python3`/`sh` and the standard
-library only, and a subprocess environment carrying no token or secret. The
-bundle is written to tmpfs per execution and deleted afterwards; the bundle tree
-is read-only and a separate scratch directory is the only writable place, so a
-script cannot rewrite the code its approval covered.
+Scripts execute in a runner on an `internal: true` network: `python3`/`sh` and
+the standard library only, and a subprocess environment carrying no token or
+secret. The bundle is written to tmpfs per execution and deleted afterwards; the
+bundle tree is read-only and a separate scratch directory is the only writable
+place, so a script cannot rewrite the code its approval covered.
 
-`api:8000` remains reachable from that segment — compose network membership is
-bidirectional and plain compose cannot express a one-way rule — but a script
-holds no credential for it, so its reach there is the unauthenticated surface.
-This is a known limit, recorded rather than left to be discovered.
+A script approved with no network runs in `skill-runner`, which has no route off
+its segment at all. A script approved with an egress allowlist runs in
+`skill-runner-net`, whose only reachable endpoint is `egress-proxy` — the sole
+service bridging that segment to the internet. Before each such run the API
+registers a one-execution nonce with the proxy carrying that tool's allowlist,
+and the nonce travels to the script as proxy credentials; the proxy authorizes
+every request by nonce, port, hostname and **resolved IP**, then connects to the
+address it just validated. `HTTP_PROXY` is a convenience for well-behaved
+clients, never the control: a script that ignores it finds no route.
 
-See `docs/superpowers/specs/2026-09-15-skill-script-execution-design.md`.
+`api:8000` remains reachable from the sandbox segments — compose network
+membership is bidirectional and plain compose cannot express a one-way rule —
+but a script holds no credential for it, so its reach there is the
+unauthenticated surface. This is a known limit, recorded rather than left to be
+discovered.
+
+See `docs/superpowers/specs/2026-09-15-skill-script-execution-design.md` and
+`docs/superpowers/specs/2026-09-15-skill-script-egress-allowlist-design.md`.
 
 ## Data flow review
 
