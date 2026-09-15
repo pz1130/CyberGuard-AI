@@ -93,14 +93,78 @@ async def revoke_token(jti: str, remaining_ttl_seconds: int) -> None:
             await redis.set(f"token:blacklist:{jti}", "1", ex=ttl)
 
 
+# --- idle session tracking ---------------------------------------------------
+#
+# `security_settings.session_timeout_minutes` has been editable on the Security
+# page since migration 013 and nothing read it. A browser-side timer would not
+# have changed that: the token stays valid for ACCESS_TOKEN_EXPIRE_MINUTES, so
+# whoever holds it still has a session.
+#
+# A session's liveness is one Redis key with a TTL. Only an explicit heartbeat
+# refreshes it — never token verification — because the UI polls every 30
+# seconds on every page, and a timeout that any request refreshed would never
+# once fire.
+
+def _session_key(jti: str) -> str:
+    return f"session:active:{jti}"
+
+
+async def start_session(jti: str, idle_minutes: int) -> None:
+    """Mark a freshly issued token's session as live."""
+    from app.core.redis_client import get_redis
+    redis = await get_redis()
+    if redis and idle_minutes > 0:
+        await redis.set(_session_key(jti), "1", ex=int(idle_minutes) * 60)
+
+
+async def touch_session(jti: str, idle_minutes: int) -> bool:
+    """Extend a live session. Returns False if there was nothing to extend.
+
+    Deliberately not a `set`: an expired session must stay expired, or a tab
+    left open overnight would come back to life on the next heartbeat.
+    """
+    from app.core.redis_client import get_redis
+    redis = await get_redis()
+    if not redis or idle_minutes <= 0:
+        return False
+    return bool(await redis.expire(_session_key(jti), int(idle_minutes) * 60))
+
+
+async def end_session(jti: str) -> None:
+    from app.core.redis_client import get_redis
+    redis = await get_redis()
+    if redis:
+        await redis.delete(_session_key(jti))
+
+
+async def session_is_idle(jti: str) -> bool:
+    """Whether this session has gone quiet for longer than the configured window.
+
+    Returns False when Redis is unavailable, matching `is_token_revoked`.
+    Failing closed would sign out every user on a Redis blip; failing open falls
+    back to the token's own expiry, which is the behaviour without this feature.
+    """
+    from app.core.redis_client import get_redis
+    redis = await get_redis()
+    if not redis:
+        return False
+    return not await redis.exists(_session_key(jti))
+
+
 async def verify_token(token: str) -> Optional[Dict[str, Any]]:
-    """Decode and validate a JWT access token. Returns None if invalid or revoked."""
+    """Decode and validate a JWT access token. Returns None if invalid, revoked
+    or idle."""
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
         jti = payload.get("jti")
         if jti:
             revoked = await is_token_revoked(jti)
             if revoked:
+                return None
+            # Absence is expiry, with no grandfathering. Creating the key here
+            # when it is missing would let a background poll resurrect a session
+            # that had already timed out — the one outcome this prevents.
+            if await session_is_idle(jti):
                 return None
         return payload
     except JWTError:

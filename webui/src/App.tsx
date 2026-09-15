@@ -8,6 +8,7 @@ import { SearchProvider } from './context/SearchContext'
 import { api } from './api/client'
 import Login from './pages/Login'
 import { applyTheme, readStoredDark } from './theme'
+import { useIdleLogout } from './hooks/useIdleLogout'
 
 const PAGES: Record<Tab, { labelKey: string; component: LazyExoticComponent<ComponentType> }> = {
   chat: { labelKey: 'nav.chat', component: lazy(() => import('./pages/Chat')) },
@@ -76,6 +77,9 @@ export default function App() {
       .finally(() => { if (!cancelled) setChecking(false) })
     return () => { cancelled = true }
   }, [])
+
+  // Tell the server when a human does something, so an idle session can end.
+  useIdleLogout()
 
   // Global CTRL+K listener
   useEffect(() => {

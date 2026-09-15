@@ -7,7 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 from app.core.dependencies import get_db, get_current_user
-from app.core.auth import create_access_token, verify_refresh_token, AuthenticatedUser, revoke_token
+from app.core.auth import (
+    create_access_token, verify_refresh_token, AuthenticatedUser, revoke_token,
+    start_session, touch_session, end_session,
+)
 from app.schemas.auth import LoginRequest, TokenResponse, RefreshTokenRequest
 from app.config import settings
 
@@ -67,6 +70,7 @@ async def login(
         data={"sub": str(user.id), "username": user.username, "role": user.role},
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
+    await _open_idle_window(db, access_token)
 
     return LoginResponse(
         access_token=access_token,
@@ -88,9 +92,54 @@ async def logout(credentials: Optional[HTTPAuthorizationCredentials] = Depends(b
             if jti and exp:
                 remaining = max(0, exp - int(datetime.now(timezone.utc).timestamp()))
                 await revoke_token(jti, remaining)
+                await end_session(jti)
         except JWTError:
             pass  # Invalid token already — nothing to revoke
     return {"message": "Successfully logged out"}
+
+
+async def _idle_minutes(db: AsyncSession) -> int:
+    """The configured idle window. Reads the setting that used to be inert."""
+    from app.services.security_settings import get_security_settings
+
+    cfg = await get_security_settings(db)
+    return int(getattr(cfg, "session_timeout_minutes", 0) or 0)
+
+
+async def _open_idle_window(db: AsyncSession, access_token: str) -> None:
+    try:
+        payload = jwt.decode(access_token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:  # pragma: no cover - we just minted it
+        return
+    jti = payload.get("jti")
+    if jti:
+        await start_session(jti, await _idle_minutes(db))
+
+
+@router.post("/auth/heartbeat", tags=["Authentication"])
+async def heartbeat(
+    db: AsyncSession = Depends(get_db),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+    _: AuthenticatedUser = Depends(get_current_user),
+):
+    """Report real user activity, extending the idle window.
+
+    Separate from ordinary requests on purpose: the UI polls several endpoints
+    on timers, and a window that any request extended would never close. Only
+    the client's interaction listener calls this.
+    """
+    if not credentials:
+        return {"extended": False}
+    try:
+        payload = jwt.decode(
+            credentials.credentials, settings.SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:  # pragma: no cover - get_current_user already rejected it
+        return {"extended": False}
+
+    jti = payload.get("jti")
+    minutes = await _idle_minutes(db)
+    extended = bool(jti) and await touch_session(jti, minutes)
+    return {"extended": extended, "idle_timeout_minutes": minutes}
 
 
 @router.get("/auth/me", tags=["Authentication"])

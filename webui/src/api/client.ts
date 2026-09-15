@@ -24,6 +24,9 @@ async function request(path: string, options: RequestInit = {}): Promise<unknown
 }
 
 export const api = {
+  // Real user activity. Deliberately its own endpoint: the UI polls on timers,
+  // and an idle window that any request extended would never close.
+  heartbeat: () => request('/auth/heartbeat', { method: 'POST' }),
   // Auth
   login: (body: { username: string; password: string }) =>
     request('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
