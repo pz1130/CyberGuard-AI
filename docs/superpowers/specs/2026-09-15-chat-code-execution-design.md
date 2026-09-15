@@ -166,6 +166,27 @@ The approval requirement in `approval` mode is **in code, not policy**: it does 
 
 ---
 
+## 7.1 Correction from implementation
+
+Two things the design did not anticipate, found while building it and recorded
+here rather than left in the commit log:
+
+**`mutate` is denied by default.** §5 chose `action_category = "mutate"` so the
+tool would be visible to category rules. It is more than visible: `gatekeeper.py`
+forbids `mutate` in a POC, requires `L3` autonomy for it, and leaves it out of
+`DEFAULT_ALLOWED`. A stock deployment therefore refuses `run_python` outright.
+That is the right answer — the taxonomy has no "always ask a human" tier, and
+every alternative category is either ungated or denied for want of a rollback
+procedure — but it means `approval` is the default *mode*, not the default
+*behaviour*. Enabling the tool is three deliberate settings on the agent.
+
+**The generic escalation had to defer to the specific one.** The gatekeeper
+escalates `run_python` on its confidence heuristic before `_run_python` runs, so
+the first record a reviewer saw carried no code and the code-carrying record
+appeared a round later. For this one tool a `NEEDS_APPROVAL` verdict now falls
+through to the tool's own gate, which opens an approval holding the program and
+its digest. `DENY` still short-circuits.
+
 ## 8. Out of scope
 
 - Network access for model-authored code (D4)

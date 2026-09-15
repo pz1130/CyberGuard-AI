@@ -512,6 +512,14 @@ class InternalAgentRunner:
                          "error": f"tool {name!r} was refused — {verdict.reason}"},
                 reason=status)
         if verdict.decision is Decision.NEEDS_APPROVAL:
+            if name == "run_python":
+                # run_python carries its own, stronger gate: it opens an
+                # approval holding the program and pins its digest. Letting the
+                # generic escalation short-circuit here would put a record in
+                # front of a reviewer with no code in it — a blind approval —
+                # and delay the code-carrying one by a round. A DENY above
+                # still short-circuits; only the escalation defers.
+                return None
             if self._pre_approved:
                 # A human already signed off on this dispatch. Spend the
                 # approval on this one call so the next gated tool still stops.

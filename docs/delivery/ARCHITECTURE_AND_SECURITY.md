@@ -104,6 +104,22 @@ Model-authored code always runs in the no-network sandbox (INV-42). Because the
 default mode offers the tool, every agent now has at least one tool; an agent
 that should never run code is set to `off`.
 
+`code_execution_mode` is not the only gate. `run_python` is classified
+`action_category = "mutate"`, which a default deployment denies three ways over:
+forbidden in a POC, below the `L3` autonomy floor, and absent from
+`DEFAULT_ALLOWED`. So on a stock install the tool is offered and the gatekeeper
+refuses it with a reason the model can report. Enabling it is three deliberate
+settings on the agent — `is_poc: false`, `autonomy_tier: "L3"`, and `mutate` in
+`allowed_categories` — which is the intended friction for letting a model run
+code. Classifying it as `observe` to avoid that would be mislabelling: running a
+program a model wrote seconds ago is a mutating capability whatever the program
+turns out to do.
+
+Where the gatekeeper *would* escalate `run_python` on its confidence heuristic,
+it defers instead, because that escalation opens a record with no code in it.
+The tool's own gate then opens one carrying the program and its digest, so the
+reviewer sees what they are approving. A denial still short-circuits.
+
 See `docs/superpowers/specs/2026-09-15-chat-code-execution-design.md`.
 
 ## Data flow review
