@@ -338,3 +338,21 @@ def test_inv40_skill_runner_package_is_standalone():
                 if m.split(".")[0] in ("app", "agent_core", "tool_runner"):
                     offenders.append(f"{path.relative_to(REPO)}: {m}")
     assert offenders == [], "INV-40 violated:\n" + "\n".join(offenders)
+
+
+# --------------------------------------------------------------------------
+# INV-41 · the proxy's blocklist may not drift from the app's
+# --------------------------------------------------------------------------
+
+def test_inv41_proxy_blocklist_matches_the_app_blocklist():
+    """INV-41: egress_proxy cannot import app, so the blocklist exists twice.
+
+    A security blocklist kept in two places drifts. This fails the moment
+    someone tightens one copy and forgets the other.
+    """
+    from app.core import ssrf as app_ssrf
+    from egress_proxy import ssrf as proxy_ssrf
+
+    assert [str(n) for n in proxy_ssrf.BLOCKED_NETWORKS] == \
+           [str(n) for n in app_ssrf._BLOCKED_NETWORKS]
+    assert proxy_ssrf.BLOCKED_HOSTNAMES == app_ssrf._BLOCKED_HOSTNAMES
