@@ -31,6 +31,10 @@ class Permission(str, Enum):
     # Skill/Tool
     SKILL_READ = "skill:read"
     SKILL_WRITE = "skill:write"
+    # Promoting a bundle script to an executable Tool. Deliberately separate
+    # from SKILL_WRITE: uploading a script and granting it the right to run
+    # must be two independently revocable capabilities.
+    SKILL_SCRIPT_APPROVE = "skill:script_approve"
 
     # Knowledge base
     KNOWLEDGE_READ = "knowledge:read"
@@ -57,7 +61,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
     Role.ADMIN: {
         Permission.USER_READ, Permission.USER_WRITE, Permission.USER_DELETE,
         Permission.AGENT_READ, Permission.AGENT_WRITE, Permission.AGENT_DELETE, Permission.AGENT_EXECUTE,
-        Permission.SKILL_READ, Permission.SKILL_WRITE,
+        Permission.SKILL_READ, Permission.SKILL_WRITE, Permission.SKILL_SCRIPT_APPROVE,
         Permission.KNOWLEDGE_READ, Permission.KNOWLEDGE_WRITE,
         Permission.TASK_READ, Permission.TASK_WRITE, Permission.TASK_EXECUTE,
         Permission.AUDIT_READ,
