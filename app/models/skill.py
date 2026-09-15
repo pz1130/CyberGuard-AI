@@ -1,7 +1,7 @@
 """Skill and Tool database models."""
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime, Text, JSON,
-    ForeignKey, LargeBinary, UniqueConstraint,
+    CheckConstraint, ForeignKey, LargeBinary, UniqueConstraint,
 )
 from app.core.database import Base
 from app.core.time import utc_now
@@ -57,6 +57,24 @@ class Tool(Base):
     tags = Column(JSON, nullable=True)  # List[str]
     created_at = Column(DateTime, default=utc_now, nullable=False)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    # --- promoted skill script (NULL source_skill_id => an ordinary pool tool) ---
+    source_skill_id = Column(
+        Integer, ForeignKey("skills.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    source_script_path = Column(String(500), nullable=True)   # e.g. scripts/triage.py
+    source_bundle_digest = Column(String(64), nullable=True)  # bundle sha256 at approval
+    script_network = Column(String(20), nullable=True)        # none | allowlist
+    script_network_allowlist = Column(JSON, nullable=True)    # List[str], phase 2
+
+    __table_args__ = (
+        CheckConstraint(
+            "source_skill_id IS NULL OR ("
+            "source_script_path IS NOT NULL AND source_bundle_digest IS NOT NULL "
+            "AND script_network IS NOT NULL)",
+            name="ck_tools_skill_script_shape",
+        ),
+    )
 
     def __repr__(self):
         return f"<Tool {self.name} (v{self.version})>"
