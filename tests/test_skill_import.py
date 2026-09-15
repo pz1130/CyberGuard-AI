@@ -349,11 +349,18 @@ def test_install_skill_from_content_still_returns_single_skill_shape():
 # --- router upsert semantics ---
 
 class _FakeResult:
-    def __init__(self, value):
+    def __init__(self, value, rows=()):
         self._value = value
+        self._rows = list(rows)
 
     def scalar_one_or_none(self):
         return self._value
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self._rows
 
 
 class _FakeDB:
@@ -369,7 +376,9 @@ class _FakeDB:
         if stmt.is_delete:
             self.deletes.append(stmt)
             return _FakeResult(None)
-        return _FakeResult(self.existing)
+        # _upsert_skill also scans for promoted tools to invalidate; this fake
+        # has none, so an empty row set is the right answer for that query.
+        return _FakeResult(self.existing, rows=[])
 
     def add(self, obj):
         self.added.append(obj)

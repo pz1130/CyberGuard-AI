@@ -118,6 +118,36 @@ async def _to_read(db: AsyncSession, skills: Sequence[Skill]) -> List[SkillRead]
     return out
 
 
+def _entry_bytes(entry: Dict[str, Any]) -> bytes:
+    """Bytes of an importer file entry, whichever column it is destined for."""
+    if entry.get("content_text") is not None:
+        return entry["content_text"].encode("utf-8")
+    return entry.get("content_blob") or b""
+
+
+async def invalidate_stale_script_tools(db: AsyncSession, skill_id: int, digest: str):
+    """Deactivate promoted tools whose approved bundle no longer matches.
+
+    Approval binds to a specific bundle. When the bundle changes, the approval
+    no longer covers the code that would run, so the tool goes dormant until an
+    admin reviews it again. Failing here means failing visibly at import time
+    rather than quietly at some later execution.
+
+    Returns only the tools this call actually changed. ``is_active`` is filtered
+    in Python as well as in the query so that contract does not depend on the
+    query having been written a particular way.
+    """
+    rows = (
+        await db.execute(
+            select(Tool).where(Tool.source_skill_id == skill_id, Tool.is_active.is_(True))
+        )
+    ).scalars().all()
+    stale = [t for t in rows if t.is_active and t.source_bundle_digest != digest]
+    for tool in stale:
+        tool.is_active = False
+    return stale
+
+
 async def _upsert_skill(
     db: AsyncSession,
     skill_data: Dict[str, Any],
@@ -142,6 +172,20 @@ async def _upsert_skill(
     await db.execute(delete(SkillFile).where(SkillFile.skill_id == skill.id))
     for entry in files or []:
         db.add(SkillFile(skill_id=skill.id, **entry))
+
+    # A changed bundle invalidates every approval granted against the old one.
+    from app.core.audit import record_action
+    from app.services.skill_bundle import bundle_digest
+
+    digest = bundle_digest([(f["path"], _entry_bytes(f)) for f in (files or [])])
+    for stale in await invalidate_stale_script_tools(db, skill.id, digest):
+        await record_action(
+            user_id=0, action="skill.script.invalidate",
+            input_data={"skill_id": skill.id, "tool_id": stale.id,
+                        "approved_digest": stale.source_bundle_digest,
+                        "current_digest": digest},
+            output_data={"deactivated": True},
+        )
     return skill
 
 
