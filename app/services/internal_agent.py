@@ -340,6 +340,29 @@ class InternalAgentRunner:
                 },
             })
 
+        if getattr(self, "code_execution_mode", "approval") != "off":
+            tools.append({
+                "type": "function",
+                "function": {
+                    "name": "run_python",
+                    "description": (
+                        "Run a short Python program in an isolated sandbox with no "
+                        "network access and the standard library only. Use it to "
+                        "compute, parse or transform data you already have. Unless "
+                        "this agent is in auto mode the code is shown to a human "
+                        "for approval before it runs."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "code": {"type": "string",
+                                     "description": "The complete Python program."},
+                        },
+                        "required": ["code"],
+                    },
+                },
+            })
+
         if self.knowledge_base_id:
             tools.append({
                 "type": "function",
@@ -427,6 +450,11 @@ class InternalAgentRunner:
             return {"action_category": getattr(tool_row, "action_category", None),
                     "risk_tier": getattr(tool_row, "risk_tier", None),
                     "transport": "pool"}
+        if name == "run_python":
+            # The one built-in that executes caller-authored code. Grouping it
+            # with the read-only helpers would hide it from category rules.
+            return {"action_category": "mutate", "risk_tier": "high",
+                    "transport": "builtin"}
         # Synthetic read-only tools owned by this runner.
         if name in ("kb_search", "web_search", "vuln_search", "load_skill"):
             return {"action_category": "observe", "risk_tier": "low",
@@ -524,6 +552,58 @@ class InternalAgentRunner:
             risk_level=risk_tier or "high",
         )
 
+    async def _run_python(self, code: str) -> Dict[str, Any]:
+        """Execute model-authored code, gated by this agent's execution mode.
+
+        In `approval` mode the gate is here in code rather than in gatekeeper
+        policy: removing the human is meant to be an explicit, audited change of
+        `code_execution_mode`, not a threshold someone lowers to zero.
+        """
+        from app.core.database import get_db_context
+        from app.services import code_approval, code_runner
+
+        mode = getattr(self, "code_execution_mode", "approval")
+        if mode == "off":
+            return {"status": "error", "is_error": True,
+                    "error": "this agent is not permitted to execute code"}
+
+        if mode == "auto":
+            return await code_runner.run_code(code)
+
+        run_id = getattr(self, "_run_request_id", None)
+        if not run_id:
+            # Without a run id an approval cannot be scoped, and an unscoped
+            # approval is not one. Refuse rather than widen it.
+            return {"status": "error", "is_error": True,
+                    "error": "no run id available to scope a code approval"}
+
+        digest = code_approval.code_digest(code)
+        async with get_db_context() as db:
+            if await code_approval.find_approved(db, run_id, digest):
+                return await code_runner.run_code(code)
+
+            if await code_approval.count_rounds(db, run_id) >= \
+                    code_approval.MAX_CODE_APPROVAL_ROUNDS:
+                return {
+                    "status": "error", "is_error": True,
+                    "error": (
+                        "too many code approval rounds in this run; the proposed "
+                        "code kept changing between approvals"
+                    ),
+                }
+
+            await code_approval.create_pending(
+                db, request_id=run_id, digest=digest, code=code,
+                user_id=getattr(self, "_user_id", 0) or 0,
+                agent_id=self.agent_id, agent_name=self.agent_name,
+            )
+
+        return {
+            "status": "needs_approval", "is_error": True,
+            "error": ("this code needs human approval before it can run; "
+                      "propose the identical code again after it is approved"),
+        }
+
     # -------- Tool dispatch --------
 
     async def _dispatch(self, call) -> str:
@@ -567,6 +647,13 @@ class InternalAgentRunner:
                         ensure_ascii=False,
                     )
                 return SkillLoader.wrap_skill_body(skill)
+
+            # 1c. Model-authored code
+            if name == "run_python":
+                res = await self._run_python(bound_args.get("code") or "")
+                if res.get("status") == "completed":
+                    return res.get("stdout", "") or "(no output)"
+                return res
 
             # 2. KB synthetic tool
             if name == "kb_search" and self.knowledge_base_id:

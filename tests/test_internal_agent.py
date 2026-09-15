@@ -311,7 +311,11 @@ async def test_execute_loop_terminates_on_final_message(monkeypatch):
     cfg = {"id": 1, "agent_name": "x", "system_prompt": "sys",
            "llm_provider_id": 1, "llm_model": "m", "tool_loop_max_steps": 2,
            "memory_window": 0, "associated_skills": [],
-           "metadata_json": {"mcp_tool_ids": []}, "permission_level": "medium"}
+           "metadata_json": {"mcp_tool_ids": []}, "permission_level": "medium",
+           # No tools at all: run_python is offered by default, so the
+           # no-tools branch now has to be asked for explicitly.
+           "code_execution_mode": "off",
+           }
     runner = InternalAgentRunner(cfg)
     res = await runner.execute(task="hi", conversation_id=None, user_id=1)
     assert res["status"] == "completed"
@@ -358,7 +362,11 @@ async def test_parallel_dispatch_runs_all_tools(monkeypatch):
     cfg = {"id": 1, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
            "llm_model": "m", "tool_loop_max_steps": 4, "memory_window": 0,
            "associated_skills": [], "metadata_json": {"mcp_tool_ids": []},
-           "permission_level": "medium"}
+           "permission_level": "medium",
+           # No tools at all: run_python is offered by default, so the
+           # no-tools branch now has to be asked for explicitly.
+           "code_execution_mode": "off",
+           }
     runner = InternalAgentRunner(cfg)
 
     dispatched = []
@@ -397,7 +405,11 @@ async def test_loop_detection_aborts_after_reflector_budget(monkeypatch):
     cfg = {"id": 1, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
            "llm_model": "m", "tool_loop_max_steps": 20, "memory_window": 0,
            "associated_skills": [], "metadata_json": {"mcp_tool_ids": []},
-           "permission_level": "medium"}
+           "permission_level": "medium",
+           # No tools at all: run_python is offered by default, so the
+           # no-tools branch now has to be asked for explicitly.
+           "code_execution_mode": "off",
+           }
     runner = InternalAgentRunner(cfg)
 
     dispatched = []
@@ -437,7 +449,11 @@ async def test_loop_detection_recovers_when_model_changes_course(monkeypatch):
     cfg = {"id": 1, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
            "llm_model": "m", "tool_loop_max_steps": 20, "memory_window": 0,
            "associated_skills": [], "metadata_json": {"mcp_tool_ids": []},
-           "permission_level": "medium"}
+           "permission_level": "medium",
+           # No tools at all: run_python is offered by default, so the
+           # no-tools branch now has to be asked for explicitly.
+           "code_execution_mode": "off",
+           }
     runner = InternalAgentRunner(cfg)
     monkeypatch.setattr(runner, "_dispatch", AsyncMock(return_value="r"))
 
@@ -518,7 +534,11 @@ async def test_llm_error_self_recovers_on_retry(monkeypatch):
     cfg = {"id": 1, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
            "llm_model": "m", "tool_loop_max_steps": 4, "memory_window": 0,
            "associated_skills": [], "metadata_json": {"mcp_tool_ids": []},
-           "permission_level": "medium"}
+           "permission_level": "medium",
+           # No tools at all: run_python is offered by default, so the
+           # no-tools branch now has to be asked for explicitly.
+           "code_execution_mode": "off",
+           }
     runner = InternalAgentRunner(cfg)
     res = await runner.execute(task="hi", conversation_id=None, user_id=1)
     assert res["status"] == "completed"
@@ -541,7 +561,11 @@ async def test_llm_error_fails_after_exhausting_retries(monkeypatch):
     cfg = {"id": 1, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
            "llm_model": "m", "tool_loop_max_steps": 4, "memory_window": 0,
            "associated_skills": [], "metadata_json": {"mcp_tool_ids": []},
-           "permission_level": "medium"}
+           "permission_level": "medium",
+           # No tools at all: run_python is offered by default, so the
+           # no-tools branch now has to be asked for explicitly.
+           "code_execution_mode": "off",
+           }
     runner = InternalAgentRunner(cfg)
     res = await runner.execute(task="hi", conversation_id=None, user_id=1)
     assert res["status"] == "failed"
@@ -593,7 +617,11 @@ async def test_no_auto_continue_without_tools(monkeypatch):
     cfg = {"id": 1, "agent_name": "x", "system_prompt": "sys", "llm_provider_id": 1,
            "llm_model": "m", "tool_loop_max_steps": 8, "memory_window": 0,
            "associated_skills": [], "metadata_json": {"mcp_tool_ids": []},
-           "permission_level": "medium"}
+           "permission_level": "medium",
+           # No tools at all: run_python is offered by default, so the
+           # no-tools branch now has to be asked for explicitly.
+           "code_execution_mode": "off",
+           }
     runner = InternalAgentRunner(cfg)
     res = await runner.execute(task="hi", conversation_id=None, user_id=1)
     assert res["status"] == "completed"
