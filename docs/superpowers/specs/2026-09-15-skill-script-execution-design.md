@@ -122,7 +122,9 @@ Checked at approval time and re-checked at execution.
 
 ### 4.4 Endpoints
 
-- `POST /skills/{id}/files/{path}/promote` → creates the Tool. Requires `SKILL_SCRIPT_APPROVE`.
+- `POST /skills/{id}/promote?script_path=<path>` → creates the Tool. Requires
+  `SKILL_SCRIPT_APPROVE`. The path is a query parameter rather than a route segment
+  because a greedy `{path:path}` converter would swallow a trailing `/promote`.
 - `DELETE /tools/{id}` already exists and revokes.
 
 ### 4.5 Re-import invalidation
