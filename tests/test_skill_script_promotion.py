@@ -39,6 +39,7 @@ def _body(**over):
         input_schema_json='{"properties": {"target": {"type": "string"}}}',
         required_permission=None, action_category="observe", risk_tier="low",
         permission_level="medium", timeout_seconds=60, script_network="none",
+        script_network_allowlist=None,
     )
     base.update(over)
     return SkillScriptPromoteRequest(**base)
@@ -91,10 +92,62 @@ async def test_promotion_refuses_a_template_pointing_at_another_script():
 
 
 @pytest.mark.asyncio
-async def test_promotion_refuses_allowlist_networking_in_phase_1():
-    with pytest.raises(HTTPException, match="not supported"):
+async def test_allowlist_networking_is_accepted_with_hosts():
+    data = await validate_promotion(
+        _DB(BUNDLE), 1, "scripts/triage.py",
+        _body(script_network="allowlist",
+              script_network_allowlist=["vendor.example", ".api.vendor.example"]))
+    assert data["script_network"] == "allowlist"
+    assert data["script_network_allowlist"] == ["vendor.example", ".api.vendor.example"]
+
+
+@pytest.mark.asyncio
+async def test_allowlist_networking_requires_at_least_one_host():
+    with pytest.raises(HTTPException, match="at least one host"):
         await validate_promotion(_DB(BUNDLE), 1, "scripts/triage.py",
-                                 _body(script_network="allowlist"))
+                                 _body(script_network="allowlist",
+                                       script_network_allowlist=[]))
+
+
+@pytest.mark.asyncio
+async def test_allowlist_rejects_a_bare_ip_address():
+    # A literal address sidesteps the whole point of naming a destination.
+    with pytest.raises(HTTPException, match="hostname"):
+        await validate_promotion(_DB(BUNDLE), 1, "scripts/triage.py",
+                                 _body(script_network="allowlist",
+                                       script_network_allowlist=["93.184.216.34"]))
+
+
+@pytest.mark.asyncio
+async def test_allowlist_rejects_wildcards_other_than_a_leading_dot():
+    with pytest.raises(HTTPException, match="hostname"):
+        await validate_promotion(_DB(BUNDLE), 1, "scripts/triage.py",
+                                 _body(script_network="allowlist",
+                                       script_network_allowlist=["*.vendor.example"]))
+
+
+@pytest.mark.asyncio
+async def test_allowlist_rejects_a_single_label_host():
+    # "internal" would resolve through the container's search domain.
+    with pytest.raises(HTTPException, match="hostname"):
+        await validate_promotion(_DB(BUNDLE), 1, "scripts/triage.py",
+                                 _body(script_network="allowlist",
+                                       script_network_allowlist=["internal"]))
+
+
+@pytest.mark.asyncio
+async def test_allowlist_is_ignored_for_none_networking():
+    data = await validate_promotion(
+        _DB(BUNDLE), 1, "scripts/triage.py",
+        _body(script_network="none", script_network_allowlist=["vendor.example"]))
+    assert data["script_network_allowlist"] is None
+
+
+@pytest.mark.asyncio
+async def test_unknown_network_mode_is_rejected():
+    with pytest.raises(HTTPException, match="script_network"):
+        await validate_promotion(_DB(BUNDLE), 1, "scripts/triage.py",
+                                 _body(script_network="everything"))
 
 
 @pytest.mark.asyncio

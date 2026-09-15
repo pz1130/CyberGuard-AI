@@ -1,4 +1,6 @@
 """Skill and Tool pool management router."""
+import ipaddress
+import re
 from typing import Any, Dict, List, Optional, Sequence
 from fastapi import APIRouter, Depends, HTTPException, Response, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +20,41 @@ router = APIRouter()
 
 ALLOWED_SCRIPT_INTERPRETERS = ("python3", "sh")
 EXECUTABLE_SCRIPT_SUFFIXES = (".py", ".sh")
+SCRIPT_NETWORK_MODES = ("none", "allowlist")
+# At least two labels: a single-label name would resolve through the container's
+# search domain, which is not a destination anyone reviewed.
+_HOSTNAME_RE = re.compile(
+    r"^\.?(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))+$")
+
+
+def _validated_allowlist(entries) -> list[str]:
+    """Check egress allowlist entries at review time, not at first request."""
+    cleaned: list[str] = []
+    for raw in entries or []:
+        host = str(raw or "").strip().lower().rstrip(".")
+        if not host:
+            continue
+        probe = host[1:] if host.startswith(".") else host
+        try:
+            ipaddress.ip_address(probe)
+        except ValueError:
+            pass
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"allowlist entry {raw!r} is an IP address; name a hostname so "
+                       "the destination is reviewable")
+        if not _HOSTNAME_RE.match(host):
+            raise HTTPException(
+                status_code=400,
+                detail=f"allowlist entry {raw!r} is not a hostname; use example.com "
+                       "for one host or .example.com for its subdomains")
+        cleaned.append(host)
+    if not cleaned:
+        raise HTTPException(
+            status_code=400,
+            detail="allowlist networking needs at least one host")
+    return cleaned
 
 
 async def validate_promotion(db: AsyncSession, skill_id: int, script_path: str, body):
@@ -38,12 +75,14 @@ async def validate_promotion(db: AsyncSession, skill_id: int, script_path: str, 
             detail=f"not an executable script: {script_path} "
                    f"(expected one of {', '.join(EXECUTABLE_SCRIPT_SUFFIXES)})",
         )
-    if body.script_network != "none":
+    if body.script_network not in SCRIPT_NETWORK_MODES:
         raise HTTPException(
             status_code=400,
-            detail=f"script_network={body.script_network!r} is not supported yet; "
-                   "only 'none' is available in this phase",
-        )
+            detail=f"script_network must be one of {', '.join(SCRIPT_NETWORK_MODES)}")
+    allowlist = (
+        _validated_allowlist(body.script_network_allowlist)
+        if body.script_network == "allowlist" else None
+    )
 
     files = await load_bundle(db, skill_id)
     if script_path not in {p for p, _ in files}:
@@ -91,7 +130,7 @@ async def validate_promotion(db: AsyncSession, skill_id: int, script_path: str, 
         "source_script_path": script_path,
         "source_bundle_digest": bundle_digest(files),
         "script_network": body.script_network,
-        "script_network_allowlist": None,
+        "script_network_allowlist": allowlist,
     }
 
 

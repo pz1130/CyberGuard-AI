@@ -189,3 +189,4 @@ class SkillScriptPromoteRequest(BaseModel):
     permission_level: str = "medium"
     timeout_seconds: int = 60
     script_network: str = "none"
+    script_network_allowlist: Optional[List[str]] = None
