@@ -152,6 +152,7 @@ async def _upsert_skill(
     db: AsyncSession,
     skill_data: Dict[str, Any],
     files: Optional[Sequence[Dict[str, Any]]] = None,
+    actor_user_id: Optional[int] = None,
 ) -> Skill:
     """Create or update a skill by name and replace its bundled file set.
 
@@ -180,7 +181,7 @@ async def _upsert_skill(
     digest = bundle_digest([(f["path"], _entry_bytes(f)) for f in (files or [])])
     for stale in await invalidate_stale_script_tools(db, skill.id, digest):
         await record_action(
-            user_id=0, action="skill.script.invalidate",
+            user_id=actor_user_id, action="skill.script.invalidate",
             input_data={"skill_id": skill.id, "tool_id": stale.id,
                         "approved_digest": stale.source_bundle_digest,
                         "current_digest": digest},
@@ -250,7 +251,7 @@ async def delete_skill(skill_id: int, db: AsyncSession = Depends(get_db), _=Depe
 async def install_skill_from_url(
     body: SkillInstallUrlRequest,
     db: AsyncSession = Depends(get_db),
-    _=Depends(require_permission(Permission.SKILL_WRITE)),
+    current_user=Depends(require_permission(Permission.SKILL_WRITE)),
 ):
     """Install a skill by fetching its markdown from a URL."""
     from app.services.skill_installer import install_skill_from_url as fetch_and_parse
@@ -259,7 +260,8 @@ async def install_skill_from_url(
     if not result["success"]:
         return SkillInstallResponse(success=False, error=result["error"])
 
-    skill = await _upsert_skill(db, result["skill_data"])
+    skill = await _upsert_skill(db, result["skill_data"],
+                                actor_user_id=current_user.user_id)
     await db.commit()
     await db.refresh(skill)
     read = SkillRead.model_validate(skill)
@@ -270,7 +272,7 @@ async def install_skill_from_url(
 async def import_skill_file(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    _=Depends(require_permission(Permission.SKILL_WRITE)),
+    current_user=Depends(require_permission(Permission.SKILL_WRITE)),
 ):
     """Import skills from an uploaded .md, .json, or .zip skill bundle.
 
@@ -292,7 +294,8 @@ async def import_skill_file(
     for entry in result["skills"]:
         skill_data = entry["skill_data"]
         try:
-            skill = await _upsert_skill(db, skill_data, entry.get("files"))
+            skill = await _upsert_skill(db, skill_data, entry.get("files"),
+                                        actor_user_id=current_user.user_id)
             await db.commit()
             await db.refresh(skill)
             installed.append((await _to_read(db, [skill]))[0])
