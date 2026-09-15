@@ -196,6 +196,22 @@ its digest. `DENY` still short-circuits.
 
 ---
 
-## 9. A pre-existing behavior this inherits
+## 9. A pre-existing behavior this inherited, and then had to fix
 
-`approval_node --re_execute--> sub_agent_executor_node` already re-runs the whole executor node after any approval, so sibling sub-agents' already-executed tools run a second time. This is today's behavior for every approval-gated tool, not something Phase 3 introduces. Phase 3 neither worsens nor fixes it. Whether to make the executor node resumable rather than replayable is its own piece of work, and it would also enable the stronger design in §3.1.
+`approval_node --re_execute--> sub_agent_executor_node` re-ran the whole
+executor node after any approval, so sibling sub-agents' already-executed tools
+ran a second time.
+
+This was written up as "Phase 3 neither worsens nor fixes it". That turned out
+to be wrong on the first half. `_approval_decision` routes to `re_execute` only
+when some sub-result reports `needs_approval`, and until a gated tool's
+`needs_approval` reached the graph, the internal-agent path always reported
+`completed` — so that route was dead for this transport. Making the status
+propagate brought the replay to life.
+
+The node now carries forward results that already completed and dispatches only
+the rest (`tasks_needing_dispatch`). A task whose key does not match a completed
+result is dispatched, so an unmatched key repeats work — today's behaviour —
+rather than skipping work that never ran.
+
+The stronger design in §3.1 remains deferred; it is not blocked by this.

@@ -36,6 +36,39 @@ def plan_requires_approval(task_plan: Optional[List[Dict[str, Any]]]) -> bool:
     return False
 
 
+def _result_key(task: dict) -> str:
+    """The key a task's result is filed under.
+
+    Every branch of ``run_task`` keys by agent_id, else agent_name, else
+    agent_type, so this reproduces the same precedence.
+    """
+    return str(
+        task.get("agent_id")
+        or task.get("agent_name")
+        or task.get("agent_type", "general")
+    )
+
+
+def tasks_needing_dispatch(task_plan: list, sub_results: dict) -> list:
+    """The tasks still to run, given what a previous pass already produced.
+
+    ``approval_node --re_execute--> sub_agent_executor_node`` re-enters the node
+    that performs every tool call, so without this a sibling task that already
+    finished runs again and its tools take effect twice.
+
+    A task whose key does not match a completed result is dispatched. Getting
+    that wrong repeats work, which is today's behaviour; skipping work that
+    never ran would be worse, so the doubt resolves towards dispatching.
+    """
+    done = {
+        key
+        for key, result in (sub_results or {}).items()
+        if isinstance(result, dict)
+        and (result.get("status") or "").lower() == "completed"
+    }
+    return [t for t in (task_plan or []) if _result_key(t) not in done]
+
+
 def approval_request_id(run_request_id: str, approval_round: int) -> str:
     """Stable, per-gate approval id.
 
@@ -683,12 +716,22 @@ class MasterAgent:
             async with sem:
                 return await run_task(task)
 
-        tasks = [run_task_limited(t) for t in task_plan]
+        # On a post-approval re-entry, carry forward what already succeeded
+        # instead of running it a second time.
+        carried = {
+            key: result
+            for key, result in (state.get("sub_results") or {}).items()
+            if isinstance(result, dict)
+            and (result.get("status") or "").lower() == "completed"
+        }
+        pending_plan = tasks_needing_dispatch(task_plan, state.get("sub_results"))
+
+        tasks = [run_task_limited(t) for t in pending_plan]
         results_list = await asyncio.gather(*tasks, return_exceptions=True)
 
-        results: Dict[str, Any] = {}
+        results: Dict[str, Any] = dict(carried)
         for i, r in enumerate(results_list):
-            task_i = task_plan[i]
+            task_i = pending_plan[i]
             agent_type = task_i.get("agent_type", "general")
             if isinstance(r, Exception):
                 key = str(
