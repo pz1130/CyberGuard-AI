@@ -679,8 +679,9 @@ async def test_agent_executor_routes_internal_kind(monkeypatch):
         def __init__(self, cfg, *, pre_approved=False):
             captured["cfg"] = cfg
             captured["pre_approved"] = pre_approved
-        async def execute(self, task, conversation_id, user_id):
+        async def execute(self, task, conversation_id, user_id, *, run_request_id=None):
             captured["task"] = task
+            captured["run_request_id"] = run_request_id
             return {"status": "completed", "output": "ok",
                     "agent_id": agent_id, "agent_name": "exec_test_int"}
     monkeypatch.setattr("app.services.agent_executor.InternalAgentRunner",

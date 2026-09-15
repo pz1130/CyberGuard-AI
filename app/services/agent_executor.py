@@ -374,7 +374,13 @@ class AgentExecutor:
         if kind == "internal":
             runner = InternalAgentRunner(config_dict, pre_approved=pre_approved)
             conv_id = (context or {}).get("conversation_id")
-            result = await runner.execute(task=task, conversation_id=conv_id, user_id=user_id)
+            # The graph's run id. run_python scopes a code approval by it, so
+            # an approval granted in one turn cannot be spent in another.
+            run_request_id = (context or {}).get("request_id")
+            result = await runner.execute(
+                task=task, conversation_id=conv_id, user_id=user_id,
+                run_request_id=run_request_id,
+            )
         else:
             if permission_level == "high" and not pre_approved:
                 return {

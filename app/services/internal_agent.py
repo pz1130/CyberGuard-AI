@@ -128,6 +128,12 @@ class InternalAgentRunner:
         meta = config.get("metadata_json") or {}
         self.mcp_tool_ids: List[int] = config.get("associated_mcp_tools") or meta.get("mcp_tool_ids") or []
         self.pool_tool_ids: List[int] = config.get("associated_tools") or meta.get("tool_ids") or []
+        # off | approval | auto. An absent or NULL column means the gated
+        # default, never the open one.
+        self.code_execution_mode: str = (
+            config.get("code_execution_mode") or "approval"
+        )
+        self._run_request_id: Optional[str] = None
         self.permission_level: str = config.get("permission_level") or "medium"
         # OSINT search tools (web_search / vuln_search) opt-in per agent.
         self.enable_search: bool = bool(
@@ -727,10 +733,14 @@ class InternalAgentRunner:
             yield ev
 
     async def execute(self, task: str, conversation_id: Optional[int],
-                      user_id: int) -> Dict[str, Any]:
+                      user_id: int, *,
+                      run_request_id: Optional[str] = None) -> Dict[str, Any]:
         """Run the tool-call loop (batch). Returns same shape as SubAgentWrapper.execute()."""
         start = time.monotonic()
         self._user_id = user_id
+        # Scopes a code approval to this graph run. Without it run_python has no
+        # key to ask "was this exact code approved for this run?".
+        self._run_request_id = run_request_id
 
         # A prior human approval covers this dispatch; without honouring it the
         # graph's post-approval re-dispatch hits the same refusal and the
