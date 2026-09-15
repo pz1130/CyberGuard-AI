@@ -14,7 +14,10 @@ class Conversation(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    title = Column(String(200), default="新对话")
+    # No placeholder is stored. A title the user has not set yet is absent, and
+    # the UI renders its own translated placeholder — storing one would freeze
+    # whatever language happened to be active when the row was created.
+    title = Column(String(200), nullable=True, default=None)
     messages_json = Column(Text, default="[]")
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)

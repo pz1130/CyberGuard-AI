@@ -420,7 +420,7 @@ async def execute_agent(
     from app.services.agent_executor import AgentExecutor
     task = body.get("task", "")
     if not task:
-        raise HTTPException(status_code=400, detail="'task' 字段不能为空")
+        raise HTTPException(status_code=400, detail="'task' must not be empty")
 
     # Guardrail check — same as /chat endpoint
     gr = check_prompt_sync(task)
@@ -453,7 +453,7 @@ async def execute_agent_stream(
 
     task = body.get("task", "")
     if not task:
-        raise HTTPException(status_code=400, detail="'task' 字段不能为空")
+        raise HTTPException(status_code=400, detail="'task' must not be empty")
 
     gr = check_prompt_sync(task)
     if gr.blocked:

@@ -31,7 +31,8 @@ interface TaskResponse {
 
 interface Conversation {
   id: number
-  title: string
+  // Absent until the user renames it or auto-titling fills it in.
+  title: string | null
   updated_at: string
   system_prompt_override?: string | null
   intent_parser_prompt_override?: string | null
@@ -275,7 +276,9 @@ export default function Chat() {
   // Create new conversation
   const createConversation = async () => {
     try {
-      const conv = await api.createConversation({ title: t('chat.newChat') }) as Conversation
+      // No title: storing a translated placeholder would freeze whatever
+      // language was active here into the row, for every reader of it.
+      const conv = await api.createConversation({}) as Conversation
       setConversations(prev => [conv, ...prev])
       setActiveConvId(conv.id)
       setMessages([])
@@ -335,7 +338,7 @@ export default function Chat() {
   const startEditTitle = (conv: Conversation, e: React.MouseEvent) => {
     e.stopPropagation()
     setEditingConvId(conv.id)
-    setEditingTitle(conv.title)
+    setEditingTitle(conv.title || t('chat.newChat'))
   }
 
   // Save edited title
@@ -699,7 +702,7 @@ export default function Chat() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         {activeConvId === conv.id && <span className="nav-pulse-dot" />}
-                        <div style={{ fontSize: 13, color: activeConvId === conv.id ? 'var(--accent)' : 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: 'var(--font-sans)', fontWeight: activeConvId === conv.id ? 500 : 400, flex: 1, minWidth: 0 }}>{conv.title}</div>
+                        <div style={{ fontSize: 13, color: activeConvId === conv.id ? 'var(--accent)' : 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: 'var(--font-sans)', fontWeight: activeConvId === conv.id ? 500 : 400, flex: 1, minWidth: 0 }}>{conv.title || t('chat.newChat')}</div>
                       </div>
                       {conv.updated_at && <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3, fontFamily: 'var(--font-sans)', paddingLeft: activeConvId === conv.id ? 14 : 0 }}>{formatTime(conv.updated_at)}</div>}
                     </div>

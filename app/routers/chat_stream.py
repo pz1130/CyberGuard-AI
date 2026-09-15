@@ -191,19 +191,25 @@ async def _persist_to_conversation(
             conv.messages_json = _json.dumps(messages, ensure_ascii=False)
             conv.updated_at = utc_now()
 
-            # Auto-title if still default
-            if conv.title == "新对话" and user_message:
+            # Auto-title while the conversation has none. Keying off absence
+            # rather than a magic string means the sentinel cannot drift away
+            # from the placeholder and silently stop this from ever running.
+            if not conv.title and user_message:
                 try:
                     from app.services.llm_router import get_llm_router
                     llm = get_llm_router()
                     title = await llm.chat(
                         messages=[{
                             "role": "user",
-                            "content": f"请为以下对话生成一个简洁标题（10字以内，不加引号）：\n{user_message[:200]}",
+                            "content": (
+                                "Write a short title for this conversation, at most "
+                                "six words, in the same language as the message, with "
+                                f"no surrounding quotes:\n{user_message[:200]}"
+                            ),
                         }],
                         temperature_override=0.3,
                     )
-                    conv.title = title.strip().strip('"').strip("'")[:50] or "新对话"
+                    conv.title = title.strip().strip('"').strip("'")[:50] or None
                 except Exception:
                     pass  # Title stays as default if LLM fails
 

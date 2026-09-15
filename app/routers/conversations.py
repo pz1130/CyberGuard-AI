@@ -23,7 +23,9 @@ class MessageModel(BaseModel):
 class ConversationResponse(BaseModel):
     id: int
     user_id: int
-    title: str
+    # Absent until the user renames it or auto-titling fills it in; the client
+    # renders its own translated placeholder rather than reading a stored one.
+    title: Optional[str] = None
     messages_json: str
     created_at: datetime
     updated_at: datetime
@@ -114,7 +116,7 @@ async def create_conversation(
     """Create a new conversation."""
     conv = Conversation(
         user_id=current_user.user_id,
-        title=body.title or "新对话",
+        title=(body.title or None),
         messages_json="[]",
         system_prompt_override=body.system_prompt_override,
         intent_parser_prompt_override=body.intent_parser_prompt_override,

@@ -226,9 +226,9 @@ async def upload_document(
     except ScannedPdfError:
         cfg = await load_ocr_config()
         if not cfg.enabled:
-            raise HTTPException(status_code=400, detail="扫描件 PDF 需启用 OCR（请在 OCR 设置中开启）")
+            raise HTTPException(status_code=400, detail="This PDF is a scan; enable OCR in the OCR settings to ingest it")
         if len(raw) > MAX_OCR_BYTES:
-            raise HTTPException(status_code=413, detail="扫描件超出 OCR 大小上限（20MB）")
+            raise HTTPException(status_code=413, detail="Scanned document exceeds the 20 MB OCR size limit")
         from app.workers.tasks import ocr_ingest_task
         service = get_knowledge_service()
         doc = await service.create_pending_document(

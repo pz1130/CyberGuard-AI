@@ -323,7 +323,7 @@ def run_master_agent_task(self, execution_id: str, user_input: str, user_id: int
 def _auto_title_conversation(conversation_id: int, user_input: str, result: dict):
     """Generate a short conversation title from the first user message using LLM.
 
-    Only runs when the conversation still has the default title ('新对话').
+    Only runs while the conversation has no title of its own.
     Runs synchronously in the Celery worker — uses a fresh event loop.
     """
     try:
@@ -337,21 +337,23 @@ def _auto_title_conversation(conversation_id: int, user_input: str, result: dict
                 select(Conversation).where(Conversation.id == conversation_id)
             )
             conv = conv_result.scalar_one_or_none()
-            if not conv or conv.title != "新对话":
-                return  # Already has a custom title
+            if not conv or conv.title:
+                return  # Already titled
 
         async def _generate():
             from app.services.llm_router import get_llm_router
             router = get_llm_router()
             prompt = (
-                f"请为以下对话生成一个简洁的标题（10字以内，不加引号）：\n{user_input[:200]}"
+                "Write a short title for this conversation, at most six words, "
+                "in the same language as the message, with no surrounding "
+                f"quotes:\n{user_input[:200]}"
             )
             try:
                 title = await router.chat(
                     messages=[{"role": "user", "content": prompt}],
                     temperature_override=0.3,
                 )
-                return title.strip().strip('"').strip("'")[:50] or "新对话"
+                return title.strip().strip('"').strip("'")[:50] or None
             except Exception:
                 return None
 
@@ -371,7 +373,7 @@ def _auto_title_conversation(conversation_id: int, user_input: str, result: dict
                 select(Conversation).where(Conversation.id == conversation_id)
             )
             conv = conv_result.scalar_one_or_none()
-            if conv and conv.title == "新对话":
+            if conv and not conv.title:
                 conv.title = title
                 session.commit()
                 logger.info(f"[auto-title] conv_id={conversation_id} → {title!r}")
