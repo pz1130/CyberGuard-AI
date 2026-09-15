@@ -91,6 +91,16 @@ export const api = {
   deleteSkill: (id: string) => request(`/skills/${id}`, { method: 'DELETE' }),
   installSkillFromUrl: (body: { url: string; headers?: Record<string, string> }) =>
     request('/skills/install/url', { method: 'POST', body: JSON.stringify(body) }),
+  getSkillFiles: (id: number) => request(`/skills/${id}/files`),
+  getSkillFileContent: (id: number, path: string) => {
+    const token = localStorage.getItem('token')
+    return fetch(`${BASE}/skills/${id}/files/${path}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then(r => r.text())
+  },
+  promoteSkillScript: (id: number, scriptPath: string, body: JsonBody) =>
+    request(`/skills/${id}/promote?script_path=${encodeURIComponent(scriptPath)}`,
+      { method: 'POST', body: JSON.stringify(body) }),
   importSkillFile: (formData: FormData) => {
     const token = localStorage.getItem('token')
     return fetch(`${BASE}/skills/import`, {

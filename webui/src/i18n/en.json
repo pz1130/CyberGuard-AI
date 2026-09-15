@@ -205,7 +205,14 @@
     "importing": "Importing…",
     "importHint": "Supported: .md (with optional YAML frontmatter), .json, and .zip skill bundles (every SKILL.md inside becomes a skill; sibling references/, scripts/ and assets/ are stored with it). An existing skill with the same name is updated.",
     "importInstalled": "Imported {{count}} skill(s)",
-    "bundleFiles": "{{count}} bundled file(s)"
+    "bundleFiles": "{{count}} bundled file(s)",
+    "bundleFilesTitle": "Bundled files",
+    "promote": "Promote to tool",
+    "promoteTitle": "Promote script to tool",
+    "promoteReview": "Review this script. Once promoted it becomes an executable tool, gated like any other.",
+    "promoteDigestNote": "The tool is pinned to this bundle. Re-importing the skill with different contents deactivates it until you review it again.",
+    "promoteNoNetwork": "Scripts run with no network access and the Python standard library only.",
+    "promoteNoScripts": "This bundle has no .py or .sh files."
   },
   "knowledge": {
     "title": "Knowledge Base",

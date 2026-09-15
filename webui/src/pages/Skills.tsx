@@ -22,6 +22,32 @@ interface Skill {
   bundle_file_count?: number
 }
 
+interface BundleFile {
+  path: string
+  size_bytes: number
+  mime?: string
+  is_binary: boolean
+}
+
+interface PromoteForm {
+  name: string
+  description: string
+  command_template: string
+  input_schema_json: string
+  required_permission: string
+  action_category: string
+  risk_tier: string
+  permission_level: string
+  timeout_seconds: number
+  script_network: string
+}
+
+const EMPTY_PROMOTE_FORM: PromoteForm = {
+  name: '', description: '', command_template: '', input_schema_json: '',
+  required_permission: '', action_category: 'observe', risk_tier: 'low',
+  permission_level: 'medium', timeout_seconds: 60, script_network: 'none',
+}
+
 interface ImportFailure {
   name?: string
   error: string
@@ -65,6 +91,13 @@ export default function Skills() {
   const [installError, setInstallError] = useState('')
   const [importSummary, setImportSummary] = useState<ImportSummary | null>(null)
   const [dragOver, setDragOver] = useState(false)
+  const [promoteSkill, setPromoteSkill] = useState<Skill | null>(null)
+  const [bundleFiles, setBundleFiles] = useState<BundleFile[]>([])
+  const [promoteScript, setPromoteScript] = useState('')
+  const [promoteSource, setPromoteSource] = useState('')
+  const [promoteForm, setPromoteForm] = useState<PromoteForm>(EMPTY_PROMOTE_FORM)
+  const [promoteError, setPromoteError] = useState('')
+  const [promoteBusy, setPromoteBusy] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { searchTarget, setSearchTarget } = useContext(SearchContext)
@@ -163,6 +196,42 @@ export default function Skills() {
     e.preventDefault(); setDragOver(false)
     const file = e.dataTransfer.files?.[0]
     if (file) await importFile(file)
+  }
+
+  const openBundle = async (s: Skill) => {
+    setPromoteSkill(s); setPromoteScript(''); setPromoteSource('')
+    setPromoteError(''); setPromoteForm(EMPTY_PROMOTE_FORM); setBundleFiles([])
+    try {
+      const r = await api.getSkillFiles(Number(s.id)) as { files?: BundleFile[] }
+      setBundleFiles(r.files || [])
+    } catch (e: unknown) { setPromoteError(errorMessage(e)) }
+  }
+
+  const selectScript = async (s: Skill, path: string) => {
+    setPromoteScript(path); setPromoteError(''); setPromoteSource('')
+    try {
+      setPromoteSource(await api.getSkillFileContent(Number(s.id), path))
+    } catch (e: unknown) { setPromoteError(errorMessage(e)) }
+    const interpreter = path.endsWith('.sh') ? 'sh' : 'python3'
+    setPromoteForm(f => ({
+      ...f,
+      name: `${s.name}-${path.split('/').pop()?.replace(/\.(py|sh)$/, '')}`,
+      command_template: `${interpreter} ${path}`,
+    }))
+  }
+
+  const submitPromotion = async () => {
+    if (!promoteSkill || !promoteScript) return
+    setPromoteError(''); setPromoteBusy(true)
+    try {
+      await api.promoteSkillScript(Number(promoteSkill.id), promoteScript, {
+        ...promoteForm,
+        required_permission: promoteForm.required_permission || null,
+        input_schema_json: promoteForm.input_schema_json || null,
+      })
+      setPromoteSkill(null)
+    } catch (e: unknown) { setPromoteError(errorMessage(e)) }
+    finally { setPromoteBusy(false) }
   }
 
   return (
@@ -295,6 +364,84 @@ export default function Skills() {
             )}
             <div style={{ padding: '8px 10px', background: 'var(--bg-base)', border: '1px solid var(--border)', fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6 }}>
               {t('skills.importHint')}
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Promote bundle script to tool */}
+      {promoteSkill && (
+        <Modal width={720} title={t('skills.promoteTitle').toUpperCase()}
+          onClose={() => { setPromoteSkill(null); setPromoteError('') }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6 }}>
+              {t('skills.promoteReview')} {t('skills.promoteNoNetwork')}
+            </div>
+            {bundleFiles.filter(f => /\.(py|sh)$/.test(f.path)).length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                {t('skills.promoteNoScripts')}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {bundleFiles.filter(f => /\.(py|sh)$/.test(f.path)).map(f => (
+                  <button key={f.path} onClick={() => selectScript(promoteSkill, f.path)}
+                    className={promoteScript === f.path ? 'btn btn-primary' : 'btn btn-secondary'}
+                    style={{ fontSize: 11, height: 24, padding: '0 8px' }}>
+                    {f.path}
+                  </button>
+                ))}
+              </div>
+            )}
+            {promoteScript && (
+              <>
+                <pre style={{
+                  maxHeight: 240, overflow: 'auto', background: 'var(--bg-base)',
+                  border: '1px solid var(--border)', padding: 10, fontSize: 12, margin: 0,
+                }}>{promoteSource}</pre>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label className="form-label">NAME</label>
+                    <input className="form-input" value={promoteForm.name}
+                      onChange={e => setPromoteForm(f => ({ ...f, name: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="form-label">COMMAND TEMPLATE</label>
+                    <input className="form-input" value={promoteForm.command_template}
+                      onChange={e => setPromoteForm(f => ({ ...f, command_template: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="form-label">ACTION CATEGORY</label>
+                    <input className="form-input" value={promoteForm.action_category}
+                      onChange={e => setPromoteForm(f => ({ ...f, action_category: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="form-label">RISK TIER</label>
+                    <input className="form-input" value={promoteForm.risk_tier}
+                      onChange={e => setPromoteForm(f => ({ ...f, risk_tier: e.target.value }))} />
+                  </div>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label className="form-label">INPUT SCHEMA (JSON)</label>
+                    <input className="form-input" value={promoteForm.input_schema_json}
+                      placeholder='{"properties": {"target": {"type": "string"}}}'
+                      onChange={e => setPromoteForm(f => ({ ...f, input_schema_json: e.target.value }))} />
+                  </div>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--amber)', lineHeight: 1.6 }}>
+                  {t('skills.promoteDigestNote')}
+                </div>
+              </>
+            )}
+            {promoteError && (
+              <div style={{ padding: '8px 10px', background: 'rgba(255,0,0,0.1)',
+                border: '1px solid var(--red)', fontSize: 13, color: 'var(--red)' }}>
+                {promoteError}
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={submitPromotion} disabled={!promoteScript || promoteBusy}
+                className="btn btn-primary">
+                {promoteBusy ? '...' : t('skills.promote').toUpperCase()}
+              </button>
             </div>
           </div>
         </Modal>
@@ -458,9 +605,17 @@ export default function Skills() {
                     </span>
                   )}
                   {!!s.bundle_file_count && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--cyan)' }}>
+                    <button
+                      onClick={() => openBundle(s)}
+                      title={t('skills.bundleFilesTitle')}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 4, fontSize: 11,
+                        color: 'var(--cyan)', background: 'transparent',
+                        border: '1px solid var(--border-bright)', padding: '1px 6px',
+                        cursor: 'pointer',
+                      }}>
                       <FolderArchive size={11} /> {t('skills.bundleFiles', { count: s.bundle_file_count })}
-                    </span>
+                    </button>
                   )}
                 </div>
 
