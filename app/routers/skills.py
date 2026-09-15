@@ -9,12 +9,90 @@ from app.schemas.skill import (
     SkillCreate, SkillRead, SkillUpdate, SkillListResponse,
     ToolCreate, ToolRead, ToolUpdate, ToolListResponse,
     SkillInstallUrlRequest, SkillInstallResponse, SkillImportFailure,
-    SkillFileRead, SkillFileListResponse,
+    SkillFileRead, SkillFileListResponse, SkillScriptPromoteRequest,
 )
 from app.models.skill import Skill, SkillFile, Tool
 from sqlalchemy import delete, select, func
 
 router = APIRouter()
+
+ALLOWED_SCRIPT_INTERPRETERS = ("python3", "sh")
+EXECUTABLE_SCRIPT_SUFFIXES = (".py", ".sh")
+
+
+async def validate_promotion(db: AsyncSession, skill_id: int, script_path: str, body):
+    """Check a promotion request and return the Tool column dict.
+
+    Every rule here is re-checked at execution; failing at review time means the
+    approver sees the problem while they are looking at the script.
+    """
+    import json as _json
+    import shlex
+
+    from app.services.skill_bundle import bundle_digest, load_bundle
+    from app.services.tool_executor import ToolArgError, build_argv
+
+    if not script_path.lower().endswith(EXECUTABLE_SCRIPT_SUFFIXES):
+        raise HTTPException(
+            status_code=400,
+            detail=f"not an executable script: {script_path} "
+                   f"(expected one of {', '.join(EXECUTABLE_SCRIPT_SUFFIXES)})",
+        )
+    if body.script_network != "none":
+        raise HTTPException(
+            status_code=400,
+            detail=f"script_network={body.script_network!r} is not supported yet; "
+                   "only 'none' is available in this phase",
+        )
+
+    files = await load_bundle(db, skill_id)
+    if script_path not in {p for p, _ in files}:
+        raise HTTPException(status_code=400, detail=f"{script_path} is not in the bundle")
+
+    tokens = shlex.split(body.command_template)
+    if not tokens or tokens[0] not in ALLOWED_SCRIPT_INTERPRETERS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"interpreter must be one of {', '.join(ALLOWED_SCRIPT_INTERPRETERS)}",
+        )
+    if len(tokens) < 2:
+        raise HTTPException(status_code=400, detail="command_template must name the script")
+    if tokens[1].startswith("-"):
+        raise HTTPException(status_code=400, detail="interpreter flags are not permitted")
+    if tokens[1] != script_path:
+        raise HTTPException(
+            status_code=400,
+            detail=f"command_template must run {script_path}, not {tokens[1]}",
+        )
+
+    # Dry-run the real argv builder so placeholder mistakes surface at review.
+    try:
+        schema = _json.loads(body.input_schema_json) if body.input_schema_json else {}
+    except _json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"input_schema_json is not JSON: {e}") from e
+    probe = {k: "probe" for k in (schema.get("properties") or {})}
+    try:
+        build_argv(body.command_template, schema, probe)
+    except ToolArgError as e:
+        raise HTTPException(status_code=400, detail=f"command_template: {e}") from e
+
+    return {
+        "name": body.name,
+        "description": body.description,
+        "command_template": body.command_template,
+        "input_schema_json": body.input_schema_json,
+        "required_permission": body.required_permission,
+        "action_category": body.action_category,
+        "risk_tier": body.risk_tier,
+        "permission_level": body.permission_level,
+        "timeout_seconds": body.timeout_seconds,
+        "is_active": True,
+        "source_skill_id": skill_id,
+        "source_script_path": script_path,
+        "source_bundle_digest": bundle_digest(files),
+        "script_network": body.script_network,
+        "script_network_allowlist": None,
+    }
 
 
 async def _bundle_file_counts(db: AsyncSession, skill_ids: Sequence[int]) -> Dict[int, int]:
@@ -251,6 +329,45 @@ async def get_skill_file(
         },
     )
 
+
+
+@router.post("/skills/{skill_id}/promote", response_model=ToolRead,
+             status_code=status.HTTP_201_CREATED)
+async def promote_skill_script(
+    skill_id: int,
+    script_path: str,
+    body: SkillScriptPromoteRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_permission(Permission.SKILL_SCRIPT_APPROVE)),
+):
+    """Promote one reviewed bundle script into an executable Tool.
+
+    The script path is a query parameter rather than a route segment because a
+    greedy {path:path} converter would swallow a trailing /promote.
+    """
+    from app.core.audit import record_action
+
+    skill = (await db.execute(select(Skill).where(Skill.id == skill_id))).scalar_one_or_none()
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    if (await db.execute(select(Tool).where(Tool.name == body.name))).scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Tool name already exists")
+
+    data = await validate_promotion(db, skill_id, script_path, body)
+    tool = Tool(**data)
+    db.add(tool)
+    await db.commit()
+    await db.refresh(tool)
+
+    await record_action(
+        user_id=current_user.user_id, action="skill.script.promote",
+        action_category=data.get("action_category"), risk_tier=data.get("risk_tier"),
+        human_reviewer=str(current_user.user_id),
+        input_data={"skill_id": skill_id, "script_path": script_path,
+                    "digest": data["source_bundle_digest"]},
+        output_data={"tool_id": tool.id, "tool_name": tool.name},
+    )
+    return ToolRead.model_validate(tool)
 
 # --- Tools ---
 @router.get("/tools", response_model=ToolListResponse)

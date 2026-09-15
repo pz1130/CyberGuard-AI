@@ -171,3 +171,21 @@ class SkillFileListResponse(BaseModel):
     skill_id: int
     total: int
     files: List[SkillFileRead]
+
+
+class SkillScriptPromoteRequest(BaseModel):
+    """Admin-supplied risk metadata for promoting a bundle script to a Tool.
+
+    Nothing here is self-declared by the skill author: the approver assigns the
+    risk metadata after reading the script.
+    """
+    name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = None
+    command_template: str = Field(..., min_length=1)
+    input_schema_json: Optional[str] = None
+    required_permission: Optional[str] = None
+    action_category: Optional[str] = None
+    risk_tier: Optional[str] = None
+    permission_level: str = "medium"
+    timeout_seconds: int = 60
+    script_network: str = "none"
