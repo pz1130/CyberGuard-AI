@@ -251,20 +251,21 @@ async def update_agent(
 
     body_dict = body.model_dump(exclude_unset=True)
 
-    # Letting an agent run model-authored code without a human is a decision
-    # someone should be answerable for, so the change is recorded before it
-    # takes effect.
-    incoming_mode = validate_code_execution_mode(body_dict.get("code_execution_mode"))
-    if incoming_mode is not None and incoming_mode != agent.code_execution_mode:
-        from app.core.audit import record_action
-        await record_action(
-            user_id=current_user.user_id, action="agent.code_execution_mode",
-            agent_id=agent.id, agent_name=agent.agent_name,
-            risk_tier="high" if incoming_mode == "auto" else "medium",
-            human_reviewer=str(current_user.user_id),
-            input_data={"from": agent.code_execution_mode, "to": incoming_mode},
-            output_data={"changed": True},
-        )
+    validate_code_execution_mode(body_dict.get("code_execution_mode"))
+
+    # What this agent is allowed to do is an authority decision, so the trail
+    # has to say what it was changed to and not merely that it was changed.
+    # The HTTP middleware records the call; these are the fields worth the
+    # before/after.
+    _GOVERNED_FIELDS = (
+        "code_execution_mode", "permission_level", "autonomy_tier",
+        "allowed_categories", "is_poc", "governed", "is_active",
+        "auto_execute_min_confidence", "escalate_to_human_below",
+        "associated_tools", "associated_mcp_tools",
+    )
+    _governance_before = {
+        f: getattr(agent, f, None) for f in _GOVERNED_FIELDS if f in body_dict
+    }
 
     if "env_vars" in body_dict:
         ev = body_dict.pop("env_vars")
@@ -288,6 +289,25 @@ async def update_agent(
 
     await db.commit()
     await db.refresh(agent)
+
+    from app.core.audit import record_action
+    from app.core.audit_diff import field_diff
+
+    changes = field_diff(
+        _governance_before,
+        {f: getattr(agent, f, None) for f in _governance_before},
+    )
+    if changes:
+        await record_action(
+            user_id=current_user.user_id, action="agent.governance_update",
+            agent_id=agent.id, agent_name=agent.agent_name,
+            risk_tier="high" if changes.get("code_execution_mode", {}).get("to") == "auto"
+                      or "permission_level" in changes or "autonomy_tier" in changes
+                      else "medium",
+            human_reviewer=str(current_user.user_id),
+            input_data={"changes": changes},
+            output_data={"changed": sorted(changes)},
+        )
     return AgentConfigRead.model_validate(agent)
 
 

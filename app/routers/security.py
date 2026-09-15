@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_db, require_permission
+from app.core.auth import AuthenticatedUser
+from app.core.dependencies import get_db, get_current_user, require_permission
 from app.core.rbac import Permission
 from app.services.security_settings import get_security_settings, update_security_settings
 
@@ -45,10 +46,30 @@ async def get_settings(
 async def put_settings(
     body: SecuritySettingsUpdate,
     db: AsyncSession = Depends(get_db),
+    actor: AuthenticatedUser = Depends(get_current_user),
     _=Depends(require_permission(Permission.SETTINGS_WRITE)),
 ):
+    from app.core.audit import record_action
+    from app.core.audit_diff import field_diff
+
     data = body.model_dump(exclude_unset=True)
+    current = await get_security_settings(db)
+    before = {k: getattr(current, k, None) for k in data}
+
     cfg = await update_security_settings(db, data)
+
+    # Turning off audit_logging, or widening the session window, are exactly the
+    # changes someone would make to cover their tracks — so they are recorded
+    # before anything else about the trail is trusted.
+    changes = field_diff(before, {k: getattr(cfg, k, None) for k in data})
+    if changes:
+        await record_action(
+            user_id=actor.user_id, action="security_settings.update",
+            risk_tier="high",
+            human_reviewer=str(actor.user_id),
+            input_data={"changes": changes},
+            output_data={"changed": sorted(changes)},
+        )
     return SecuritySettingsResponse.model_validate(cfg)
 
 

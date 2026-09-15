@@ -8,6 +8,8 @@ from app.core.auth import AuthenticatedUser
 from app.core.rbac import Role
 from app.schemas.user import UserCreate, UserRead, UserUpdate, UserListResponse
 from app.models.user import User
+from app.core.audit import record_action
+from app.core.audit_diff import field_diff
 from sqlalchemy import select
 
 router = APIRouter()
@@ -97,6 +99,7 @@ async def update_user(
     user_id: int,
     body: UserUpdate,
     db: AsyncSession = Depends(get_db),
+    actor: AuthenticatedUser = Depends(get_current_user),
 ):
     """Update user (Admin only)."""
     from sqlalchemy import select
@@ -105,6 +108,13 @@ async def update_user(
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # A role change is a privilege change. The HTTP middleware records that
+    # someone called this endpoint; without this it would not record what they
+    # made of it.
+    before = {"email": user.email, "full_name": user.full_name,
+              "role": user.role, "is_active": user.is_active,
+              "password": user.hashed_password}
 
     if body.email is not None:
         user.email = body.email
@@ -119,6 +129,20 @@ async def update_user(
 
     await db.commit()
     await db.refresh(user)
+
+    changes = field_diff(before, {
+        "email": user.email, "full_name": user.full_name,
+        "role": user.role, "is_active": user.is_active,
+        "password": user.hashed_password,
+    })
+    if changes:
+        await record_action(
+            user_id=actor.user_id, action="user.update",
+            risk_tier="high" if "role" in changes else "medium",
+            human_reviewer=str(actor.user_id),
+            input_data={"target_user_id": user_id, "changes": changes},
+            output_data={"changed": sorted(changes)},
+        )
     return UserRead.model_validate(user)
 
 
