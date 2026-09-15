@@ -15,6 +15,16 @@ if not RUNNER_TOKEN:
     raise RuntimeError("RUNNER_TOKEN must be set for the tool-runner")
 OUTPUT_MAX_BYTES = 64_000
 
+# Explicit child environment. Without env=, create_subprocess_exec hands the
+# child our whole environment, RUNNER_TOKEN included — and that token buys
+# arbitrary argv on this service.
+MINIMAL_ENV = {
+    "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
+    "LANG": os.environ.get("LANG", "C.UTF-8"),
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "HOME": "/tmp",
+}
+
 
 @app.get("/health")
 async def health():
@@ -34,7 +44,7 @@ async def run(body: dict, x_runner_token: str = Header(default="")):
     try:
         proc = await asyncio.create_subprocess_exec(
             *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-            start_new_session=True)
+            env=MINIMAL_ENV, start_new_session=True)
     except FileNotFoundError:
         return {"stdout": "", "stderr": f"command not found: {argv[0]}",
                 "exit_code": 127, "duration_ms": 0, "timed_out": False}

@@ -71,3 +71,39 @@ class TestToolRunnerMcpEndpoints(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestToolRunnerSubprocessEnv(unittest.TestCase):
+    """A tool subprocess must not inherit the runner's own secrets.
+
+    Without an explicit env=, create_subprocess_exec hands the child the whole
+    parent environment — RUNNER_TOKEN included. That token buys arbitrary argv
+    on this runner, so a child that can read it can bypass every gate in the API.
+    """
+
+    def setUp(self):
+        self._ctx = TestClient(app)
+        self.client = self._ctx.__enter__()
+
+    def tearDown(self):
+        self._ctx.__exit__(None, None, None)
+
+    def test_child_cannot_see_runner_token(self):
+        r = self.client.post(
+            "/run",
+            json={"argv": ["python3", "-c",
+                           "import os; print(os.environ.get('RUNNER_TOKEN', '<absent>'))"],
+                  "timeout": 20},
+            headers=_HDR,
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["stdout"].strip(), "<absent>")
+
+    def test_child_still_gets_a_usable_path(self):
+        r = self.client.post(
+            "/run",
+            json={"argv": ["python3", "-c", "import os; print(bool(os.environ.get('PATH')))"],
+                  "timeout": 20},
+            headers=_HDR,
+        )
+        self.assertEqual(r.json()["stdout"].strip(), "True")
