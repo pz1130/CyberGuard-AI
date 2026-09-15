@@ -422,3 +422,20 @@ def test_inv41_proxy_runs_a_single_worker():
     text = " ".join(command) if isinstance(command, list) else (command or "")
     assert "--workers" not in text or "--workers 1" in text
     assert "python" in text or "egress_proxy" in text
+
+
+# --------------------------------------------------------------------------
+# INV-42 · model-authored code never gets egress
+# --------------------------------------------------------------------------
+
+def test_inv42_code_runner_never_uses_the_networked_runner():
+    """INV-42: run_python goes to the no-network sandbox, always.
+
+    Phase 2's allowlist exists for scripts a human reviewed and named hosts
+    for. Code written seconds ago by a model has neither.
+    """
+    source = (REPO / "app" / "services" / "code_runner.py").read_text()
+    body = source.split("async def run_code", 1)[1]
+    assert "SKILL_RUNNER_NET_URL" not in body
+    assert "proxy_url" not in body
+    assert "SKILL_RUNNER_URL" in body

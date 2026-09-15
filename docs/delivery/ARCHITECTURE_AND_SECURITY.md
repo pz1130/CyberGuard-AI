@@ -80,6 +80,32 @@ discovered.
 See `docs/superpowers/specs/2026-09-15-skill-script-execution-design.md` and
 `docs/superpowers/specs/2026-09-15-skill-script-egress-allowlist-design.md`.
 
+### Model-authored code in chat
+
+An agent can also write a Python program during a conversation and run it, via
+the `run_python` built-in. This is a different trust object from a promoted
+skill script: nobody reviewed it in advance, so it carries none of the
+promotion machinery and none of the egress.
+
+Each agent has a `code_execution_mode`: `off`, `approval` (the default) or
+`auto`. In `approval` mode the first call opens an approval carrying the full
+program and its sha256, and the graph suspends at its existing approval node —
+the only node with no side effects, which is why suspension is safe there. The
+program runs only when an approved record matches both the run and the exact
+digest, so an approval cannot be reused for code the model rewrote on resume.
+
+`auto` skips the human and nothing else: the kill switch, the gatekeeper, the
+audit chain, the sandbox and the network isolation all still apply. Changing the
+mode needs `AGENT_WRITE` and is audited before it takes effect. `AUTO_APPROVE`
+remains a development-only convenience; `code_execution_mode` is the production
+control.
+
+Model-authored code always runs in the no-network sandbox (INV-42). Because the
+default mode offers the tool, every agent now has at least one tool; an agent
+that should never run code is set to `off`.
+
+See `docs/superpowers/specs/2026-09-15-chat-code-execution-design.md`.
+
 ## Data flow review
 
 Before deployment, document for each provider or MCP connection: data classes,
