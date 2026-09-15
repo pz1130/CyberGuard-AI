@@ -19,6 +19,10 @@ from agent_core.schema_validate import SchemaValidationError, validate_tool_argu
 
 TOOL_RUNNER_URL = os.environ.get("TOOL_RUNNER_URL", "http://tool-runner:9000")
 RUNNER_TOKEN = os.environ.get("RUNNER_TOKEN", "")
+# Promoted skill scripts run in a separate, network-isolated sandbox with its
+# own token. See docs/superpowers/specs/2026-09-15-skill-script-execution-design.md
+SKILL_RUNNER_URL = os.environ.get("SKILL_RUNNER_URL", "http://skill-runner:9000")
+SKILL_RUNNER_TOKEN = os.environ.get("SKILL_RUNNER_TOKEN", "")
 OUTPUT_MAX_CHARS = 8000  # mirror internal_agent.TOOL_RESULT_MAX_CHARS
 # Shell / scanner outputs often put signal at the end (errors, findings).
 # mode "head" drops the start and keeps the tail (see agent_core.truncate).
@@ -161,6 +165,74 @@ async def _pool_before_tool_call(
     return None
 
 
+async def _load_bundle_for_tool(skill_id: int):
+    """Load a skill's bundle, owning the session.
+
+    It opens its own session rather than taking one so that a unit test can
+    replace this single function and need no database at all.
+    """
+    from app.core.database import get_db_context
+    from app.services.skill_bundle import load_bundle
+
+    async with get_db_context() as db:
+        return await load_bundle(db, skill_id)
+
+
+async def _execute_skill_script(tool, argv: List[str], timeout: int) -> Dict[str, Any]:
+    """Verify the bundle still matches the approval, then run it in the sandbox."""
+    import base64
+
+    from app.services.skill_bundle import bundle_digest
+
+    files = await _load_bundle_for_tool(tool.source_skill_id)
+
+    # Redundant with the import-time check by design: that one catches the normal
+    # path, this one catches a bundle changed by any route that did not go through
+    # _upsert_skill (direct DB access, a restore, a future code path).
+    if bundle_digest(files) != (tool.source_bundle_digest or ""):
+        return {
+            "status": "error",
+            "is_error": True,
+            "error": "skill bundle has changed since approval; the tool must be "
+                     "reviewed and promoted again before it can run",
+        }
+
+    payload = {
+        "argv": argv,
+        "timeout": timeout,
+        "files": [
+            {"path": path, "content_b64": base64.b64encode(content).decode()}
+            for path, content in files
+        ],
+    }
+    try:
+        async with httpx.AsyncClient(timeout=timeout + 10) as client:
+            r = await client.post(
+                f"{SKILL_RUNNER_URL}/run", json=payload,
+                headers={"X-Skill-Runner-Token": SKILL_RUNNER_TOKEN},
+            )
+    except Exception as e:
+        return {"status": "error", "is_error": True, "error": f"skill-runner unreachable: {e}"}
+
+    if r.status_code != 200:
+        return {"status": "error", "is_error": True,
+                "error": f"skill-runner {r.status_code}: {r.text[:200]}"}
+
+    data = r.json()
+    exit_code = data.get("exit_code")
+    timed_out = data.get("timed_out", False)
+    is_error = bool(timed_out) or (exit_code not in (0, None))
+    return {
+        "status": "error" if is_error else "completed",
+        "stdout": _truncate(data.get("stdout", "")),
+        "stderr": _truncate(data.get("stderr", "")),
+        "exit_code": exit_code,
+        "duration_ms": data.get("duration_ms"),
+        "timed_out": timed_out,
+        "is_error": is_error,
+    }
+
+
 async def _pool_execute(ctx: ToolCallContext, args: Dict[str, Any]) -> Dict[str, Any]:
     """Build argv + run tool-runner (+ safety envelope). Unchanged semantics."""
     tool = ctx.tool
@@ -174,6 +246,12 @@ async def _pool_execute(ctx: ToolCallContext, args: Dict[str, Any]) -> Dict[str,
         return {"status": "error", "error": str(e)}
 
     timeout = int(getattr(tool, "timeout_seconds", 60) or 60)
+
+    # Promoted skill scripts run in the sandbox runner. Everything above this
+    # line — kill switch, RBAC, gatekeeper, approval — already ran, because a
+    # promoted script is an ordinary Tool travelling the ordinary path.
+    if getattr(tool, "source_skill_id", None) is not None:
+        return await _execute_skill_script(tool, argv, timeout)
 
     from app.services.safety_envelope import requires_envelope
     _envelope = requires_envelope(getattr(tool, "action_category", None))
