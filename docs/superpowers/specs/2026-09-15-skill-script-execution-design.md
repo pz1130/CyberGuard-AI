@@ -56,7 +56,7 @@ and execute any argv with no kill switch, no RBAC, no gatekeeper, no approval, a
 |---|---|---|
 | D1 | A script becomes a **`Tool` row only after explicit human approval**, with risk metadata assigned by the approver. | Self-declared metadata in SKILL.md frontmatter — the uploader would be grading their own risk, so `SKILL_WRITE` still equals arbitrary execution. |
 | D2 | The bundle is **materialized per execution into the runner's tmpfs** and deleted afterwards. | A shared writable volume (introduces persistent cross-execution state and requires relaxing `read_only: true`); per-skill container images (needs a Docker socket or build orchestration in the API — a large new privilege surface). |
-| D3 | Scripts run in a **dedicated `skill-runner` container**, on a network segment with no route to postgres / redis / api, and with **no network at all in Phase 1** (§8 adds opt-in egress). | Reusing `tool-runner` (§1.1: the token there buys arbitrary argv); same container with a second uid (dropping privileges needs `CAP_SETUID` or a setuid helper, both of which weaken the current `cap_drop: ALL` hardening). |
+| D3 | Scripts run in a **dedicated `skill-runner` container** on an `internal: true` network segment: no route to postgres, redis, or the internet (§5.3.1 on what remains reachable). | Reusing `tool-runner` (§1.1: the token there buys arbitrary argv); same container with a second uid (dropping privileges needs `CAP_SETUID` or a setuid helper, both of which weaken the current `cap_drop: ALL` hardening). |
 | D4 | Runtime is **`python3` + POSIX `sh`, standard library only**. No third-party packages. | Pre-installing common libs (grows the supply-chain surface and the SBOM); per-skill `pip install` at approval time (pulls PyPI into the build path and needs network during approval, contradicting D3). |
 | D5 | Executable entrypoints are limited to **`.py` and `.sh`**. | — |
 | D6 | Re-importing a skill whose bundle changed **deactivates** the dependent Tools and requires re-approval. | Refusing the import outright — an import should not be blocked by a downstream object. |
@@ -156,12 +156,30 @@ Execution recomputes the digest from the current `skill_files` rows and compares
 Same shape as `tool-runner` (`POST /run`, token header), with:
 
 - its **own** `SKILL_RUNNER_TOKEN`, distinct from `RUNNER_TOKEN`
-- its **own network segment**: no route to postgres, redis, or api; no egress in Phase 1
+- its **own `internal: true` network segment**: no route to postgres, redis, or the internet (§5.3.1)
 - the existing hardening: `cap_drop: ALL`, `no-new-privileges: true`, `read_only: true`, non-root uid, no host port
 - added: `pids_limit`, memory limit, CPU limit
 - `/tmp` tmpfs sized for the 10 MB bundle cap with headroom
 
 Why a separate token matters: stealing `SKILL_RUNNER_TOKEN` buys the ability to run a script in an empty, network-less sandbox — which is what the thief is already doing. Stealing `RUNNER_TOKEN` buys arbitrary argv on a container that can reach the database. The blast radius collapses to zero, and that is a property of the topology rather than of a mitigation that must be re-argued every time a binary is added to the tool image.
+
+### 5.3.1 What a script can still reach, stated honestly
+
+Compose network membership is bidirectional: `api` must reach `skill-runner:9000`, so both sit
+on the `sandbox` network, and therefore **`api:8000` is reachable from a script**. There is no
+way to make that one-directional with plain compose networks; claiming otherwise would be
+designing against a control that does not exist.
+
+What this does and does not buy:
+
+- **Removed:** postgres (encrypted provider keys, the audit chain), redis, and all internet
+  egress. `internal: true` gives no NAT to the outside.
+- **Remains:** `api:8000`. A script holds no credential for it — `MINIMAL_ENV` (§5.4) carries no
+  token and no secret — so its reach is the API's *unauthenticated* surface: health endpoints and
+  the login endpoint, the latter already rate-limited.
+
+Narrowing this further needs per-container network policy, which compose does not express. It is
+recorded here as a known limit rather than left for a reader to discover.
 
 ### 5.4 `/run` handling
 
@@ -216,6 +234,7 @@ Promotion, deactivation, and every execution go through the existing `record_act
 - `skill-runner`: files materialized, `cwd` correct, the bundle tree is not writable by the script, `scratch/` is, the whole temp root is removed after both success and timeout, traversal and symlink entries rejected, timeout kills the process group
 - **Regression test for §1.1: a child process's environment contains no token.** Asserted for both runners.
 - Static invariant test: any `Tool` with `source_skill_id IS NOT NULL` routes to `SKILL_RUNNER_URL` and never to `TOOL_RUNNER_URL`
+- Compose assertion: `skill-runner` is attached only to the `internal: true` network, and is not attached to the network carrying postgres or redis
 - End to end: import → promote → execute → result; then re-import → execution refused
 
 ---
