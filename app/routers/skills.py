@@ -1,7 +1,6 @@
 """Skill and Tool pool management router."""
-import tempfile
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from typing import Any, Dict, List, Optional, Sequence
+from fastapi import APIRouter, Depends, HTTPException, Response, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_db, require_permission, get_current_user
 from app.core.rbac import Permission, Role, ROLE_PERMISSIONS
@@ -9,12 +8,63 @@ from app.services.tool_executor import execute_tool
 from app.schemas.skill import (
     SkillCreate, SkillRead, SkillUpdate, SkillListResponse,
     ToolCreate, ToolRead, ToolUpdate, ToolListResponse,
-    SkillInstallUrlRequest, SkillInstallResponse,
+    SkillInstallUrlRequest, SkillInstallResponse, SkillImportFailure,
+    SkillFileRead, SkillFileListResponse,
 )
-from app.models.skill import Skill, Tool
-from sqlalchemy import select, func
+from app.models.skill import Skill, SkillFile, Tool
+from sqlalchemy import delete, select, func
 
 router = APIRouter()
+
+
+async def _bundle_file_counts(db: AsyncSession, skill_ids: Sequence[int]) -> Dict[int, int]:
+    """Bundled-file count per skill, in one grouped query."""
+    if not skill_ids:
+        return {}
+    rows = await db.execute(
+        select(SkillFile.skill_id, func.count(SkillFile.id))
+        .where(SkillFile.skill_id.in_(list(skill_ids)))
+        .group_by(SkillFile.skill_id)
+    )
+    return {skill_id: count for skill_id, count in rows.all()}
+
+
+async def _to_read(db: AsyncSession, skills: Sequence[Skill]) -> List[SkillRead]:
+    """Serialize skills with their bundled-file counts attached."""
+    counts = await _bundle_file_counts(db, [s.id for s in skills])
+    out = []
+    for skill in skills:
+        read = SkillRead.model_validate(skill)
+        read.bundle_file_count = counts.get(skill.id, 0)
+        out.append(read)
+    return out
+
+
+async def _upsert_skill(
+    db: AsyncSession,
+    skill_data: Dict[str, Any],
+    files: Optional[Sequence[Dict[str, Any]]] = None,
+) -> Skill:
+    """Create or update a skill by name and replace its bundled file set.
+
+    The file set is replaced wholesale rather than merged so a re-import can
+    never leave a path behind that the new bundle no longer ships.
+    """
+    existing = await db.execute(select(Skill).where(Skill.name == skill_data["name"]))
+    skill = existing.scalar_one_or_none()
+
+    if skill:
+        for key, value in skill_data.items():
+            setattr(skill, key, value)
+    else:
+        skill = Skill(**skill_data)
+        db.add(skill)
+    await db.flush()
+
+    await db.execute(delete(SkillFile).where(SkillFile.skill_id == skill.id))
+    for entry in files or []:
+        db.add(SkillFile(skill_id=skill.id, **entry))
+    return skill
 
 
 # --- Skills ---
@@ -27,7 +77,7 @@ async def list_skills(skip: int = 0, limit: int = 50, tag: Optional[str] = None,
     if tag:
         skills = [s for s in skills if tag in (s.tags or [])]
         total = len(skills)
-    return SkillListResponse(total=total, skills=[SkillRead.model_validate(s) for s in skills])
+    return SkillListResponse(total=total, skills=await _to_read(db, skills))
 
 
 @router.post("/skills", response_model=SkillRead, status_code=status.HTTP_201_CREATED)
@@ -48,7 +98,7 @@ async def get_skill(skill_id: int, db: AsyncSession = Depends(get_db), _=Depends
     skill = result.scalar_one_or_none()
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
-    return SkillRead.model_validate(skill)
+    return (await _to_read(db, [skill]))[0]
 
 
 @router.put("/skills/{skill_id}", response_model=SkillRead)
@@ -87,23 +137,11 @@ async def install_skill_from_url(
     if not result["success"]:
         return SkillInstallResponse(success=False, error=result["error"])
 
-    skill_data = result["skill_data"]
-
-    # Upsert: update existing skill with same name, or create new
-    existing = await db.execute(select(Skill).where(Skill.name == skill_data["name"]))
-    existing_skill = existing.scalar_one_or_none()
-
-    if existing_skill:
-        for key, value in skill_data.items():
-            setattr(existing_skill, key, value)
-        skill = existing_skill
-    else:
-        skill = Skill(**skill_data)
-        db.add(skill)
-
+    skill = await _upsert_skill(db, result["skill_data"])
     await db.commit()
     await db.refresh(skill)
-    return SkillInstallResponse(success=True, skill=SkillRead.model_validate(skill))
+    read = SkillRead.model_validate(skill)
+    return SkillInstallResponse(success=True, skill=read, installed=[read])
 
 
 @router.post("/skills/import", response_model=SkillInstallResponse)
@@ -112,39 +150,106 @@ async def import_skill_file(
     db: AsyncSession = Depends(get_db),
     _=Depends(require_permission(Permission.SKILL_WRITE)),
 ):
-    """Import a skill from an uploaded .md or .json file."""
-    from app.services.skill_installer import install_skill_from_content
+    """Import skills from an uploaded .md, .json, or .zip skill bundle.
+
+    A zip may carry a whole skill repository: every ``SKILL.md`` inside becomes
+    one skill, and its sibling files become that skill's bundle.
+    """
+    from app.services.skill_installer import install_skills_from_upload
 
     if not file.filename:
         return SkillInstallResponse(success=False, error="No filename provided")
 
     content = await file.read()
-    try:
-        text = content.decode("utf-8")
-    except UnicodeDecodeError:
-        return SkillInstallResponse(success=False, error="File must be UTF-8 encoded")
-
-    result = install_skill_from_content(file.filename, text)
+    result = install_skills_from_upload(file.filename, content)
     if not result["success"]:
         return SkillInstallResponse(success=False, error=result["error"])
 
-    skill_data = result["skill_data"]
+    installed: List[SkillRead] = []
+    failed: List[SkillImportFailure] = []
+    for entry in result["skills"]:
+        skill_data = entry["skill_data"]
+        try:
+            skill = await _upsert_skill(db, skill_data, entry.get("files"))
+            await db.commit()
+            await db.refresh(skill)
+            installed.append((await _to_read(db, [skill]))[0])
+        except Exception as e:  # one bad skill must not sink the whole bundle
+            await db.rollback()
+            failed.append(SkillImportFailure(name=skill_data.get("name"), error=str(e)))
 
-    # Upsert
-    existing = await db.execute(select(Skill).where(Skill.name == skill_data["name"]))
-    existing_skill = existing.scalar_one_or_none()
+    if not installed:
+        detail = "; ".join(f"{f.name}: {f.error}" for f in failed) or "Nothing was imported"
+        return SkillInstallResponse(success=False, failed=failed, error=detail)
 
-    if existing_skill:
-        for key, value in skill_data.items():
-            setattr(existing_skill, key, value)
-        skill = existing_skill
-    else:
-        skill = Skill(**skill_data)
-        db.add(skill)
+    return SkillInstallResponse(
+        success=True,
+        skill=installed[0] if len(installed) == 1 else None,
+        installed=installed,
+        failed=failed,
+    )
 
-    await db.commit()
-    await db.refresh(skill)
-    return SkillInstallResponse(success=True, skill=SkillRead.model_validate(skill))
+
+@router.get("/skills/{skill_id}/files", response_model=SkillFileListResponse)
+async def list_skill_files(
+    skill_id: int,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_permission(Permission.SKILL_READ)),
+):
+    """List the bundled resource files of a skill (metadata only)."""
+    skill = (await db.execute(select(Skill).where(Skill.id == skill_id))).scalar_one_or_none()
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+
+    rows = (
+        await db.execute(
+            select(SkillFile)
+            .where(SkillFile.skill_id == skill_id)
+            .order_by(SkillFile.path)
+        )
+    ).scalars().all()
+    files = [
+        SkillFileRead(
+            path=r.path,
+            size_bytes=r.size_bytes,
+            mime=r.mime,
+            is_binary=r.content_text is None,
+        )
+        for r in rows
+    ]
+    return SkillFileListResponse(skill_id=skill_id, total=len(files), files=files)
+
+
+@router.get("/skills/{skill_id}/files/{path:path}")
+async def get_skill_file(
+    skill_id: int,
+    path: str,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_permission(Permission.SKILL_READ)),
+):
+    """Return the content of one bundled skill file."""
+    row = (
+        await db.execute(
+            select(SkillFile).where(
+                SkillFile.skill_id == skill_id,
+                SkillFile.path == path,
+            )
+        )
+    ).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Skill file not found")
+
+    payload = row.content_blob if row.content_text is None else row.content_text.encode("utf-8")
+    media_type = row.mime or "application/octet-stream"
+    # Bundle files are attacker-supplied content; never let a browser render them.
+    return Response(
+        content=payload or b"",
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{path.rsplit("/", 1)[-1]}"',
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 # --- Tools ---

@@ -1,7 +1,7 @@
 """Models module initialization."""
 from app.models.user import User, RoleModel
 from app.models.agent import AgentConfig, AgentExecution
-from app.models.skill import Skill, Tool
+from app.models.skill import Skill, SkillFile, Tool
 from app.models.knowledge import KnowledgeBase, Document, DocumentChunk
 from app.models.audit import AuditLog
 from app.models.mcp import MCPServer, MCPTool
@@ -22,7 +22,7 @@ from app.models.run_event import AgentRunEvent
 __all__ = [
     "User", "RoleModel",
     "AgentConfig", "AgentExecution",
-    "Skill", "Tool",
+    "Skill", "SkillFile", "Tool",
     "KnowledgeBase", "Document", "DocumentChunk",
     "AuditLog",
     "MCPServer", "MCPTool",

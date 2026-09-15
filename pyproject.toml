@@ -19,6 +19,8 @@ dependencies = [
     # probes with an over-length password during backend init and now raises).
     # app.core.auth calls bcrypt directly, which is what the routers already did.
     "python-multipart>=0.0.30",
+    # Direct dep: skill-bundle frontmatter parsing (app/services/skill_installer.py).
+    "pyyaml>=6.0",
     "httpx>=0.27.0",
     "httpx2>=2.12.0",
     "httpcore2>=2.10.0",

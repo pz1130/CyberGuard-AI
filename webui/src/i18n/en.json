@@ -199,7 +199,13 @@
     "name": "Name",
     "type": "Type",
     "description": "Description",
-    "deleteConfirm": "Confirm deletion?"
+    "deleteConfirm": "Confirm deletion?",
+    "importPick": "Click to select a .md / .json / .zip file",
+    "importDrop": "or drag and drop",
+    "importing": "Importing…",
+    "importHint": "Supported: .md (with optional YAML frontmatter), .json, and .zip skill bundles (every SKILL.md inside becomes a skill; sibling references/, scripts/ and assets/ are stored with it). An existing skill with the same name is updated.",
+    "importInstalled": "Imported {{count}} skill(s)",
+    "bundleFiles": "{{count}} bundled file(s)"
   },
   "knowledge": {
     "title": "Knowledge Base",

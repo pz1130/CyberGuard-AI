@@ -1,5 +1,8 @@
 """Skill and Tool database models."""
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, JSON
+from sqlalchemy import (
+    Column, Integer, String, Boolean, DateTime, Text, JSON,
+    ForeignKey, LargeBinary, UniqueConstraint,
+)
 from app.core.database import Base
 from app.core.time import utc_now
 
@@ -57,3 +60,33 @@ class Tool(Base):
 
     def __repr__(self):
         return f"<Tool {self.name} (v{self.version})>"
+
+
+class SkillFile(Base):
+    """A bundled resource file belonging to a skill (references/, scripts/, assets/).
+
+    Populated when a skill is imported from a zipped bundle. The whole file set
+    of a skill is replaced on every re-import, so stale paths never linger.
+    """
+
+    __tablename__ = "skill_files"
+    __table_args__ = (
+        UniqueConstraint("skill_id", "path", name="uq_skill_files_skill_path"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    skill_id = Column(
+        Integer,
+        ForeignKey("skills.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    path = Column(String(500), nullable=False)  # relative to the skill root
+    content_text = Column(Text, nullable=True)  # UTF-8 decodable files
+    content_blob = Column(LargeBinary, nullable=True)  # everything else
+    size_bytes = Column(Integer, nullable=False, default=0)
+    mime = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+
+    def __repr__(self):
+        return f"<SkillFile {self.skill_id}:{self.path}>"

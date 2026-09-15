@@ -199,7 +199,13 @@
     "name": "名称",
     "type": "类型",
     "description": "描述",
-    "deleteConfirm": "确认删除？"
+    "deleteConfirm": "确认删除？",
+    "importPick": "点击选择 .md / .json / .zip 文件",
+    "importDrop": "或拖拽到此处",
+    "importing": "导入中…",
+    "importHint": "支持 .md（带可选 YAML frontmatter）、.json，以及 .zip skill 包（包内每个 SKILL.md 为一个 skill，同目录的 references/、scripts/、assets/ 会一并保存）。同名 skill 将被更新。",
+    "importInstalled": "已导入 {{count}} 个 skill",
+    "bundleFiles": "{{count}} 个附带文件"
   },
   "knowledge": {
     "title": "知识库",

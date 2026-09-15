@@ -95,3 +95,28 @@ async def test_dispatch_load_skill_unauthorized(monkeypatch):
     out = await runner._dispatch(Call())
     data = json.loads(out)
     assert data.get("is_error") is True or data.get("status") == "error"
+
+
+def test_wrap_skill_body_lists_bundle_files_without_their_contents():
+    wrapped = SkillLoader.wrap_skill_body(
+        {
+            "id": 9,
+            "name": "bundled",
+            "version": "1",
+            "md_content": "step 1",
+            "files": [
+                {"path": "references/api.md", "size_bytes": 1200},
+                {"path": "scripts/run.sh", "size_bytes": 80},
+            ],
+        }
+    )
+    assert "references/api.md" in wrapped
+    assert "scripts/run.sh" in wrapped
+    assert "step 1" in wrapped
+
+
+def test_wrap_skill_body_omits_the_manifest_when_there_are_no_files():
+    wrapped = SkillLoader.wrap_skill_body(
+        {"id": 9, "name": "plain", "version": "1", "md_content": "step 1", "files": []}
+    )
+    assert "bundled files" not in wrapped.lower()

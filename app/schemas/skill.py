@@ -48,6 +48,7 @@ class SkillResponse(BaseModel):
     metadata_json: Optional[Dict[str, Any]]
     tags: Optional[List[str]] = None
     md_content: Optional[str] = None
+    bundle_file_count: int = 0
     created_at: datetime
     updated_at: datetime
 
@@ -136,8 +137,37 @@ class SkillInstallUrlRequest(BaseModel):
     headers: Optional[Dict[str, str]] = Field(default=None, description="Optional HTTP headers (e.g. Authorization)")
 
 
+class SkillImportFailure(BaseModel):
+    """One skill inside a bundle that could not be installed."""
+    name: Optional[str] = None
+    error: str
+
+
 class SkillInstallResponse(BaseModel):
-    """Response after installing a skill."""
+    """Response after installing one or more skills.
+
+    ``skill`` stays populated for single-skill imports so existing callers keep
+    working; bundle imports report every result through ``installed``/``failed``.
+    """
     success: bool
     skill: Optional[SkillRead] = None
+    installed: List[SkillRead] = Field(default_factory=list)
+    failed: List[SkillImportFailure] = Field(default_factory=list)
     error: Optional[str] = None
+
+
+class SkillFileRead(BaseModel):
+    """Metadata for one bundled skill file (never the content itself)."""
+    path: str
+    size_bytes: int
+    mime: Optional[str] = None
+    is_binary: bool = False
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SkillFileListResponse(BaseModel):
+    """All bundled files belonging to a skill."""
+    skill_id: int
+    total: int
+    files: List[SkillFileRead]

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useContext, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
-import { Trash2, Plus, Edit2, Wrench, X, Loader2, Link, Upload } from 'lucide-react'
+import { Trash2, Plus, Edit2, Wrench, X, Loader2, Link, Upload, FolderArchive } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import { SearchContext } from '../context/search'
 import { errorMessage } from '../lib/errorMessage'
@@ -19,6 +19,25 @@ interface Skill {
   tags?: string[]
   tagsText?: string
   md_content?: string
+  bundle_file_count?: number
+}
+
+interface ImportFailure {
+  name?: string
+  error: string
+}
+
+interface ImportResult {
+  success?: boolean
+  error?: string
+  skill?: Skill
+  installed?: Skill[]
+  failed?: ImportFailure[]
+}
+
+interface ImportSummary {
+  installed: string[]
+  failed: ImportFailure[]
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -44,6 +63,8 @@ export default function Skills() {
   const [installUrl, setInstallUrl] = useState('')
   const [installLoading, setInstallLoading] = useState(false)
   const [installError, setInstallError] = useState('')
+  const [importSummary, setImportSummary] = useState<ImportSummary | null>(null)
+  const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { searchTarget, setSearchTarget } = useContext(SearchContext)
@@ -110,22 +131,38 @@ export default function Skills() {
     finally { setInstallLoading(false) }
   }
 
-  const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setInstallLoading(true); setInstallError('')
+  const importFile = async (file: File) => {
+    setInstallLoading(true); setInstallError(''); setImportSummary(null)
     try {
       const fd = new FormData()
       fd.append('file', file)
-      const result = await api.importSkillFile(fd) as { success?: boolean; error?: string }
+      const result = await api.importSkillFile(fd) as ImportResult
       if (result.success) {
-        setShowImport(false); load()
+        const installed = result.installed || (result.skill ? [result.skill] : [])
+        load()
+        // A bundle can partially succeed, so keep the modal open to show what landed.
+        if ((result.failed?.length || 0) > 0) {
+          setImportSummary({ installed: installed.map(s => s.name), failed: result.failed || [] })
+        } else {
+          setShowImport(false)
+        }
       } else {
         setInstallError(result.error || 'Import failed')
       }
     } catch (e: unknown) { setInstallError(errorMessage(e)) }
     finally { setInstallLoading(false) }
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) await importFile(file)
+  }
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault(); setDragOver(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) await importFile(file)
   }
 
   return (
@@ -215,22 +252,49 @@ export default function Skills() {
 
       {/* Import File Modal */}
       {showImport && (
-        <Modal width={500} title="IMPORT SKILL FILE" onClose={() => { setShowImport(false); setInstallError('') }}>
+        <Modal width={500} title="IMPORT SKILL FILE" onClose={() => { setShowImport(false); setInstallError(''); setImportSummary(null) }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ padding: '20px', background: 'var(--bg-base)', border: '1px dashed var(--border-bright)', textAlign: 'center', cursor: 'pointer' }}
-              onClick={() => fileInputRef.current?.click()}>
-              <Upload size={24} style={{ color: 'var(--text-dim)', marginBottom: 8 }} />
-              <div style={{ fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>Click to select a .md file</div>
-              <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>or drag and drop</div>
-              <input ref={fileInputRef} type="file" accept=".md,.markdown,.json" onChange={handleFileImport} style={{ display: 'none' }} />
+            <div
+              style={{
+                padding: '20px',
+                background: dragOver ? 'var(--bg-elevated)' : 'var(--bg-base)',
+                border: `1px dashed ${dragOver ? 'var(--accent)' : 'var(--border-bright)'}`,
+                textAlign: 'center',
+                cursor: installLoading ? 'wait' : 'pointer',
+                opacity: installLoading ? 0.6 : 1,
+              }}
+              onClick={() => !installLoading && fileInputRef.current?.click()}
+              onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+            >
+              {installLoading
+                ? <Loader2 size={24} style={{ color: 'var(--accent)', marginBottom: 8, animation: 'spin 1s linear infinite' }} />
+                : <Upload size={24} style={{ color: 'var(--text-dim)', marginBottom: 8 }} />}
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
+                {installLoading ? t('skills.importing') : t('skills.importPick')}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{t('skills.importDrop')}</div>
+              <input ref={fileInputRef} type="file" accept=".md,.markdown,.json,.zip" onChange={handleFileImport} style={{ display: 'none' }} />
             </div>
             {installError && (
               <div style={{ padding: '8px 10px', background: 'rgba(255,0,0,0.1)', border: '1px solid var(--red)', fontSize: 13, color: 'var(--red)' }}>
                 {installError}
               </div>
             )}
+            {importSummary && (
+              <div style={{ padding: '8px 10px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', fontSize: 12, lineHeight: 1.6 }}>
+                <div style={{ color: 'var(--accent)' }}>
+                  {t('skills.importInstalled', { count: importSummary.installed.length })}
+                  {importSummary.installed.length > 0 && `: ${importSummary.installed.join(', ')}`}
+                </div>
+                {importSummary.failed.map((f, i) => (
+                  <div key={i} style={{ color: 'var(--red)' }}>{f.name || '?'}: {f.error}</div>
+                ))}
+              </div>
+            )}
             <div style={{ padding: '8px 10px', background: 'var(--bg-base)', border: '1px solid var(--border)', fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6 }}>
-              Supported formats: .md (markdown with optional YAML frontmatter), .json. If the skill name already exists, it will be updated.
+              {t('skills.importHint')}
             </div>
           </div>
         </Modal>
@@ -391,6 +455,11 @@ export default function Skills() {
                   {s.md_content && (
                     <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>
                       body ~{Math.max(1, Math.round((s.md_content.length || 0) / 100) / 10)}k chars
+                    </span>
+                  )}
+                  {!!s.bundle_file_count && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--cyan)' }}>
+                      <FolderArchive size={11} /> {t('skills.bundleFiles', { count: s.bundle_file_count })}
                     </span>
                   )}
                 </div>
