@@ -1,0 +1,3 @@
+# The egress proxy is standard library only. This file exists so the image
+# build has the same shape as the other services; adding a dependency here
+# means adding one to the one process that talks to the internet.

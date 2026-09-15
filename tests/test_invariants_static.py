@@ -356,3 +356,69 @@ def test_inv41_proxy_blocklist_matches_the_app_blocklist():
     assert [str(n) for n in proxy_ssrf.BLOCKED_NETWORKS] == \
            [str(n) for n in app_ssrf._BLOCKED_NETWORKS]
     assert proxy_ssrf.BLOCKED_HOSTNAMES == app_ssrf._BLOCKED_HOSTNAMES
+
+
+def test_inv41_egress_proxy_is_the_only_way_out_of_the_sandbox():
+    """INV-41: the sandbox segments reach the internet only through the proxy."""
+    compose = _compose()
+    services, networks = compose["services"], compose["networks"]
+
+    for name in ("skill-runner-net", "egress-proxy"):
+        assert name in services, f"{name} service is missing"
+
+    runner_nets = set(services["skill-runner-net"].get("networks") or [])
+    proxy_nets = set(services["egress-proxy"].get("networks") or [])
+
+    # A network declared with no options parses as None, not {}.
+    def _opts(name):
+        return networks[name] or {}
+
+    # The net-enabled runner has no route of its own.
+    assert runner_nets == {"sandbox-net"}
+    assert _opts("sandbox-net").get("internal") is True
+
+    # The proxy bridges the sandbox to the outside and touches nothing else.
+    assert proxy_nets == {"sandbox-net", "egress"}
+    assert _opts("egress").get("internal") is not True
+    for forbidden in ("backend", "sandbox"):
+        assert forbidden not in proxy_nets
+        assert forbidden not in runner_nets
+
+    # Phase 1's no-network runner must not gain a path to the proxy.
+    assert set(services["skill-runner"].get("networks") or []) == {"sandbox"}
+
+    # api is the only service that must span both sandbox segments; without
+    # this it cannot dispatch to either runner and nothing works at all.
+    api_nets = set(services["api"].get("networks") or [])
+    assert {"backend", "sandbox", "sandbox-net"} <= api_nets
+    assert "egress" not in api_nets
+
+    # Data plane stays where it was.
+    for data_service in ("postgres", "redis"):
+        nets = set(services[data_service].get("networks") or [])
+        assert not (nets & (runner_nets | proxy_nets))
+
+
+def test_inv41_runners_never_receive_the_control_token():
+    services = _compose()["services"]
+    for runner in ("skill-runner", "skill-runner-net"):
+        env = services[runner].get("environment") or {}
+        keys = set(env if isinstance(env, dict) else [e.split("=", 1)[0] for e in env])
+        assert "EGRESS_PROXY_TOKEN" not in keys, f"{runner} must not hold the control token"
+        assert "RUNNER_TOKEN" not in keys
+        assert "env_file" not in services[runner]
+
+
+def test_inv41_proxy_runs_a_single_worker():
+    """Grants live in process memory, so a second worker would break lookups
+    intermittently — which reads as a flaky 407, not as a config error.
+
+    The service runs the module directly, so today there is no worker flag to
+    get wrong. This guards the migration someone will eventually make to an
+    ASGI server, where --workers N is the natural default.
+    """
+    svc = _compose()["services"]["egress-proxy"]
+    command = svc.get("command")
+    text = " ".join(command) if isinstance(command, list) else (command or "")
+    assert "--workers" not in text or "--workers 1" in text
+    assert "python" in text or "egress_proxy" in text

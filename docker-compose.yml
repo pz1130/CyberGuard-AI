@@ -84,6 +84,10 @@ services:
       TOOL_RUNNER_URL: http://tool-runner:9000
       SKILL_RUNNER_URL: http://skill-runner:9000
       SKILL_RUNNER_TOKEN: ${SKILL_RUNNER_TOKEN:?Set SKILL_RUNNER_TOKEN in .env}
+      SKILL_RUNNER_NET_URL: http://skill-runner-net:9000
+      EGRESS_PROXY_URL: egress-proxy:3128
+      EGRESS_PROXY_CONTROL_URL: http://egress-proxy:3129
+      EGRESS_PROXY_TOKEN: ${EGRESS_PROXY_TOKEN:?Set EGRESS_PROXY_TOKEN in .env}
       # RUNNER_TOKEN and others come from .env or defaults in compose
     depends_on:
       migrate:
@@ -105,6 +109,7 @@ services:
     networks:
       - backend
       - sandbox
+      - sandbox-net
     <<: *app-hardening
     restart: unless-stopped
 
@@ -163,6 +168,44 @@ services:
     pids_limit: 128
     mem_limit: 512m
     cpus: 1.0
+    <<: *app-hardening
+    restart: unless-stopped
+
+  skill-runner-net:
+    image: cyberguard-skill-runner:1.0.0-rc.1
+    build:
+      context: .
+      dockerfile: skill-runner/Dockerfile
+    environment:
+      SKILL_RUNNER_TOKEN: ${SKILL_RUNNER_TOKEN:?Set SKILL_RUNNER_TOKEN in .env}
+    # Same image as skill-runner; the only difference is which network it is on.
+    # `sandbox-net` is internal, so the sole reachable endpoint is egress-proxy.
+    networks:
+      - sandbox-net
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=1777,size=64m
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 1.0
+    <<: *app-hardening
+    restart: unless-stopped
+
+  egress-proxy:
+    image: cyberguard-egress-proxy:1.0.0-rc.1
+    build:
+      context: .
+      dockerfile: egress-proxy/Dockerfile
+    command: ["python", "-m", "egress_proxy.main"]
+    environment:
+      EGRESS_PROXY_TOKEN: ${EGRESS_PROXY_TOKEN:?Set EGRESS_PROXY_TOKEN in .env}
+    # The only service bridging the sandbox to the outside. Not on `backend`,
+    # so a rebinding trick that slipped the IP check still reaches no database.
+    networks:
+      - sandbox-net
+      - egress
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 0.5
     <<: *app-hardening
     restart: unless-stopped
 
@@ -249,6 +292,12 @@ networks:
   # this removes is postgres, redis, and all egress.
   sandbox:
     internal: true
+  # Phase 2: the allowlist runner and the proxy. Internal for the same reason —
+  # the only way out of it is through egress-proxy, which checks every hop.
+  sandbox-net:
+    internal: true
+  # Ordinary network. egress-proxy alone is attached to it.
+  egress:
 
 volumes:
   postgres_data:
