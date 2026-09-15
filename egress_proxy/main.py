@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import logging
 import os
 from typing import List, Optional, Tuple
@@ -24,6 +25,7 @@ logger = logging.getLogger("egress-proxy")
 ALLOWED_PORTS = frozenset({80, 443})
 MAX_HEADER_BYTES = 16384
 STORE = GrantStore()
+CONTROL_TOKEN = os.environ.get("EGRESS_PROXY_TOKEN", "")
 
 
 def _nonce_from_headers(headers: List[str]) -> Optional[str]:
@@ -165,16 +167,112 @@ async def handle_proxy(reader: asyncio.StreamReader,
     )
 
 
+async def _control_reply(writer: asyncio.StreamWriter, status: str, obj: dict) -> None:
+    body = json.dumps(obj).encode()
+    writer.write(
+        f"HTTP/1.1 {status}\r\nContent-Type: application/json\r\n"
+        f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n".encode() + body)
+    try:
+        await writer.drain()
+    except ConnectionError:
+        pass
+    writer.close()
+
+
+async def handle_control(reader: asyncio.StreamReader,
+                         writer: asyncio.StreamWriter) -> None:
+    """Grant and revoke.
+
+    A separate listener from the proxy port so the control surface and the data
+    surface cannot be mistaken for each other: holding the control token buys
+    the ability to describe a grant, never to use one.
+    """
+    try:
+        head = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), timeout=15)
+    except (asyncio.IncompleteReadError, asyncio.TimeoutError,
+            asyncio.LimitOverrunError, ConnectionError):
+        writer.close()
+        return
+
+    lines = head.decode("latin1").split("\r\n")
+    parts = lines[0].split()
+    if len(parts) != 3:
+        await _control_reply(writer, "400 Bad Request", {"error": "malformed request"})
+        return
+    _method, path, _version = parts
+
+    token, length = "", 0
+    for line in lines[1:]:
+        name, _, value = line.partition(":")
+        key = name.strip().lower()
+        if key == "x-egress-token":
+            token = value.strip()
+        elif key == "content-length" and value.strip().isdigit():
+            length = int(value.strip())
+
+    # A blank CONTROL_TOKEN must not be satisfied by a blank header.
+    if not CONTROL_TOKEN or token != CONTROL_TOKEN:
+        await _control_reply(writer, "401 Unauthorized", {"error": "bad control token"})
+        return
+
+    try:
+        raw = await asyncio.wait_for(reader.readexactly(length), timeout=15) if length else b"{}"
+        body = json.loads(raw or b"{}")
+    except Exception:
+        await _control_reply(writer, "400 Bad Request", {"error": "bad JSON body"})
+        return
+    if not isinstance(body, dict):
+        await _control_reply(writer, "400 Bad Request", {"error": "body must be an object"})
+        return
+
+    nonce = body.get("nonce")
+    if not nonce or not isinstance(nonce, str):
+        await _control_reply(writer, "400 Bad Request", {"error": "nonce is required"})
+        return
+
+    if path == "/grant":
+        allowlist = body.get("allowlist")
+        if not isinstance(allowlist, list) or not allowlist:
+            await _control_reply(writer, "400 Bad Request",
+                                 {"error": "allowlist must be a non-empty list"})
+            return
+        try:
+            ttl = float(body.get("ttl") or 0)
+        except (TypeError, ValueError):
+            ttl = 0.0
+        if ttl <= 0:
+            await _control_reply(writer, "400 Bad Request", {"error": "ttl must be positive"})
+            return
+        STORE.purge()
+        STORE.grant(nonce, [str(h) for h in allowlist], ttl)
+        await _control_reply(writer, "200 OK", {"ok": True})
+        return
+
+    if path == "/revoke":
+        STORE.revoke(nonce)
+        await _control_reply(writer, "200 OK", {"ok": True})
+        return
+
+    await _control_reply(writer, "404 Not Found", {"error": "unknown path"})
+
+
+async def start_control(host: str, port: int) -> asyncio.AbstractServer:
+    return await asyncio.start_server(handle_control, host, port)
+
+
 async def start_proxy(host: str, port: int) -> asyncio.AbstractServer:
     return await asyncio.start_server(handle_proxy, host, port)
 
 
 async def main() -> None:  # pragma: no cover - process entry point
     logging.basicConfig(level=logging.INFO)
+    if not CONTROL_TOKEN:
+        raise RuntimeError("EGRESS_PROXY_TOKEN must be set for the egress proxy")
     proxy = await start_proxy("0.0.0.0", int(os.environ.get("PROXY_PORT", "3128")))
-    logger.info("egress proxy listening")
-    async with proxy:
-        await proxy.serve_forever()
+    control = await start_control("0.0.0.0", int(os.environ.get("CONTROL_PORT", "3129")))
+    logger.info("egress proxy listening; control plane up")
+    async with proxy, control:
+        await asyncio.gather(proxy.serve_forever(), control.serve_forever())
 
 
 if __name__ == "__main__":  # pragma: no cover
