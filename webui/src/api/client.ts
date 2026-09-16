@@ -305,7 +305,6 @@ export const api = {
   getConversation: (id: number) => request(`/conversations/${id}`),
   updateConversation: (id: number, body: {
     title?: string
-    messages_json?: string
     system_prompt_override?: string | null
     intent_parser_prompt_override?: string | null
     summarizer_prompt_override?: string | null
