@@ -144,7 +144,10 @@ export default function Approvals() {
           {filter === 'pending' ? 'NO PENDING APPROVALS' : 'NO RECORDS'}
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+        <div data-testid="approval-list" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {/* One request per full-width row. As a multi-column card grid, each
+              column was narrower than the row's fixed-width parts, so the title
+              was squeezed to nothing — and a wider window only added columns. */}
           {items.map(item => {
             const risk = item.risk_level as RiskLevel
             const isExpanded = expanded === item.id

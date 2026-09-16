@@ -63,6 +63,18 @@ describe('Approvals row layout', () => {
     expect(titleRow.style.minWidth).toBe('0px')
   })
 
+  it('gives each request a full-width row instead of a grid column', async () => {
+    render(<Approvals />)
+    await screen.findByText('AGENT_EXECUTION')
+
+    // A multi-column grid made each card narrower than its fixed-width parts,
+    // leaving the title 0–21px wide; more window width only added columns.
+    const list = screen.getByTestId('approval-list')
+    expect(list.style.display).toBe('flex')
+    expect(list.style.flexDirection).toBe('column')
+    expect(list.style.gridTemplateColumns).toBe('')
+  })
+
   it('wraps the filter tabs rather than cutting them off', async () => {
     render(<Approvals />)
     const pending = await screen.findByRole('button', { name: 'PENDING' })
