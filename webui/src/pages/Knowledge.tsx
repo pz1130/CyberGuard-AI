@@ -145,7 +145,7 @@ function OcrSettingsModal({ open, onClose }: { open: boolean; onClose: () => voi
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 0, border: '1px solid var(--border)' }}>
             <input
               id="ocr-enabled"
               type="checkbox"
@@ -643,7 +643,7 @@ export default function Knowledge() {
                       alignItems: 'center',
                       gap: 10,
                       padding: '10px 12px',
-                      borderRadius: 'var(--radius-md)',
+                      borderRadius: 0,
                       border: `1px solid ${isSelected ? 'var(--accent-border)' : 'var(--border)'}`,
                       background: isSelected ? 'var(--accent-dim)' : 'var(--bg-elevated)',
                       cursor: 'pointer',
@@ -719,7 +719,7 @@ export default function Knowledge() {
               <div style={{
                 width: 48,
                 height: 48,
-                borderRadius: 'var(--radius-lg)',
+                borderRadius: 0,
                 background: 'var(--bg-elevated)',
                 display: 'flex',
                 alignItems: 'center',
@@ -846,7 +846,7 @@ export default function Knowledge() {
                           background: 'var(--bg-elevated)',
                           border: '1px solid var(--border)',
                           borderLeft: '3px solid var(--accent)',
-                          borderRadius: 'var(--radius-md)',
+                          borderRadius: 0,
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
@@ -922,68 +922,69 @@ export default function Knowledge() {
                     color: 'var(--text-dim)',
                     fontSize: 12,
                     border: '1px dashed var(--border)',
-                    borderRadius: 'var(--radius-md)',
+                    borderRadius: 0,
                     background: 'var(--bg-elevated)',
                   }}>
                     {t('knowledge.noDocs')}
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {docs.map(d => (
-                      <div
-                        key={d.id}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 12,
-                          padding: '12px 14px',
-                          background: 'var(--bg-elevated)',
-                          border: '1px solid var(--border)',
-                          borderRadius: 'var(--radius-md)',
-                          transition: 'border-color var(--transition-fast)',
-                        }}
-                      >
-                        <FileText size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
-                            <span style={{
-                              fontSize: 13,
-                              fontWeight: 500,
-                              color: 'var(--text-primary)',
-                              letterSpacing: '0.02em',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                            }}>
-                              {d.filename}
-                            </span>
-                            {d.status === 'processing' && (
-                              <span className="badge badge-warning" style={{ fontSize: 10, flexShrink: 0 }}>
-                                <Loader2 size={10} style={{ animation: 'spin 1s linear infinite', marginRight: 2 }} />
-                                {t('knowledge.ocrInProgress')}
-                              </span>
-                            )}
-                            {d.status === 'failed' && (
-                              <span title={d.status_detail || ''} className="badge badge-error" style={{ fontSize: 10, flexShrink: 0 }}>
-                                {t('knowledge.failed')}
-                              </span>
-                            )}
-                          </div>
-                          <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>
-                            {d.metadata_json?.chunk_count ?? 0} {t('knowledge.chunks')}
-                            {d.file_size != null && ` · ${(d.file_size / 1024).toFixed(1)} KB`}
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => deleteDoc(d)}
-                          title={t('common.delete', 'Delete')}
-                          className="item-card-icon-btn danger"
-                          style={{ flexShrink: 0 }}
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    ))}
+                  <div style={{ border: '1px solid var(--border-bright)', overflow: 'hidden' }}>
+                    <table className="data-table" style={{ width: '100%' }}>
+                      <thead>
+                        <tr>
+                          <th>{t('knowledge.filename', 'DOCUMENT').toUpperCase()}</th>
+                          <th style={{ textAlign: 'right' }}>{t('knowledge.chunks', 'CHUNKS').toUpperCase()}</th>
+                          <th style={{ textAlign: 'right' }}>{t('knowledge.fileSize', 'SIZE').toUpperCase()}</th>
+                          <th style={{ width: 60, textAlign: 'center' }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {docs.map(d => (
+                          <tr key={d.id}>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <FileText size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                                <span style={{
+                                  fontSize: 13,
+                                  fontWeight: 500,
+                                  color: 'var(--text-primary)',
+                                  letterSpacing: '0.02em',
+                                }}>
+                                  {d.filename}
+                                </span>
+                                {d.status === 'processing' && (
+                                  <span className="badge badge-warning" style={{ fontSize: 10, flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                    <Loader2 size={10} style={{ animation: 'spin 1s linear infinite' }} />
+                                    {t('knowledge.ocrInProgress')}
+                                  </span>
+                                )}
+                                {d.status === 'failed' && (
+                                  <span title={d.status_detail || ''} className="badge badge-error" style={{ fontSize: 10, flexShrink: 0 }}>
+                                    {t('knowledge.failed')}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+                              {d.metadata_json?.chunk_count ?? 0}
+                            </td>
+                            <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+                              {d.file_size != null ? `${(d.file_size / 1024).toFixed(1)} KB` : '—'}
+                            </td>
+                            <td style={{ textAlign: 'center' }}>
+                              <button
+                                onClick={() => deleteDoc(d)}
+                                title={t('common.delete', 'Delete')}
+                                className="item-card-icon-btn danger"
+                                style={{ margin: '0 auto' }}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>

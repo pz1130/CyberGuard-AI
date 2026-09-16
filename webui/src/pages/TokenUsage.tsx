@@ -31,11 +31,11 @@ function Bar({ label, value, max }: { label: string; value: number; max: number 
   const pct = Math.min((value / max) * 100, 100)
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      <span style={{ fontSize: 12, color: 'var(--text-muted)', width: 160, flexShrink: 0, letterSpacing: '0.05em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-      <div style={{ flex: 1, height: 14, background: 'var(--bg-base)', border: '1px solid var(--border-bright)', overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${pct}%`, background: 'var(--accent)', transition: 'all 0.3s' }} />
+      <span style={{ fontSize: 12, color: 'var(--text-muted)', width: 180, flexShrink: 0, letterSpacing: '0.04em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)' }}>{label}</span>
+      <div style={{ flex: 1, height: 16, background: 'var(--bg-base)', border: '1px solid var(--border-bright)', overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: 'var(--accent)', transition: 'all 0.3s ease' }} />
       </div>
-      <span style={{ fontSize: 12, color: 'var(--text-muted)', width: 48, textAlign: 'right', letterSpacing: '0.05em' }}>{(value / 1000).toFixed(0)}K</span>
+      <span style={{ fontSize: 12, color: 'var(--accent)', width: 64, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{(value / 1000).toFixed(1)}K</span>
     </div>
   )
 }
@@ -73,7 +73,7 @@ export default function TokenUsage() {
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200 }}>
-        <div style={{ color: 'var(--text-muted)' }}>{t('token.loading')}</div>
+        <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>{t('token.loading')}</div>
       </div>
     )
   }
@@ -90,7 +90,7 @@ export default function TokenUsage() {
             </div>
           }
         />
-        <div className="item-card" style={{ padding: 20, color: 'var(--text-muted)' }}>
+        <div className="card" style={{ padding: 20, color: 'var(--text-muted)' }}>
           {t('token.loadError')}
         </div>
       </div>
@@ -116,7 +116,7 @@ export default function TokenUsage() {
               value={rangeDays}
               onChange={e => setRangeDays(Number(e.target.value))}
               aria-label={t('token.dateRange')}
-              style={{ width: 110, height: 32, fontSize: 12 }}
+              style={{ width: 120, height: 32, fontSize: 12 }}
             >
               <option value={7}>{t('token.lastDays', { count: 7 })}</option>
               <option value={30}>{t('token.lastDays', { count: 30 })}</option>
@@ -127,58 +127,75 @@ export default function TokenUsage() {
       />
 
       {/* Summary */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 20 }}>
         {[
-          { label: t('token.totalInputTokens').toUpperCase(), value: totalInput.toLocaleString(), color: 'var(--cyan)' },
-          { label: t('token.totalOutputTokens').toUpperCase(), value: totalOutput.toLocaleString(), color: 'var(--purple)' },
-          { label: t('token.estimatedCostUsd').toUpperCase(), value: data.priced_tokens > 0 ? '$' + totalCost.toFixed(4) : '—', color: 'var(--amber)' },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="item-card" style={{ padding: 20, textAlign: 'center' }}>
-            <div style={{ fontSize: 24, fontWeight: 700, color, letterSpacing: '0.05em', marginBottom: 6 }}>{value}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.06em' }}>{label}</div>
+          { label: t('token.totalInputTokens').toUpperCase(), value: totalInput.toLocaleString(), color: 'var(--accent)', sub: 'PROMPT' },
+          { label: t('token.totalOutputTokens').toUpperCase(), value: totalOutput.toLocaleString(), color: 'var(--text-primary)', sub: 'COMPLETION' },
+          { label: t('token.estimatedCostUsd').toUpperCase(), value: data.priced_tokens > 0 ? '$' + totalCost.toFixed(4) : '—', color: 'var(--accent)', sub: 'ESTIMATED' },
+        ].map(({ label, value, color, sub }) => (
+          <div key={label} className="card" style={{ padding: '18px 20px', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.08em', fontWeight: 600 }}>{label}</span>
+              <span className="badge badge-neutral" style={{ fontSize: 10, fontFamily: 'var(--font-mono)' }}>{sub}</span>
+            </div>
+            <div style={{ fontSize: 26, fontWeight: 700, color, fontFamily: 'var(--font-mono)', letterSpacing: '0.02em' }}>{value}</div>
           </div>
         ))}
       </div>
 
       {data.unpriced_tokens > 0 && (
-        <div style={{ margin: '-12px 0 20px', fontSize: 12, color: 'var(--text-muted)' }}>
+        <div style={{ margin: '-10px 0 16px', fontSize: 12, color: 'var(--text-muted)' }}>
           {t('token.unpricedNotice', { count: data.unpriced_tokens.toLocaleString() })}
         </div>
       )}
 
       {/* Bar chart */}
-      <div className="item-card" style={{ padding: 20, marginBottom: 24 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 16 }}>{t('token.inputByModel').toUpperCase()}</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="card" style={{ padding: 0, marginBottom: 20, overflow: 'hidden' }}>
+        <div style={{
+          padding: '12px 18px',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: 'var(--bg-surface)',
+        }}>
+          <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--text-primary)' }}>
+            {t('token.inputByModel').toUpperCase()}
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: '0.05em', fontFamily: 'var(--font-mono)' }}>
+            PROMPT TOKENS
+          </span>
+        </div>
+        <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {data.by_model.length > 0 ? data.by_model.map(d => (
             <Bar key={`${d.provider_id}:${d.model_name}`} label={`${d.provider_name}/${d.model_name}`} value={d.prompt_tokens} max={maxVal} />
           )) : (
-            <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>{t('token.noData')}</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: '16px 0' }}>{t('token.noData')}</div>
           )}
         </div>
       </div>
 
       {/* Table */}
-      <div className="item-card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div style={{ border: '1px solid var(--border-bright)', overflow: 'hidden' }}>
         <table className="data-table">
           <thead>
             <tr>
               {[t('token.model'), t('token.input'), t('token.output'), t('token.estimatedCostUsd')].map((h, i) => (
-                <th key={i} style={i > 0 ? { textAlign: 'right' } : undefined}>{h}</th>
+                <th key={i} style={i > 0 ? { textAlign: 'right' } : undefined}>{h.toUpperCase()}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {data.by_model.length > 0 ? data.by_model.map(d => (
               <tr key={`${d.provider_id}:${d.model_name}`}>
-                <td style={{ color: 'var(--text-primary)', letterSpacing: '0.05em' }}>{d.model_name}</td>
-                <td style={{ color: 'var(--text-muted)', textAlign: 'right', letterSpacing: '0.05em' }}>{(d.prompt_tokens / 1000).toFixed(1)}K</td>
-                <td style={{ color: 'var(--text-muted)', textAlign: 'right', letterSpacing: '0.05em' }}>{(d.completion_tokens / 1000).toFixed(1)}K</td>
-                <td style={{ color: 'var(--purple)', textAlign: 'right', letterSpacing: '0.05em' }}>{d.estimated_cost_usd == null ? '—' : `$${d.estimated_cost_usd.toFixed(4)}`}</td>
+                <td style={{ color: 'var(--text-primary)', letterSpacing: '0.04em', fontFamily: 'var(--font-mono)' }}>{d.model_name}</td>
+                <td style={{ color: 'var(--accent)', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{(d.prompt_tokens / 1000).toFixed(1)}K</td>
+                <td style={{ color: 'var(--text-primary)', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{(d.completion_tokens / 1000).toFixed(1)}K</td>
+                <td style={{ color: 'var(--accent)', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{d.estimated_cost_usd == null ? '—' : `$${d.estimated_cost_usd.toFixed(4)}`}</td>
               </tr>
             )) : (
               <tr>
-                <td colSpan={4} style={{ padding: '14px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>{t('token.noData')}</td>
+                <td colSpan={4} style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>{t('token.noData')}</td>
               </tr>
             )}
           </tbody>

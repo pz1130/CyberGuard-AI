@@ -34,6 +34,8 @@
   --red-dim: rgba(239, 68, 68, 0.1);
   --cyan: #38bdf8;
   --cyan-dim: rgba(56, 189, 248, 0.1);
+  --purple: #a855f7;
+  --purple-dim: rgba(168, 85, 247, 0.1);
 
   /* Text */
   --text-primary: #f1f5f9;
@@ -62,7 +64,7 @@
   /* Shape (one radius system, Section 4.4) */
   --radius-sm: 0px;
   --radius-md: 0px;
-  --radius-lg: 8px;
+  --radius-lg: 0px;
   --radius-full: 9999px;
 
   /* Motion (Section 4.5: state changes only) */
@@ -84,6 +86,8 @@
   --amber: #d97706;
   --red: #dc2626;
   --cyan: #0284c7;
+  --purple: #9333ea;
+  --purple-dim: rgba(147, 51, 234, 0.1);
   --text-primary: #0f172a;
   --text-muted: #475569;
   --text-dim: #64748b;
