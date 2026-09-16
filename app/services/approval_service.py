@@ -79,13 +79,14 @@ class ApprovalService:
             "risk_level": risk_level,
         })
 
-        # Email admin (best-effort, fire-and-forget)
-        asyncio.create_task(ApprovalService._email_admin_created(
+        # Await best-effort delivery: worker event loops may end immediately
+        # after graph interruption, cancelling a detached notification task.
+        await ApprovalService._email_admin_created(
             request_id=request_id,
             action_description=action_description,
             risk_level=risk_level,
             user_id=user_id,
-        ))
+        )
 
         logger.info(
             f"[approval] Created request {record.id} for request_id={request_id} "

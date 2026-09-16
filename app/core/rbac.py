@@ -13,6 +13,7 @@ class Role(str, Enum):
     ANALYST = "analyst"
     VIEWER = "viewer"
     AUDITOR = "auditor"
+    APPROVER = "approver"
 
 
 class Permission(str, Enum):
@@ -47,6 +48,8 @@ class Permission(str, Enum):
 
     # Audit
     AUDIT_READ = "audit:read"
+    APPROVAL_READ = "approval:read"
+    APPROVAL_DECIDE = "approval:decide"
 
     # Settings (env vars, system config)
     SETTINGS_READ = "settings:read"
@@ -64,7 +67,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.SKILL_READ, Permission.SKILL_WRITE, Permission.SKILL_SCRIPT_APPROVE,
         Permission.KNOWLEDGE_READ, Permission.KNOWLEDGE_WRITE,
         Permission.TASK_READ, Permission.TASK_WRITE, Permission.TASK_EXECUTE,
-        Permission.AUDIT_READ,
+        Permission.AUDIT_READ, Permission.APPROVAL_READ, Permission.APPROVAL_DECIDE,
         Permission.SETTINGS_READ, Permission.SETTINGS_WRITE,
         Permission.ADMIN_ALL,
     },
@@ -85,6 +88,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.SKILL_READ,
         Permission.TASK_READ,
     },
+    Role.APPROVER: {Permission.APPROVAL_READ, Permission.APPROVAL_DECIDE},
     Role.AUDITOR: {
         Permission.AUDIT_READ,
         Permission.TASK_READ,

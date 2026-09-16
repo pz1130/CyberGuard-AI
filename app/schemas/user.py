@@ -3,6 +3,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from datetime import datetime
 
+from app.core.rbac import Role
 from app.schemas.email import InternalEmailStr
 
 
@@ -11,7 +12,7 @@ class UserBase(BaseModel):
     username: str = Field(..., min_length=3, max_length=100)
     email: InternalEmailStr
     full_name: Optional[str] = None
-    role: str = "viewer"
+    role: Role = Role.VIEWER
 
 
 class UserCreate(UserBase):
@@ -30,7 +31,7 @@ class UserUpdate(BaseModel):
     """
     email: Optional[InternalEmailStr] = None
     full_name: Optional[str] = None
-    role: Optional[str] = None
+    role: Optional[Role] = None
     is_active: Optional[bool] = None
     password: Optional[str] = Field(default=None, min_length=8)
 

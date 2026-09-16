@@ -404,14 +404,24 @@ class TestEmailService(unittest.IsolatedAsyncioTestCase):
             result = await send_email("admin@example.com", "Test", "<p>Test</p>")
         self.assertFalse(result)
 
-    async def test_notify_approval_created_no_admin_email(self):
-        """notify_approval_created is a no-op when SMTP_ADMIN_EMAIL is not set."""
-        import os
-        from app.services.email_service import notify_approval_created
+    async def test_notify_approval_created_sends_nothing_when_unconfigured(self):
+        """notify_approval_created sends nothing when delivery is disabled or incomplete."""
+        from app.services import email_service
 
-        with patch.dict(os.environ, {"SMTP_ADMIN_EMAIL": ""}, clear=False):
-            # Should not raise
-            await notify_approval_created("req-1", "test action", "high", user_id=1)
+        for cfg in ({"enabled": False, "method": "smtp", "from_email": "sender@example.org",
+                     "smtp_host": "smtp.example.org"},
+                    {"enabled": True, "method": "smtp", "from_email": "sender@example.org",
+                     "smtp_host": ""}):
+            with (
+                patch("app.services.email_config.load_email_config",
+                      new_callable=AsyncMock, return_value=cfg),
+                patch("app.services.email_config.approval_recipients",
+                      new_callable=AsyncMock) as recipients,
+                patch.object(email_service, "send_email", new_callable=AsyncMock) as send,
+            ):
+                await email_service.notify_approval_created("req-1", "test action", "high", user_id=1)
+            recipients.assert_not_awaited()
+            send.assert_not_awaited()
 
     def test_html_to_text_strips_tags(self):
         from app.services.email_service import _html_to_text

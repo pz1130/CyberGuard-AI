@@ -270,6 +270,10 @@ export const api = {
   exportAuditLogsSyslog: (body: { host: string; port: number; protocol: 'udp' | 'tcp'; facility: number }) =>
     request('/audit/export/syslog', { method: 'POST', body: JSON.stringify(body) }),
 
+  getEmailConfig: () => request('/email/config'),
+  updateEmailConfig: (body: JsonBody) => request('/email/config', { method: 'PUT', body: JSON.stringify(body) }),
+  testEmail: (body: { to_email: string; template?: 'connection' | 'created' | 'decided' }) => request('/email/test', { method: 'POST', body: JSON.stringify(body) }),
+
   // Backup
   listBackups: () => request('/backup'),
   createBackup: (body?: { name?: string; backup_type?: string; exclude_chat?: boolean }) =>

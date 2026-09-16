@@ -30,7 +30,7 @@ interface SsoMapping {
   priority?: number
 }
 
-const ROLES = ['admin', 'operator', 'viewer']
+const ROLES = ['admin', 'approver', 'operator', 'analyst', 'viewer', 'auditor']
 
 export default function Users() {
   const { t } = useTranslation()
@@ -219,9 +219,9 @@ export default function Users() {
                 <div style={{ gridColumn: '1 / -1' }}><SsoInput label="REDIRECT URI" value={ssoCfg.redirect_uri || ''} onChange={v => saveSsoConfig({ redirect_uri: v || null })} placeholder="https://your-domain/api/v1/auth/sso/callback" /></div>
               </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>DEFAULT ROLE</label>
+                  <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>{t('users.defaultRole')}</label>
                   <select value={ssoCfg.default_role} onChange={e => saveSsoConfig({ default_role: e.target.value })} style={{ width: '100%', height: 36, padding: '0 10px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 13 }}>
-                    {['admin', 'operator', 'analyst', 'viewer', 'auditor'].map(r => <option key={r} value={r}>{r.toUpperCase()}</option>)}
+                    {ROLES.map(r => <option key={r} value={r}>{t(`users.roles.${r}`)}</option>)}
                   </select>
                 </div>
                 <SsoField label="JIT PROVISIONING" checked={!!ssoCfg.allow_jit} onChange={v => saveSsoConfig({ allow_jit: v })} saving={ssoSaving} />
@@ -229,13 +229,13 @@ export default function Users() {
             )}
           </div>
           <div style={{ padding: 24, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
-            <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: '0.1em', marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border)', color: 'var(--text-primary)' }}>AZURE GROUP → APP ROLE MAPPINGS</div>
+            <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: '0.1em', marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border)', color: 'var(--text-primary)' }}>{t('users.roleMappings')}</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 12, alignItems: 'end', marginBottom: 20 }}>
               <SsoInput label="AZURE KEY" value={newMapping.azure_key} onChange={v => setNewMapping(p => ({ ...p, azure_key: v }))} placeholder="00000000-0000-0000-0000-000000000000" />
               <div>
-                <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>APP ROLE</label>
+                <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>{t('users.appRole')}</label>
                 <select value={newMapping.app_role} onChange={e => setNewMapping(p => ({ ...p, app_role: e.target.value }))} style={{ height: 36, padding: '0 8px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 13 }}>
-                  {['admin', 'operator', 'analyst', 'viewer', 'auditor'].map(r => <option key={r} value={r}>{r.toUpperCase()}</option>)}
+                  {ROLES.map(r => <option key={r} value={r}>{t(`users.roles.${r}`)}</option>)}
                 </select>
               </div>
               <div>
@@ -245,16 +245,16 @@ export default function Users() {
               <button onClick={addMapping} disabled={!newMapping.azure_key.trim()} style={{ height: 36, padding: '0 16px', background: newMapping.azure_key.trim() ? 'var(--accent)' : 'var(--bg-elevated)', border: '1px solid var(--accent-border)', color: newMapping.azure_key.trim() ? '#000' : 'var(--text-muted)', fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', cursor: 'pointer' }}>+ ADD</button>
             </div>
             {ssoMappings.length === 0 ? (
-              <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.06em' }}>NO MAPPINGS — AZURE USERS RECEIVE THE DEFAULT ROLE</div>
+              <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.06em' }}>{t('users.noRoleMappings')}</div>
             ) : (
               <table className="data-table">
                 <thead><tr>
-                  {['AZURE KEY', 'APP ROLE', 'PRIORITY', ''].map(h => <th key={h}>{h}</th>)}
+                  {['AZURE KEY', 'APP ROLE', 'PRIORITY', ''].map(h => <th key={h}>{h === 'APP ROLE' ? t('users.appRole') : h}</th>)}
                 </tr></thead>
                 <tbody>{ssoMappings.map(m => (
                   <tr key={m.id}>
                     <td className="font-mono" style={{ fontSize: 12 }}>{m.azure_key}</td>
-                    <td style={{ fontSize: 12, color: 'var(--accent)' }}>{m.app_role.toUpperCase()}</td>
+                    <td style={{ fontSize: 12, color: 'var(--accent)' }}>{t(`users.roles.${m.app_role}`)}</td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{m.priority}</td>
                     <td style={{ textAlign: 'right' }}>
                       <button onClick={() => removeMapping(m.id)} style={{ background: 'none', border: '1px solid var(--red)', color: 'var(--red)', padding: '4px 10px', fontSize: 11, cursor: 'pointer', letterSpacing: '0.06em', borderRadius: 0 }}>REMOVE</button>
@@ -301,10 +301,10 @@ export default function Users() {
               </div>
             </div>
             <div>
-              <label htmlFor="user-role" style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>ROLE</label>
+              <label htmlFor="user-role" style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>{t('users.role')}</label>
               <select id="user-role" value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
                 className="form-input">
-                {ROLES.map(r => <option key={r} value={r}>{r.toUpperCase()}</option>)}
+                {ROLES.map(r => <option key={r} value={r}>{t(`users.roles.${r}`)}</option>)}
               </select>
             </div>
             <div>
@@ -348,7 +348,7 @@ export default function Users() {
           <thead>
             <tr>
               {['USERNAME', 'EMAIL', 'ROLE', 'STATUS', 'ACTIONS'].map((h, i) => (
-                <th key={i}>{h}</th>
+                <th key={i}>{h === 'ROLE' ? t('users.role') : h}</th>
               ))}
             </tr>
           </thead>
@@ -372,7 +372,7 @@ export default function Users() {
                     color: ROLE_COLORS[u.role] || 'var(--text-muted)',
                     fontSize: 11, letterSpacing: '0.06em', background: 'var(--bg-base)',
                   }}>
-                    {u.role.toUpperCase()}
+                    {t(`users.roles.${u.role}`)}
                   </span>
                 </td>
                 <td style={{ padding: '14px 16px' }}>

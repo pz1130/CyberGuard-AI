@@ -120,14 +120,14 @@ class SsoConfigUpdate(BaseModel):
     tenant_id: Optional[str] = None
     client_id: Optional[str] = None
     redirect_uri: Optional[str] = None
-    default_role: Optional[str] = None
+    default_role: Optional[Role] = None
     allow_jit: Optional[bool] = None
     secret_env_var_id: Optional[int] = None
 
 
 class RoleMappingCreate(BaseModel):
     azure_key: str
-    app_role: str
+    app_role: Role
     priority: int = 10
 
 

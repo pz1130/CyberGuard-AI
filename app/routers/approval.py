@@ -9,8 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_session
-from app.core.dependencies import require_role
-from app.core.rbac import Role
+from app.core.dependencies import require_permission
+from app.core.rbac import Permission
 from app.core.auth import AuthenticatedUser
 from app.models.approval import ApprovalRequest
 from app.schemas.approval import (
@@ -53,20 +53,20 @@ logger = logging.getLogger(__name__)
 
 @router.get("/approvals/notify-status")
 async def approval_notify_status(
-    _=Depends(require_role(Role.ADMIN)),
+    _=Depends(require_permission(Permission.APPROVAL_READ)),
 ):
     """Whether approval emails will actually send."""
-    from app.services.email_service import smtp_status
-    return smtp_status()
+    from app.services.email_config import load_email_config, config_status
+    return config_status(await load_email_config())
 
 
 @router.get("/approvals", response_model=ApprovalListResponse)
 async def list_approvals(
     status_filter: str = "pending",
-    _=Depends(require_role(Role.ADMIN)),
+    _=Depends(require_permission(Permission.APPROVAL_READ)),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """List approval requests (ADMIN only). ?status_filter=pending|approved|rejected|all"""
+    """List approval requests (approval permission required). ?status_filter=pending|approved|rejected|all"""
     query = select(ApprovalRequest).order_by(ApprovalRequest.created_at.desc())
     if status_filter != "all":
         query = query.where(ApprovalRequest.status == status_filter)
@@ -80,9 +80,9 @@ async def list_approvals(
 
 @router.get("/approvals/events")
 async def approval_sse_events(
-    current_user: AuthenticatedUser = Depends(require_role(Role.ADMIN)),
+    current_user: AuthenticatedUser = Depends(require_permission(Permission.APPROVAL_READ)),
 ):
-    """SSE stream for real-time approval notifications (ADMIN only).
+    """SSE stream for real-time approval notifications (approval permission required).
 
     Connect at GET /api/v1/approvals/events.
     Each event: ``data: {JSON}\\n\\n``
@@ -172,7 +172,7 @@ async def approval_sse_events(
 @router.get("/approvals/{approval_id}", response_model=ApprovalRequestResponse)
 async def get_approval(
     approval_id: int,
-    _=Depends(require_role(Role.ADMIN)),
+    _=Depends(require_permission(Permission.APPROVAL_READ)),
 ):
     """Get a specific approval request by ID."""
     record = await ApprovalService.get_by_id(approval_id)
@@ -185,10 +185,10 @@ async def get_approval(
 async def decide_approval(
     approval_id: int,
     body: ApprovalDecision,
-    current_user: AuthenticatedUser = Depends(require_role(Role.ADMIN)),
+    current_user: AuthenticatedUser = Depends(require_permission(Permission.APPROVAL_DECIDE)),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Approve or reject a pending request (ADMIN only)."""
+    """Approve or reject a pending request (approval permission required)."""
     result = await session.execute(
         select(ApprovalRequest).where(ApprovalRequest.id == approval_id)
     )
@@ -212,6 +212,12 @@ async def decide_approval(
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    from app.core.audit import record_action
+    await record_action(user_id=current_user.user_id, action="approval.decide",
+                        human_reviewer=str(current_user.user_id), risk_tier=record.risk_level,
+                        input_data={"request_id": record.request_id, "decision": body.decision},
+                        output_data={"status": updated.status})
 
     # Resume a master graph suspended via interrupt(). Only approvals raised by
     # the graph's approval node have a checkpointed thread to resume.
