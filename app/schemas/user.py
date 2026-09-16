@@ -20,11 +20,19 @@ class UserCreate(UserBase):
 
 
 class UserUpdate(BaseModel):
-    """User update schema."""
+    """User update schema.
+
+    ``password`` was missing while ``update_user`` read ``body.password``, so
+    every edit — a role change, a deactivation — raised AttributeError and came
+    back as a 500, and setting a password from the UI silently kept the old
+    one. The same 8-character floor as UserCreate applies, or the update path
+    would be a way around the create path's minimum.
+    """
     email: Optional[InternalEmailStr] = None
     full_name: Optional[str] = None
     role: Optional[str] = None
     is_active: Optional[bool] = None
+    password: Optional[str] = Field(default=None, min_length=8)
 
 
 class UserResponse(BaseModel):
