@@ -115,7 +115,7 @@ export default function Approvals() {
       />
 
       {/* Filter tabs */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
         {filters.map(f => (
           <button key={f} onClick={() => setFilter(f)} style={{
             padding: '4px 14px', fontSize: 11, letterSpacing: '0.12em',
@@ -190,8 +190,17 @@ export default function Approvals() {
 
                   {/* Action info */}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.06em' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
+                      {/* Truncates like the description below it. Every other
+                          part of this row is flexShrink: 0, so an untruncated
+                          title was the one thing that could overflow — and a
+                          single long token cannot wrap, so it painted over the
+                          status badge and the decision buttons. */}
+                      <span style={{
+                        fontSize: 13, fontWeight: 600, color: 'var(--text-primary)',
+                        letterSpacing: '0.06em', minWidth: 0,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
                         {item.action_type.toUpperCase()}
                       </span>
                       {item.agent_name && (
