@@ -19,15 +19,19 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
 from typing import AsyncGenerator
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
 from app.core.auth import AuthenticatedUser
-from app.core.time import utc_now
+from app.core.database import AsyncSessionLocal
 from app.core.dependencies import get_db, rate_limit, require_permission
+from app.services.conversation_messages import (
+    append_messages_locked,
+    fetch_recent,
+    to_llm_turns,
+)
 from app.core.guardrails import check_prompt_sync
 from app.core.rbac import Permission
 from app.schemas.chat import ChatRequest
@@ -69,10 +73,8 @@ async def stream_chat(
     conversation = None
     if body.conversation_id:
         try:
-            from app.core.database import AsyncSessionLocal
             from app.models.conversation import Conversation
             from sqlalchemy import select
-            import json as _json
             async with AsyncSessionLocal() as session:
                 result = await session.execute(
                     select(Conversation).where(
@@ -81,16 +83,9 @@ async def stream_chat(
                     )
                 )
                 conversation = result.scalar_one_or_none()
-            if conversation:
-                try:
-                    msgs = _json.loads(conversation.messages_json or "[]")
-                    conversation_history = [
-                        {"role": m["role"], "content": m["content"]}
-                        for m in msgs[-20:]
-                        if m.get("role") in ("user", "assistant") and m.get("content")
-                    ]
-                except Exception:
-                    conversation_history = []
+                if conversation:
+                    rows = await fetch_recent(session, body.conversation_id, 20)
+                    conversation_history = to_llm_turns(rows)
         except Exception as e:
             logger.warning(f"[stream_chat] Failed to load conversation: {e}")
 
@@ -167,29 +162,23 @@ async def _persist_to_conversation(
     assistant_response: str,
 ) -> None:
     """Save the streamed exchange to the conversations table."""
-    import json as _json
     try:
-        from app.core.database import AsyncSessionLocal
-        from app.models.conversation import Conversation
-        from sqlalchemy import select
-
         async with AsyncSessionLocal() as session:
-            result = await session.execute(
-                select(Conversation).where(
-                    Conversation.id == conversation_id,
-                    Conversation.user_id == user_id,
-                )
+            # Goes through the chained append, which takes the row lock and
+            # does the ownership check itself. The code this replaced did an
+            # unlocked read-modify-write of the blob, silently losing a
+            # concurrent append under API_WORKERS>1.
+            conv, _ = await append_messages_locked(
+                session,
+                conversation_id,
+                [
+                    {"role": "user", "content": user_message},
+                    {"role": "assistant", "content": assistant_response},
+                ],
+                user_id=user_id,
             )
-            conv = result.scalar_one_or_none()
             if not conv:
                 return
-
-            messages = _json.loads(conv.messages_json or "[]")
-            now = datetime.now(timezone.utc).isoformat()
-            messages.append({"role": "user", "content": user_message, "created_at": now})
-            messages.append({"role": "assistant", "content": assistant_response, "created_at": now})
-            conv.messages_json = _json.dumps(messages, ensure_ascii=False)
-            conv.updated_at = utc_now()
 
             # Auto-title while the conversation has none. Keying off absence
             # rather than a magic string means the sentinel cannot drift away

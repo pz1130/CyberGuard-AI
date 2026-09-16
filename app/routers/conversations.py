@@ -12,6 +12,11 @@ from app.core.rbac import Permission
 from app.core.auth import AuthenticatedUser
 from app.core.time import utc_now
 from app.models.conversation import Conversation
+from app.services.conversation_messages import (
+    DEFAULT_PAGE_LIMIT,
+    fetch_messages,
+    to_message_dict,
+)
 
 
 class MessageModel(BaseModel):
@@ -208,12 +213,14 @@ async def delete_conversation(
 @router.get("/conversations/{conv_id}/messages")
 async def get_conversation_messages(
     conv_id: int,
+    limit: int = DEFAULT_PAGE_LIMIT,
+    before_seq: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     current_user: AuthenticatedUser = Depends(
         require_permission(Permission.TASK_EXECUTE)
     ),
 ):
-    """Get messages for a conversation."""
+    """Get messages for a conversation, newest-last, most recent page first."""
     result = await db.execute(
         select(Conversation).where(
             Conversation.id == conv_id,
@@ -223,11 +230,8 @@ async def get_conversation_messages(
     conv = result.scalar_one_or_none()
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    try:
-        messages = json.loads(conv.messages_json or "[]")
-    except json.JSONDecodeError:
-        messages = []
-    return {"messages": messages}
+    rows = await fetch_messages(db, conv_id, limit=limit, before_seq=before_seq)
+    return {"messages": [to_message_dict(row) for row in rows]}
 
 
 @router.post("/conversations/{conv_id}/messages")
