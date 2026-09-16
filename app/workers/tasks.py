@@ -431,10 +431,32 @@ def cleanup_stale_executions_task(self):
     return {"cleaned": len(stale_executions)}
 
 
+@celery_app.task(bind=True, max_retries=1)
+def anchor_conversation_chains_task(self):
+    """Write moved conversation chain heads into the global audit chain.
+
+    Sync, like every other beat task here: Celery has no event loop of its own,
+    and `get_sync_session` avoids binding the shared async engine to a
+    throwaway loop.
+    """
+    from app.core.database import get_sync_session
+    from app.services.conversation_anchor import anchor_pending
+
+    SessionLocal = get_sync_session()
+    with SessionLocal() as session:
+        summary = anchor_pending(session)
+        session.commit()
+    return summary
+
+
 # Celery Beat schedule for periodic tasks
 celery_app.conf.beat_schedule = {
     "cleanup-stale-executions-every-15-min": {
         "task": "app.workers.tasks.cleanup_stale_executions_task",
+        "schedule": 900.0,  # 15 minutes
+    },
+    "anchor-conversation-chains-every-15-min": {
+        "task": "app.workers.tasks.anchor_conversation_chains_task",
         "schedule": 900.0,  # 15 minutes
     },
 }
