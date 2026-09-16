@@ -9,10 +9,12 @@ from jose import jwt, JWTError
 from app.core.dependencies import get_db, get_current_user
 from app.core.auth import (
     create_access_token, verify_refresh_token, AuthenticatedUser, revoke_token,
-    start_session, touch_session, end_session,
+    start_session, touch_session, end_session, end_other_sessions,
 )
 from app.core import login_guard
-from app.schemas.auth import LoginRequest, TokenResponse, RefreshTokenRequest
+from app.schemas.auth import (
+    LoginRequest, TokenResponse, RefreshTokenRequest, PasswordChangeRequest,
+)
 from app.config import settings
 
 ALGORITHM = settings.ALGORITHM
@@ -154,7 +156,73 @@ async def _open_idle_window(db: AsyncSession, access_token: str) -> None:
         return
     jti = payload.get("jti")
     if jti:
-        await start_session(jti, await _idle_minutes(db))
+        user_id = payload.get("sub")
+        await start_session(
+            jti, await _idle_minutes(db),
+            user_id=int(user_id) if user_id is not None else None)
+
+
+@router.post("/auth/change-password", tags=["Authentication"])
+async def change_password(
+    body: PasswordChangeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+):
+    """Change your own password.
+
+    Takes the account from the token and never from the body: a user_id
+    parameter here would be an admin endpoint wearing a self-service name.
+
+    The old password is required even though the caller is authenticated. A
+    token alone must not be enough to seize the account — otherwise stealing a
+    session, which expires, becomes owning the account, which does not.
+    """
+    from sqlalchemy import select
+
+    from app.core.auth import get_password_hash, verify_password
+    from app.core.audit import record_action
+    from app.models.user import User
+
+    result = await db.execute(select(User).where(User.id == current_user.user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if not verify_password(body.old_password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+
+    user.hashed_password = get_password_hash(body.new_password)
+    await db.commit()
+
+    # Changing a password is what someone does when they think it leaked, and
+    # that is not answered by rotating the secret while the other session keeps
+    # working. The caller's own session is kept so they are not signed out of
+    # the tab they are using.
+    current_jti = None
+    if credentials:
+        try:
+            current_jti = jwt.decode(
+                credentials.credentials, settings.SECRET_KEY,
+                algorithms=[ALGORITHM]).get("jti")
+        except JWTError:  # pragma: no cover - they just authenticated with it
+            current_jti = None
+    ended = await end_other_sessions(current_user.user_id, current_jti)
+
+    await record_action(
+        user_id=current_user.user_id,
+        action="user.password_changed",
+        action_category="annotate",
+        risk_tier="medium",
+        rollback_possible=False,
+        input_data={"self_service": True},
+        output_data={"other_sessions_ended": ended},
+    )
+
+    return {"message": "Password changed", "other_sessions_ended": ended}
 
 
 @router.post("/auth/heartbeat", tags=["Authentication"])

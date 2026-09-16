@@ -57,7 +57,18 @@
     "darkMode": "深色模式",
     "lightMode": "浅色模式",
     "signedInAs": "登录身份",
-    "signOut": "退出登录"
+    "signOut": "退出登录",
+    "changePassword": "修改密码",
+    "currentPassword": "当前密码",
+    "newPassword": "新密码",
+    "confirmPassword": "确认新密码",
+    "passwordTooShort": "至少 8 位",
+    "passwordMismatch": "两次输入不一致",
+    "passwordChanged": "密码已修改。",
+    "passwordChangedSessions": "密码已修改，另外 {{count}} 个会话已登出。",
+    "cancel": "取消",
+    "close": "关闭",
+    "saving": "保存中..."
   },
   "login": {
     "title": "欢迎回来",

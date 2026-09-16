@@ -57,7 +57,18 @@
     "darkMode": "Dark mode",
     "lightMode": "Light mode",
     "signedInAs": "Signed in as",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "changePassword": "Change password",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm new password",
+    "passwordTooShort": "At least 8 characters",
+    "passwordMismatch": "Passwords do not match",
+    "passwordChanged": "Password changed.",
+    "passwordChangedSessions": "Password changed. {{count}} other session(s) were signed out.",
+    "cancel": "Cancel",
+    "close": "Close",
+    "saving": "Saving..."
   },
   "login": {
     "title": "Welcome Back",

@@ -292,6 +292,8 @@ export const api = {
   }) => request('/ocr/config', { method: 'PUT', body: JSON.stringify(body) }),
 
   // Conversations
+  changePassword: (body: { old_password: string; new_password: string }) =>
+    request('/auth/change-password', { method: 'POST', body: JSON.stringify(body) }),
   getConversations: () => request('/conversations'),
   createConversation: (body?: {
     title?: string

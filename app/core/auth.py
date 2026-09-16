@@ -109,12 +109,60 @@ def _session_key(jti: str) -> str:
     return f"session:active:{jti}"
 
 
-async def start_session(jti: str, idle_minutes: int) -> None:
+def _user_sessions_key(user_id: int) -> str:
+    """Index of a user's live session ids.
+
+    Sessions are keyed by jti, which cannot be enumerated for one user. Ending
+    "every session but this one" — what a password change owes the person doing
+    it — needs this index.
+    """
+    return f"user:sessions:{user_id}"
+
+
+async def start_session(jti: str, idle_minutes: int, user_id: Optional[int] = None) -> None:
     """Mark a freshly issued token's session as live."""
     from app.core.redis_client import get_redis
     redis = await get_redis()
-    if redis and idle_minutes > 0:
+    if not redis:
+        return
+    if idle_minutes > 0:
         await redis.set(_session_key(jti), "1", ex=int(idle_minutes) * 60)
+    if user_id is not None:
+        # Indexed even when the idle window is disabled: such a session has no
+        # timeout, which makes being able to end it deliberately more important,
+        # not less. Stale members are skipped on read and pruned on use.
+        await redis.sadd(_user_sessions_key(user_id), jti)
+
+
+async def end_other_sessions(user_id: int, keep_jti: Optional[str]) -> int:
+    """End every session this user has except ``keep_jti``. Returns how many.
+
+    A missing session key is what ``verify_token`` treats as expired, so
+    deleting it is what invalidates the token.
+    """
+    from app.core.redis_client import get_redis
+    redis = await get_redis()
+    if not redis:
+        return 0
+    index = _user_sessions_key(user_id)
+    try:
+        members = await redis.smembers(index)
+    except Exception:  # noqa: BLE001 - availability, not correctness
+        return 0
+
+    ended = 0
+    stale = []
+    for member in members:
+        jti = member.decode() if isinstance(member, bytes) else str(member)
+        if jti == keep_jti:
+            continue
+        if await redis.exists(_session_key(jti)):
+            ended += 1
+        await redis.delete(_session_key(jti))
+        stale.append(jti)
+    if stale:
+        await redis.srem(index, *stale)
+    return ended
 
 
 async def touch_session(jti: str, idle_minutes: int) -> bool:

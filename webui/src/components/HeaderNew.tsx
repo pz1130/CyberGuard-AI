@@ -9,6 +9,7 @@ import { Sun, Moon, Globe, Search, Bell, ChevronDown, LogOut, Shield, Terminal }
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
+import ChangePasswordDialog from './ChangePasswordDialog'
 
 interface HeaderProps {
   dark: boolean
@@ -35,6 +36,7 @@ export default function HeaderNew({
   const [username, setUsername] = useState('Admin')
   const [role, setRole] = useState('Administrator')
   const [menuOpen, setMenuOpen] = useState(false)
+  const [showChangePassword, setShowChangePassword] = useState(false)
   const [sysStatus, setSysStatus] = useState<SysStatus>('online')
   const [branding, setBranding] = useState<{ branding_logo?: string | null; branding_company_name?: string | null }>({})
 
@@ -102,6 +104,7 @@ export default function HeaderNew({
   })
 
   return (
+    <>
     <header
       className="header-shell"
       style={{
@@ -400,6 +403,25 @@ export default function HeaderNew({
                 </div>
                 <button
                   role="menuitem"
+                  onClick={() => { setMenuOpen(false); setShowChangePassword(true) }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    width: '100%',
+                    padding: '8px 12px',
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    fontSize: 13,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  {t('header.changePassword')}
+                </button>
+                <button
+                  role="menuitem"
                   onClick={logout}
                   style={{
                     display: 'flex',
@@ -430,5 +452,9 @@ export default function HeaderNew({
         </div>
       </div>
     </header>
+    {showChangePassword && (
+      <ChangePasswordDialog onClose={() => setShowChangePassword(false)} />
+    )}
+    </>
   )
 }
