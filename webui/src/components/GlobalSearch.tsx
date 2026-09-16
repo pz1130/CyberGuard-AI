@@ -38,6 +38,12 @@ const TAB_LABELS: Record<string, string> = {
 export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Props) {
   const [query, setQuery] = useState('')
   const [allItems, setAllItems] = useState<SearchItem[]>([])
+  // Keyed by the term they answer, so results from a previous query are simply
+  // not used rather than cleared — clearing synchronously inside the effect
+  // cascades renders, and leaving them unkeyed showed stale hits while the next
+  // response was in flight.
+  const [messageHits, setMessageHits] =
+    useState<{ term: string; items: SearchItem[] }>({ term: '', items: [] })
   const [catalogReady, setCatalogReady] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [prevOpen, setPrevOpen] = useState(open)
@@ -188,10 +194,48 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
     }
   }, [open])
 
+  // Message search runs on the server: the conversation list no longer carries
+  // transcripts, and the browser only ever held the 50 most recent anyway.
+  useEffect(() => {
+    const term = query.trim()
+    if (!open || !term) return
+
+    let cancelled = false
+    const timer = setTimeout(() => {
+      void api.searchConversationMessages(term)
+        .then(res => {
+          if (cancelled) return
+          const rows = (res as { results?: Array<{
+            conversation_id: number; conversation_title?: string | null
+            message_id: number; snippet?: string
+          }> }).results || []
+          setMessageHits({
+            term,
+            items: rows.map(r => ({
+              id: `msg-${r.message_id}`,
+              name: r.conversation_title || `Conversation #${r.conversation_id}`,
+              subtitle: 'MESSAGE',
+              tab: 'chat' as Tab,
+              category: 'CONVERSATIONS',
+              icon: '◉',
+              preview: r.snippet || '',
+            })),
+          })
+        })
+        .catch(() => { if (!cancelled) setMessageHits({ term, items: [] }) })
+    }, 250)
+
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [query, open])
+
   // Filter and group by category
   const q = query.toLowerCase().trim()
+  // Server-side message hits are already matched; only the catalog needs
+  // filtering. Titles still match locally, so a title hit needs no round trip.
+  const hits = messageHits.term === q ? messageHits.items : []
   const filtered = q
-    ? allItems.filter(item => {
+    ? [...hits, ...allItems].filter(item => {
+        if (item.id.toString().startsWith('msg-')) return true
         if (item.name.toLowerCase().includes(q) || item.subtitle.toLowerCase().includes(q)) return true
         // Also search inside conversation preview text
         if (item.category === 'CONVERSATIONS' && item.preview) {

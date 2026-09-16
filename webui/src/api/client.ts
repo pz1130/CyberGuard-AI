@@ -295,6 +295,9 @@ export const api = {
   changePassword: (body: { old_password: string; new_password: string }) =>
     request('/auth/change-password', { method: 'POST', body: JSON.stringify(body) }),
   getConversations: () => request('/conversations'),
+  searchConversationMessages: (q: string, limit?: number) =>
+    request(`/conversations/search?q=${encodeURIComponent(q)}` +
+            (limit ? `&limit=${limit}` : '')),
   createConversation: (body?: {
     title?: string
     system_prompt_override?: string | null
