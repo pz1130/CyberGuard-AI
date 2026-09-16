@@ -295,6 +295,17 @@ export const api = {
   changePassword: (body: { old_password: string; new_password: string }) =>
     request('/auth/change-password', { method: 'POST', body: JSON.stringify(body) }),
   getConversations: () => request('/conversations'),
+  // ---- Chat evidence (auditor) ----
+  auditorSearchConversations: (q: string, userId?: number) =>
+    request(`/audit/conversation-search?q=${encodeURIComponent(q)}` +
+            (userId ? `&user_id=${userId}` : '')),
+  exportConversations: (olderThanDays: number, retainDays: number) =>
+    request(`/conversations/export?older_than_days=${olderThanDays}` +
+            `&retain_days=${retainDays}`, { method: 'POST' }),
+  purgeConversations: (olderThanDays: number, confirm: boolean) =>
+    request(`/conversations/purge?older_than_days=${olderThanDays}` +
+            `&confirm=${confirm}`, { method: 'POST' }),
+
   searchConversationMessages: (q: string, limit?: number) =>
     request(`/conversations/search?q=${encodeURIComponent(q)}` +
             (limit ? `&limit=${limit}` : '')),

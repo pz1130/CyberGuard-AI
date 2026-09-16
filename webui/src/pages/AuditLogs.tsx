@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
+import ChatEvidence from './ChatEvidence'
 import { Download, Search, Loader2 } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import { errorMessage } from '../lib/errorMessage'
@@ -22,6 +23,7 @@ export default function AuditLogs() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('')
   const [limit, setLimit] = useState(50)
+  const [tab, setTab] = useState<'logs' | 'evidence'>('logs')
 
   const load = useCallback(async () => {
     try {
@@ -64,6 +66,29 @@ export default function AuditLogs() {
         }
       />
 
+      {/* Tabs — both halves of the auditor's job: what the system did, and
+          what was said. Same permission, same person. */}
+      <div style={{ display: 'flex', border: '1px solid var(--border-bright)',
+                    width: 'fit-content', marginBottom: 20 }}>
+        {([['logs', t('audit.tabLogs')], ['evidence', t('audit.tabEvidence')]] as const)
+          .map(([key, label]) => (
+            <button key={key} onClick={() => setTab(key)} role="tab"
+              aria-selected={tab === key}
+              style={{
+                padding: '8px 20px', fontSize: 12, letterSpacing: '0.08em',
+                fontWeight: 600, cursor: 'pointer', border: 'none',
+                background: tab === key ? 'var(--accent)' : 'var(--bg-surface)',
+                color: tab === key ? '#000' : 'var(--text-muted)',
+                borderRight: key === 'logs' ? '1px solid var(--border-bright)' : 'none',
+              }}>
+              {label.toUpperCase()}
+            </button>
+          ))}
+      </div>
+
+      {tab === 'evidence' && <ChatEvidence />}
+
+      {tab === 'logs' && (<>
       {/* Filters */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
         <div style={{ flex: 1, position: 'relative' }}>
@@ -133,6 +158,7 @@ export default function AuditLogs() {
           </tbody>
         </table>
       </div>
+      </>)}
     </div>
   )
 }
