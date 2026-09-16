@@ -5,13 +5,14 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
+from sqlalchemy import desc, func, select
 
 from app.core.dependencies import get_db, require_permission
 from app.core.rbac import Permission
 from app.core.auth import AuthenticatedUser
 from app.core.time import utc_now
 from app.models.conversation import Conversation
+from app.models.conversation_message import ConversationMessage
 from app.services.conversation_messages import (
     DEFAULT_PAGE_LIMIT,
     fetch_messages,
@@ -31,7 +32,11 @@ class ConversationResponse(BaseModel):
     # Absent until the user renames it or auto-titling fills it in; the client
     # renders its own translated placeholder rather than reading a stored one.
     title: Optional[str] = None
-    messages_json: str
+    # The transcript is no longer shipped with the list: it made every listing
+    # carry every message of 50 conversations. Read it from
+    # GET /conversations/{id}/messages, a page at a time.
+    message_count: int = 0
+    last_message_preview: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     # Per-conversation config overrides
@@ -58,7 +63,6 @@ class ConversationCreate(BaseModel):
 
 class ConversationUpdate(BaseModel):
     title: Optional[str] = None
-    messages_json: Optional[str] = None  # JSON string of messages
     # Per-conversation config overrides
     system_prompt_override: Optional[str] = None
     intent_parser_prompt_override: Optional[str] = None
@@ -68,7 +72,7 @@ class ConversationUpdate(BaseModel):
     knowledge_base_id: Optional[int] = None
 
 
-_REQUIRED_UPDATE_FIELDS = {"title", "messages_json"}
+_REQUIRED_UPDATE_FIELDS = {"title"}
 
 
 def apply_conversation_update(conv, body: ConversationUpdate) -> None:
@@ -100,14 +104,45 @@ async def list_conversations(
         require_permission(Permission.TASK_EXECUTE)
     ),
 ):
-    """List all conversations for current user."""
+    """List the caller's live conversations, newest first."""
     result = await db.execute(
         select(Conversation)
-        .where(Conversation.user_id == current_user.user_id)
+        .where(
+            Conversation.user_id == current_user.user_id,
+            Conversation.deleted_at.is_(None),
+        )
         .order_by(desc(Conversation.updated_at))
         .limit(50)
     )
-    return [ConversationResponse.model_validate(c) for c in result.scalars().all()]
+    conversations = list(result.scalars().all())
+    if not conversations:
+        return []
+
+    ids = [c.id for c in conversations]
+
+    counts = dict((await db.execute(
+        select(ConversationMessage.conversation_id, func.count(ConversationMessage.id))
+        .where(ConversationMessage.conversation_id.in_(ids))
+        .group_by(ConversationMessage.conversation_id)
+    )).all())
+
+    # DISTINCT ON is PostgreSQL-only, which this deployment is. It gets the
+    # newest message per conversation in one pass instead of one query each.
+    previews = dict((await db.execute(
+        select(ConversationMessage.conversation_id, ConversationMessage.content)
+        .where(ConversationMessage.conversation_id.in_(ids))
+        .distinct(ConversationMessage.conversation_id)
+        .order_by(ConversationMessage.conversation_id, ConversationMessage.seq.desc())
+    )).all())
+
+    responses = []
+    for conv in conversations:
+        payload = ConversationResponse.model_validate(conv)
+        payload.message_count = counts.get(conv.id, 0)
+        preview = previews.get(conv.id)
+        payload.last_message_preview = preview[:200] if preview else None
+        responses.append(payload)
+    return responses
 
 
 @router.post("/conversations", response_model=ConversationResponse, status_code=201)
@@ -149,6 +184,7 @@ async def get_conversation(
         select(Conversation).where(
             Conversation.id == conv_id,
             Conversation.user_id == current_user.user_id,
+            Conversation.deleted_at.is_(None),
         )
     )
     conv = result.scalar_one_or_none()
@@ -171,6 +207,7 @@ async def update_conversation(
         select(Conversation).where(
             Conversation.id == conv_id,
             Conversation.user_id == current_user.user_id,
+            Conversation.deleted_at.is_(None),
         )
     )
     conv = result.scalar_one_or_none()
@@ -200,13 +237,17 @@ async def delete_conversation(
         select(Conversation).where(
             Conversation.id == conv_id,
             Conversation.user_id == current_user.user_id,
+            Conversation.deleted_at.is_(None),
         )
     )
     conv = result.scalar_one_or_none()
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    await db.delete(conv)
+    # Immutability-first: a user removing a conversation from their sidebar
+    # must not be able to destroy the record of what the assistant told them.
+    # Retention (Round 3) decides when the rows actually go.
+    conv.deleted_at = utc_now()
     await db.commit()
 
 
@@ -225,6 +266,7 @@ async def get_conversation_messages(
         select(Conversation).where(
             Conversation.id == conv_id,
             Conversation.user_id == current_user.user_id,
+            Conversation.deleted_at.is_(None),
         )
     )
     conv = result.scalar_one_or_none()
