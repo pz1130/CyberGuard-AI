@@ -11,6 +11,7 @@ from app.core.auth import (
     create_access_token, verify_refresh_token, AuthenticatedUser, revoke_token,
     start_session, touch_session, end_session,
 )
+from app.core import login_guard
 from app.schemas.auth import LoginRequest, TokenResponse, RefreshTokenRequest
 from app.config import settings
 
@@ -49,14 +50,45 @@ async def login(
     from sqlalchemy import select
     from app.models.user import User
 
+    # Checked before the password is even looked at, so a locked account costs
+    # an attacker a round trip and nothing else.
+    if await login_guard.is_locked(body.username):
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail=(
+                "Account temporarily locked after repeated failed sign-ins. "
+                f"Try again in {login_guard.LOCKOUT_SECONDS // 60} minutes."
+            ),
+        )
+
     result = await db.execute(select(User).where(User.username == body.username))
     user = result.scalar_one_or_none()
 
     if not user or not verify_password(body.password, user.hashed_password):
+        # Counted for unknown usernames too: if only real accounts could be
+        # locked, the lockout itself would reveal which usernames exist.
+        max_attempts = await _max_login_attempts(db)
+        count = await login_guard.record_failure(
+            body.username, max_attempts=max_attempts)
+        if max_attempts and count >= max_attempts:
+            from app.core.audit import record_action
+
+            await record_action(
+                user_id=getattr(user, "id", None),
+                action="auth.account_locked",
+                action_category="contain_soft",
+                rollback_possible=True,
+                input_data={"username": body.username,
+                            "client": request.client.host if request.client else None},
+                output_data={"attempts": count,
+                             "locked_for_seconds": login_guard.LOCKOUT_SECONDS},
+            )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
 
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is disabled")
+
+    await login_guard.clear(body.username)
 
     # Name the actor for the audit middleware. This request predates any
     # get_current_user call, so without it the one row that matters most for
@@ -96,6 +128,15 @@ async def logout(credentials: Optional[HTTPAuthorizationCredentials] = Depends(b
         except JWTError:
             pass  # Invalid token already — nothing to revoke
     return {"message": "Successfully logged out"}
+
+
+async def _max_login_attempts(db: AsyncSession) -> int:
+    """The configured attempt limit. Read per request, so lowering it takes
+    effect on the next sign-in rather than the next restart."""
+    from app.services.security_settings import get_security_settings
+
+    cfg = await get_security_settings(db)
+    return int(getattr(cfg, "max_login_attempts", 0) or 0)
 
 
 async def _idle_minutes(db: AsyncSession) -> int:
