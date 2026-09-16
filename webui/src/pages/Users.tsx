@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
-import { Trash2, Edit2 } from 'lucide-react'
+import { Trash2, Edit2, Plus } from 'lucide-react'
 import { errorMessage } from '../lib/errorMessage'
 
 interface User {
@@ -260,6 +260,14 @@ export default function Users() {
       {/* ── Users tab ── */}
       {activeTab === 'users' && (
         <div>
+          {!showForm && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+              <button onClick={() => openForm()} className="btn btn-primary"
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Plus size={12} /> {t('users.addUser').toUpperCase()}
+              </button>
+            </div>
+          )}
           {showForm && (
             <div style={{ marginBottom: 24, padding: 24, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border)' }}>
@@ -267,31 +275,31 @@ export default function Users() {
               </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
-              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>USERNAME</label>
-              <input value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
+              <label htmlFor="user-username" style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>USERNAME</label>
+              <input id="user-username" value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
                 className="form-input" />
               <div style={{ fontSize: 11, color: form.username && form.username.trim().length >= 3 ? 'var(--green)' : 'var(--text-dim)', marginTop: 4, letterSpacing: '0.05em' }}>
                 {form.username ? (form.username.trim().length >= 3 ? '✓ At least 3 characters' : `✗ ${form.username.trim().length}/3 characters`) : 'Min 3 characters'}
               </div>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>EMAIL</label>
-              <input type="email" value={form.email || ''} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+              <label htmlFor="user-email" style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>EMAIL</label>
+              <input id="user-email" type="email" value={form.email || ''} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                 className="form-input" />
               <div style={{ fontSize: 11, color: form.email && form.email.includes('@') ? 'var(--green)' : 'var(--text-dim)', marginTop: 4, letterSpacing: '0.05em' }}>
                 {form.email ? (form.email.includes('@') ? '✓ Valid email' : '✗ Must contain @') : 'Must be a valid email'}
               </div>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>ROLE</label>
-              <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
+              <label htmlFor="user-role" style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>ROLE</label>
+              <select id="user-role" value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
                 className="form-input">
                 {ROLES.map(r => <option key={r} value={r}>{r.toUpperCase()}</option>)}
               </select>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>{editing ? 'NEW PASSWORD' : 'PASSWORD'}</label>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+              <label htmlFor="user-password" style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>{editing ? 'NEW PASSWORD' : 'PASSWORD'}</label>
+              <input id="user-password" type="password" value={password} onChange={e => setPassword(e.target.value)}
                 placeholder={editing ? 'LEAVE BLANK TO KEEP CURRENT' : ''}
                 className="form-input" />
               {editing ? (
