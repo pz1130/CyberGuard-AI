@@ -439,3 +439,77 @@ def test_inv42_code_runner_never_uses_the_networked_runner():
     assert "SKILL_RUNNER_NET_URL" not in body
     assert "proxy_url" not in body
     assert "SKILL_RUNNER_URL" in body
+
+
+# INV-43 · the assistant's words are evidence
+
+def test_inv43_no_api_schema_accepts_raw_message_content():
+    """INV-43: message content reaches the database only through the chained
+    append path.
+
+    Asserted on the schema rather than on a request, because the hole this
+    closes was a field quietly present on an update model — exactly the kind
+    of thing a refactor re-adds without anyone noticing.
+    """
+    from app.routers.conversations import ConversationUpdate
+
+    assert "messages_json" not in ConversationUpdate.model_fields
+
+
+def test_inv43_the_delete_route_does_not_destroy_a_transcript():
+    """INV-43: the delete button tombstones; it does not erase what was said."""
+    import inspect
+
+    from app.routers.conversations import delete_conversation
+
+    src = inspect.getsource(delete_conversation)
+    assert "deleted_at" in src, "delete_conversation no longer tombstones"
+    assert "db.delete(" not in src, (
+        "delete_conversation destroys the conversation row, and its messages "
+        "with it through ON DELETE CASCADE"
+    )
+
+
+def test_inv43_every_message_write_goes_through_the_chained_append():
+    """INV-43: no module builds a ConversationMessage of its own.
+
+    A second construction site would be a message that never enters the chain.
+    The store and the backfill helper are the two places allowed to.
+    """
+    import pathlib
+    import re
+
+    # The store is the only place that may build one. The backfill helper
+    # returns plain dicts, and the model module only declares the class.
+    allowed = {"app/services/conversation_messages.py"}
+    # `ConversationMessage(` also appears in `class ConversationMessage(Base)`,
+    # which is a declaration, not a construction.
+    construction = re.compile(r"(?<!class )\bConversationMessage\(")
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    offenders = []
+    for path in list((root / "app").rglob("*.py")) + list((root / "packages").rglob("*.py")):
+        rel = path.relative_to(root).as_posix()
+        if rel in allowed:
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        if construction.search(text):
+            offenders.append(rel)
+    assert offenders == [], (
+        "INV-43 violated — these construct messages outside the chained "
+        "append path:\n" + "\n".join(offenders)
+    )
+
+
+def test_inv43_conversation_chains_do_not_use_the_global_audit_lock():
+    """INV-43's performance half: chat writes must not queue on 0xA0D17.
+
+    If the message store ever took the audit advisory lock, every message in
+    every conversation would serialise on it — the bottleneck the
+    per-conversation chain exists to avoid.
+    """
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    store = (root / "app/services/conversation_messages.py").read_text()
+    assert "0xA0D17" not in store and "advisory" not in store.lower()
