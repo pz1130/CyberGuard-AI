@@ -112,6 +112,10 @@ async def list_conversations(
         .where(
             Conversation.user_id == current_user.user_id,
             Conversation.deleted_at.is_(None),
+            # An internal agent's memory is stored as a conversations row owned
+            # by the person (internal_agent.py:181). It is not a conversation
+            # they had.
+            Conversation.agent_id.is_(None),
         )
         .order_by(desc(Conversation.updated_at))
         .limit(50)

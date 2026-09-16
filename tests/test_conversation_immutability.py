@@ -147,3 +147,36 @@ async def test_an_empty_conversation_lists_without_a_preview(seeded):
     row = next(c for c in listed if c.title == "nothing said yet")
     assert row.message_count == 0
     assert row.last_message_preview is None
+
+
+@pytest.mark.asyncio
+async def test_agent_memory_slices_are_not_listed_as_conversations(seeded):
+    """InternalAgentRunner stores each agent's memory as a conversations row
+    owned by the person, titled `agent:<name>`. list_conversations filtered
+    only on user_id and deleted_at, so those slices belonged in the sidebar —
+    unnoticed only because no deployment had run an internal agent yet.
+    """
+    from app.models.agent import AgentConfig
+
+    _, user_id, *_ = seeded
+    async with AsyncSessionLocal() as db:
+        agent = AgentConfig(agent_name=f"recon_{uuid.uuid4().hex[:8]}",
+                            backend_type="__internal__")
+        db.add(agent)
+        await db.flush()
+        slice_ = Conversation(user_id=user_id, title="agent:recon",
+                              agent_id=agent.id)
+        db.add(slice_)
+        await db.commit()
+        agent_id, slice_id = agent.id, slice_.id
+
+        try:
+            listed = await list_conversations(db, _user(seeded))
+            assert all(c.id != slice_id for c in listed), (
+                "an internal agent's memory is showing as a conversation")
+        finally:
+            await db.execute(Conversation.__table__.delete().where(
+                Conversation.id == slice_id))
+            await db.execute(AgentConfig.__table__.delete().where(
+                AgentConfig.id == agent_id))
+            await db.commit()
