@@ -404,7 +404,9 @@
     "lockedSubAgent": "Locked to specific Sub-Agent, bypassing intent parsing",
     "masterRoute": "Routed by Master Agent after intent parsing",
     "maxFiles": "Max upload {{max}} files",
-    "reasoning": "Thinking process"
+    "reasoning": "Thinking process",
+    "archivedTitle": "This conversation has been archived",
+    "archivedBody": "Its messages were exported to write-once storage under the retention policy and removed from the live database. The record of what was said is preserved and can be retrieved by an auditor."
   },
   "tools": {
     "title": "Tool Pool",

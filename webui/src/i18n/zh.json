@@ -404,7 +404,9 @@
     "lockedSubAgent": "已锁定到指定 Sub-Agent，绕过意图解析",
     "masterRoute": "由 Master Agent 解析意图后路由",
     "maxFiles": "最多上传 {{max}} 个文件",
-    "reasoning": "思考过程"
+    "reasoning": "思考过程",
+    "archivedTitle": "此对话已归档",
+    "archivedBody": "根据留存策略，其消息已导出到一次写入存储并从在线数据库中移除。所说内容的记录仍被保留，审计员可以取回。"
   },
   "tools": {
     "title": "工具池",

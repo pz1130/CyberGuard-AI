@@ -116,6 +116,16 @@ a conversation tombstones it (`conversations.deleted_at`) and leaves the
 messages in place.
 See `docs/superpowers/specs/2026-09-16-chat-message-storage-design.md`.
 
+INV-44: nothing is deleted that was not first archived. A conversation's
+messages may be removed only when an export object in write-once storage holds
+every one of them with its chain intact (`app/services/conversation_export.py`),
+the `conversations` row survives naming that object, and the deletion is
+recorded in the global audit chain as `conversation.purged`
+(`app/services/conversation_purge.py`). Purge dry-runs unless confirmed, and a
+deployment with no object storage configured finds nothing eligible — it cannot
+delete what it cannot archive.
+See `docs/superpowers/specs/2026-09-16-chat-retention-export-design.md`.
+
 `code_execution_mode` is not the only gate. `run_python` is classified
 `action_category = "mutate"`, which a default deployment denies three ways over:
 forbidden in a POC, below the `L3` autonomy floor, and absent from

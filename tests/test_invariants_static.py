@@ -513,3 +513,63 @@ def test_inv43_conversation_chains_do_not_use_the_global_audit_lock():
     root = pathlib.Path(__file__).resolve().parent.parent
     store = (root / "app/services/conversation_messages.py").read_text()
     assert "0xA0D17" not in store and "advisory" not in store.lower()
+
+
+# INV-44 · nothing is deleted that was not first archived
+
+def test_inv44_purge_requires_a_complete_export():
+    """INV-44: the eligibility query must compare the exported head against the
+    conversation's own head. "Exported at some point" would let a conversation
+    lose every message written since its last export."""
+    import inspect
+
+    from app.services import conversation_purge
+
+    src = inspect.getsource(conversation_purge)
+    assert "exported_head == heads.c.head_seq" in src, (
+        "purge no longer requires the export to reach the conversation's head")
+
+
+def test_inv44_purge_deletes_whole_conversations_only():
+    """INV-44: a partial delete would leave a dangling prev_hash, and the
+    verifier could no longer tell retention apart from tampering."""
+    import inspect
+
+    from app.services.conversation_purge import purge_eligible
+
+    src = inspect.getsource(purge_eligible)
+    assert "ConversationMessage.conversation_id == conversation_id" in src
+    assert ".seq" not in src.split("delete(ConversationMessage)")[1][:400], (
+        "the delete is filtered by seq, so it removes part of a conversation")
+
+
+def test_inv44_only_the_purge_service_deletes_messages():
+    """INV-44: a second deletion site would be messages leaving without an
+    export and without an audit row."""
+    import pathlib
+    import re
+
+    allowed = {"app/services/conversation_purge.py"}
+    root = pathlib.Path(__file__).resolve().parent.parent
+    pattern = re.compile(r"delete\(ConversationMessage\)")
+    offenders = []
+    for path in (root / "app").rglob("*.py"):
+        rel = path.relative_to(root).as_posix()
+        if rel in allowed:
+            continue
+        if pattern.search(path.read_text(encoding="utf-8", errors="ignore")):
+            offenders.append(rel)
+    assert offenders == [], (
+        "INV-44 violated — these delete messages outside the purge service:\n"
+        + "\n".join(offenders))
+
+
+def test_inv44_a_purged_conversation_keeps_its_row():
+    """INV-44: the row is what makes the chain anchors still resolve."""
+    import inspect
+
+    from app.services.conversation_purge import purge_eligible
+
+    src = inspect.getsource(purge_eligible)
+    assert "conv.purged_at" in src and "conv.export_key" in src
+    assert "delete(Conversation)" not in src

@@ -34,6 +34,9 @@ interface Conversation {
   // Absent until the user renames it or auto-titling fills it in.
   title: string | null
   updated_at: string
+  // True once retention disposed of the messages. The row survives, so an
+  // archived conversation is not the same thing as an empty one.
+  archived?: boolean
   system_prompt_override?: string | null
   intent_parser_prompt_override?: string | null
   summarizer_prompt_override?: string | null
@@ -152,6 +155,7 @@ export default function Chat() {
   // Conversation state
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeConvId, setActiveConvId] = useState<number | null>(null)
+  const activeConv = conversations.find(c => c.id === activeConvId)
   const [editingConvId, setEditingConvId] = useState<number | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
   const [showConvPanel, setShowConvPanel] = useState(true)
@@ -930,6 +934,19 @@ export default function Chat() {
               <button onClick={createConversation} className="chat-empty-btn">
                 + {t('chat.newChat').toUpperCase()}
               </button>
+            </div>
+          ) : messages.length === 0 && activeConv?.archived ? (
+            <div style={{
+              padding: 32, textAlign: 'center', color: 'var(--text-muted)',
+              maxWidth: 520, margin: '0 auto', lineHeight: 1.7,
+            }}>
+              <div style={{
+                fontSize: 14, fontWeight: 600, color: 'var(--text-primary)',
+                marginBottom: 10,
+              }}>
+                {t('chat.archivedTitle')}
+              </div>
+              <div style={{ fontSize: 13 }}>{t('chat.archivedBody')}</div>
             </div>
           ) : messages.length === 0 ? (
             <div className="chat-empty">
