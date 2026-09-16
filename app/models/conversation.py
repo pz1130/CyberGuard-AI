@@ -28,6 +28,11 @@ class Conversation(Base):
     # app.services.conversation_anchor. -1 means "nothing anchored yet", which
     # is correct for a conversation whose first message will be seq 0.
     last_anchored_seq = Column(Integer, nullable=False, default=-1, server_default="-1")
+    # Set when retention disposed of this conversation's messages. The row
+    # survives so the chain anchors still resolve and the person sees an
+    # archived conversation rather than a shrinking history.
+    purged_at = Column(DateTime, nullable=True, default=None)
+    export_key = Column(String(300), nullable=True, default=None)
 
     # Per-conversation agent config overrides
     system_prompt_override = Column(Text, nullable=True)

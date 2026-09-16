@@ -17,6 +17,7 @@ from app.models.ocr import OcrConfig
 from app.models.episode import AgentEpisode
 from app.models.master_config import MasterAgentConfig
 from app.models.sso import SsoConfig, SsoRoleMapping
+from app.models.conversation_export import ConversationExport
 from app.models.conversation_message import ConversationMessage
 from app.models.run_event import AgentRunEvent
 
@@ -40,5 +41,6 @@ __all__ = [
     "MasterAgentConfig",
     "SsoConfig", "SsoRoleMapping",
     "AgentRunEvent",
+    "ConversationExport",
     "ConversationMessage",
 ]
