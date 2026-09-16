@@ -19,6 +19,7 @@ interface Hit {
   role: string
   created_at: string | null
   snippet: string
+  hits: number
 }
 
 interface PurgeCandidate {
@@ -149,7 +150,7 @@ export default function ChatEvidence() {
                 <div style={{ fontSize: 12, color: 'var(--accent)' }}>
                   {h.conversation_title || `#${h.conversation_id}`}
                   <span style={{ color: 'var(--text-dim)', marginLeft: 8 }}>
-                    {h.role} · seq {h.seq}
+                    {h.hits > 1 ? `${h.hits} matches · ` : ''}{h.role} · seq {h.seq}
                     {h.created_at ? ` · ${h.created_at.slice(0, 19).replace('T', ' ')}` : ''}
                   </span>
                 </div>

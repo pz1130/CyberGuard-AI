@@ -207,14 +207,16 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
           if (cancelled) return
           const rows = (res as { results?: Array<{
             conversation_id: number; conversation_title?: string | null
-            message_id: number; snippet?: string
+            message_id: number; snippet?: string; hits?: number
           }> }).results || []
           setMessageHits({
             term,
             items: rows.map(r => ({
               id: `msg-${r.message_id}`,
               name: r.conversation_title || `Conversation #${r.conversation_id}`,
-              subtitle: 'MESSAGE',
+              // One row per conversation; the count is what the reader would
+              // otherwise have had to gather from repeated rows.
+              subtitle: (r.hits ?? 1) > 1 ? `${r.hits} MATCHES` : 'MATCH',
               tab: 'chat' as Tab,
               category: 'CONVERSATIONS',
               icon: '◉',

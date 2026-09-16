@@ -215,6 +215,7 @@ async def search_conversation_messages(
                 "role": hit.role,
                 "created_at": hit.created_at.isoformat() if hit.created_at else None,
                 "snippet": snippet(hit.content, term),
+                "hits": hit.hits,
             }
             for hit in hits
         ],

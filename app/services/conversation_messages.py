@@ -152,6 +152,11 @@ async def append_messages_locked(
 
     rows = _build_rows(conv_id, new_messages, next_seq, prev_hash)
     session.add_all(rows)
+    # The session is built with autoflush=False, so without this a second
+    # append before the commit would not see these rows when it reads the chain
+    # head, and both would compute the same seq. uq_conv_messages_seq catches
+    # that, but batching two appends is an ordinary thing for a caller to do.
+    await session.flush()
     conv.updated_at = utc_now()
     return conv, next_seq + len(rows)
 
@@ -179,6 +184,7 @@ def append_messages_locked_sync(
 
     rows = _build_rows(conv_id, new_messages, next_seq, prev_hash)
     session.add_all(rows)
+    session.flush()   # see the async twin: autoflush is off
     conv.updated_at = utc_now()
     return conv, next_seq + len(rows)
 

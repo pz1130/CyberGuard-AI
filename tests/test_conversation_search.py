@@ -216,7 +216,9 @@ async def test_the_endpoint_returns_snippets_not_message_bodies(world):
     assert payload["results"], "expected a hit"
     assert set(payload["results"][0]) == {
         "conversation_id", "conversation_title", "message_id", "seq", "role",
-        "created_at", "snippet"}
+        "created_at", "snippet", "hits"}, (
+        "an exact set, so a future change that starts returning message bodies "
+        "shows up here")
 
 
 @pytest.mark.asyncio
@@ -254,3 +256,86 @@ def test_the_endpoint_takes_the_user_from_the_token_only():
 
     assert "user_id" not in inspect.signature(search_conversation_messages).parameters
     assert "current_user.user_id" in inspect.getsource(search_conversation_messages)
+
+
+# --- one row per conversation (collapsing) ---
+
+@pytest.mark.asyncio
+async def test_a_conversation_appears_once_however_many_messages_match(world):
+    """Searching returns conversations, not messages. "端口" matches two
+    messages in the same conversation; listing it twice is noise, and it made
+    `limit` mean something the reader did not ask for."""
+    hits = await _search(world["amy"], "e")
+    conversation_ids = [h.conversation_id for h in hits]
+    assert len(conversation_ids) == len(set(conversation_ids))
+
+
+@pytest.mark.asyncio
+async def test_the_hit_count_says_how_many_messages_matched(world):
+    """Collapsing must not hide how much there is — that is the number a
+    person uses to decide whether to open it."""
+    async with AsyncSessionLocal() as db:
+        await append_messages_locked(db, world["live"], [
+            {"role": "user", "content": "端口 again"},
+            {"role": "user", "content": "端口 once more"},
+        ])
+        await db.commit()
+
+    hits = await _search(world["amy"], "端口")
+    live = next(h for h in hits if h.conversation_id == world["live"])
+    assert live.hits == 3, "one original plus the two just appended"
+
+
+@pytest.mark.asyncio
+async def test_the_representative_is_the_newest_matching_message(world):
+    """Newest first is what "find that thing I said" means."""
+    async with AsyncSessionLocal() as db:
+        await append_messages_locked(db, world["live"], [
+            {"role": "assistant", "content": "端口 the latest word on it"}])
+        await db.commit()
+
+    hits = await _search(world["amy"], "端口")
+    live = next(h for h in hits if h.conversation_id == world["live"])
+    assert live.content == "端口 the latest word on it"
+
+
+@pytest.mark.asyncio
+async def test_limit_now_counts_conversations(world):
+    async with AsyncSessionLocal() as db:
+        for _ in range(4):
+            await append_messages_locked(db, world["live"], [
+                {"role": "user", "content": "端口 filler"}])
+        await db.commit()
+
+    assert len(await _search(world["amy"], "端口", limit=1)) == 1
+
+
+@pytest.mark.asyncio
+async def test_paging_walks_conversations_without_repeating_one(world):
+    """The cursor is the representative id, and a conversation's representative
+    is its newest match — so a page boundary cannot re-surface a conversation
+    through an older message."""
+    async with AsyncSessionLocal() as db:
+        second = Conversation(user_id=world["amy"], title="Another")
+        db.add(second)
+        await db.commit()
+        await append_messages_locked(db, second.id, [
+            {"role": "user", "content": "端口 elsewhere"}])
+        await db.commit()
+        second_id = second.id
+
+    try:
+        first_page = await _search(world["amy"], "端口", limit=1)
+        assert len(first_page) == 1
+        rest = await _search(world["amy"], "端口", limit=5,
+                             cursor=first_page[-1].message_id)
+        seen = [h.conversation_id for h in first_page + rest]
+        assert len(seen) == len(set(seen)), "a conversation appeared on two pages"
+        assert second_id in seen
+    finally:
+        async with AsyncSessionLocal() as db:
+            await db.execute(ConversationMessage.__table__.delete().where(
+                ConversationMessage.conversation_id == second_id))
+            await db.execute(Conversation.__table__.delete().where(
+                Conversation.id == second_id))
+            await db.commit()

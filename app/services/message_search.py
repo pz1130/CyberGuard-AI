@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.conversation import Conversation
@@ -30,6 +30,13 @@ _LIKE_ESCAPE = "\\"
 
 @dataclass(frozen=True)
 class SearchHit:
+    """One conversation, represented by its newest matching message.
+
+    A keyword commonly matches several messages in the same conversation.
+    Returning each of them listed the conversation repeatedly and made ``limit``
+    mean "messages", which is not what a person searching asks for. ``hits``
+    keeps the number they would otherwise have counted by eye.
+    """
     conversation_id: int
     conversation_title: Optional[str]
     message_id: int
@@ -37,6 +44,7 @@ class SearchHit:
     role: str
     content: str
     created_at: datetime
+    hits: int = 1
 
 
 def escape_like(term: str) -> str:
@@ -82,6 +90,28 @@ async def search_messages(
         conditions.append(Conversation.deleted_at.is_(None))
         conditions.append(Conversation.agent_id.is_(None))
 
+    # One row per conversation: its newest matching message represents it, and
+    # the count says how much else is in there. Grouping here rather than in
+    # the client is what makes `limit` mean conversations and keeps paging
+    # correct — a representative is a conversation's maximum matching id, so a
+    # page boundary cannot re-surface it through an older message.
+    grouped = (
+        select(
+            ConversationMessage.conversation_id.label("cid"),
+            func.max(ConversationMessage.id).label("rep"),
+            func.count(ConversationMessage.id).label("hits"),
+        )
+        .join(Conversation, Conversation.id == ConversationMessage.conversation_id)
+        .where(*conditions)
+        .group_by(ConversationMessage.conversation_id)
+    )
+    if cursor is not None:
+        grouped = grouped.having(func.max(ConversationMessage.id) < cursor)
+    grouped = (grouped
+               .order_by(func.max(ConversationMessage.id).desc())
+               .limit(max(1, min(int(limit), MAX_SEARCH_LIMIT)))
+               .subquery())
+
     stmt = (
         select(
             ConversationMessage.conversation_id,
@@ -91,20 +121,19 @@ async def search_messages(
             ConversationMessage.role,
             ConversationMessage.content,
             ConversationMessage.created_at,
+            grouped.c.hits,
         )
+        .join(grouped, grouped.c.rep == ConversationMessage.id)
         .join(Conversation, Conversation.id == ConversationMessage.conversation_id)
-        .where(*conditions)
         .order_by(ConversationMessage.id.desc())
-        .limit(max(1, min(int(limit), MAX_SEARCH_LIMIT)))
     )
-    if cursor is not None:
-        stmt = stmt.where(ConversationMessage.id < cursor)
 
     rows = (await session.execute(stmt)).all()
     return [
         SearchHit(
             conversation_id=row[0], conversation_title=row[1], message_id=row[2],
             seq=row[3], role=row[4], content=row[5], created_at=row[6],
+            hits=row[7],
         )
         for row in rows
     ]

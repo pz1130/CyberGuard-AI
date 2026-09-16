@@ -238,3 +238,23 @@ async def test_appending_costs_the_same_at_message_500_as_at_message_1(conv):
         "500-message history — it is scaling with the transcript, which is the "
         "blob behaviour this table replaces"
     )
+
+
+@pytest.mark.asyncio
+async def test_two_appends_on_one_session_do_not_collide(conv):
+    """The session is built with autoflush=False, so without an explicit flush
+    the second append's head query cannot see the first append's rows and both
+    compute the same seq. uq_conv_messages_seq catches it — as it should — but
+    a caller batching two appends before committing is an ordinary thing to do.
+    """
+    conv_id, _ = conv
+    async with AsyncSessionLocal() as db:
+        await append_messages_locked(db, conv_id, [{"role": "user", "content": "one"}])
+        await append_messages_locked(db, conv_id, [{"role": "user", "content": "two"}])
+        await db.commit()
+
+        rows = await fetch_messages(db, conv_id)
+
+    assert [r.seq for r in rows] == [0, 1]
+    assert [r.content for r in rows] == ["one", "two"]
+    assert verify_conversation_chain(rows) is None
