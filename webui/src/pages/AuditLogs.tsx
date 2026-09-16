@@ -19,6 +19,11 @@ interface Log {
 
 export default function AuditLogs() {
   const { t } = useTranslation()
+  const [showSyslog, setShowSyslog] = useState(false)
+  const [syslog, setSyslog] = useState({ host: '', port: 514, protocol: 'tcp' as 'udp' | 'tcp', facility: 16 })
+  const [sending, setSending] = useState(false)
+  const [syslogResult, setSyslogResult] = useState('')
+  const [syslogError, setSyslogError] = useState('')
   const [logs, setLogs] = useState<Log[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('')
@@ -44,6 +49,16 @@ export default function AuditLogs() {
     } catch (e: unknown) { alert(errorMessage(e)) }
   }
 
+  const exportSyslog = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setSending(true); setSyslogResult(''); setSyslogError('')
+    try {
+      const result = await api.exportAuditLogsSyslog(syslog) as { sent: number }
+      setSyslogResult(t('audit.syslogSent', { count: result.sent }))
+    } catch (e: unknown) { setSyslogError(errorMessage(e)) }
+    finally { setSending(false) }
+  }
+
   const filtered = logs.filter(l =>
     !filter || l.action?.toLowerCase().includes(filter.toLowerCase()) ||
     String(l.user_id)?.includes(filter)
@@ -56,6 +71,8 @@ export default function AuditLogs() {
         eyebrow="COMPLETE OPERATION RECORDS · SIEM EXPORT"
         title={t('audit.title').toUpperCase()}
         actions={
+          <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={() => setShowSyslog(!showSyslog)} aria-expanded={showSyslog}>SYSLOG</button>
           <button
             onClick={exportLogs}
             className="btn btn-primary"
@@ -63,8 +80,32 @@ export default function AuditLogs() {
           >
             <Download size={13} /> EXPORT
           </button>
+          </div>
         }
       />
+
+      {showSyslog && <form onSubmit={exportSyslog} style={{ padding: 20, marginBottom: 20, border: '1px solid var(--border-bright)' }}>
+        <p style={{ marginTop: 0 }}>{t('audit.syslogDescription')}</p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'end' }}>
+          <label style={{ display: 'grid', gap: 6 }}>{t('audit.syslogHost')}<input required maxLength={253} value={syslog.host} placeholder="syslog.example.com"
+            disabled={sending} onChange={e => setSyslog({ ...syslog, host: e.target.value })} /></label>
+          <label style={{ display: 'grid', gap: 6 }}>{t('audit.syslogPort')}<input required type="number" min={1} max={65535} value={syslog.port}
+            disabled={sending} onChange={e => setSyslog({ ...syslog, port: Number(e.target.value) })} /></label>
+          <label style={{ display: 'grid', gap: 6 }}>{t('audit.syslogProtocol')}<select value={syslog.protocol} disabled={sending}
+            onChange={e => setSyslog({ ...syslog, protocol: e.target.value as 'udp' | 'tcp' })}>
+            <option value="tcp">TCP</option><option value="udp">UDP</option>
+          </select></label>
+          <label style={{ display: 'grid', gap: 6 }}>Facility<select value={syslog.facility} disabled={sending}
+            onChange={e => setSyslog({ ...syslog, facility: Number(e.target.value) })}>
+            {Array.from({ length: 8 }, (_, i) => <option key={i} value={16 + i}>local{i}</option>)}
+          </select></label>
+          <button className="btn btn-primary" type="submit" disabled={sending}>
+            {sending ? t('audit.syslogSending') : t('audit.syslogSend')}
+          </button>
+        </div>
+        {syslogResult && <p role="status">{syslogResult}</p>}
+        {syslogError && <p role="alert" style={{ color: 'var(--red)' }}>{syslogError}</p>}
+      </form>}
 
       {/* Tabs — both halves of the auditor's job: what the system did, and
           what was said. Same permission, same person. */}

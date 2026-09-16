@@ -267,6 +267,9 @@ export const api = {
   exportAuditLogs: (params?: Record<string, string>) =>
     request(`/audit/export?${new URLSearchParams(params || {})}`),
 
+  exportAuditLogsSyslog: (body: { host: string; port: number; protocol: 'udp' | 'tcp'; facility: number }) =>
+    request('/audit/export/syslog', { method: 'POST', body: JSON.stringify(body) }),
+
   // Backup
   listBackups: () => request('/backup'),
   createBackup: (body?: { name?: string; backup_type?: string; exclude_chat?: boolean }) =>

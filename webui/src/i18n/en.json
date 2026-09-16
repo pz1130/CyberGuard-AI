@@ -379,6 +379,14 @@
     "localBackup": "Local Backup & Config Export"
   },
   "audit": {
+    "syslogDescription": "Manually send up to 10,000 latest audit logs. Sending does not confirm receiver ingestion; repeated exports may produce duplicates.",
+    "syslogHost": "Server address",
+    "syslogPort": "Port",
+    "syslogProtocol": "Protocol",
+    "syslogSend": "Send logs",
+    "syslogSending": "Sending…",
+    "syslogSent": "Sent {{count}} audit records.",
+
     "title": "Audit Logs",
     "filterByUser": "Filter by user",
     "filterByAction": "Filter by action",

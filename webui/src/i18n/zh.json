@@ -379,6 +379,14 @@
     "localBackup": "本地备份与配置导出"
   },
   "audit": {
+    "syslogDescription": "手动发送最近最多 10,000 条审计日志。发送成功仅表示已发送，不代表接收端已入库；重复导出可能产生重复记录。",
+    "syslogHost": "服务器地址",
+    "syslogPort": "端口",
+    "syslogProtocol": "协议",
+    "syslogSend": "发送日志",
+    "syslogSending": "发送中…",
+    "syslogSent": "已发送 {{count}} 条审计日志。",
+
     "title": "审计日志",
     "filterByUser": "按用户筛选",
     "filterByAction": "按操作筛选",

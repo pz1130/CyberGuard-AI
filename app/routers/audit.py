@@ -2,12 +2,12 @@
 from typing import Optional
 import json
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import AuthenticatedUser
 from app.core.dependencies import get_current_user, get_db, require_permission
 from app.core.rbac import Permission
-from app.schemas.audit import AuditLogRead, AuditLogListResponse
+from app.schemas.audit import AuditLogRead, AuditLogListResponse, SyslogExportRequest
 from app.models.audit import AuditLog
 from sqlalchemy import select, func, desc
 
@@ -88,6 +88,28 @@ async def export_audit_logs(
         "logs": [AuditLogRead.model_validate(l).model_dump() for l in logs],
         "filename": f"audit_export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json",
     }
+
+
+@router.post("/audit/export/syslog")
+async def export_audit_logs_syslog(
+    body: SyslogExportRequest,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_permission(Permission.AUDIT_READ)),
+):
+    """Send the same latest 10,000 records as the local export."""
+    from app.services.audit_syslog import send_logs, SyslogExportError
+
+    result = await db.execute(
+        select(AuditLog).order_by(desc(AuditLog.timestamp), desc(AuditLog.id)).limit(10000))
+    logs = result.scalars().all()
+    try:
+        sent = await send_logs(logs, body)
+    except SyslogExportError as exc:
+        raise HTTPException(status_code=502, detail={
+            "message": "Syslog delivery failed; some records may already have been sent",
+            "sent": exc.sent, "total": len(logs),
+        }) from exc
+    return {"sent": sent, "total": len(logs), "protocol": body.protocol}
 
 
 from app.core.audit import verify_chain
