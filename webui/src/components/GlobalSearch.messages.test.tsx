@@ -23,9 +23,10 @@ describe('GlobalSearch — message hits', () => {
     }
     vi.spyOn(api, 'searchConversationMessages').mockResolvedValue({
       results: [{
-        conversation_id: 7, conversation_title: 'Port scan triage',
-        message_id: 91, seq: 3, role: 'assistant',
-        created_at: '2026-09-16T10:00:00', snippet: '…three open ports…',
+        conversation_id: 7, conversation_title: 'Port scan triage', hits: 1,
+        matches: [{ message_id: 91, seq: 3, role: 'assistant',
+                    created_at: '2026-09-16T10:00:00',
+                    snippet: '…three open ports…' }],
       }],
       next_cursor: 91,
     } as never)

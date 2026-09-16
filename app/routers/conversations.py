@@ -210,16 +210,23 @@ async def search_conversation_messages(
             {
                 "conversation_id": hit.conversation_id,
                 "conversation_title": hit.conversation_title,
-                "message_id": hit.message_id,
-                "seq": hit.seq,
-                "role": hit.role,
-                "created_at": hit.created_at.isoformat() if hit.created_at else None,
-                "snippet": snippet(hit.content, term),
                 "hits": hit.hits,
+                "matches": [
+                    {
+                        "message_id": m.message_id,
+                        "seq": m.seq,
+                        "role": m.role,
+                        "created_at": m.created_at.isoformat() if m.created_at else None,
+                        "snippet": snippet(m.content, term),
+                    }
+                    for m in hit.matches
+                ],
             }
             for hit in hits
         ],
-        "next_cursor": hits[-1].message_id if hits else None,
+        # The newest match of the last conversation on this page.
+        "next_cursor": (hits[-1].matches[0].message_id
+                        if hits and hits[-1].matches else None),
     }
 
 

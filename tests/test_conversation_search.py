@@ -91,7 +91,8 @@ async def _search(user_id, term, **kw):
 @pytest.mark.asyncio
 async def test_an_english_term_finds_its_message(world):
     hits = await _search(world["amy"], "open ports")
-    assert [h.content for h in hits] == ["three open ports, including 22/tcp"]
+    assert [m.content for h in hits for m in h.matches] == [
+        "three open ports, including 22/tcp"]
 
 
 @pytest.mark.asyncio
@@ -99,7 +100,7 @@ async def test_a_two_character_chinese_term_finds_its_message(world):
     """The case the trigram index cannot accelerate. It must still be correct —
     the index is a speed decision, never a correctness one."""
     hits = await _search(world["amy"], "端口")
-    assert any("开放端口" in h.content for h in hits)
+    assert any("开放端口" in m.content for h in hits for m in h.matches)
 
 
 @pytest.mark.asyncio
@@ -116,7 +117,7 @@ async def test_a_search_never_reaches_another_users_messages(world):
     """The one that matters. Bob's message contains the term; Amy must not see it."""
     hits = await _search(world["amy"], "端口")
     assert all(h.conversation_id != world["bobs"] for h in hits)
-    assert all("Bob" not in h.content for h in hits)
+    assert all("Bob" not in m.content for h in hits for m in h.matches)
 
 
 @pytest.mark.asyncio
@@ -167,7 +168,7 @@ def test_escape_like_neutralises_wildcards():
 async def test_a_percent_sign_is_a_literal_not_a_wildcard(world):
     hits = await _search(world["amy"], "100%")
     assert len(hits) == 1
-    assert "100%" in hits[0].content
+    assert "100%" in hits[0].matches[0].content
 
 
 @pytest.mark.asyncio
@@ -182,16 +183,17 @@ async def test_an_underscore_is_a_literal_not_a_single_character_wildcard(world)
 async def test_paging_returns_each_hit_once(world):
     first = await _search(world["amy"], "e", limit=2)
     assert len(first) == 2
-    second = await _search(world["amy"], "e", limit=2, cursor=first[-1].message_id)
-    ids = [h.message_id for h in first] + [h.message_id for h in second]
+    second = await _search(world["amy"], "e", limit=2,
+                           cursor=first[-1].matches[0].message_id)
+    ids = [h.conversation_id for h in first] + [h.conversation_id for h in second]
     assert len(ids) == len(set(ids)), "a message appeared on two pages"
 
 
 @pytest.mark.asyncio
 async def test_results_are_newest_first(world):
     hits = await _search(world["amy"], "e", limit=10)
-    assert [h.message_id for h in hits] == sorted(
-        (h.message_id for h in hits), reverse=True)
+    newest = [h.matches[0].message_id for h in hits]
+    assert newest == sorted(newest, reverse=True)
 
 
 @pytest.mark.asyncio
@@ -214,9 +216,11 @@ async def test_the_endpoint_returns_snippets_not_message_bodies(world):
         payload = await search_conversation_messages("open ports", 20, None, db, amy)
 
     assert payload["results"], "expected a hit"
-    assert set(payload["results"][0]) == {
-        "conversation_id", "conversation_title", "message_id", "seq", "role",
-        "created_at", "snippet", "hits"}, (
+    result = payload["results"][0]
+    assert set(result) == {"conversation_id", "conversation_title", "hits",
+                           "matches"}
+    assert set(result["matches"][0]) == {
+        "message_id", "seq", "role", "created_at", "snippet"}, (
         "an exact set, so a future change that starts returning message bodies "
         "shows up here")
 
@@ -287,7 +291,7 @@ async def test_the_hit_count_says_how_many_messages_matched(world):
 
 
 @pytest.mark.asyncio
-async def test_the_representative_is_the_newest_matching_message(world):
+async def test_the_first_match_is_the_newest_one(world):
     """Newest first is what "find that thing I said" means."""
     async with AsyncSessionLocal() as db:
         await append_messages_locked(db, world["live"], [
@@ -296,7 +300,45 @@ async def test_the_representative_is_the_newest_matching_message(world):
 
     hits = await _search(world["amy"], "端口")
     live = next(h for h in hits if h.conversation_id == world["live"])
-    assert live.content == "端口 the latest word on it"
+    assert live.matches[0].content == "端口 the latest word on it"
+
+
+@pytest.mark.asyncio
+async def test_a_conversation_carries_its_matching_messages(world):
+    """Collapsing must not cost the reader the matches themselves. Showing one
+    line for a conversation with three hits is what made the results look
+    incomplete."""
+    async with AsyncSessionLocal() as db:
+        await append_messages_locked(db, world["live"], [
+            {"role": "user", "content": "端口 second"},
+            {"role": "user", "content": "端口 third"},
+        ])
+        await db.commit()
+
+    hits = await _search(world["amy"], "端口")
+    live = next(h for h in hits if h.conversation_id == world["live"])
+    assert live.hits == 3
+    assert len(live.matches) == 3
+    assert [m.content for m in live.matches] == [
+        "端口 third", "端口 second", "扫描主机的开放端口"]
+
+
+@pytest.mark.asyncio
+async def test_the_matches_per_conversation_are_capped(world):
+    """A conversation with fifty hits must not flood the page; the count still
+    says how many there are."""
+    from app.services.message_search import MAX_MATCHES_PER_CONVERSATION
+
+    async with AsyncSessionLocal() as db:
+        for i in range(6):
+            await append_messages_locked(db, world["live"], [
+                {"role": "user", "content": f"端口 filler {i}"}])
+        await db.commit()
+
+    hits = await _search(world["amy"], "端口")
+    live = next(h for h in hits if h.conversation_id == world["live"])
+    assert live.hits == 7
+    assert len(live.matches) == MAX_MATCHES_PER_CONVERSATION
 
 
 @pytest.mark.asyncio
@@ -328,7 +370,7 @@ async def test_paging_walks_conversations_without_repeating_one(world):
         first_page = await _search(world["amy"], "端口", limit=1)
         assert len(first_page) == 1
         rest = await _search(world["amy"], "端口", limit=5,
-                             cursor=first_page[-1].message_id)
+                             cursor=first_page[-1].matches[0].message_id)
         seen = [h.conversation_id for h in first_page + rest]
         assert len(seen) == len(set(seen)), "a conversation appeared on two pages"
         assert second_id in seen

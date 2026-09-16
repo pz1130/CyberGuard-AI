@@ -207,12 +207,13 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
           if (cancelled) return
           const rows = (res as { results?: Array<{
             conversation_id: number; conversation_title?: string | null
-            message_id: number; snippet?: string; hits?: number
+            hits?: number
+            matches?: Array<{ message_id: number; snippet?: string }>
           }> }).results || []
           setMessageHits({
             term,
             items: rows.map(r => ({
-              id: `msg-${r.message_id}`,
+              id: `msg-${r.conversation_id}`,
               name: r.conversation_title || `Conversation #${r.conversation_id}`,
               // One row per conversation; the count is what the reader would
               // otherwise have had to gather from repeated rows.
@@ -220,7 +221,8 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
               tab: 'chat' as Tab,
               category: 'CONVERSATIONS',
               icon: '◉',
-              preview: r.snippet || '',
+              // The palette shows one line; the evidence panel shows them all.
+              preview: r.matches?.[0]?.snippet || '',
             })),
           })
         })

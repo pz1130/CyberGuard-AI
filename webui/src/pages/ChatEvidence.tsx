@@ -11,15 +11,47 @@ import { errorMessage } from '../lib/errorMessage'
  * what was said, whether it can still be proved, and when it may be disposed
  * of. They live beside the audit log because it is the same person's job.
  */
-interface Hit {
-  conversation_id: number
-  conversation_title: string | null
+interface Match {
   message_id: number
   seq: number
   role: string
   created_at: string | null
   snippet: string
+}
+
+interface Hit {
+  conversation_id: number
+  conversation_title: string | null
   hits: number
+  matches: Match[]
+}
+
+/**
+ * Highlight every occurrence of the term. Split rather than dangerouslySet:
+ * the term comes from the search box and the snippet from a stored message,
+ * and neither should be able to put markup on this page.
+ */
+function Highlighted({ text, term }: { text: string; term: string }) {
+  if (!term) return <>{text}</>
+  const lower = text.toLowerCase()
+  const needle = term.toLowerCase()
+  const parts: React.ReactNode[] = []
+  let at = 0
+  for (;;) {
+    const found = lower.indexOf(needle, at)
+    if (found < 0) { parts.push(text.slice(at)); break }
+    if (found > at) parts.push(text.slice(at, found))
+    parts.push(
+      <mark key={found} style={{
+        background: 'var(--accent-dim)', color: 'var(--accent)',
+        padding: '0 2px', borderRadius: 2,
+      }}>
+        {text.slice(found, found + term.length)}
+      </mark>,
+    )
+    at = found + term.length
+  }
+  return <>{parts}</>
 }
 
 interface PurgeCandidate {
@@ -144,20 +176,30 @@ export default function ChatEvidence() {
         {hits !== null && hits.length > 0 && (
           <div style={{ marginTop: 14 }}>
             {hits.map(h => (
-              <div key={h.message_id} style={{
+              <div key={h.conversation_id} style={{
                 borderTop: '1px solid var(--border)', padding: '10px 0',
               }}>
                 <div style={{ fontSize: 12, color: 'var(--accent)' }}>
                   {h.conversation_title || `#${h.conversation_id}`}
                   <span style={{ color: 'var(--text-dim)', marginLeft: 8 }}>
-                    {h.hits > 1 ? `${h.hits} matches · ` : ''}{h.role} · seq {h.seq}
-                    {h.created_at ? ` · ${h.created_at.slice(0, 19).replace('T', ' ')}` : ''}
+                    {h.hits} {h.hits === 1 ? 'match' : 'matches'}
+                    {h.hits > h.matches.length
+                      ? ` · showing ${h.matches.length}` : ''}
                   </span>
                 </div>
-                <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4,
-                              lineHeight: 1.6 }}>
-                  {h.snippet}
-                </div>
+                {h.matches.map(m => (
+                  <div key={m.message_id} style={{ marginTop: 6 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+                      {m.role} · seq {m.seq}
+                      {m.created_at
+                        ? ` · ${m.created_at.slice(0, 19).replace('T', ' ')}` : ''}
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--text-muted)',
+                                  marginTop: 2, lineHeight: 1.6 }}>
+                      <Highlighted text={m.snippet} term={query.trim()} />
+                    </div>
+                  </div>
+                ))}
               </div>
             ))}
           </div>
