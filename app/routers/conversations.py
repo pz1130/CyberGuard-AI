@@ -376,8 +376,15 @@ async def export_conversations(
     """
     from app.services.conversation_export import export_eligible
 
-    summary = await export_eligible(
-        db, older_than_days=older_than_days, retain_days=retain_days)
+    try:
+        summary = await export_eligible(
+            db, older_than_days=older_than_days, retain_days=retain_days)
+    except RuntimeError as exc:
+        # Object storage is not configured. An uncaught RuntimeError becomes a
+        # bare "Internal server error", leaving the operator guessing at the
+        # one thing that blocks retention entirely — purge finding nothing
+        # eligible is the downstream symptom of exactly this.
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     await db.commit()
     return summary
 

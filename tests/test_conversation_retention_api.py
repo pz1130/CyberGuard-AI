@@ -133,3 +133,51 @@ def test_purge_dry_runs_unless_confirmed():
 
     signature = inspect.signature(purge_conversations)
     assert signature.parameters["confirm"].default is False
+
+
+@pytest.mark.asyncio
+async def test_an_unconfigured_export_tells_the_operator_what_is_missing(monkeypatch):
+    """The service raises a RuntimeError naming S3_ENDPOINT, but FastAPI turns
+    an uncaught exception into a bare "Internal server error". The operator
+    would be left guessing at the one thing that blocks the whole round —
+    purge silently finding nothing eligible is the consequence of this.
+    """
+    from fastapi import HTTPException
+
+    from app.routers.conversations import export_conversations
+
+    from app.services.conversation_messages import append_messages_locked
+
+    for var in ("S3_ENDPOINT", "OSS_ENDPOINT", "S3_ACCESS_KEY"):
+        monkeypatch.delenv(var, raising=False)
+
+    # A conversation with a message: an empty one is skipped before S3 is
+    # ever reached, so without this the test passes for the wrong reason on a
+    # database other tests have cleaned out.
+    suffix = uuid.uuid4().hex[:8]
+    async with AsyncSessionLocal() as db:
+        user = User(username=f"s3_{suffix}", email=f"s3_{suffix}@company.local",
+                    hashed_password="test-only", role="admin", is_active=True)
+        db.add(user)
+        await db.flush()
+        conv = Conversation(user_id=user.id, title="needs archiving")
+        db.add(conv)
+        await db.commit()
+        await append_messages_locked(db, conv.id, [
+            {"role": "user", "content": "something worth keeping"}])
+        await db.commit()
+        conv_id, user_id = conv.id, user.id
+
+        try:
+            with pytest.raises(HTTPException) as exc:
+                await export_conversations(older_than_days=0, retain_days=365, db=db)
+            assert exc.value.status_code == 503
+            assert "S3_ENDPOINT" in exc.value.detail
+        finally:
+            await db.rollback()
+            await db.execute(ConversationMessage.__table__.delete().where(
+                ConversationMessage.conversation_id == conv_id))
+            await db.execute(Conversation.__table__.delete().where(
+                Conversation.id == conv_id))
+            await db.execute(User.__table__.delete().where(User.id == user_id))
+            await db.commit()
