@@ -4,7 +4,8 @@ import json
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.dependencies import get_db, require_permission
+from app.core.auth import AuthenticatedUser
+from app.core.dependencies import get_current_user, get_db, require_permission
 from app.core.rbac import Permission
 from app.schemas.audit import AuditLogRead, AuditLogListResponse
 from app.models.audit import AuditLog
@@ -109,3 +110,66 @@ async def audit_worm_export(
     _=Depends(require_permission(Permission.AUDIT_READ)),
 ):
     return await export_new(retain_days=retain_days)
+
+
+@router.get("/audit/conversation-search")
+async def auditor_conversation_search(
+    q: str = "",
+    user_id: Optional[int] = None,
+    limit: int = 20,
+    cursor: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    _=Depends(require_permission(Permission.AUDIT_READ)),
+):
+    """Search chat messages across users, for an investigation.
+
+    Separate from the self-service search on purpose: that endpoint takes the
+    owner from the token and accepts no user_id, so it cannot be turned into
+    this by passing a parameter. Omitting `user_id` searches everyone.
+
+    Sees what ordinary search hides — conversations a person deleted, and
+    internal agents' memory slices. A tombstone is the whole reason delete does
+    not delete, and a slice is where an agent's own reasoning lives.
+    """
+    from fastapi import HTTPException
+
+    from app.core.audit import record_action
+    from app.services.message_search import search_messages
+    from app.services.message_snippet import snippet
+
+    term = (q or "").strip()
+    if not term:
+        raise HTTPException(status_code=400, detail="q is required")
+
+    hits = await search_messages(
+        db, user_id=user_id, term=term, limit=limit, cursor=cursor,
+        include_hidden=True)
+
+    # Reading someone's private conversations is the act that needs a trace,
+    # or "who watches the watchers" has no answer here.
+    await record_action(
+        user_id=current_user.user_id,
+        action="audit.conversation_search",
+        action_category="observe",
+        risk_tier="medium",
+        rollback_possible=True,
+        input_data={"query": term, "scope_user_id": user_id},
+        output_data={"results": len(hits)},
+    )
+
+    return {
+        "results": [
+            {
+                "conversation_id": hit.conversation_id,
+                "conversation_title": hit.conversation_title,
+                "message_id": hit.message_id,
+                "seq": hit.seq,
+                "role": hit.role,
+                "created_at": hit.created_at.isoformat() if hit.created_at else None,
+                "snippet": snippet(hit.content, term),
+            }
+            for hit in hits
+        ],
+        "next_cursor": hits[-1].message_id if hits else None,
+    }

@@ -5,9 +5,10 @@ PostgreSQL tokenises a whole Chinese sentence as one lexeme, so a tsvector
 cannot match a keyword inside one (see the Round 2 design).
 
 ``user_id`` is a parameter rather than something this module reads from a
-token, so the Round 3 auditor path can pass a different scope without the
-search being rewritten. The caller is responsible for deciding whose messages
-these are; this module is responsible for honouring that decision.
+token, so the auditor path can pass a different scope without the search being
+rewritten. The caller is responsible for deciding whose messages these are;
+this module is responsible for honouring that decision. ``None`` means every
+user, which only the auditor endpoint passes.
 """
 from __future__ import annotations
 
@@ -54,18 +55,33 @@ def escape_like(term: str) -> str:
 async def search_messages(
     session: AsyncSession,
     *,
-    user_id: int,
+    user_id: Optional[int],
     term: str,
     limit: int = DEFAULT_SEARCH_LIMIT,
     cursor: Optional[int] = None,
+    include_hidden: bool = False,
 ) -> List[SearchHit]:
-    """Messages owned by ``user_id`` containing ``term``, newest first.
+    """Messages containing ``term``, newest first.
 
-    Excludes tombstoned conversations and internal-agent memory slices. Those
-    predicates are repeated here rather than left to the partial index: the
+    ``user_id=None`` searches every user; only the auditor endpoint passes it.
+
+    ``include_hidden`` admits the two kinds of conversation ordinary search
+    excludes — ones the person deleted, and internal-agent memory slices. They
+    travel together because no caller wants one without the other: a person
+    should see neither, and an auditor needs both. Tombstones are why Round 1
+    made delete not delete, and a slice is where an agent's own reasoning is.
+
+    The predicates live here rather than being left to the partial index: the
     index is an optimisation and must never be the security boundary.
     """
     pattern = f"%{escape_like(term)}%"
+    conditions = [ConversationMessage.content.ilike(pattern, escape=_LIKE_ESCAPE)]
+    if user_id is not None:
+        conditions.append(Conversation.user_id == user_id)
+    if not include_hidden:
+        conditions.append(Conversation.deleted_at.is_(None))
+        conditions.append(Conversation.agent_id.is_(None))
+
     stmt = (
         select(
             ConversationMessage.conversation_id,
@@ -77,12 +93,7 @@ async def search_messages(
             ConversationMessage.created_at,
         )
         .join(Conversation, Conversation.id == ConversationMessage.conversation_id)
-        .where(
-            Conversation.user_id == user_id,
-            Conversation.deleted_at.is_(None),
-            Conversation.agent_id.is_(None),
-            ConversationMessage.content.ilike(pattern, escape=_LIKE_ESCAPE),
-        )
+        .where(*conditions)
         .order_by(ConversationMessage.id.desc())
         .limit(max(1, min(int(limit), MAX_SEARCH_LIMIT)))
     )
