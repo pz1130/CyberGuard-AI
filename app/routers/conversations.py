@@ -39,6 +39,9 @@ class ConversationResponse(BaseModel):
     # GET /conversations/{id}/messages, a page at a time.
     message_count: int = 0
     last_message_preview: Optional[str] = None
+    # True once retention has disposed of the messages. The row survives so the
+    # person sees an archived conversation rather than an empty one.
+    archived: bool = False
     created_at: datetime
     updated_at: datetime
     # Per-conversation config overrides
@@ -145,6 +148,7 @@ async def list_conversations(
     for conv in conversations:
         payload = ConversationResponse.model_validate(conv)
         payload.message_count = counts.get(conv.id, 0)
+        payload.archived = conv.purged_at is not None
         preview = previews.get(conv.id)
         payload.last_message_preview = preview[:200] if preview else None
         responses.append(payload)
@@ -344,7 +348,53 @@ async def append_message(
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
+    if conv.purged_at is not None:
+        # A second chain starting at seq 0 would collide with the one already
+        # exported, and the history it belongs to no longer lives here. Raised
+        # before the commit below, so nothing is written.
+        raise HTTPException(
+            status_code=409,
+            detail="This conversation has been archived and cannot be continued.")
+
     await db.commit()
     await db.refresh(conv)
 
     return {"status": "ok", "message_count": count}
+
+
+@router.post("/conversations/export")
+async def export_conversations(
+    older_than_days: int = 0,
+    retain_days: int = 365,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_permission(Permission.AUDIT_READ)),
+):
+    """Mirror conversations to write-once storage.
+
+    older_than_days=0 exports everything; retention disposes of nothing that
+    has not been through here first.
+    """
+    from app.services.conversation_export import export_eligible
+
+    summary = await export_eligible(
+        db, older_than_days=older_than_days, retain_days=retain_days)
+    await db.commit()
+    return summary
+
+
+@router.post("/conversations/purge")
+async def purge_conversations(
+    older_than_days: int = 365,
+    confirm: bool = False,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_permission(Permission.AUDIT_READ)),
+):
+    """Dispose of archived conversations older than the cutoff.
+
+    Dry runs unless `confirm` is true. This is the one irreversible operation
+    in the product; it should not be a typo away.
+    """
+    from app.services.conversation_purge import purge_eligible
+
+    return await purge_eligible(
+        db, older_than_days=older_than_days, confirm=confirm)
