@@ -163,6 +163,8 @@ async def auditor_conversation_search(
             {
                 "conversation_id": hit.conversation_id,
                 "conversation_title": hit.conversation_title,
+                "user_id": hit.user_id,
+                "username": hit.username,
                 "hits": hit.hits,
                 "matches": [
                     {

@@ -22,7 +22,8 @@ describe('ChatEvidence', () => {
   it('shows the snippets the auditor search returned', async () => {
     vi.spyOn(api, 'auditorSearchConversations').mockResolvedValue({
       results: [{
-        conversation_id: 7, conversation_title: 'Deleted by the user', hits: 2,
+        conversation_id: 7, conversation_title: 'Deleted by the user',
+        user_id: 3, username: 'amy', hits: 2,
         matches: [
           { message_id: 91, seq: 2, role: 'assistant',
             created_at: '2026-09-16T10:00:00', snippet: '…three open ports…' },
@@ -46,7 +47,8 @@ describe('ChatEvidence', () => {
   it('shows every match of a conversation, not just the first', async () => {
     vi.spyOn(api, 'auditorSearchConversations').mockResolvedValue({
       results: [{
-        conversation_id: 7, conversation_title: 'Busy thread', hits: 2,
+        conversation_id: 7, conversation_title: 'Busy thread',
+        user_id: 3, username: 'amy', hits: 2,
         matches: [
           { message_id: 91, seq: 2, role: 'assistant',
             created_at: null, snippet: 'first snippet' },
@@ -67,7 +69,8 @@ describe('ChatEvidence', () => {
   it('says when it is showing fewer matches than exist', async () => {
     vi.spyOn(api, 'auditorSearchConversations').mockResolvedValue({
       results: [{
-        conversation_id: 7, conversation_title: 'Very busy', hits: 40,
+        conversation_id: 7, conversation_title: 'Very busy',
+        user_id: 3, username: 'amy', hits: 40,
         matches: [{ message_id: 91, seq: 2, role: 'user',
                     created_at: null, snippet: 'one of forty' }],
       }],
@@ -82,7 +85,8 @@ describe('ChatEvidence', () => {
   it('highlights the term inside the snippet', async () => {
     vi.spyOn(api, 'auditorSearchConversations').mockResolvedValue({
       results: [{
-        conversation_id: 7, conversation_title: 'Marked', hits: 1,
+        conversation_id: 7, conversation_title: 'Marked',
+        user_id: 3, username: 'amy', hits: 1,
         matches: [{ message_id: 91, seq: 0, role: 'user',
                     created_at: null, snippet: 'open ports here' }],
       }],
@@ -172,5 +176,62 @@ describe('ChatEvidence', () => {
 
     await waitFor(() => expect(purge).toHaveBeenCalledWith(365, true))
     expect(await screen.findByText(/Deleted 12 message/)).toBeTruthy()
+  })
+})
+
+describe('ChatEvidence grouping', () => {
+  beforeEach(() => { vi.restoreAllMocks() })
+
+  const search = (term: string) => {
+    fireEvent.change(screen.getByPlaceholderText(/keyword/i), { target: { value: term } })
+    fireEvent.click(screen.getByRole('button', { name: /^search$/i }))
+  }
+
+  const twoUsers = {
+    results: [
+      { conversation_id: 7, conversation_title: 'Amy one', user_id: 3,
+        username: 'amy.analyst', hits: 1,
+        matches: [{ message_id: 91, seq: 0, role: 'user', created_at: null,
+                    snippet: 'amy said this' }] },
+      { conversation_id: 8, conversation_title: 'Amy two', user_id: 3,
+        username: 'amy.analyst', hits: 1,
+        matches: [{ message_id: 90, seq: 0, role: 'user', created_at: null,
+                    snippet: 'amy said that' }] },
+      { conversation_id: 9, conversation_title: 'Bob one', user_id: 4,
+        username: 'bob.operator', hits: 1,
+        matches: [{ message_id: 89, seq: 0, role: 'user', created_at: null,
+                    snippet: 'bob said this' }] },
+    ],
+  }
+
+  it('groups conversations under the user who owns them', async () => {
+    vi.spyOn(api, 'auditorSearchConversations').mockResolvedValue(twoUsers as never)
+    render(<ChatEvidence />)
+    search('said')
+
+    expect(await screen.findByText(/amy\.analyst/)).toBeTruthy()
+    expect(screen.getByText(/bob\.operator/)).toBeTruthy()
+  })
+
+  it('counts each user\'s conversations', async () => {
+    vi.spyOn(api, 'auditorSearchConversations').mockResolvedValue(twoUsers as never)
+    render(<ChatEvidence />)
+    search('said')
+
+    expect(await screen.findByText(/2 conversations/)).toBeTruthy()
+    expect(screen.getByText(/1 conversation$/)).toBeTruthy()
+  })
+
+  it('falls back to the id when a username is missing', async () => {
+    vi.spyOn(api, 'auditorSearchConversations').mockResolvedValue({
+      results: [{ conversation_id: 7, conversation_title: 'Orphan', user_id: 12,
+                  username: null, hits: 1,
+                  matches: [{ message_id: 91, seq: 0, role: 'user',
+                              created_at: null, snippet: 'something' }] }],
+    } as never)
+    render(<ChatEvidence />)
+    search('something')
+
+    expect(await screen.findByText(/user #12/)).toBeTruthy()
   })
 })

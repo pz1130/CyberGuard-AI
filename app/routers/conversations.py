@@ -210,6 +210,8 @@ async def search_conversation_messages(
             {
                 "conversation_id": hit.conversation_id,
                 "conversation_title": hit.conversation_title,
+                "user_id": hit.user_id,
+                "username": hit.username,
                 "hits": hit.hits,
                 "matches": [
                     {

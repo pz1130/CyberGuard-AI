@@ -22,8 +22,29 @@ interface Match {
 interface Hit {
   conversation_id: number
   conversation_title: string | null
+  user_id: number | null
+  username: string | null
   hits: number
   matches: Match[]
+}
+
+/**
+ * Group the flat result list by owner, keeping the server's ordering within
+ * each. A cross-user search reads as a pile of conversations until you can see
+ * whose they are; the auditor's next question after "what was said" is always
+ * "by whom".
+ */
+function byUser(hits: Hit[]): Array<{ label: string; conversations: Hit[] }> {
+  const groups = new Map<string, Hit[]>()
+  for (const hit of hits) {
+    const label = hit.username || `user #${hit.user_id ?? '?'}`
+    const bucket = groups.get(label)
+    if (bucket) bucket.push(hit)
+    else groups.set(label, [hit])
+  }
+  return [...groups.entries()].map(([label, conversations]) => ({
+    label, conversations,
+  }))
 }
 
 /**
@@ -175,7 +196,22 @@ export default function ChatEvidence() {
         )}
         {hits !== null && hits.length > 0 && (
           <div style={{ marginTop: 14 }}>
-            {hits.map(h => (
+            {byUser(hits).map(group => (
+              <div key={group.label} style={{ marginTop: 12 }}>
+                <div style={{
+                  fontSize: 11, letterSpacing: '0.1em', fontWeight: 600,
+                  color: 'var(--text-primary)', textTransform: 'uppercase',
+                  borderBottom: '1px solid var(--border-bright)', paddingBottom: 5,
+                }}>
+                  {group.label}
+                  <span style={{ color: 'var(--text-dim)', fontWeight: 400,
+                                 letterSpacing: '0.06em', marginLeft: 8 }}>
+                    {group.conversations.length}{' '}
+                    {group.conversations.length === 1
+                      ? 'conversation' : 'conversations'}
+                  </span>
+                </div>
+                {group.conversations.map(h => (
               <div key={h.conversation_id} style={{
                 borderTop: '1px solid var(--border)', padding: '10px 0',
               }}>
@@ -198,6 +234,8 @@ export default function ChatEvidence() {
                                   marginTop: 2, lineHeight: 1.6 }}>
                       <Highlighted text={m.snippet} term={query.trim()} />
                     </div>
+                  </div>
+                ))}
                   </div>
                 ))}
               </div>

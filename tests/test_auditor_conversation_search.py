@@ -206,3 +206,33 @@ def test_the_self_service_endpoint_still_refuses_a_user_id():
     from app.routers.conversations import search_conversation_messages
 
     assert "user_id" not in inspect.signature(search_conversation_messages).parameters
+
+
+# --- whose conversation is it ---
+
+@pytest.mark.asyncio
+async def test_results_name_the_owner(world):
+    """A cross-user search that does not say whose conversation it found is
+    most of the way to useless: the auditor's next question is always "who".
+    """
+    payload = await _audit_search(world)
+    by_conv = {r["conversation_id"]: r for r in payload["results"]}
+
+    assert by_conv[world["bobs"]]["user_id"] == world["bob"]
+    assert by_conv[world["bobs"]]["username"].startswith("bob_")
+    assert by_conv[world["live"]]["user_id"] == world["amy"]
+    assert by_conv[world["live"]]["username"].startswith("amy_")
+
+
+@pytest.mark.asyncio
+async def test_every_result_names_an_owner(world):
+    """There is no such thing as an ownerless conversation here:
+    conversations.user_id is NOT NULL and its foreign key has neither CASCADE
+    nor SET NULL, so a user who owns one cannot be deleted at all. The grouping
+    in the UI relies on that — every row has a user to sit under.
+    """
+    payload = await _audit_search(world)
+    assert payload["results"], "expected hits"
+    for row in payload["results"]:
+        assert row["user_id"] is not None, row
+        assert row["username"], row

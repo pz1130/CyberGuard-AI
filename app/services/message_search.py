@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.conversation import Conversation
 from app.models.conversation_message import ConversationMessage
+from app.models.user import User
 
 DEFAULT_SEARCH_LIMIT = 20
 MAX_SEARCH_LIMIT = 100
@@ -53,6 +54,12 @@ class SearchHit:
     """
     conversation_id: int
     conversation_title: Optional[str]
+    # Whose conversation it is. A cross-user search that cannot say is most of
+    # the way to useless — the next question is always "who". Both are None
+    # when the owner has since been deleted, which must not hide the
+    # conversation from an investigation.
+    user_id: Optional[int]
+    username: Optional[str]
     hits: int
     matches: List[MatchedMessage]
 
@@ -137,12 +144,16 @@ async def search_messages(
             ConversationMessage.content.label("content"),
             ConversationMessage.created_at.label("created_at"),
             Conversation.title.label("title"),
+            Conversation.user_id.label("user_id"),
+            User.username.label("username"),
             func.row_number().over(
                 partition_by=ConversationMessage.conversation_id,
                 order_by=ConversationMessage.id.desc(),
             ).label("rank"),
         )
         .join(Conversation, Conversation.id == ConversationMessage.conversation_id)
+        # Outer: a conversation whose owner was deleted must still be findable.
+        .outerjoin(User, User.id == Conversation.user_id)
         .where(*conditions, ConversationMessage.conversation_id.in_(order))
         .subquery()
     )
@@ -152,17 +163,22 @@ async def search_messages(
         .order_by(ranked.c.cid, ranked.c.mid.desc())
     )).all()
 
-    by_conversation: dict[int, SearchHit] = {}
+    owners: dict[int, tuple[Optional[int], Optional[str]]] = {}
     titles: dict[int, Optional[str]] = {}
     grouped_matches: dict[int, List[MatchedMessage]] = {}
     for row in matched:
         titles[row.cid] = row.title
+        owners[row.cid] = (row.user_id, row.username)
         grouped_matches.setdefault(row.cid, []).append(MatchedMessage(
             message_id=row.mid, seq=row.seq, role=row.role,
             content=row.content, created_at=row.created_at))
 
-    for cid in order:
-        by_conversation[cid] = SearchHit(
+    return [
+        SearchHit(
             conversation_id=cid, conversation_title=titles.get(cid),
-            hits=totals[cid], matches=grouped_matches.get(cid, []))
-    return [by_conversation[cid] for cid in order]
+            user_id=owners.get(cid, (None, None))[0],
+            username=owners.get(cid, (None, None))[1],
+            hits=totals[cid], matches=grouped_matches.get(cid, []),
+        )
+        for cid in order
+    ]

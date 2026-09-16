@@ -217,8 +217,8 @@ async def test_the_endpoint_returns_snippets_not_message_bodies(world):
 
     assert payload["results"], "expected a hit"
     result = payload["results"][0]
-    assert set(result) == {"conversation_id", "conversation_title", "hits",
-                           "matches"}
+    assert set(result) == {"conversation_id", "conversation_title", "user_id",
+                           "username", "hits", "matches"}
     assert set(result["matches"][0]) == {
         "message_id", "seq", "role", "created_at", "snippet"}, (
         "an exact set, so a future change that starts returning message bodies "
