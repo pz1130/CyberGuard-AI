@@ -18,6 +18,8 @@ from app.services.conversation_messages import (
     fetch_messages,
     to_message_dict,
 )
+from app.services.message_search import DEFAULT_SEARCH_LIMIT, search_messages
+from app.services.message_snippet import snippet
 
 
 class MessageModel(BaseModel):
@@ -169,6 +171,47 @@ async def create_conversation(
     await db.commit()
     await db.refresh(conv)
     return ConversationResponse.model_validate(conv)
+
+
+# Declared before /conversations/{conv_id}: FastAPI matches in declaration
+# order, and "search" would otherwise bind to conv_id and fail int parsing.
+@router.get("/conversations/search")
+async def search_conversation_messages(
+    q: str = "",
+    limit: int = DEFAULT_SEARCH_LIMIT,
+    cursor: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(
+        require_permission(Permission.TASK_EXECUTE)
+    ),
+):
+    """Search your own chat messages.
+
+    The owner comes from the token and is never accepted as a parameter; a
+    user_id here would make this an admin endpoint wearing a self-service name.
+    """
+    term = (q or "").strip()
+    if not term:
+        raise HTTPException(status_code=400, detail="q is required")
+
+    hits = await search_messages(
+        db, user_id=current_user.user_id, term=term, limit=limit, cursor=cursor)
+
+    return {
+        "results": [
+            {
+                "conversation_id": hit.conversation_id,
+                "conversation_title": hit.conversation_title,
+                "message_id": hit.message_id,
+                "seq": hit.seq,
+                "role": hit.role,
+                "created_at": hit.created_at.isoformat() if hit.created_at else None,
+                "snippet": snippet(hit.content, term),
+            }
+            for hit in hits
+        ],
+        "next_cursor": hits[-1].message_id if hits else None,
+    }
 
 
 @router.get("/conversations/{conv_id}", response_model=ConversationResponse)
