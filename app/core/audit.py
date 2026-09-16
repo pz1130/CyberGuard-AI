@@ -91,6 +91,34 @@ async def log_audit(
     return entry
 
 
+async def _clear_deleted_actors(session, entries: list) -> None:
+    """Blank the actor on entries whose user no longer exists.
+
+    ``audit_logs.user_id`` is a foreign key with ``ON DELETE SET NULL``, so a
+    row already stored loses its actor when that user is deleted. An entry
+    still sitting in the buffer had no such protection: the insert violated the
+    constraint, and because a failed flush re-queues its entries and re-raises
+    (INV-25/29, so that nothing is lost), the entry could never succeed and
+    every later flush failed with it. Three consecutive logins returning 500,
+    not recovering, was the observed result of deleting a user who had just
+    signed in.
+
+    Applying the column's own policy a moment earlier costs the actor — who has
+    been deleted — and keeps the action, the address and the path, which are
+    what an investigator filters on.
+    """
+    from app.models.user import User
+
+    actors = {e["user_id"] for e in entries if e.get("user_id") is not None}
+    if not actors:
+        return
+    alive = set((await session.execute(
+        select(User.id).where(User.id.in_(actors)))).scalars().all())
+    for entry in entries:
+        if entry.get("user_id") is not None and entry["user_id"] not in alive:
+            entry["user_id"] = None
+
+
 async def _flush_audit_buffer():
     """Flush buffered audit logs to database.
 
@@ -111,6 +139,10 @@ async def _flush_audit_buffer():
         async with _chain_lock:
             async with get_db_context() as session:
                 await session.execute(select(func.pg_advisory_xact_lock(0xA0D17)))
+                # Before the chain payload is built: the actor is part of the
+                # hash, so clearing it afterwards would store a row that does
+                # not match the hash stored beside it.
+                await _clear_deleted_actors(session, logs_to_write)
                 prev = (await session.execute(
                     select(AuditLog.entry_hash)
                     .where(AuditLog.entry_hash.is_not(None))
