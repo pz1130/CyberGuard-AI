@@ -663,7 +663,7 @@ export default function Chat() {
         }}>
           <div style={{ padding: '0 14px', height: 44, flexShrink: 0, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', fontFamily: 'var(--font-sans)', fontWeight: 600, textTransform: 'uppercase' }}>{t('chat.history').toUpperCase()}</span>
-            <button onClick={createConversation} style={{ padding: 4, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', borderRadius: 'var(--radius-sm)' }}
+            <button onClick={createConversation} style={{ padding: 4, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', borderRadius: 0 }}
               onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent-dim)')}
               onMouseLeave={e => (e.currentTarget.style.background = 'none')}
             >
@@ -677,7 +677,7 @@ export default function Chat() {
                   padding: '10px 12px', cursor: 'pointer', marginBottom: 2,
                   background: activeConvId === conv.id ? 'var(--accent-dim)' : 'transparent',
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4,
-                  borderRadius: 'var(--radius-md)',
+                  borderRadius: 0,
                   transition: 'background 0.1s ease',
                 }}
                 onMouseEnter={e => { if (activeConvId !== conv.id) e.currentTarget.style.background = 'var(--bg-hover)' }}
@@ -695,7 +695,7 @@ export default function Chat() {
                         else if (e.key === 'Escape') cancelEditTitle()
                       }}
                       autoFocus
-                      style={{ flex: 1, height: 24, padding: '0 6px', background: 'var(--bg-base)', border: '1px solid var(--accent)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-sans)', borderRadius: 'var(--radius-sm)' }}
+                      style={{ flex: 1, height: 24, padding: '0 6px', background: 'var(--bg-base)', border: '1px solid var(--accent)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-sans)', borderRadius: 0 }}
                       onClick={e => e.stopPropagation()}
                     />
                     <button onClick={(e) => { e.stopPropagation(); saveEditTitle() }} style={{ padding: 2, color: 'var(--accent)', background: 'none', border: 'none' }}><Check size={10} /></button>
@@ -714,8 +714,8 @@ export default function Chat() {
                       onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
                       onMouseLeave={e => (e.currentTarget.style.opacity = '0.5')}
                     >
-                      <button onClick={(e) => startEditTitle(conv, e)} style={{ padding: 3, color: 'var(--text-dim)', background: 'none', border: 'none', flexShrink: 0, borderRadius: 'var(--radius-sm)' }}><Edit2 size={11} /></button>
-                      <button onClick={(e) => deleteConversation(conv.id, e)} style={{ padding: 3, color: 'var(--red)', background: 'none', border: 'none', flexShrink: 0, borderRadius: 'var(--radius-sm)' }}><Trash2 size={11} /></button>
+                      <button onClick={(e) => startEditTitle(conv, e)} style={{ padding: 3, color: 'var(--text-dim)', background: 'none', border: 'none', flexShrink: 0, borderRadius: 0 }}><Edit2 size={11} /></button>
+                      <button onClick={(e) => deleteConversation(conv.id, e)} style={{ padding: 3, color: 'var(--red)', background: 'none', border: 'none', flexShrink: 0, borderRadius: 0 }}><Trash2 size={11} /></button>
                     </div>
                   </>
                 )}
@@ -978,7 +978,7 @@ export default function Chat() {
                             style={{
                               width: 72, height: 72, objectFit: 'cover',
                               border: '1px solid var(--accent-border)',
-                              borderRadius: 'var(--radius-md)',
+                              borderRadius: 0,
                               cursor: 'pointer',
                             }}
                           />
@@ -988,7 +988,7 @@ export default function Chat() {
                           display: 'flex', alignItems: 'center', gap: 5,
                           padding: '5px 10px',
                           border: '1px solid var(--accent-border)',
-                          borderRadius: 'var(--radius-md)',
+                          borderRadius: 0,
                           fontSize: 12, color: 'var(--text-muted)',
                         }}>
                           <FileText size={11} />

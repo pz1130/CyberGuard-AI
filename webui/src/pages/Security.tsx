@@ -51,7 +51,7 @@ function EnforcedRow({ icon, title, desc }: {
         fontSize: 11, letterSpacing: '0.1em', fontWeight: 700,
         color: 'var(--accent)', border: '1px solid var(--accent-border)',
         background: 'var(--accent-dim)', padding: '4px 10px',
-        borderRadius: 'var(--radius-sm)', whiteSpace: 'nowrap', flexShrink: 0,
+        borderRadius: 0, whiteSpace: 'nowrap', flexShrink: 0,
       }}>
         {t('security.enforced')}
       </span>

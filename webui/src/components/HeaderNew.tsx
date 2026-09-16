@@ -94,7 +94,7 @@ export default function HeaderNew({
     width: 32,
     height: 32,
     border: '1px solid var(--border)',
-    borderRadius: 'var(--radius-md)',
+    borderRadius: 0,
     background: 'transparent',
     color: 'var(--text-muted)',
     cursor: 'pointer',
@@ -187,7 +187,7 @@ export default function HeaderNew({
             color: STATUS_COLOR[sysStatus],
             background: 'var(--bg-elevated)',
             border: `1px solid ${sysStatus === 'online' ? 'var(--accent-border)' : 'var(--border)'}`,
-            borderRadius: 'var(--radius-md)',
+            borderRadius: 0,
             boxShadow: sysStatus === 'online' ? 'var(--accent-glow)' : undefined,
           }}
         >
@@ -212,7 +212,7 @@ export default function HeaderNew({
             padding: '0 10px',
             background: 'var(--bg-elevated)',
             border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-md)',
+            borderRadius: 0,
             color: 'var(--text-dim)',
             fontSize: 13,
             cursor: 'pointer',
@@ -234,7 +234,7 @@ export default function HeaderNew({
               fontSize: 10,
               padding: '2px 6px',
               border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-sm)',
+              borderRadius: 0,
               color: 'var(--text-muted)',
               background: 'var(--bg-surface)',
             }}
@@ -319,7 +319,7 @@ export default function HeaderNew({
               border: menuOpen
                 ? '1px solid var(--accent-border)'
                 : '1px solid var(--border)',
-              borderRadius: 'var(--radius-md)',
+              borderRadius: 0,
               color: 'var(--text-primary)',
               cursor: 'pointer',
               transition: 'border-color var(--transition-fast)',

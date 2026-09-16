@@ -745,7 +745,7 @@ export default function Agents() {
                   <div style={{
                     padding: '8px 10px',
                     background: 'rgba(0,255,65,0.06)', border: '1px solid var(--accent-border)',
-                    borderRadius: 'var(--radius-md)',
+                    borderRadius: 0,
                     fontSize: 11, color: 'var(--accent)',
                     wordBreak: 'break-all', lineHeight: 1.7,
                   }}>
@@ -759,7 +759,7 @@ export default function Agents() {
                   <div style={{
                     padding: '6px 10px',
                     background: 'var(--bg-base)', border: `1px solid ${testResult[a.id!].ok ? 'var(--accent-border)' : 'rgba(255,60,60,0.3)'}`,
-                    borderRadius: 'var(--radius-md)',
+                    borderRadius: 0,
                     fontSize: 12, color: testResult[a.id!].ok ? 'var(--accent)' : '#f87171',
                   }}>
                     {testResult[a.id!].ok ? '✓' : '✗'} {testResult[a.id!].msg}
@@ -819,7 +819,7 @@ export default function Agents() {
           <button
             onClick={() => { setShowKindPicker(false); openCreate(false) }}
             style={{
-              padding: '18px 20px', border: '1px solid var(--border-bright)', borderRadius: 'var(--radius-md)',
+              padding: '18px 20px', border: '1px solid var(--border-bright)', borderRadius: 0,
               background: 'var(--bg-base)', cursor: 'pointer', textAlign: 'left',
             }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 6 }}>EXTERNAL AGENT</div>
@@ -833,7 +833,7 @@ export default function Agents() {
               openCreate(true)
             }}
             style={{
-              padding: '18px 20px', border: '1px solid rgba(96,165,250,0.4)', borderRadius: 'var(--radius-md)',
+              padding: '18px 20px', border: '1px solid rgba(96,165,250,0.4)', borderRadius: 0,
               background: 'rgba(96,165,250,0.04)', cursor: 'pointer', textAlign: 'left',
             }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#60a5fa', letterSpacing: '0.1em', marginBottom: 6 }}>INTERNAL AGENT</div>

@@ -141,7 +141,7 @@ export default function SidebarNew({ tab, setTab }: Props) {
                     marginBottom: 1,
                     background: isActive ? undefined : 'transparent',
                     border: isActive ? undefined : 'none',
-                    borderRadius: 'var(--radius-md)',
+                    borderRadius: 0,
                     color: isActive ? 'var(--accent)' : 'var(--text-muted)',
                     fontSize: 13,
                     fontWeight: isActive ? 500 : 400,

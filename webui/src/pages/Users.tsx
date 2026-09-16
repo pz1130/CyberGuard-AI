@@ -257,7 +257,7 @@ export default function Users() {
                     <td style={{ fontSize: 12, color: 'var(--accent)' }}>{m.app_role.toUpperCase()}</td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{m.priority}</td>
                     <td style={{ textAlign: 'right' }}>
-                      <button onClick={() => removeMapping(m.id)} style={{ background: 'none', border: '1px solid var(--red)', color: 'var(--red)', padding: '4px 10px', fontSize: 11, cursor: 'pointer', letterSpacing: '0.06em', borderRadius: 'var(--radius-sm)' }}>REMOVE</button>
+                      <button onClick={() => removeMapping(m.id)} style={{ background: 'none', border: '1px solid var(--red)', color: 'var(--red)', padding: '4px 10px', fontSize: 11, cursor: 'pointer', letterSpacing: '0.06em', borderRadius: 0 }}>REMOVE</button>
                     </td>
                   </tr>
                 ))}</tbody>

@@ -60,8 +60,8 @@
   --space-7: 48px;
 
   /* Shape (one radius system, Section 4.4) */
-  --radius-sm: 4px;
-  --radius-md: 6px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
   --radius-lg: 8px;
   --radius-full: 9999px;
 
@@ -90,6 +90,10 @@
   --text-accent: #16a34a;
   --border: #e2e8f0;
   --border-bright: #cbd5e1;
+}
+
+[data-theme="light"] .btn-primary {
+  color: #ffffff;
 }
 
 /* ============================================
@@ -132,7 +136,7 @@ body::before, body::after { display: none; }
 *:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: var(--radius-sm);
+  border-radius: 0;
 }
 
 /* ============================================
@@ -202,6 +206,7 @@ select {
 button {
   font-family: var(--font-sans);
   cursor: pointer;
+  border-radius: 0;
 }
 
 .btn {
@@ -212,8 +217,8 @@ button {
   padding: 8px 14px;
   font-size: 13px;
   font-weight: 500;
-  border-radius: var(--radius-md);
-  border: 1px solid transparent;
+  border-radius: 0;
+  border: 1px solid var(--border);
   transition: all var(--transition-fast);
   cursor: pointer;
   white-space: nowrap;
@@ -254,6 +259,59 @@ button {
 .btn-sm { padding: 4px 10px; font-size: 12px; }
 .btn-icon { padding: 0; width: 32px; height: 32px; }
 
+.btn:disabled,
+.btn[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+/* ============================================
+   Toggle switch
+   ============================================ */
+.toggle-switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  padding: 0;
+  outline: none;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+.toggle-switch:hover {
+  border-color: var(--text-dim);
+}
+.toggle-switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.toggle-switch.active {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.toggle-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background: #ffffff;
+  border-radius: var(--radius-full);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform var(--transition-normal);
+  transform: translateX(0);
+}
+.toggle-switch.active .toggle-switch-thumb {
+  transform: translateX(20px);
+}
+
 /* ============================================
    Cards
    ============================================ */
@@ -277,15 +335,16 @@ button {
   padding: 2px 8px;
   font-size: 11px;
   font-weight: 500;
-  border-radius: var(--radius-full);
+  border-radius: 0;
+  border: 1px solid currentColor;
   line-height: 1.4;
 }
 
-.badge-success { background: var(--green-dim); color: var(--green); }
-.badge-warning { background: var(--amber-dim); color: var(--amber); }
-.badge-error { background: var(--red-dim); color: var(--red); }
-.badge-info { background: var(--accent-dim); color: var(--accent); }
-.badge-neutral { background: var(--bg-hover); color: var(--text-muted); }
+.badge-success { background: var(--green-dim); color: var(--green); border-color: var(--green); }
+.badge-warning { background: var(--amber-dim); color: var(--amber); border-color: var(--amber); }
+.badge-error { background: var(--red-dim); color: var(--red); border-color: var(--red); }
+.badge-info { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+.badge-neutral { background: var(--bg-hover); color: var(--text-muted); border-color: var(--border-bright); }
 
 /* ============================================
    Status dot (SEMANTIC ONLY, Section 9.F)
@@ -711,8 +770,8 @@ button {
   justify-content: center;
   width: 28px;
   height: 28px;
-  border: none;
-  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  border-radius: 0;
   background: transparent;
   color: var(--text-dim);
   cursor: pointer;
@@ -858,7 +917,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-md);
+  border-radius: 0;
   border: 1px solid var(--border-bright);
   background: transparent;
   color: var(--text-muted);
@@ -877,7 +936,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-lg);
+  border-radius: 0;
   border: 1px solid var(--accent-border);
   background: var(--accent);
   color: #0b1018;
@@ -1028,7 +1087,7 @@ button {
   padding: 5px 10px;
   border: 1px solid var(--accent-border);
   background: var(--accent-dim);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   font-size: 12px;
   color: var(--text-primary);
 }
@@ -1095,7 +1154,7 @@ button {
   letter-spacing: 0.1em;
   font-weight: 500;
   border: 1px solid var(--border-bright);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
@@ -1140,10 +1199,10 @@ button {
   letter-spacing: 0.08em;
   font-weight: 600;
   background: var(--accent);
-  border: none;
+  border: 1px solid var(--accent-border);
   color: #0b1018;
   cursor: pointer;
-  border-radius: var(--radius-lg);
+  border-radius: 0;
   transition: all 0.15s ease;
 }
 .chat-empty-btn:hover {
@@ -1215,7 +1274,7 @@ button {
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.08em;
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   border: 1px solid currentColor;
   background: transparent;
   white-space: nowrap;
@@ -1243,7 +1302,7 @@ button {
   font-weight: 500;
   letter-spacing: 0.1em;
   border: 1px solid var(--border-bright);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
@@ -1275,8 +1334,8 @@ button {
   justify-content: center;
   width: 28px;
   height: 28px;
-  border: none;
-  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  border-radius: 0;
   background: transparent;
   color: var(--text-dim);
   cursor: pointer;
