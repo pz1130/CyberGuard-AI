@@ -150,8 +150,21 @@ async def update_user(
 async def delete_user(
     user_id: int,
     db: AsyncSession = Depends(get_db),
+    actor: AuthenticatedUser = Depends(get_current_user),
 ):
-    """Delete user (Admin only)."""
+    """Deactivate a user (Admin only).
+
+    Not a deletion. ``conversations.user_id`` is NOT NULL behind a plain
+    foreign key — no CASCADE, no SET NULL — so removing anyone who had ever
+    held a conversation raised a constraint violation that surfaced as a bare
+    500. Of the ways out, cascading would destroy the transcripts this product
+    exists to preserve, and reassigning them would rewrite who said what.
+
+    Deactivating keeps the record and takes the access away, which is what
+    removing someone means here. ``get_current_user`` refuses an inactive user
+    with 403, so it applies to tokens already issued, and an admin can restore
+    the account with PUT /users/{id}.
+    """
     from sqlalchemy import select
 
     result = await db.execute(select(User).where(User.id == user_id))
@@ -159,5 +172,18 @@ async def delete_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    await db.delete(user)
+    was_active = user.is_active
+    user.is_active = False
     await db.commit()
+
+    if was_active:
+        await record_action(
+            user_id=actor.user_id,
+            action="user.deactivate",
+            action_category="contain_hard",
+            risk_tier="high",
+            human_reviewer=str(actor.user_id),
+            rollback_possible=True,
+            input_data={"target_user_id": user_id, "username": user.username},
+            output_data={"is_active": False},
+        )

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
-import { Trash2, Edit2, Plus } from 'lucide-react'
+import { UserX, UserCheck, Edit2, Plus } from 'lucide-react'
 import { errorMessage } from '../lib/errorMessage'
 
 interface User {
@@ -92,9 +92,19 @@ export default function Users() {
     }
   }
 
-  const del = async (id: number) => {
-    if (!confirm('CONFIRM DELETION?')) return
-    await api.deleteUser(id); load()
+  // Not a deletion: the server deactivates. A user who has held a
+  // conversation cannot be deleted at all — conversations.user_id is NOT NULL
+  // behind a plain foreign key — and cascading would destroy the transcripts.
+  const deactivate = async (id: number) => {
+    if (!confirm(t('users.confirmDeactivate'))) return
+    try { await api.deleteUser(id); load() }
+    catch (e: unknown) { alert(errorMessage(e)) }
+  }
+
+  const reactivate = async (id: number) => {
+    if (!confirm(t('users.confirmReactivate'))) return
+    try { await api.updateUser(id, { is_active: true }); load() }
+    catch (e: unknown) { alert(errorMessage(e)) }
   }
 
   // SSO data loading & mutation
@@ -381,10 +391,19 @@ export default function Users() {
                     style={{ padding: 4, color: 'var(--text-muted)', cursor: 'pointer', background: 'none', border: 'none', marginRight: 8 }}>
                     <Edit2 size={12} />
                   </button>
-                  <button onClick={() => del(u.id!)}
-                    style={{ padding: 4, color: 'var(--red)', cursor: 'pointer', background: 'none', border: 'none' }}>
-                    <Trash2 size={12} />
-                  </button>
+                  {u.is_active !== false ? (
+                    <button onClick={() => deactivate(u.id!)}
+                      title={t('users.deactivate')} aria-label={t('users.deactivate')}
+                      style={{ padding: 4, color: 'var(--red)', cursor: 'pointer', background: 'none', border: 'none' }}>
+                      <UserX size={12} />
+                    </button>
+                  ) : (
+                    <button onClick={() => reactivate(u.id!)}
+                      title={t('users.reactivate')} aria-label={t('users.reactivate')}
+                      style={{ padding: 4, color: 'var(--green)', cursor: 'pointer', background: 'none', border: 'none' }}>
+                      <UserCheck size={12} />
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

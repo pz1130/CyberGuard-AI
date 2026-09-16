@@ -146,13 +146,16 @@
     "newPassword": "新密码（留空不修改）",
     "password": "密码",
     "leaveBlankNoChange": "留空不修改",
-    "confirmDelete": "确认删除此用户？",
     "noUsers": "暂无用户",
     "roles": {
       "admin": "管理员",
       "operator": "运维",
       "viewer": "只读"
-    }
+    },
+    "deactivate": "停用",
+    "reactivate": "恢复",
+    "confirmDeactivate": "停用该用户？其访问权限将立即失效。对话记录会保留，之后可以恢复。",
+    "confirmReactivate": "恢复该用户？"
   },
   "providers": {
     "title": "AI Provider 管理",

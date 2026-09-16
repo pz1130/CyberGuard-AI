@@ -146,13 +146,16 @@
     "newPassword": "New Password (leave blank to keep current)",
     "password": "Password",
     "leaveBlankNoChange": "Leave blank to keep current",
-    "confirmDelete": "Confirm deleting this user?",
     "noUsers": "No users yet",
     "roles": {
       "admin": "Admin",
       "operator": "Operator",
       "viewer": "Viewer"
-    }
+    },
+    "deactivate": "Deactivate",
+    "reactivate": "Reactivate",
+    "confirmDeactivate": "Deactivate this user? They lose access immediately. Their conversations are kept, and you can reactivate them later.",
+    "confirmReactivate": "Reactivate this user?"
   },
   "providers": {
     "title": "AI Provider Management",
