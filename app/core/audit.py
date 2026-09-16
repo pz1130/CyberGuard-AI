@@ -345,6 +345,61 @@ async def record_action(
     return payload
 
 
+def record_action_sync(
+    *, user_id, action, agent_name=None, action_category=None,
+    risk_tier=None, confidence=None, human_reviewer=None,
+    rollback_possible=None, input_data=None, output_data=None,
+    agent_id=None, request_id=None,
+) -> dict:
+    """Sync twin of ``record_action``, for Celery workers.
+
+    Celery tasks in this codebase use ``get_sync_session`` rather than bridging
+    into the async engine (see ``cleanup_stale_executions_task``), and the same
+    reasoning gives ``conversation_messages`` a sync append twin.
+
+    ``_chain_lock`` has no counterpart here, and needs none: it only serialises
+    coroutines inside one event loop. ``pg_advisory_xact_lock`` is what makes
+    the chain correct across processes, and that is taken below.
+    """
+    from app.core.database import get_sync_session
+
+    timestamp = datetime.now(timezone.utc).replace(tzinfo=None)
+    payload = _chain_payload(
+        user_id=user_id, agent_id=agent_id, agent_name=agent_name, action=action,
+        action_category=action_category,
+        confidence=None if confidence is None else f"{float(confidence):.4f}",
+        human_reviewer=human_reviewer, rollback_possible=rollback_possible,
+        risk_tier=risk_tier, input_hash=_hash_data(input_data),
+        output_hash=_hash_data(output_data),
+        request_id=request_id or _generate_request_id(), timestamp=timestamp,
+    )
+
+    SessionLocal = get_sync_session()
+    with SessionLocal() as session:
+        session.execute(select(func.pg_advisory_xact_lock(0xA0D17)))
+        prev = session.execute(
+            select(AuditLog.entry_hash)
+            .where(AuditLog.entry_hash.is_not(None))
+            .order_by(AuditLog.id.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+        prev_hash = prev or _GENESIS
+        payload = stamp_chain_hashes(payload, prev_hash)
+
+        session.add(AuditLog(
+            user_id=user_id, agent_id=(str(agent_id) if agent_id is not None else None),
+            agent_name=agent_name, action=action, action_category=action_category,
+            confidence=payload["confidence"], human_reviewer=human_reviewer,
+            rollback_possible=rollback_possible, risk_tier=risk_tier,
+            input_hash=payload["input_hash"], output_hash=payload["output_hash"],
+            request_id=payload["request_id"], prev_hash=prev_hash,
+            entry_hash=payload["entry_hash"], timestamp=timestamp,
+            chain_version=_CHAIN_VERSION,
+        ))
+        session.commit()
+    return payload
+
+
 async def verify_chain() -> tuple[bool, int | None]:
     """Recompute the chain; return (ok, first_broken_row_id or None)."""
     from app.core.database import get_db_context

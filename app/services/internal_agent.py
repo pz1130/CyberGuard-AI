@@ -190,6 +190,8 @@ class InternalAgentRunner:
     async def _load_memory(self, parent_conversation_id: Optional[int]) -> List[Dict[str, str]]:
         if parent_conversation_id is None:
             return []
+        from app.services.conversation_messages import fetch_recent, to_message_dict
+
         async with AsyncSessionLocal() as s:
             result = await s.execute(
                 select(Conversation).where(
@@ -198,13 +200,13 @@ class InternalAgentRunner:
                 )
             )
             row = result.scalar_one_or_none()
-            if not row or not row.messages_json:
+            if not row:
                 return []
-            try:
-                msgs = json.loads(row.messages_json) or []
-            except json.JSONDecodeError:
-                return []
-            return msgs[-self.memory_window:]
+            # LIMIT memory_window in the database. The blob this replaced was
+            # loaded whole and then sliced, so a long-lived agent slice paid
+            # for its entire history on every turn.
+            rows = await fetch_recent(s, row.id, self.memory_window)
+            return [to_message_dict(m) for m in rows]
 
     async def _append_memory(
         self, parent_conversation_id: Optional[int], user_id: int,
@@ -212,26 +214,13 @@ class InternalAgentRunner:
     ) -> None:
         if parent_conversation_id is None or not messages:
             return
-        from app.services.conversation_messages import (
-            parse_messages,
-            serialize_messages,
-            stamp_message,
-        )
+        from app.services.conversation_messages import append_messages_locked
 
         async with AsyncSessionLocal() as s:
-            # Lock slice row after ensure-exists to avoid concurrent RMW loss
             row = await self._get_or_create_slice_row(s, parent_conversation_id, user_id)
             await s.flush()
-            result = await s.execute(
-                select(Conversation)
-                .where(Conversation.id == row.id)
-                .with_for_update()
-            )
-            locked = result.scalar_one()
-            existing = parse_messages(locked.messages_json)
-            for m in messages:
-                existing.append(stamp_message(dict(m)))
-            locked.messages_json = serialize_messages(existing)
+            # Takes the row lock itself; the chain head is read under it.
+            await append_messages_locked(s, row.id, [dict(m) for m in messages])
             await s.commit()
 
     # -------- System prompt assembly --------

@@ -17,6 +17,10 @@ jobs:
       POSTGRES_PASSWORD: ci-postgres-password
       REDIS_PASSWORD: ci-redis-password
       RUNNER_TOKEN: ci-runner-token
+      # docker-compose.yml marks these required; the log/teardown steps below
+      # run bare `docker compose`, which interpolates before it does anything.
+      SKILL_RUNNER_TOKEN: ci-skill-runner-token
+      EGRESS_PROXY_TOKEN: ci-egress-proxy-token
       BOOTSTRAP_ADMIN_PASSWORD: ci-admin-password
       ENCRYPTION_KEY: "1111111111111111111111111111111111111111111111111111111111111111"
       SECRET_KEY: "2222222222222222222222222222222222222222222222222222222222222222"

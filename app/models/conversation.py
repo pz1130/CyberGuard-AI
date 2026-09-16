@@ -21,6 +21,13 @@ class Conversation(Base):
     messages_json = Column(Text, default="[]")
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+    # Immutability-first: the delete button tombstones the conversation rather
+    # than destroying the transcript. Retention decides when rows really go.
+    deleted_at = Column(DateTime, nullable=True, default=None)
+    # Highest seq already written into the global audit chain by
+    # app.services.conversation_anchor. -1 means "nothing anchored yet", which
+    # is correct for a conversation whose first message will be seq 0.
+    last_anchored_seq = Column(Integer, nullable=False, default=-1, server_default="-1")
 
     # Per-conversation agent config overrides
     system_prompt_override = Column(Text, nullable=True)

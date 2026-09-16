@@ -78,7 +78,12 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
 
       type AgentRow = { id?: number | string; name?: string; agent_name?: string; kind?: string; backend_type?: string }
       type NamedRow = { id?: number | string; name?: string; description?: string; provider_type?: string; url?: string; category?: string }
-      type ConvRow = { id: number; title?: string; messages_json?: string }
+      type ConvRow = {
+        id: number
+        title?: string
+        message_count?: number
+        last_message_preview?: string | null
+      }
 
       if (agents.status === 'fulfilled') {
         for (const a of unwrapList<AgentRow>(agents.value, 'agents')) {
@@ -155,20 +160,17 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
 
       if (convos.status === 'fulfilled') {
         for (const c of unwrapList<ConvRow>(convos.value, 'conversations')) {
-          let msgs: Array<{ role: string; content: string }> = []
-          try {
-            msgs = typeof c.messages_json === 'string' ? JSON.parse(c.messages_json || '[]') : []
-          } catch { /* keep the empty fallback for malformed history */ }
-          const lastMsgs = msgs.slice(-6)
-          const previewText = lastMsgs.map(m => m.content || '').join(' ').slice(0, 200)
+          const count = c.message_count ?? 0
           items.push({
             id: c.id,
             name: c.title || `Conversation #${c.id}`,
-            subtitle: msgs.length > 0 ? `${msgs.length} messages` : 'EMPTY',
+            subtitle: count > 0 ? `${count} messages` : 'EMPTY',
             tab: 'chat',
             category: 'CONVERSATIONS',
             icon: '◉',
-            preview: previewText,
+            // The transcript is no longer shipped with the listing. Full-text
+            // search over messages arrives with the server-side endpoint.
+            preview: c.last_message_preview || '',
           })
         }
       }

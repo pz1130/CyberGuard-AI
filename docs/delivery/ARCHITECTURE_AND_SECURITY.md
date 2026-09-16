@@ -104,6 +104,18 @@ Model-authored code always runs in the no-network sandbox (INV-42). Because the
 default mode offers the tool, every agent now has at least one tool; an agent
 that should never run code is set to `off`.
 
+INV-43: the assistant's words are evidence. Every message persisted to a
+conversation enters a per-conversation hash chain before it is readable
+(`app/services/conversation_chain.py`), no API accepts a message-content write
+outside that path, and each conversation's chain head is periodically anchored
+into the global audit chain (`app/services/conversation_anchor.py`). The chain
+is per conversation rather than global so chat writes never queue on the audit
+advisory lock that `audit_logs` uses; the anchor is what makes a deleted
+conversation detectable, since a chain cannot prove its own existence. Deleting
+a conversation tombstones it (`conversations.deleted_at`) and leaves the
+messages in place.
+See `docs/superpowers/specs/2026-09-16-chat-message-storage-design.md`.
+
 `code_execution_mode` is not the only gate. `run_python` is classified
 `action_category = "mutate"`, which a default deployment denies three ways over:
 forbidden in a POC, below the `L3` autonomy floor, and absent from
