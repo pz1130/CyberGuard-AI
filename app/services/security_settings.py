@@ -13,12 +13,8 @@ async def _load_or_create(db: AsyncSession) -> SecuritySettings:
     if cfg is None:
         cfg = SecuritySettings(
             id=1,
-            encryption_enabled=True,
-            rbac_enabled=True,
-            audit_logging=True,
             max_login_attempts=5,
             session_timeout_minutes=30,
-            api_key_rotation_days=90,
         )
         db.add(cfg)
         await db.commit()

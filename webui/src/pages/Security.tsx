@@ -6,73 +6,59 @@ import PageHeader from '../components/PageHeader'
 import { errorMessage } from '../lib/errorMessage'
 
 interface SecuritySettings {
-  encryption_enabled: boolean
-  rbac_enabled: boolean
-  audit_logging: boolean
   max_login_attempts: number
   session_timeout_minutes: number
-  api_key_rotation_days: number
 }
 
 const DEFAULT: SecuritySettings = {
-  encryption_enabled: true,
-  rbac_enabled: true,
-  audit_logging: true,
   max_login_attempts: 5,
   session_timeout_minutes: 30,
-  api_key_rotation_days: 90,
 }
 
-function Toggle({ enabled, onToggle, color = 'var(--cyan)' }: {
-  enabled: boolean; onToggle: () => void; color?: string
-}) {
-  return (
-    <button onClick={onToggle} style={{
-      position: 'relative', width: 44, height: 22,
-      background: enabled ? color : 'var(--bg-elevated)',
-      border: `1px solid ${enabled ? color : 'var(--border-bright)'}`,
-      cursor: 'pointer', transition: 'all 0.2s',
-      borderRadius: 'var(--radius-full)',
-    }}>
-      <div style={{
-        position: 'absolute', top: 2, left: 2,
-        width: 16, height: 16,
-        background: enabled ? '#0b1018' : 'var(--text-dim)',
-        borderRadius: 'var(--radius-full)',
-        transition: 'all 0.2s',
-        transform: enabled ? 'translateX(22px)' : 'translateX(0)',
-      }} />
-    </button>
-  )
-}
-
-function SettingRow({ icon, title, desc, enabled, onToggle, color = 'var(--cyan)' }: {
+/**
+ * A control the platform always enforces.
+ *
+ * These were toggles. Nothing ever read the values, and wiring them up would
+ * have meant shipping switches for "store credentials in plaintext", "skip
+ * permission checks" and "stop writing the audit trail". They are invariants,
+ * so the page states them instead of offering them.
+ */
+function EnforcedRow({ icon, title, desc }: {
   icon: ReactNode; title: string; desc: string
-  enabled: boolean; onToggle: () => void; color?: string
 }) {
+  const { t } = useTranslation()
   return (
     <div className="item-card" style={{
       display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-      padding: '16px 20px',
-      marginBottom: 12,
+      padding: '16px 20px', marginBottom: 12, gap: 12, flexWrap: 'wrap',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
         <div style={{
-          width: 36, height: 36, border: '1px solid var(--border)',
-          background: 'var(--bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color, borderRadius: 'var(--radius-md)', flexShrink: 0,
+          width: 38, height: 38,
+          border: '1px solid var(--accent-border)',
+          background: 'var(--accent-dim)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: 'var(--accent)', borderRadius: 'var(--radius-md)', flexShrink: 0,
         }}>
           {icon}
         </div>
-        <div>
+        <div style={{ minWidth: 0 }}>
           <div className="item-card-title">{title}</div>
           <div className="item-card-desc">{desc}</div>
         </div>
       </div>
-      <Toggle enabled={enabled} onToggle={onToggle} color={color} />
+      <span style={{
+        fontSize: 11, letterSpacing: '0.1em', fontWeight: 700,
+        color: 'var(--accent)', border: '1px solid var(--accent-border)',
+        background: 'var(--accent-dim)', padding: '4px 10px',
+        borderRadius: 'var(--radius-sm)', whiteSpace: 'nowrap', flexShrink: 0,
+      }}>
+        {t('security.enforced')}
+      </span>
     </div>
   )
 }
+
 
 export default function Security() {
   const { t } = useTranslation()
@@ -138,10 +124,10 @@ export default function Security() {
             <button
               onClick={save}
               disabled={!dirty || saving}
-              className="btn btn-primary"
+              className={`btn ${dirty ? 'btn-primary' : 'btn-secondary'}`}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8, height: 36,
-                opacity: (!dirty || saving) ? 0.5 : 1,
+                opacity: (!dirty || saving) ? 0.6 : 1,
                 cursor: (!dirty || saving) ? 'not-allowed' : 'pointer',
               }}
             >
@@ -155,30 +141,18 @@ export default function Security() {
       />
 
       <div style={{ maxWidth: 680 }}>
-        <SettingRow
-          icon={<Key size={15} />}
-          title={t('security.encryption')}
-          desc={t('security.encryptionDesc')}
-          enabled={settings.encryption_enabled}
-          onToggle={() => update('encryption_enabled', !settings.encryption_enabled)}
-          color="var(--cyan)"
-        />
-        <SettingRow
-          icon={<Lock size={15} />}
-          title={t('security.rbac')}
-          desc={t('security.rbacDesc')}
-          enabled={settings.rbac_enabled}
-          onToggle={() => update('rbac_enabled', !settings.rbac_enabled)}
-          color="var(--cyan)"
-        />
-        <SettingRow
-          icon={<AlertTriangle size={15} />}
-          title={t('security.audit')}
-          desc={t('security.auditDesc')}
-          enabled={settings.audit_logging}
-          onToggle={() => update('audit_logging', !settings.audit_logging)}
-          color="var(--amber)"
-        />
+        <EnforcedRow icon={<Key size={15} />}
+          title={t('security.encryption')} desc={t('security.encryptionDesc')} />
+        <EnforcedRow icon={<Lock size={15} />}
+          title={t('security.rbac')} desc={t('security.rbacDesc')} />
+        <EnforcedRow icon={<AlertTriangle size={15} />}
+          title={t('security.audit')} desc={t('security.auditDesc')} />
+        <div style={{
+          fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6,
+          margin: '4px 2px 18px', fontFamily: 'var(--font-sans)',
+        }}>
+          {t('security.enforcedNote')}
+        </div>
 
         <div className="item-card" style={{ padding: 20, marginBottom: 12, display: 'block' }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.06em', marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
@@ -187,7 +161,6 @@ export default function Security() {
           {([
             { key: 'max_login_attempts', label: t('security.maxLoginAttempts'), min: 3, max: 20 },
             { key: 'session_timeout_minutes', label: t('security.sessionTimeout'), min: 5, max: 480 },
-            { key: 'api_key_rotation_days', label: t('security.keyRotation'), min: 7, max: 365 },
           ] as const).map(({ key, label, min, max }) => (
             <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{label}</span>

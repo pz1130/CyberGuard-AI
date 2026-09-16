@@ -14,23 +14,17 @@ router = APIRouter()
 
 class SecuritySettingsResponse(BaseModel):
     id: int
-    encryption_enabled: bool
-    rbac_enabled: bool
-    audit_logging: bool
+    # Only what is enforced. See tests/test_security_settings_shape.py for why
+    # encryption / RBAC / audit are not switches.
     max_login_attempts: int
     session_timeout_minutes: int
-    api_key_rotation_days: int
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class SecuritySettingsUpdate(BaseModel):
-    encryption_enabled: Optional[bool] = None
-    rbac_enabled: Optional[bool] = None
-    audit_logging: Optional[bool] = None
     max_login_attempts: Optional[int] = None
     session_timeout_minutes: Optional[int] = None
-    api_key_rotation_days: Optional[int] = None
 
 
 @router.get("/security-settings", response_model=SecuritySettingsResponse)
