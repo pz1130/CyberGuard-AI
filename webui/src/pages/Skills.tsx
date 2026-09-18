@@ -1,3 +1,4 @@
+import { PermissionButton } from '../components/PermissionButton'
 import { useState, useEffect, useRef, useContext, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
@@ -246,19 +247,19 @@ export default function Skills() {
         title={t('skills.title').toUpperCase()}
         actions={
           <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={() => setShowInstallUrl(true)} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <PermissionButton permission="skill:write" onClick={() => setShowInstallUrl(true)} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <Link size={12} /> FROM URL
-            </button>
-            <button onClick={() => setShowImport(true)} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            </PermissionButton>
+            <PermissionButton permission="skill:write" onClick={() => setShowImport(true)} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <Upload size={12} /> IMPORT
-            </button>
-            <button
+            </PermissionButton>
+            <PermissionButton permission="skill:write"
               onClick={() => { setShowForm(true); setEditing(null); setForm({ name: '', category: 'tool', description: '', version: '1.0.0', permission_level: 'medium', tagsText: '' }); setMdContent('') }}
               className="btn btn-primary"
               style={{ display: 'flex', alignItems: 'center', gap: 8 }}
             >
               <Plus size={13} /> NEW SKILL
-            </button>
+            </PermissionButton>
           </div>
         }
       />
@@ -315,10 +316,10 @@ export default function Skills() {
                 style={{ padding: '0 14px', height: 36, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.1em', cursor: 'pointer' }}>
                 CANCEL
               </button>
-              <button onClick={handleInstallUrl} disabled={installLoading}
+              <PermissionButton permission="skill:write" onClick={handleInstallUrl} disabled={installLoading}
                 style={{ padding: '0 14px', height: 36, border: '1px solid var(--accent-border)', background: installLoading ? 'var(--bg-elevated)' : 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.1em', cursor: installLoading ? 'not-allowed' : 'pointer' }}>
                 {installLoading ? 'INSTALLING...' : 'INSTALL'}
-              </button>
+              </PermissionButton>
             </div>
           </div>
         </Modal>
@@ -466,10 +467,10 @@ export default function Skills() {
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button onClick={submitPromotion} disabled={!promoteScript || promoteBusy}
+              <PermissionButton permission="skill:script_approve" onClick={submitPromotion} disabled={!promoteScript || promoteBusy}
                 className="btn btn-primary">
                 {promoteBusy ? '...' : t('skills.promote').toUpperCase()}
-              </button>
+              </PermissionButton>
             </div>
           </div>
         </Modal>
@@ -548,10 +549,10 @@ export default function Skills() {
               style={{ padding: '0 16px', height: 36, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer' }}>
               CANCEL
             </button>
-            <button onClick={submit}
+            <PermissionButton permission="skill:write" onClick={submit}
               style={{ padding: '0 16px', height: 36, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer' }}>
               {editing ? 'SAVE CHANGES' : 'CREATE SKILL'}
-            </button>
+            </PermissionButton>
           </div>
         </div>
       )}
@@ -579,9 +580,9 @@ export default function Skills() {
             <Wrench size={18} style={{ color: 'var(--text-dim)' }} />
           </div>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>NO SKILLS DEPLOYED</div>
-          <button onClick={() => setShowForm(true)} style={{ fontSize: 12, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', letterSpacing: '0.1em' }}>
+          <PermissionButton permission="skill:write" onClick={() => setShowForm(true)} style={{ fontSize: 12, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', letterSpacing: '0.1em' }}>
             + DEPLOY FIRST SKILL
-          </button>
+          </PermissionButton>
         </div>
       )}
 
@@ -650,12 +651,12 @@ export default function Skills() {
                 <div className="item-card-actions" style={{ paddingTop: 10, marginTop: 4 }}>
                   <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>ID: {String(s.id || '').slice(0, 8) || '—'}</span>
                   <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
-                    <button onClick={() => openEdit(s)} className="item-card-icon-btn" title="Edit">
+                    <PermissionButton permission="skill:write" onClick={() => openEdit(s)} className="item-card-icon-btn" title="Edit">
                       <Edit2 size={12} />
-                    </button>
-                    <button onClick={() => del(String(s.id))} className="item-card-icon-btn danger" title="Delete">
+                    </PermissionButton>
+                    <PermissionButton permission="skill:write" onClick={() => del(String(s.id))} className="item-card-icon-btn danger" title="Delete">
                       <Trash2 size={12} />
-                    </button>
+                    </PermissionButton>
                   </div>
                 </div>
               </div>

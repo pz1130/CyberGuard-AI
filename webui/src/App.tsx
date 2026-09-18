@@ -6,6 +6,7 @@ import HeaderNew from './components/HeaderNew'
 import GlobalSearch from './components/GlobalSearch'
 import { SearchProvider } from './context/SearchContext'
 import { api } from './api/client'
+import { RoleContext, canAccessTab } from './context/permissions'
 import Login from './pages/Login'
 import { applyTheme, readStoredDark } from './theme'
 import { useIdleLogout } from './hooks/useIdleLogout'
@@ -36,6 +37,7 @@ export default function App() {
     const saved = localStorage.getItem('lastTab') as Tab | null
     return saved && PAGES[saved] ? saved : 'chat'
   })
+  const [role, setRole] = useState('')
   const [authed, setAuthed] = useState(false)
   const [checking, setChecking] = useState(() => {
     try {
@@ -58,7 +60,8 @@ export default function App() {
       return []
     }
   })
-  const ActivePage = PAGES[tab].component
+  const allowedTab = canAccessTab(role, tab) ? tab : ((Object.keys(PAGES) as Tab[]).find(t => canAccessTab(role, t)) || 'chat')
+  const ActivePage = PAGES[allowedTab].component
 
   useEffect(() => {
     // SSO callback delivers the JWT in the URL fragment (#sso_token=...).
@@ -72,10 +75,16 @@ export default function App() {
     if (!token) return
     let cancelled = false
     api.getAuthMe()
-      .then(() => { if (!cancelled) setAuthed(true) })
+      .then(user => { if (!cancelled) { setRole((user as { role: string }).role); setAuthed(true) } })
       .catch(() => { localStorage.removeItem('token') })
       .finally(() => { if (!cancelled) setChecking(false) })
     return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    const expired = () => { setAuthed(false); setChecking(false) }
+    window.addEventListener('cyberguard:session-expired', expired)
+    return () => window.removeEventListener('cyberguard:session-expired', expired)
   }, [])
 
   // Tell the server when a human does something, so an idle session can end.
@@ -94,6 +103,7 @@ export default function App() {
   }, [])
 
   const handleSetTab = (t: Tab) => {
+    if (!canAccessTab(role, t)) return
     setTab(t)
     localStorage.setItem('lastTab', t)
     setRecentTabs(prev => {
@@ -138,6 +148,7 @@ export default function App() {
   if (!authed) return <Login />
 
   return (
+    <RoleContext.Provider value={role}>
     <SearchProvider>
       <div
         style={{
@@ -164,7 +175,7 @@ export default function App() {
             paddingTop: 'var(--header-height)',
           }}
         >
-          <SidebarNew tab={tab} setTab={handleSetTab} />
+          <SidebarNew tab={allowedTab} setTab={handleSetTab} />
           <main
             style={{
               flex: 1,
@@ -175,7 +186,7 @@ export default function App() {
             }}
           >
             <Suspense fallback={<div style={{ color: 'var(--text-muted)' }}>Loading...</div>}>
-              <ActivePage />
+              {canAccessTab(role, allowedTab) ? <ActivePage /> : <div role="alert">Permission denied</div>}
             </Suspense>
           </main>
         </div>
@@ -183,9 +194,10 @@ export default function App() {
           open={searchOpen}
           onClose={() => setSearchOpen(false)}
           setTab={handleSetTab}
-          recentTabs={recentTabs}
+          recentTabs={recentTabs.filter(t => canAccessTab(role, t))}
         />
       </div>
     </SearchProvider>
+    </RoleContext.Provider>
   )
 }

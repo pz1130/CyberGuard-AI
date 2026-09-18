@@ -1,9 +1,11 @@
+import { RoleContext } from '../context/permissions'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SearchProvider } from '../context/SearchContext'
 import Chat from './Chat'
 
+const getChatReadiness = vi.fn()
 const getProviders = vi.fn()
 const getConversations = vi.fn()
 const getConversation = vi.fn()
@@ -15,6 +17,7 @@ const chatStream = vi.fn()
 
 vi.mock('../api/client', () => ({
   api: {
+    getChatReadiness: () => getChatReadiness(),
     getProviders: (...args: unknown[]) => getProviders(...args),
     getConversations: (...args: unknown[]) => getConversations(...args),
     getConversation: (...args: unknown[]) => getConversation(...args),
@@ -34,15 +37,16 @@ const conversation = {
 
 function renderChat() {
   return render(
-    <SearchProvider>
+    <RoleContext.Provider value="admin"><SearchProvider>
       <Chat />
-    </SearchProvider>,
+    </SearchProvider></RoleContext.Provider>,
   )
 }
 
 describe('Chat critical path', () => {
   beforeEach(() => {
     localStorage.clear()
+    getChatReadiness.mockReset().mockResolvedValue({ master_ready: false })
     getProviders.mockReset().mockResolvedValue([
       {
         id: 34,
@@ -71,6 +75,7 @@ describe('Chat critical path', () => {
 
     renderChat()
 
+    expect(await screen.findByText(/AUTO requires a provider and model/)).toBeInTheDocument()
     const modelSelect = await screen.findByRole('combobox', { name: 'Model' })
     await waitFor(() => {
       expect(screen.getByRole('option', { name: 'MINIMAX / MiniMax-M3' })).toBeInTheDocument()

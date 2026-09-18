@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import ChatEvidence from './ChatEvidence'
@@ -30,13 +30,25 @@ export default function AuditLogs() {
   const [limit, setLimit] = useState(50)
   const [tab, setTab] = useState<'logs' | 'evidence'>('logs')
 
-  const load = useCallback(async () => {
-    try {
-      const data = await api.getAuditLogs({ limit }) as Log[] | { logs?: Log[] }
-      setLogs(Array.isArray(data) ? data : data?.logs || [])
-    } catch { setLogs([]) } finally { setLoading(false) }
-  }, [limit])
-  useEffect(() => { void Promise.resolve().then(() => load()) }, [load])
+  const [refresh, setRefresh] = useState(0)
+  const requestId = useRef(0)
+  useEffect(() => {
+    const id = ++requestId.current
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      setLoading(true)
+      try {
+        const data = await api.getAuditLogs({ limit, q: filter }) as Log[] | { logs?: Log[] }
+        if (!cancelled && id === requestId.current) setLogs(Array.isArray(data) ? data : data?.logs || [])
+      } catch {
+        if (!cancelled && id === requestId.current) setLogs([])
+      } finally {
+        if (!cancelled && id === requestId.current) setLoading(false)
+      }
+    }, 200)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [limit, filter, refresh])
+
 
   const exportLogs = async () => {
     try {
@@ -59,10 +71,7 @@ export default function AuditLogs() {
     finally { setSending(false) }
   }
 
-  const filtered = logs.filter(l =>
-    !filter || l.action?.toLowerCase().includes(filter.toLowerCase()) ||
-    String(l.user_id)?.includes(filter)
-  )
+  const filtered = logs
 
   return (
     <div>
@@ -153,7 +162,7 @@ export default function AuditLogs() {
           <option value={100}>100 RECORDS</option>
           <option value={500}>500 RECORDS</option>
         </select>
-        <button onClick={load}
+        <button onClick={() => setRefresh(n => n + 1)}
           style={{
             height: 36, padding: '0 14px',
             border: '1px solid var(--border-bright)', background: 'transparent',

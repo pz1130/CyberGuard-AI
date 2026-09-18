@@ -1,3 +1,4 @@
+import { PermissionButton } from '../components/PermissionButton'
 import { useState, useEffect, useContext, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
@@ -159,13 +160,13 @@ export default function MCP() {
         eyebrow="MODEL CONTEXT PROTOCOL"
         title={t('mcp.title').toUpperCase()}
         actions={
-          <button
+          <PermissionButton permission="agent:write"
             onClick={() => { setEditingServer(null); setServerForm(emptyServerForm); setShowServerForm(true) }}
             className="btn btn-primary"
             style={{ display: 'flex', alignItems: 'center', gap: 8 }}
           >
             <Plus size={13} /> NEW SERVER
-          </button>
+          </PermissionButton>
         }
       />
 
@@ -199,9 +200,9 @@ export default function MCP() {
               <button onClick={() => { setShowServerForm(false); setEditingServer(null) }} className="btn btn-secondary">
                 CANCEL
               </button>
-              <button onClick={submitServer} className="btn btn-primary">
+              <PermissionButton permission="agent:write" onClick={submitServer} className="btn btn-primary">
                 {editingServer ? 'SAVE CHANGES' : 'CREATE SERVER'}
-              </button>
+              </PermissionButton>
             </>
           )}
         >
@@ -292,12 +293,12 @@ export default function MCP() {
                       {s.description && <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>{s.description}</div>}
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button onClick={() => openEditServer(s)} className="item-card-icon-btn">
+                      <PermissionButton permission="agent:write" onClick={() => openEditServer(s)} className="item-card-icon-btn">
                         <Edit2 size={13} />
-                      </button>
-                      <button onClick={() => s.id && delServer(s.id)} className="item-card-icon-btn danger">
+                      </PermissionButton>
+                      <PermissionButton permission="agent:write" onClick={() => s.id && delServer(s.id)} className="item-card-icon-btn danger">
                         <Trash2 size={13} />
-                      </button>
+                      </PermissionButton>
                     </div>
                   </div>
                   {expanded && (

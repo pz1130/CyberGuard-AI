@@ -1,3 +1,4 @@
+import { RoleContext } from '../context/permissions'
 import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SearchProvider } from '../context/SearchContext'
@@ -31,7 +32,7 @@ vi.mock('../api/client', () => ({
 }))
 
 const renderChat = () =>
-  render(<SearchProvider><Chat /></SearchProvider>)
+  render(<RoleContext.Provider value="admin"><SearchProvider><Chat /></SearchProvider></RoleContext.Provider>)
 
 describe('Chat — an archived conversation', () => {
   beforeEach(() => {

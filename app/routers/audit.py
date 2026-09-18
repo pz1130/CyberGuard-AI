@@ -9,15 +9,16 @@ from app.core.dependencies import get_current_user, get_db, require_permission
 from app.core.rbac import Permission
 from app.schemas.audit import AuditLogRead, AuditLogListResponse, SyslogExportRequest
 from app.models.audit import AuditLog
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, or_, cast, String
 
 router = APIRouter()
 
 
 @router.get("/audit/logs", response_model=AuditLogListResponse)
 async def list_audit_logs(
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    q: Optional[str] = Query(None, max_length=200),
     user_id: Optional[int] = Query(None),
     agent_id: Optional[int] = Query(None),
     action: Optional[str] = Query(None),
@@ -33,11 +34,15 @@ async def list_audit_logs(
     if action:
         query = query.where(AuditLog.action == action)
 
-    total_result = await db.execute(select(func.count(AuditLog.id)).where(
-        (AuditLog.user_id == user_id if user_id else True) &
-        (AuditLog.agent_id == agent_id if agent_id else True) &
-        (AuditLog.action == action if action else True)
-    ))
+    if q:
+        # Literal substring matching; user input cannot introduce LIKE wildcards.
+        query = query.where(or_(
+            AuditLog.action.icontains(q, autoescape=True),
+            cast(AuditLog.user_id, String).contains(q, autoescape=True),
+        ))
+    total_result = await db.execute(
+        select(func.count()).select_from(query.subquery())
+    )
     total = total_result.scalar()
 
     query = query.order_by(desc(AuditLog.timestamp)).offset(skip).limit(limit)

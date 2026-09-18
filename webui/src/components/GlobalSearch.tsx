@@ -1,5 +1,6 @@
+import { RoleContext, canAccessTab } from '../context/permissions'
 // webui/src/components/GlobalSearch.tsx
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useContext } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../api/client'
 import { useSearch } from '../context/search'
@@ -36,6 +37,7 @@ const TAB_LABELS: Record<string, string> = {
 }
 
 export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Props) {
+  const role = useContext(RoleContext)
   const [query, setQuery] = useState('')
   const [allItems, setAllItems] = useState<SearchItem[]>([])
   // Keyed by the term they answer, so results from a previous query are simply
@@ -75,9 +77,9 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
       api.getProviders(),
       api.getSkills(),
       api.getTools(),
-      api.getKnowledgeBases(),
+      canAccessTab(role, 'knowledge') ? api.getKnowledgeBases() : Promise.resolve([]),
       api.getMCPServers(),
-      api.getPromptTemplates(),
+      canAccessTab(role, 'prompts') ? api.getPromptTemplates() : Promise.resolve([]),
       api.getConversations(),
     ]).then(([agents, providers, skills, tools, knowledge, mcp, prompts, convos]) => {
       const items: SearchItem[] = []
@@ -181,18 +183,18 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
         }
       }
 
-      setAllItems(items)
+      setAllItems(items.filter(item => canAccessTab(role, item.tab)))
       setCatalogReady(true)
       loadedAtRef.current = Date.now()
     })
-  }, [open])
+  }, [open, role])
 
   useEffect(() => {
     if (open) {
       const timer = setTimeout(() => inputRef.current?.focus(), 30)
       return () => clearTimeout(timer)
     }
-  }, [open])
+  }, [open, role])
 
   // Message search runs on the server: the conversation list no longer carries
   // transcripts, and the browser only ever held the 50 most recent anyway.
@@ -239,6 +241,7 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
   const hits = messageHits.term === q ? messageHits.items : []
   const filtered = q
     ? [...hits, ...allItems].filter(item => {
+        if (!canAccessTab(role, item.tab)) return false
         if (item.id.toString().startsWith('msg-')) return true
         if (item.name.toLowerCase().includes(q) || item.subtitle.toLowerCase().includes(q)) return true
         // Also search inside conversation preview text

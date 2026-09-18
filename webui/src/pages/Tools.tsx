@@ -1,3 +1,4 @@
+import { PermissionButton } from '../components/PermissionButton'
 import { useState, useEffect, useContext, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
@@ -46,6 +47,7 @@ const labelStyle: React.CSSProperties = {
 
 export default function Tools() {
   const { t } = useTranslation()
+  const [testResult, setTestResult] = useState('')
   const [items, setItems] = useState<Tool[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -152,27 +154,32 @@ export default function Tools() {
   const testTool = async (t: Tool) => {
     const raw = prompt(`Args JSON for ${t.name}:`, '{}')
     if (raw == null) return
+    setTestResult(`${t.name}: running…`)
     try {
       const res = await api.executeTool(t.id!, JSON.parse(raw) as Record<string, unknown>) as {
         status?: string; exit_code?: number; stdout?: string; error?: string
       }
-      alert(`status: ${res.status}\nexit: ${res.exit_code ?? ''}\n\n${res.stdout || res.error || ''}`)
-    } catch (e: unknown) { alert(errorMessage(e)) }
+      setTestResult(`${t.name}\nstatus: ${res.status}\nexit: ${res.exit_code ?? ''}\n\n${res.stdout || res.error || ''}`)
+    } catch (e: unknown) { setTestResult(`${t.name}: ${errorMessage(e)}`) }
   }
 
   return (
     <div>
+      {testResult && <section className="card" style={{ padding: 16, marginBottom: 16 }}>
+        <strong>{t('tools.testResult')}</strong>
+        <pre role="status" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{testResult}</pre>
+      </section>}
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
           <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>AGENT CAPABILITIES</div>
           <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{t('tools.title').toUpperCase()}</h1>
         </div>
-        <button
+        <PermissionButton permission="skill:write"
           onClick={() => { setShowForm(true); setEditing(null); resetForm() }}
           style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', height: 36, background: 'var(--accent)', border: '1px solid var(--accent-border)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer', boxShadow: '0 0 16px rgba(0,255,65,0.15)' }}>
           <Plus size={13} /> NEW TOOL
-        </button>
+        </PermissionButton>
       </div>
 
       {/* Form */}
@@ -272,10 +279,10 @@ export default function Tools() {
               style={{ padding: '0 16px', height: 36, border: '1px solid var(--border-bright)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer' }}>
               CANCEL
             </button>
-            <button onClick={submit}
+            <PermissionButton permission="skill:write" onClick={submit}
               style={{ padding: '0 16px', height: 36, border: '1px solid var(--accent-border)', background: 'var(--accent)', color: '#000', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', cursor: 'pointer' }}>
               {editing != null ? 'SAVE CHANGES' : 'CREATE TOOL'}
-            </button>
+            </PermissionButton>
           </div>
         </div>
       )}
@@ -303,9 +310,9 @@ export default function Tools() {
             <Terminal size={18} style={{ color: 'var(--text-dim)' }} />
           </div>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>NO TOOLS DEPLOYED</div>
-          <button onClick={() => { setShowForm(true); setEditing(null); resetForm() }} style={{ fontSize: 12, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', letterSpacing: '0.1em' }}>
+          <PermissionButton permission="skill:write" onClick={() => { setShowForm(true); setEditing(null); resetForm() }} style={{ fontSize: 12, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', letterSpacing: '0.1em' }}>
             + DEPLOY FIRST TOOL
-          </button>
+          </PermissionButton>
         </div>
       )}
 
@@ -351,16 +358,16 @@ export default function Tools() {
                   <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>ID: {t.id ?? '—'}</span>
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
                     {t.command_template && (
-                      <button onClick={() => testTool(t)} className="item-card-btn" style={{ color: 'var(--cyan)', borderColor: 'var(--cyan)' }}>
+                      <PermissionButton permission="task:execute" onClick={() => testTool(t)} className="item-card-btn" style={{ color: 'var(--cyan)', borderColor: 'var(--cyan)' }}>
                         TEST
-                      </button>
+                      </PermissionButton>
                     )}
-                    <button onClick={() => openEdit(t)} className="item-card-icon-btn">
+                    <PermissionButton permission="skill:write" onClick={() => openEdit(t)} className="item-card-icon-btn">
                       <Edit2 size={13} />
-                    </button>
-                    <button onClick={() => del(t.id!)} className="item-card-icon-btn danger">
+                    </PermissionButton>
+                    <PermissionButton permission="skill:write" onClick={() => del(t.id!)} className="item-card-icon-btn danger">
                       <Trash2 size={13} />
-                    </button>
+                    </PermissionButton>
                   </div>
                 </div>
               </div>

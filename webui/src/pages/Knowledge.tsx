@@ -1,3 +1,4 @@
+import { PermissionButton } from '../components/PermissionButton'
 import { useState, useEffect, useRef, useContext, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
@@ -125,7 +126,7 @@ function OcrSettingsModal({ open, onClose }: { open: boolean; onClose: () => voi
           <button onClick={onClose} className="btn btn-secondary">
             {t('knowledge.cancel', 'Cancel')}
           </button>
-          <button onClick={save} disabled={saving || loading || !cfg} className="btn btn-primary">
+          <PermissionButton permission="settings:write" onClick={save} disabled={saving || loading || !cfg} className="btn btn-primary">
             {saving ? (
               <>
                 <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
@@ -134,7 +135,7 @@ function OcrSettingsModal({ open, onClose }: { open: boolean; onClose: () => voi
             ) : (
               t('knowledge.save', 'Save')
             )}
-          </button>
+          </PermissionButton>
         </>
       }
     >
@@ -318,7 +319,7 @@ export default function Knowledge() {
     return () => clearInterval(timer)
   }, [docs, selected, loadDocs])
 
-  const embeddingModels = providers.flatMap(p =>
+  const embeddingModels = providers.filter(providerHasEmbedding).flatMap(p =>
     (p.models || [])
       .filter((m: ModelInfo) => m.model_type === 'embedding')
       .map(m => ({ ...m, providerId: p.id, providerName: p.name })),
@@ -443,16 +444,16 @@ export default function Knowledge() {
               </select>
             </div>
 
-            <button
+            <PermissionButton permission="settings:write"
               onClick={() => setShowOcrModal(true)}
               className="btn btn-secondary"
               style={{ display: 'flex', alignItems: 'center', gap: 6, height: 34 }}
             >
               <Settings2 size={13} />
               {t('knowledge.ocrSettings')}
-            </button>
+            </PermissionButton>
 
-            <button
+            <PermissionButton permission="knowledge:write"
               onClick={() => {
                 const first = embeddingModels[0]
                 setKBForm(f => ({
@@ -468,7 +469,7 @@ export default function Knowledge() {
             >
               <Plus size={13} />
               {t('knowledge.newKb')}
-            </button>
+            </PermissionButton>
           </div>
         }
       />
@@ -488,9 +489,9 @@ export default function Knowledge() {
               <button onClick={() => setShowKBForm(false)} className="btn btn-secondary">
                 {t('knowledge.cancel')}
               </button>
-              <button onClick={submitKB} className="btn btn-primary">
+              <PermissionButton permission="knowledge:write" onClick={submitKB} className="btn btn-primary">
                 {t('knowledge.create')}
-              </button>
+              </PermissionButton>
             </>
           }
         >
@@ -573,7 +574,7 @@ export default function Knowledge() {
               <button onClick={() => setShowTextForm(false)} className="btn btn-secondary">
                 {t('knowledge.cancel')}
               </button>
-              <button onClick={ingestText} disabled={ingesting} className="btn btn-primary">
+              <PermissionButton permission="knowledge:write" onClick={ingestText} disabled={ingesting} className="btn btn-primary">
                 {ingesting ? (
                   <>
                     <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
@@ -582,7 +583,7 @@ export default function Knowledge() {
                 ) : (
                   t('knowledge.import')
                 )}
-              </button>
+              </PermissionButton>
             </>
           }
         >
@@ -686,14 +687,14 @@ export default function Knowledge() {
                         </div>
                       )}
                     </div>
-                    <button
+                    <PermissionButton permission="knowledge:write"
                       onClick={(e) => { e.stopPropagation(); deleteKB(k) }}
                       title={t('common.delete', 'Delete')}
                       className="item-card-icon-btn danger"
                       style={{ flexShrink: 0 }}
                     >
                       <Trash2 size={12} />
-                    </button>
+                    </PermissionButton>
                   </div>
                 )
               })}
@@ -736,13 +737,13 @@ export default function Knowledge() {
                   {t('knowledge.selectKbSubhint')}
                 </div>
               </div>
-              <button
+              <PermissionButton permission="knowledge:write"
                 onClick={() => setShowKBForm(true)}
                 className="btn btn-primary"
                 style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}
               >
                 <Plus size={13} /> {t('knowledge.newKb')}
-              </button>
+              </PermissionButton>
             </div>
           ) : (
             <>
@@ -775,13 +776,13 @@ export default function Knowledge() {
                       </div>
                     )}
                   </div>
-                  <button
+                  <PermissionButton permission="knowledge:write"
                     onClick={() => deleteKB(selected)}
                     className="btn btn-secondary btn-sm"
                     style={{ color: 'var(--red)', borderColor: 'rgba(248, 113, 113, 0.3)', flexShrink: 0 }}
                   >
                     <Trash2 size={12} /> {t('common.delete', 'DELETE')}
-                  </button>
+                  </PermissionButton>
                 </div>
               </div>
 
@@ -893,21 +894,21 @@ export default function Knowledge() {
                       onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f) }}
                       style={{ display: 'none' }}
                     />
-                    <button
+                    <PermissionButton permission="knowledge:write"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={ingesting}
                       className="btn btn-secondary btn-sm"
                       style={{ display: 'flex', alignItems: 'center', gap: 6 }}
                     >
                       <Upload size={12} /> {t('knowledge.uploadFile')}
-                    </button>
-                    <button
+                    </PermissionButton>
+                    <PermissionButton permission="knowledge:write"
                       onClick={() => setShowTextForm(true)}
                       className="btn btn-primary btn-sm"
                       style={{ display: 'flex', alignItems: 'center', gap: 6 }}
                     >
                       <Plus size={12} /> {t('knowledge.pasteText')}
-                    </button>
+                    </PermissionButton>
                   </div>
                 </div>
 
@@ -972,14 +973,14 @@ export default function Knowledge() {
                               {d.file_size != null ? `${(d.file_size / 1024).toFixed(1)} KB` : '—'}
                             </td>
                             <td style={{ textAlign: 'center' }}>
-                              <button
+                              <PermissionButton permission="knowledge:write"
                                 onClick={() => deleteDoc(d)}
                                 title={t('common.delete', 'Delete')}
                                 className="item-card-icon-btn danger"
                                 style={{ margin: '0 auto' }}
                               >
                                 <Trash2 size={12} />
-                              </button>
+                              </PermissionButton>
                             </td>
                           </tr>
                         ))}

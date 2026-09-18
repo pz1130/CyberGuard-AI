@@ -1,3 +1,4 @@
+import { PermissionButton } from '../components/PermissionButton'
 import { useState, useEffect, useMemo, useContext, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
@@ -193,14 +194,14 @@ function SettingsModal({
       width={460}
       footer={
         <>
-          <button
+          <PermissionButton permission="agent:write"
             onClick={testConn}
             disabled={testing || (!baseUrl && !provider)}
             className="btn btn-secondary"
             style={{ height: 36, fontSize: 12, letterSpacing: '0.12em' }}
           >
             {testing ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : 'TEST'}
-          </button>
+          </PermissionButton>
           <div style={{ flex: 1 }} />
           <button
             onClick={onClose}
@@ -209,14 +210,14 @@ function SettingsModal({
           >
             CANCEL
           </button>
-          <button
+          <PermissionButton permission="agent:write"
             onClick={save}
             disabled={saving || !name}
             className="btn btn-primary"
             style={{ height: 36, fontSize: 12, letterSpacing: '0.12em', paddingLeft: 20, paddingRight: 20 }}
           >
             {saving ? '...' : 'SAVE'}
-          </button>
+          </PermissionButton>
         </>
       }
     >
@@ -475,21 +476,21 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
           >
             CANCEL
           </button>
-          <button
+          <PermissionButton permission="agent:write"
             onClick={save}
             disabled={saving}
             className="btn btn-primary"
             style={{ height: 36, fontSize: 12, letterSpacing: '0.12em', paddingLeft: 20, paddingRight: 20 }}
           >
             {saving ? '...' : 'SAVE MODELS'}
-          </button>
+          </PermissionButton>
         </>
       }
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {/* Discover / Probe toolbar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button
+          <PermissionButton permission="agent:write"
             onClick={discover}
             disabled={fetching}
             className="btn"
@@ -504,8 +505,8 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
           >
             {fetching ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Zap size={11} />}
             {fetching ? t('providers.fetching') : t('providers.autoDiscover')}
-          </button>
-          <button
+          </PermissionButton>
+          <PermissionButton permission="agent:write"
             onClick={probe}
             disabled={probing || !models.length}
             title={t('providers.probeHelp')}
@@ -514,7 +515,7 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
           >
             {probing ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Settings2 size={11} />}
             {probing ? t('providers.probing') : t('providers.probeBtn')}
-          </button>
+          </PermissionButton>
         </div>
         {fetchErr && <div style={{ fontSize: 11, color: '#f87171' }}>{fetchErr}</div>}
         {(/minimax/i.test(provider.base_url || '') || /minimax/i.test(provider.name)) && (
@@ -569,14 +570,14 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
                     <option value="rerank">rerank</option>
                   </select>
                   {/* Test button */}
-                  <button onClick={() => testModel(m.name)} disabled={testing === m.name}
+                  <PermissionButton permission="agent:write" onClick={() => testModel(m.name)} disabled={testing === m.name}
                     style={{ fontSize: 11, letterSpacing: '0.1em', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px', flexShrink: 0 }}>
                     {testing === m.name ? '…' : 'TEST'}
-                  </button>
+                  </PermissionButton>
                   {/* Remove */}
-                  <button onClick={() => remove(m.name)} style={{ color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', flexShrink: 0 }}>
+                  <PermissionButton permission="agent:write" onClick={() => remove(m.name)} style={{ color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', flexShrink: 0 }}>
                     <X size={11} />
-                  </button>
+                  </PermissionButton>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 64 }}>
                     <span style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.08em' }}>{t('providers.pricingUsdPerMillion')}</span>
@@ -634,13 +635,13 @@ function ModelsModal({ provider, onClose, onSaved }: { provider: Provider; onClo
             <option value="embedding">embed</option>
             <option value="rerank">rerank</option>
           </select>
-          <button
+          <PermissionButton permission="agent:write"
             onClick={add}
             className="btn"
             style={{ height: 34, border: '1px solid var(--accent-border)', background: 'var(--accent-dim)', color: 'var(--accent)', fontSize: 12, letterSpacing: '0.1em' }}
           >
             {t('providers.addCustom')}
-          </button>
+          </PermissionButton>
         </div>
       </div>
     </Modal>
@@ -693,17 +694,17 @@ function ProviderCard({
 
       {/* Action buttons */}
       <div className="item-card-actions">
-        <button onClick={onSettings} className="item-card-btn">
+        <PermissionButton permission="agent:write" onClick={onSettings} className="item-card-btn">
           <Settings2 size={12} /> SETTINGS
-        </button>
+        </PermissionButton>
         <button onClick={onModels}
           className={`item-card-btn ${status !== 'unconfigured' ? 'accent' : ''}`}
           disabled={status === 'unconfigured'} title={status === 'unconfigured' ? t('providers.unconfiguredTip') : ''}>
           <Database size={12} /> MODELS
         </button>
-        <button onClick={onDelete} className="item-card-icon-btn danger" style={{ marginLeft: 'auto' }}>
+        <PermissionButton permission="agent:write" onClick={onDelete} className="item-card-icon-btn danger" style={{ marginLeft: 'auto' }}>
           <X size={13} />
-        </button>
+        </PermissionButton>
       </div>
     </div>
   )
@@ -783,13 +784,13 @@ export default function Providers() {
             >
               <RefreshCw size={13} />
             </button>
-            <button
+            <PermissionButton permission="agent:write"
               onClick={() => setSettingsTarget({})}
               className="btn btn-primary"
               style={{ display: 'flex', alignItems: 'center', gap: 8 }}
             >
               <Plus size={13} /> {t('providers.customProvider')}
-            </button>
+            </PermissionButton>
           </div>
         }
       />

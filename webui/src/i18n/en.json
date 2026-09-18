@@ -45,6 +45,7 @@
     "testSent": "Test email submitted. Check your inbox."
 },
   "common": {
+    "retry": "Retry",
     "loading": "Loading...",
     "save": "Save",
     "cancel": "Cancel",
@@ -116,6 +117,7 @@
     "saving": "Saving..."
   },
   "login": {
+    "sessionExpired": "Your session has expired. Please sign in again.",
     "title": "Welcome Back",
     "subtitle": "Sign in to the management console",
     "username": "Username",
@@ -471,6 +473,8 @@
     "working": "Working…"
   },
   "chat": {
+    "autoUnconfigured": "AUTO (setup required)",
+    "masterSetupRequired": "AUTO requires a provider and model in Settings → Master Agent. You can also select a verified model here.",
     "title": "Chat",
     "awaitingApproval": "AWAITING APPROVAL",
     "awaitingApprovalNotice": "⏸ This task triggered a high-risk action and is paused for human approval. Decide it on the Approvals page — the answer resumes automatically once approved.",
@@ -494,6 +498,7 @@
     "archivedBody": "Its messages were exported to write-once storage under the retention policy and removed from the live database. The record of what was said is preserved and can be retrieved by an auditor."
   },
   "tools": {
+    "testResult": "Tool test result",
     "title": "Tool Pool",
     "addTool": "Add Tool",
     "editTool": "Edit Tool",

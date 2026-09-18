@@ -46,6 +46,7 @@ export default function TokenUsage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [rangeDays, setRangeDays] = useState(30)
+  const [retry, setRetry] = useState(0)
   const [prevRangeDays, setPrevRangeDays] = useState(rangeDays)
 
   if (rangeDays !== prevRangeDays) {
@@ -68,33 +69,21 @@ export default function TokenUsage() {
       .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : 'Unknown error') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [rangeDays])
+  }, [rangeDays, retry])
 
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200 }}>
-        <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>{t('token.loading')}</div>
-      </div>
-    )
-  }
+  const rangeControl = <select className="form-input" value={rangeDays}
+    aria-label={t('token.dateRange')} onChange={e => setRangeDays(Number(e.target.value))}>
+    {[7, 30, 90].map(days => <option key={days} value={days}>{t('token.lastDays', { count: days })}</option>)}
+  </select>
 
-  if (error || !data) {
-    return (
-      <div>
-        <PageHeader
-          eyebrow="COST ANALYSIS"
-          title={t('token.title').toUpperCase()}
-          actions={
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Coins size={16} style={{ color: 'var(--accent)' }} />
-            </div>
-          }
-        />
-        <div className="card" style={{ padding: 20, color: 'var(--text-muted)' }}>
-          {t('token.loadError')}
-        </div>
+  if (loading || error || !data) {
+    return <div>
+      <PageHeader eyebrow="COST ANALYSIS" title={t('token.title').toUpperCase()} actions={rangeControl} />
+      <div className="card" style={{ padding: 20 }} role={error ? 'alert' : 'status'}>
+        {loading ? t('token.loading') : t('token.loadError')}
+        {error && <button className="btn" onClick={() => { setLoading(true); setError(null); setRetry(n => n + 1) }}>{t('common.retry')}</button>}
       </div>
-    )
+    </div>
   }
 
   const totalInput = data.total_prompt_tokens

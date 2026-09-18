@@ -79,3 +79,14 @@ def test_the_config_import_builds_a_row_the_model_accepts():
              if name in code]
     assert stale == [], (
         f"config import still writes fields the model does not have: {stale}")
+
+
+@pytest.mark.parametrize("field,value", [
+    ("max_login_attempts", 2), ("max_login_attempts", 999),
+    ("session_timeout_minutes", 4), ("session_timeout_minutes", 481),
+])
+def test_thresholds_reject_out_of_range_values(field, value):
+    from pydantic import ValidationError
+    from app.routers.security import SecuritySettingsUpdate
+    with pytest.raises(ValidationError):
+        SecuritySettingsUpdate.model_validate({field: value})

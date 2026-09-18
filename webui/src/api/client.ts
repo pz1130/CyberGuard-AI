@@ -1,3 +1,12 @@
+export function checkAuthentication(res: Response): void {
+  if (res.status !== 401) return
+  localStorage.removeItem('token')
+  sessionStorage.setItem('sessionExpired', '1')
+  window.dispatchEvent(new Event('cyberguard:session-expired'))
+  window.location.hash = '#/login'
+  throw new Error('Session expired. Please sign in again.')
+}
+
 const BASE = '/api/v1'
 
 /** JSON-object request body. Field sets vary by endpoint. */
@@ -12,11 +21,7 @@ async function request(path: string, options: RequestInit = {}): Promise<unknown
   if (token) headers['Authorization'] = `Bearer ${token}`
 
   const res = await fetch(`${BASE}${path}`, { ...options, headers })
-  if (res.status === 401) {
-    localStorage.removeItem('token')
-    window.location.hash = '#/login'
-    throw new Error('Unauthorized')
-  }
+  if (path !== '/auth/login') checkAuthentication(res)
   if (!res.ok) throw new Error(await res.text())
   const text = await res.text()
   if (!text) return null
@@ -99,7 +104,7 @@ export const api = {
     const token = localStorage.getItem('token')
     return fetch(`${BASE}/skills/${id}/files/${path}`, {
       headers: { Authorization: `Bearer ${token}` },
-    }).then(r => r.text())
+    }).then(r => { checkAuthentication(r); if (!r.ok) throw new Error(`Request failed (${r.status})`); return r.text() })
   },
   promoteSkillScript: (id: number, scriptPath: string, body: JsonBody) =>
     request(`/skills/${id}/promote?script_path=${encodeURIComponent(scriptPath)}`,
@@ -110,7 +115,7 @@ export const api = {
       method: 'POST',
       body: formData,
       headers: { Authorization: `Bearer ${token}` },
-    }).then(r => r.json())
+    }).then(r => { checkAuthentication(r); if (!r.ok) throw new Error(`Request failed (${r.status})`); return r.json() })
   },
 
   // Knowledge — knowledge bases
@@ -134,6 +139,7 @@ export const api = {
       body: fd,
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
+    checkAuthentication(res)
     if (!res.ok) throw new Error(await res.text())
     return res.json()
   },
@@ -143,6 +149,8 @@ export const api = {
   // Knowledge — query
   queryKnowledge: (body: { kb_id: number; query: string; top_k?: number; similarity_threshold?: number; provider_id?: number }) =>
     request('/knowledge/query', { method: 'POST', body: JSON.stringify(body) }),
+
+  getChatReadiness: () => request('/chat/readiness'),
 
   // Chat (async task via Celery — for complex requests with agents/attachments)
   chat: (body: { message: string; agent_id?: string; provider_id?: number; model?: string; conversation_id?: number; mode?: string }) =>
@@ -159,6 +167,7 @@ export const api = {
       },
       body: JSON.stringify(body),
     })
+    checkAuthentication(res)
     if (!res.ok) throw new Error(await res.text())
     const reader = res.body!.getReader()
     const decoder = new TextDecoder()
@@ -192,6 +201,7 @@ export const api = {
       },
       body: JSON.stringify({ task, conversation_id: conversationId }),
     })
+    checkAuthentication(res)
     if (!res.ok) throw new Error(await res.text())
     const reader = res.body!.getReader()
     const decoder = new TextDecoder()
@@ -233,6 +243,7 @@ export const api = {
       headers: { Authorization: `Bearer ${token}` },
       body: fd,
     }).then(async r => {
+      checkAuthentication(r)
       if (!r.ok) throw new Error(await r.text())
       return r.json()
     })
@@ -256,11 +267,12 @@ export const api = {
     }),
 
   // Audit
-  getAuditLogs: (params?: { user_id?: number; limit?: number; offset?: number }) => {
+  getAuditLogs: (params?: { user_id?: number; limit?: number; offset?: number; q?: string }) => {
     const q = new URLSearchParams()
     if (params?.user_id) q.set('user_id', String(params.user_id))
     if (params?.limit) q.set('limit', String(params.limit))
-    if (params?.offset) q.set('offset', String(params.offset))
+    if (params?.offset) q.set('skip', String(params.offset))
+    if (params?.q) q.set('q', params.q)
     const qs = q.toString()
     return request(`/audit/logs${qs ? '?' + qs : ''}`)
   },

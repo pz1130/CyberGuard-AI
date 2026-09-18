@@ -1,3 +1,4 @@
+import { PermissionButton } from '../components/PermissionButton'
 import { useState, useEffect, useContext } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
@@ -268,7 +269,7 @@ After completing all steps, reply:
                 : <>⚠ {t('agents.keyPlaceholderWarning2')}</>}
             </div>
             {onRequestKey && (
-              <button
+              <PermissionButton permission="agent:write"
                 disabled={regenBusy}
                 onClick={async () => {
                   if (!confirm(t('agents.reissueKey'))) return
@@ -286,7 +287,7 @@ After completing all steps, reply:
                 }}>
                 {regenBusy ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Key size={11} />}
                 {regenBusy ? 'GENERATING…' : 'GENERATE NEW KEY'}
-              </button>
+              </PermissionButton>
             )}
           </div>
         )}
@@ -440,10 +441,10 @@ function AgentRunPanel({ agentId, agentName, onClose }: {
         placeholder={t('agents.inputTask')} disabled={running}
         className="form-textarea" />
 
-      <button onClick={run} disabled={running || !task.trim()}
+      <PermissionButton permission="task:execute" onClick={run} disabled={running || !task.trim()}
         className="btn btn-primary" style={{ alignSelf: 'flex-start', opacity: running ? 0.6 : 1 }}>
         {running ? t('agents.running') : t('agents.run')}
-      </button>
+      </PermissionButton>
 
       {steps.length > 0 && (
         <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -650,9 +651,9 @@ export default function Agents() {
         eyebrow="AGENT INFRASTRUCTURE"
         title={t('agents.title').toUpperCase()}
         actions={
-          <button onClick={() => setShowKindPicker(true)} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <PermissionButton permission="agent:write" onClick={() => setShowKindPicker(true)} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Plus size={13} /> NEW AGENT
-          </button>
+          </PermissionButton>
         }
       />
 
@@ -681,9 +682,9 @@ export default function Agents() {
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 0', gap: 12 }}>
           <Cpu size={24} style={{ color: 'var(--text-dim)' }} />
           <div style={{ fontSize: 13, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>NO ACTIVE AGENTS</div>
-          <button onClick={() => setShowKindPicker(true)} style={{ fontSize: 12, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', letterSpacing: '0.1em' }}>
+          <PermissionButton permission="agent:write" onClick={() => setShowKindPicker(true)} style={{ fontSize: 12, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', letterSpacing: '0.1em' }}>
             + DEPLOY FIRST AGENT
-          </button>
+          </PermissionButton>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
@@ -773,28 +774,28 @@ export default function Agents() {
                     {testing === a.id ? '…' : 'TEST'}
                   </button>
 
-                  <button onClick={() => setRunningAgent({ id: a.id!, name: a.agent_name || a.id! })}
+                  <PermissionButton permission="task:execute" onClick={() => setRunningAgent({ id: a.id!, name: a.agent_name || a.id! })}
                     className="item-card-btn accent">
                     RUN
-                  </button>
+                  </PermissionButton>
 
                   {!isInternal && (
-                    <button onClick={() => regenApiKey(a.id!)} disabled={regenLoading === a.id}
+                    <PermissionButton permission="agent:write" onClick={() => regenApiKey(a.id!)} disabled={regenLoading === a.id}
                       title={t('agents.reissueTitle')}
                       className="item-card-btn">
                       {regenLoading === a.id
                         ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} />
                         : <><Key size={11} /> REGEN KEY</>}
-                    </button>
+                    </PermissionButton>
                   )}
 
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
-                    <button onClick={() => openEdit(a)} className="item-card-icon-btn">
+                    <PermissionButton permission="agent:write" onClick={() => openEdit(a)} className="item-card-icon-btn">
                       <Pencil size={13} />
-                    </button>
-                    <button onClick={() => del(a.id!)} className="item-card-icon-btn danger">
+                    </PermissionButton>
+                    <PermissionButton permission="agent:write" onClick={() => del(a.id!)} className="item-card-icon-btn danger">
                       <Trash size={13} />
-                    </button>
+                    </PermissionButton>
                   </div>
                 </div>
               </div>
@@ -816,7 +817,7 @@ export default function Agents() {
             </button>
           )}
         >
-          <button
+          <PermissionButton permission="agent:write"
             onClick={() => { setShowKindPicker(false); openCreate(false) }}
             style={{
               padding: '18px 20px', border: '1px solid var(--border-bright)', borderRadius: 0,
@@ -826,8 +827,8 @@ export default function Agents() {
             <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6 }}>
               OpenClaw, Hermes, or Custom HTTP endpoint. Deploy a separate process and connect via protocol.
             </div>
-          </button>
-          <button
+          </PermissionButton>
+          <PermissionButton permission="agent:write"
             onClick={() => {
               setShowKindPicker(false)
               openCreate(true)
@@ -840,7 +841,7 @@ export default function Agents() {
             <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6 }}>
               Configured fully in-app. Select system prompt, LLM provider, skills, MCP tools, and optional knowledge base.
             </div>
-          </button>
+          </PermissionButton>
         </Modal>
       )}
 
@@ -859,7 +860,7 @@ export default function Agents() {
           ) : (
             <>
               <button onClick={() => setShowForm(false)} className="btn btn-secondary">CANCEL</button>
-              <button onClick={submit} className="btn btn-primary">{editing ? 'SAVE CHANGES' : 'DEPLOY AGENT'}</button>
+              <PermissionButton permission="agent:write" onClick={submit} className="btn btn-primary">{editing ? 'SAVE CHANGES' : 'DEPLOY AGENT'}</PermissionButton>
             </>
           )}
         >
@@ -1067,7 +1068,7 @@ export default function Agents() {
                     </div>
                   )}
                   {editing && (
-                    <button
+                    <PermissionButton permission="agent:write"
                       onClick={async () => {
                         if (!confirm(t('agents.reissueKeyShort'))) return
                         try {
@@ -1082,7 +1083,7 @@ export default function Agents() {
                         display: 'flex', alignItems: 'center', gap: 6,
                         fontSize: 12, letterSpacing: '0.1em',                       }}>
                       <Key size={11} /> GENERATE NEW KEY
-                    </button>
+                    </PermissionButton>
                   )}
                 </div>
               )}

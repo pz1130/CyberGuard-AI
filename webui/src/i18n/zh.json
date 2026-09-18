@@ -45,6 +45,7 @@
     "testSent": "测试邮件已提交，请检查收件箱。"
 },
   "common": {
+    "retry": "重试",
     "loading": "加载中...",
     "save": "保存",
     "cancel": "取消",
@@ -116,6 +117,7 @@
     "saving": "保存中..."
   },
   "login": {
+    "sessionExpired": "登录已过期，请重新登录。",
     "title": "欢迎回来",
     "subtitle": "使用账号密码登录管理控制台",
     "username": "用户名",
@@ -471,6 +473,8 @@
     "working": "处理中…"
   },
   "chat": {
+    "autoUnconfigured": "AUTO（需要配置）",
+    "masterSetupRequired": "AUTO 需要在设置 → Master Agent 绑定供应商和模型，也可在此直接选择已验证模型。",
     "title": "聊天",
     "awaitingApproval": "等待人工审批",
     "awaitingApprovalNotice": "⏸ 该任务触发了高风险操作，已暂停等待人工审批。请到「审批管理」页面处理；批准后本次回答会自动继续。",
@@ -494,6 +498,7 @@
     "archivedBody": "根据留存策略，其消息已导出到一次写入存储并从在线数据库中移除。所说内容的记录仍被保留，审计员可以取回。"
   },
   "tools": {
+    "testResult": "工具测试结果",
     "title": "工具池",
     "addTool": "新增工具",
     "editTool": "编辑工具",

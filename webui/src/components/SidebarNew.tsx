@@ -11,6 +11,8 @@ import {
   Settings, Shield, Coins, Database, FileText, UserCog,
   ScrollText, ShieldCheck, ShieldAlert,
 } from 'lucide-react'
+import { useContext } from 'react'
+import { RoleContext, canAccessTab } from '../context/permissions'
 import { useTranslation } from 'react-i18next'
 
 export type Tab =
@@ -82,6 +84,7 @@ interface Props {
 
 export default function SidebarNew({ tab, setTab }: Props) {
   const { t } = useTranslation()
+  const role = useContext(RoleContext)
 
   return (
     <aside
@@ -108,7 +111,7 @@ export default function SidebarNew({ tab, setTab }: Props) {
           padding: '8px 8px 16px',
         }}
       >
-        {NAV_GROUPS.map((group) => (
+        {NAV_GROUPS.filter(g => g.items.some(i => canAccessTab(role, i.key))).map((group) => (
           <div key={group.id} style={{ marginTop: 12 }}>
             <div
               style={{
@@ -124,7 +127,7 @@ export default function SidebarNew({ tab, setTab }: Props) {
               {t(group.labelKey)}
             </div>
 
-            {group.items.map((item) => {
+            {group.items.filter(item => canAccessTab(role, item.key)).map((item) => {
               const isActive = tab === item.key
               return (
                 <button

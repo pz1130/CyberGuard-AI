@@ -206,7 +206,7 @@ export default function Security() {
                   <input
                     type="number" min={min} max={max}
                     value={settings[key]}
-                    onChange={e => update(key, parseInt(e.target.value) || min)}
+                    onChange={e => update(key, Math.min(max, Math.max(min, parseInt(e.target.value) || min)))}
                     className="form-input"
                     style={{
                       width: 88, height: 32, padding: '0 8px', textAlign: 'right', fontFamily: 'var(--font-mono)',

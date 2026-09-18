@@ -1,7 +1,7 @@
 """Security settings router."""
 from typing import Optional
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import AuthenticatedUser
@@ -23,8 +23,8 @@ class SecuritySettingsResponse(BaseModel):
 
 
 class SecuritySettingsUpdate(BaseModel):
-    max_login_attempts: Optional[int] = None
-    session_timeout_minutes: Optional[int] = None
+    max_login_attempts: Optional[int] = Field(default=None, ge=3, le=20)
+    session_timeout_minutes: Optional[int] = Field(default=None, ge=5, le=480)
 
 
 @router.get("/security-settings", response_model=SecuritySettingsResponse)

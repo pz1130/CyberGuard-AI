@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
+import { RoleContext, hasPermission } from '../context/permissions'
+import { useContext, useState, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import ReactMarkdown from 'react-markdown'
@@ -136,6 +137,15 @@ export default function Chat() {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
+  const role = useContext(RoleContext)
+  const canExecute = hasPermission(role, 'task:execute')
+  const [masterReady, setMasterReady] = useState<boolean | null>(null)
+  useEffect(() => {
+    if (!api.getChatReadiness) return
+    let cancelled = false
+    api.getChatReadiness().then(r => { if (!cancelled) setMasterReady((r as { master_ready: boolean }).master_ready) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
   const [providerModel, setProviderModel] = useState(() => localStorage.getItem('lastProviderModel') || 'auto')
   const [selectedAgentId, setSelectedAgentId] = useState(() => localStorage.getItem('lastSelectedAgentId') || '')
   const [availableAgents, setAvailableAgents] = useState<AgentOption[]>([])
@@ -370,7 +380,7 @@ export default function Chat() {
           provider_type: string
           base_url?: string
           is_active?: boolean
-          models?: Array<string | { name?: string; verified?: boolean | null }>
+          models?: Array<string | { name?: string; verified?: boolean | null; model_type?: string }>
         }
         const providers = unwrapList<ProviderRow>(await api.getProviders(), 'providers')
         if (!providers.length) return
@@ -384,8 +394,8 @@ export default function Chat() {
             // are seeded with verified=true (see _seed_presets). Legacy rows may
             // still hold plain strings instead of dicts — those have no
             // `verified` field and are filtered out.
-            const entry = (typeof m === 'object' && m !== null) ? m as { name?: string; verified?: boolean | null } : null
-            if (!entry || entry.verified !== true) continue
+            const entry = (typeof m === 'object' && m !== null) ? m as { name?: string; verified?: boolean | null; model_type?: string } : null
+            if (!entry || entry.verified !== true || (entry.model_type && entry.model_type !== 'chat')) continue
             models.push({
               provider_id: p.id,
               provider_name: p.name.toUpperCase(),
@@ -509,6 +519,7 @@ export default function Chat() {
 
   // Send message
   const send = async () => {
+    if (!canExecute) return
     if ((!input.trim() && attachments.length === 0) || loading) return
     if (!activeConvId) {
       alert(t('chat.selectOrCreateFirst'))
@@ -769,6 +780,7 @@ export default function Chat() {
 
           <div className="chat-toolbar-separator" />
 
+          {masterReady === false && !selectedAgentId && providerModel === 'auto' && <span role="status" style={{ color: 'var(--amber)', fontSize: 12 }}>{t('chat.masterSetupRequired')}</span>}
           {/* MODEL group */}
           <div className="chat-toolbar-group">
             <span className="chat-toolbar-label">MODEL</span>
@@ -778,7 +790,7 @@ export default function Chat() {
               style={{ width: 'auto', minWidth: 140, maxWidth: 260, height: 30, fontSize: 12 }}
               title={availableModels.length === 0 ? 'No verified models — go to Providers and click TEST' : undefined}
             >
-              <option value="auto">AUTO (Master pair)</option>
+              <option value="auto">{masterReady === false ? t('chat.autoUnconfigured') : 'AUTO (Master pair)'}</option>
               {availableModels.map(m => <option key={`${m.provider_id}:${m.model}`} value={`${m.provider_id}:${m.model}`}>{m.provider_name} / {m.model}</option>)}
             </select>
             {availableModels.length === 0 && (
@@ -1060,14 +1072,14 @@ export default function Chat() {
           )}
           <button
             onClick={() => fileInputRef.current?.click()}
-            disabled={!activeConvId || loading}
+            disabled={!canExecute || !activeConvId || loading}
             className="chat-input-btn">
             <Paperclip size={15} />
           </button>
           <textarea
             ref={textareaRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey}
             placeholder={activeConvId ? 'Type your message...' : 'Select a conversation first...'}
-            disabled={!activeConvId || loading}
+            disabled={!canExecute || !activeConvId || loading}
             rows={1}
             className="chat-input-textarea"
           />
@@ -1086,7 +1098,7 @@ export default function Chat() {
                 send()
               }
             }}
-            disabled={!activeConvId || (!loading && !input.trim() && attachments.length === 0)}
+            disabled={!canExecute || !activeConvId || (!loading && !input.trim() && attachments.length === 0)}
             aria-label={t('chat.send')}
             className={`chat-send-btn ${loading ? 'cancel' : ''}`}>
             {loading ? (

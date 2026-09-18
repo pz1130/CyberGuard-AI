@@ -1,3 +1,4 @@
+import { RoleContext } from '../context/permissions'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -35,7 +36,7 @@ describe('GlobalSearch — message hits', () => {
   const DEBOUNCE_MS = 250
 
   const type = async (text: string) => {
-    render(<GlobalSearch open onClose={() => {}} setTab={() => {}} recentTabs={[]} />)
+    render(<RoleContext.Provider value="admin"><GlobalSearch open onClose={() => {}} setTab={() => {}} recentTabs={[]} /></RoleContext.Provider>)
     const input = screen.getByPlaceholderText(/SEARCH AGENTS/i)
     fireEvent.change(input, { target: { value: text } })
     return input
