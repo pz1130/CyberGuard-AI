@@ -1,6 +1,7 @@
 """Celery tasks for background agent execution."""
 import asyncio
 import logging
+import os
 from datetime import timedelta
 from concurrent.futures import ThreadPoolExecutor
 
@@ -13,6 +14,32 @@ from app.core.time import utc_now
 logger = logging.getLogger(__name__)
 
 _executor = ThreadPoolExecutor(max_workers=4)
+_worker_async_loop = None
+_worker_async_loop_pid = None
+
+
+def _run_worker_async(coro):
+    """Run a coroutine on one persistent event loop per Celery child process.
+
+    The worker previously created and closed a loop for every task while
+    module-level async DB/Redis clients survived between tasks. Reusing those
+    clients on the next loop caused "Event loop is closed" and fail-closed
+    Kill Switch responses. Celery prefork children execute one task at a time,
+    so a process-local loop keeps each async resource on its owning loop.
+    """
+    global _worker_async_loop, _worker_async_loop_pid
+
+    pid = os.getpid()
+    if (
+        _worker_async_loop is None
+        or _worker_async_loop.is_closed()
+        or _worker_async_loop_pid != pid
+    ):
+        _worker_async_loop = asyncio.new_event_loop()
+        _worker_async_loop_pid = pid
+
+    asyncio.set_event_loop(_worker_async_loop)
+    return _worker_async_loop.run_until_complete(coro)
 
 
 def _update_execution_status_sync(execution_id: str, status: str):
@@ -72,12 +99,7 @@ def _query_knowledge_base_sync(kb_id: int, query: str, top_k: int = 5) -> str:
         return results
 
     try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            results = loop.run_until_complete(_async_query())
-        finally:
-            loop.close()
+        results = _run_worker_async(_async_query())
 
         if not results:
             return ""
@@ -132,7 +154,7 @@ def _save_to_conversation_async(conversation_id: int, user_input: str, result: d
 
 
 def _run_async_master_agent(execution_id: str, user_input: str, user_id: int, **kwargs):
-    """Run async master agent in a thread pool."""
+    """Run the async master agent on the process-local worker loop."""
     import asyncio
     from app.agents.master import get_master_agent
     from app.core.guardrails import check_prompt_sync, GuardrailResult
@@ -199,13 +221,9 @@ def _run_async_master_agent(execution_id: str, user_input: str, user_id: int, **
         user_input = f"[知识库检索结果]\n{rag_context}\n\n[用户问题]\n{user_input}"
 
     async def _run():
-        # This Celery task runs in a fresh event loop (see below). The module-level
-        # async engine pools connections bound to the loop that created them, so a
-        # connection left over from a previous task's (now-closed) loop fails with
-        # "got Future attached to a different loop" — which silently broke expert
-        # mode (the active-agent load in _parse_intent_node was swallowing it and
-        # degrading to a no-fan-out reply). Dispose the pool so connections are
-        # (re)created on THIS loop.
+        # Drop inherited/pre-fork DB connections before this process uses its
+        # persistent event loop. Disposal and all later DB work now happen on
+        # that same loop.
         from app.core.database import engine
         await engine.dispose()
 
@@ -234,14 +252,7 @@ def _run_async_master_agent(execution_id: str, user_input: str, user_id: int, **
             **{**kwargs, **conv_overrides},
         )
 
-    # Create a fresh event loop to avoid "Event loop is closed" errors
-    # that occur when Celery's main process loop conflicts with async redis client
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        return loop.run_until_complete(_run())
-    finally:
-        loop.close()
+    return _run_worker_async(_run())
 
 
 @shared_task(
@@ -321,7 +332,7 @@ def _auto_title_conversation(conversation_id: int, user_input: str, result: dict
     """Generate a short conversation title from the first user message using LLM.
 
     Only runs while the conversation has no title of its own.
-    Runs synchronously in the Celery worker — uses a fresh event loop.
+    Runs synchronously in the Celery worker on its process-local event loop.
     """
     try:
         from app.core.database import get_sync_session
@@ -354,12 +365,7 @@ def _auto_title_conversation(conversation_id: int, user_input: str, result: dict
             except Exception:
                 return None
 
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            title = loop.run_until_complete(_generate())
-        finally:
-            loop.close()
+        title = _run_worker_async(_generate())
 
         if not title:
             return
@@ -554,7 +560,6 @@ def resume_master_agent_task(
     The decision arrives in the API process; the run lives here. The durable
     checkpointer is what lets a different process pick it back up.
     """
-    import asyncio as _asyncio
     from app.agents.master import get_master_agent
 
     logger.info(
@@ -568,17 +573,13 @@ def resume_master_agent_task(
         return await get_master_agent().resume(
             thread_id, decision=decision, comment=comment, user_id=user_id)
 
-    loop = _asyncio.new_event_loop()
-    _asyncio.set_event_loop(loop)
     try:
-        result = loop.run_until_complete(_run())
+        result = _run_worker_async(_run())
     except Exception as e:
         logger.error("[resume_master_agent_task] failed: %s", e)
         if execution_id:
             _update_execution_with_result_sync(execution_id, "failed", None, str(e))
         raise
-    finally:
-        loop.close()
 
     if isinstance(result, dict) and result.get("interrupted"):
         # The run hit a second gate — still waiting on a human.

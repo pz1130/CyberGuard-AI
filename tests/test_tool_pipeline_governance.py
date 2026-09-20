@@ -125,3 +125,36 @@ async def test_an_allowed_observe_tool_still_runs(monkeypatch):
 
     searched.assert_awaited_once()
     assert not _is_refusal(result), result
+
+
+@pytest.mark.asyncio
+async def test_preapproved_pool_tool_keeps_rollback_and_spends_approval_once(monkeypatch):
+    """The outer gate must pass rollback + approval into pool execution."""
+    monkeypatch.setattr("app.services.kill_switch.is_halted",
+                        AsyncMock(return_value=False))
+    monkeypatch.setattr("app.core.audit.record_action", AsyncMock())
+    executed = AsyncMock(return_value={"status": "completed", "stdout": "SIMULATED deny"})
+    monkeypatch.setattr(ia_mod, "execute_tool", executed)
+
+    r = _runner(
+        permission_level="high",
+        allowed_categories=["contain_hard"],
+        is_poc=False,
+    )
+    r._pre_approved = True
+    r._pool_tools_by_name = {
+        "simulate_block_ip": SimpleNamespace(
+            name="simulate_block_ip",
+            action_category="contain_hard",
+            risk_tier="high",
+            permission_level="high",
+            rollback_command_template="echo allow {ip}",
+        )
+    }
+
+    result = await r._dispatch(_call("simulate_block_ip", ip="192.0.2.123"))
+
+    assert not _is_refusal(result), result
+    assert r._pre_approved is False
+    executed.assert_awaited_once()
+    assert executed.await_args.kwargs["approved"] is True
