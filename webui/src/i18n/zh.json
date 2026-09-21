@@ -250,10 +250,10 @@
     "refresh": "刷新",
     "customProvider": "自定义 PROVIDER",
     "searchPh": "搜索 Provider…",
-    "configuredCount": "已配置 · {count}",
+    "configuredCount": "已配置 · {{count}}",
     "noMatch": "未找到匹配的 Provider",
     "groupId": "Group ID",
-    "groupIdHint": "国内 MiniMax embeddings（api.minimaxi.com）需要 Group ID；国际站 api.minimax.io 可留空。",
+    "groupIdHint": "国内 MiniMax embeddings（api.minimax.cn）需要 Group ID；国际站 api.minimax.io 可留空。",
     "minimaxEmbedHint": "对话走 /v1/chat/completions；向量化使用原生 embo-01（不兼容 OpenAI /embeddings）。请将 embo-01 的类型设为 embedding。",
     "minimaxChatNotEmbed": "{{name}} 是 MiniMax 对话模型，不能用于向量化。请使用类型为 embedding 的 embo-01。"
   },
@@ -475,6 +475,17 @@
   "chat": {
     "autoUnconfigured": "AUTO（需要配置）",
     "masterSetupRequired": "AUTO 需要在设置 → Master Agent 绑定供应商和模型，也可在此直接选择已验证模型。",
+    "setupRequiredTitle": "连接模型后即可开始对话",
+    "workspaceSubtitle": "受治理的 AI 工作空间",
+    "mode": "模式",
+    "model": "模型",
+    "agent": "智能体",
+    "session": "会话设置",
+    "clear": "清空",
+    "noVerifiedModels": "暂无已验证模型，请先前往 AI Provider 测试模型。",
+    "noModelsShort": "暂无已验证模型",
+    "emptyTitle": "CyberGuard 可以帮你做什么？",
+    "emptyBody": "分析安全告警、调查证据，或制定受控的响应方案。",
     "title": "聊天",
     "awaitingApproval": "等待人工审批",
     "awaitingApprovalNotice": "⏸ 该任务触发了高风险操作，已暂停等待人工审批。请到「审批管理」页面处理；批准后本次回答会自动继续。",
@@ -559,6 +570,7 @@
     "activeInChat": "启用（显示在对话选择器中）"
   },
   "approvals": {
+    "viewDetails": "查看审批详情",
     "title": "审批管理",
     "proposedCode": "待执行代码",
     "proposedCodeHint": "该程序将在无网络访问的隔离沙箱中运行。",
@@ -609,6 +621,43 @@
     "aboutDesc": "面向安全运营的受治理 AI · MCP 工具协议 · 知识库 RAG · 完整审计轨迹"
   },
   "govDash": {
+    "localScope": "仅检查当前数据库快照的哈希一致性，不证明真实性，也无法发现未归档末尾记录被删除。",
+    "auditCounts": "已完整验证 {{verified}} / {{total}} 条 · 内容不匹配：{{payload}} · 链接不匹配：{{links}}",
+    "firstAnomaly": "首条异常：记录 {{id}}",
+    "unverifiedCounts": "未签名：{{unsigned}} · 旧版：{{legacy}} · 不支持的版本：{{unsupported}}",
+    "anomalyDetails": "查看 {{count}} 条异常记录",
+    "auditAction": "操作",
+    "auditReason": "异常原因",
+    "truncatedIssues": "显示前 100 条异常，统计覆盖完整快照。",
+    "externalEvidence": "外部不可变证据",
+    "externalScope": "读取归档对象版本，核对 COMPLIANCE 保留锁及记录内容。保护范围仅限已覆盖记录；独立的信任边界需要独立管理的存储。",
+    "evidenceCounts": "已归档：{{archived}} 条 · 未归档：{{pending}} 条 · 差异：{{mismatches}} 条",
+    "archiveAudit": "归档已验证记录",
+    "archiveConfirm": "将已验证记录归档并锁定保留 365 天？保留期间无法删除这些对象版本。",
+    "archiveFailed": "归档被阻止或存储验证失败，请检查审计完整性与外部证据状态。",
+    "auditStatus": {
+        "verified": "本地哈希一致",
+        "broken": "发现审计异常",
+        "partial": "只能部分验证",
+        "empty": "暂无审计记录",
+        "unavailable": "审计校验不可用"
+    },
+    "auditReasons": {
+        "link_mismatch": "与前一条记录的链接不一致",
+        "payload_mismatch": "记录内容与已存哈希不一致"
+    },
+    "evidenceStatus": {
+        "checking": "正在检查外部证据…",
+        "verified": "归档内容匹配且保留锁已验证",
+        "not_configured": "未配置外部存储",
+        "no_archives": "未发现不可变归档",
+        "partial": "外部验证未完整完成",
+        "unprotected": "未确认不可变保留锁",
+        "mismatch": "归档证据与数据库存在差异",
+        "unavailable": "外部证据不可用",
+        "bucket_missing": "未找到审计归档桶",
+        "permission_denied": "无权读取外部审计证据"
+    },
     "subtitle": "运行时治理：指标、紧急停止、回滚、审计完整性",
     "pocMetrics": "POC 验收指标",
     "allPass": "全部达标",
@@ -630,11 +679,11 @@
     "revert": "回滚",
     "confirmRollback": "立即触发此回滚？",
     "metric": {
-      "governance_violation_rate": "治理违规率",
-      "human_override_rate": "人工否决率",
-      "kill_switch_response_seconds": "紧急停止响应",
-      "audit_completeness": "审计完整性",
-      "rollback_success_rate": "回滚成功率"
+        "governance_violation_rate": "治理违规率",
+        "human_override_rate": "人工否决率",
+        "kill_switch_response_seconds": "紧急停止响应",
+        "audit_completeness": "本地审计验证",
+        "rollback_success_rate": "回滚成功率"
     }
-  }
+}
 }

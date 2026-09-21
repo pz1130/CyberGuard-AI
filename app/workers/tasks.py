@@ -456,7 +456,25 @@ def anchor_conversation_chains_task(self):
 
 
 # Celery Beat schedule for periodic tasks
+@celery_app.task(name="app.workers.tasks.expire_approval_requests_task")
+def expire_approval_requests_task():
+    from app.core.database import engine
+    from app.services.approval_service import ApprovalService
+
+    async def run():
+        await engine.dispose()
+        try:
+            return {"expired": await ApprovalService.expire_pending()}
+        finally:
+            await engine.dispose()
+    return _run_worker_async(run())
+
+
 celery_app.conf.beat_schedule = {
+    "expire-approval-requests-every-minute": {
+        "task": "app.workers.tasks.expire_approval_requests_task",
+        "schedule": 60.0,
+    },
     "cleanup-stale-executions-every-15-min": {
         "task": "app.workers.tasks.cleanup_stale_executions_task",
         "schedule": 900.0,  # 15 minutes
@@ -599,3 +617,29 @@ def resume_master_agent_task(
         _save_to_conversation_async(conversation_id, user_input or "", result)
 
     return {"status": status, "execution_id": execution_id, "result": result}
+
+
+@celery_app.task(name="app.workers.tasks.archive_audit_evidence_task")
+def archive_audit_evidence_task():
+    """Opt-in periodic archival; failures are surfaced as failed tasks."""
+    import os
+    if os.environ.get('AUDIT_WORM_AUTO_EXPORT', '').lower() != 'true':
+        return {'status': 'disabled'}
+    from app.core.database import engine
+    from app.services.audit_worm import export_new
+
+    async def run():
+        await engine.dispose()
+        try:
+            return await export_new(retain_days=int(os.environ.get('AUDIT_WORM_RETAIN_DAYS', '365')))
+        finally:
+            await engine.dispose()
+    return _run_worker_async(run())
+
+
+import os as _audit_schedule_os
+if _audit_schedule_os.environ.get('AUDIT_WORM_AUTO_EXPORT', '').lower() == 'true':
+    celery_app.conf.beat_schedule['archive-audit-evidence-every-15-min'] = {
+        'task': 'app.workers.tasks.archive_audit_evidence_task',
+        'schedule': 900.0,
+    }

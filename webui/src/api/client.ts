@@ -391,6 +391,8 @@ export const api = {
   triggerRollback: (actionId: string) =>
     request(`/governance/rollback/${actionId}`, { method: 'POST' }),
   verifyAudit: () => request('/audit/verify'),
+  getAuditEvidence: () => request('/audit/evidence'),
+  archiveAudit: () => request('/audit/worm-export?retain_days=365', { method: 'POST' }),
 
   // ---- Prompt Templates ----
   getPromptTemplates: (category?: string) =>

@@ -114,6 +114,7 @@ export default function SidebarNew({ tab, setTab }: Props) {
         {NAV_GROUPS.filter(g => g.items.some(i => canAccessTab(role, i.key))).map((group) => (
           <div key={group.id} style={{ marginTop: 12 }}>
             <div
+              className="sidebar-group-label"
               style={{
                 padding: '4px 10px 6px',
                 fontSize: 11,
@@ -175,7 +176,7 @@ export default function SidebarNew({ tab, setTab }: Props) {
                   >
                     {item.icon}
                   </span>
-                  <span style={{ flex: 1, minWidth: 0 }} className="truncate">
+                  <span style={{ flex: 1, minWidth: 0 }} className="truncate sidebar-item-label">
                     {t(item.labelKey)}
                   </span>
                 </button>
@@ -187,6 +188,7 @@ export default function SidebarNew({ tab, setTab }: Props) {
       </nav>
 
       <div
+        className="sidebar-footer"
         style={{
           padding: '10px 14px',
           borderTop: '1px solid var(--border)',

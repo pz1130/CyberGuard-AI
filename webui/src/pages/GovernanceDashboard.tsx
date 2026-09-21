@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
+import { PermissionButton } from '../components/PermissionButton'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ShieldAlert, RefreshCw, Power, RotateCcw, CheckCircle2, XCircle, ShieldCheck } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
@@ -7,6 +8,14 @@ import { unwrapList } from '../lib/unwrapList'
 
 interface Metric { name: string; value: number; target: number; pass: boolean }
 interface MetricsReport { window_days: number; metrics: Metric[]; all_pass: boolean }
+interface AuditReport {
+  status: string; fully_verified: boolean; first_broken_row_id: number | null
+  total_rows: number; verified_rows: number; payload_mismatches: number
+  link_mismatches: number; unsigned_rows: number; legacy_rows: number; unsupported_rows: number
+  affected_rows: number; issues_truncated: boolean
+  issues: { row_id: number; action: string; reasons: string[] }[]
+}
+interface EvidenceReport { status: string; archived_rows?: number; unarchived_rows?: number; mismatch_count?: number; last_archived_row_id?: number }
 interface Rollback { action_id: string; tool: string | null; expires_at: string }
 
 const PCT = new Set(['governance_violation_rate', 'human_override_rate', 'audit_completeness', 'rollback_success_rate'])
@@ -24,7 +33,10 @@ export default function GovernanceDashboard() {
   const [metrics, setMetrics] = useState<MetricsReport | null>(null)
   const [halted, setHalted] = useState<boolean | null>(null)
   const [rollbacks, setRollbacks] = useState<Rollback[]>([])
-  const [auditIntact, setAuditIntact] = useState<boolean | null>(null)
+  const [audit, setAudit] = useState<AuditReport | null>(null)
+  const [evidence, setEvidence] = useState<EvidenceReport | null>(null)
+  const evidenceRequest = useRef(0)
+  const [archiveError, setArchiveError] = useState('')
   const [pending, setPending] = useState<number>(0)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -38,7 +50,7 @@ export default function GovernanceDashboard() {
       if (m.status === 'fulfilled') setMetrics(m.value as MetricsReport)
       if (h.status === 'fulfilled') setHalted(!!(h.value as { global?: boolean } | null)?.global)
       if (rb.status === 'fulfilled') setRollbacks((rb.value as Rollback[] | null) || [])
-      if (av.status === 'fulfilled') setAuditIntact(!!(av.value as { intact?: boolean } | null)?.intact)
+      setAudit(av.status === 'fulfilled' ? av.value as AuditReport : null)
       if (ap.status === 'fulfilled') setPending(unwrapList(ap.value, 'requests').length)
     } finally {
       setLoading(false)
@@ -50,6 +62,28 @@ export default function GovernanceDashboard() {
     const id = setInterval(load, 10000)
     return () => clearInterval(id)
   }, [load])
+
+  const loadEvidence = useCallback(async () => {
+    const id = ++evidenceRequest.current
+    try {
+      const result = await api.getAuditEvidence() as EvidenceReport
+      if (id === evidenceRequest.current) setEvidence(result)
+    } catch { if (id === evidenceRequest.current) setEvidence({ status: 'unavailable' }) }
+  }, [])
+  useEffect(() => {
+    const request = evidenceRequest
+    void Promise.resolve().then(loadEvidence)
+    const interval = setInterval(loadEvidence, 60000)
+    return () => { clearInterval(interval); request.current++ }
+  }, [loadEvidence])
+
+  const archiveAudit = async () => {
+    if (!window.confirm(t('govDash.archiveConfirm'))) return
+    setBusy(true); setArchiveError('')
+    try { await api.archiveAudit(); await loadEvidence() }
+    catch { setArchiveError(t('govDash.archiveFailed')) }
+    finally { setBusy(false) }
+  }
 
   const toggleHalt = async () => {
     setBusy(true)
@@ -73,7 +107,7 @@ export default function GovernanceDashboard() {
         title={t('nav.govDashboard').toUpperCase()}
         description={t('govDash.subtitle')}
         actions={
-          <button className="btn btn-secondary" onClick={load} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button className="btn btn-secondary" onClick={() => { void load(); void loadEvidence() }} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {loading ? <RefreshCw size={14} className="animate-spin" /> : <RefreshCw size={14} />}
             {t('common.refresh').toUpperCase()}
           </button>
@@ -249,37 +283,35 @@ export default function GovernanceDashboard() {
             <span className="badge badge-neutral" style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>SHA-256 HASH CHAIN</span>
           </div>
           <div style={{ padding: '20px 18px' }}>
-            {auditIntact === null ? (
-              <span style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>—</span>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{
-                  width: 36,
-                  height: 36,
-                  border: `1px solid ${auditIntact ? 'var(--accent-border)' : 'rgba(239, 68, 68, 0.4)'}`,
-                  background: auditIntact ? 'var(--accent-dim)' : 'var(--red-dim)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: auditIntact ? 'var(--accent)' : 'var(--red)',
-                }}>
-                  {auditIntact ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
-                </div>
-                <div>
-                  <div style={{
-                    fontSize: 14,
-                    fontWeight: 700,
-                    letterSpacing: '0.04em',
-                    color: auditIntact ? 'var(--accent)' : 'var(--red)',
-                  }}>
-                    {auditIntact ? t('govDash.chainIntact').toUpperCase() : t('govDash.chainBroken').toUpperCase()}
-                  </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>
-                    {auditIntact ? 'Cryptographic audit signatures validated.' : 'Hash mismatch detected in audit log.'}
-                  </div>
-                </div>
-              </div>
-            )}
+            <div role="status" style={{ color: audit?.status === 'broken' ? 'var(--red)' : 'var(--text-primary)' }}>
+              <strong>{t(`govDash.auditStatus.${audit?.status || 'unavailable'}`)}</strong>
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('govDash.localScope')}</p>
+            {audit && <>
+              <p>{t('govDash.auditCounts', { total: audit.total_rows, verified: audit.verified_rows, payload: audit.payload_mismatches, links: audit.link_mismatches })}</p>
+              {audit.first_broken_row_id !== null && <p>{t('govDash.firstAnomaly', { id: audit.first_broken_row_id })}</p>}
+              {(audit.unsigned_rows + audit.legacy_rows + audit.unsupported_rows > 0) && <p>{t('govDash.unverifiedCounts', { unsigned: audit.unsigned_rows, legacy: audit.legacy_rows, unsupported: audit.unsupported_rows })}</p>}
+              {audit.issues.length > 0 && <details>
+                <summary>{t('govDash.anomalyDetails', { count: audit.affected_rows })}</summary>
+                <table className="data-table">
+                  <thead><tr><th>ID</th><th>{t('govDash.auditAction')}</th><th>{t('govDash.auditReason')}</th></tr></thead>
+                  <tbody>{audit.issues.map(issue => <tr key={issue.row_id}>
+                    <td>{issue.row_id}</td><td>{issue.action}</td>
+                    <td>{issue.reasons.map(reason => t(`govDash.auditReasons.${reason}`)).join(' · ')}</td>
+                  </tr>)}</tbody>
+                </table>
+                {audit.issues_truncated && <p>{t('govDash.truncatedIssues')}</p>}
+              </details>}
+            </>}
+            <h3 style={{ fontSize: 14, marginTop: 24 }}>{t('govDash.externalEvidence')}</h3>
+            <p role="status">{t(`govDash.evidenceStatus.${evidence?.status || 'checking'}`)}</p>
+            {evidence?.archived_rows !== undefined && <p>{t('govDash.evidenceCounts', { archived: evidence.archived_rows, pending: evidence.unarchived_rows, mismatches: evidence.mismatch_count })}</p>}
+            <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('govDash.externalScope')}</p>
+            <PermissionButton permission="settings:write" className="btn" disabled={!audit?.fully_verified || busy} onClick={archiveAudit}>
+              {t('govDash.archiveAudit')}
+            </PermissionButton>
+            {archiveError && <p role="alert">{archiveError}</p>}
+
           </div>
         </div>
 

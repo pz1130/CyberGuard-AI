@@ -3,7 +3,11 @@ import { useContext, useState, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import ReactMarkdown from 'react-markdown'
-import { Send, Plus, X, Check, Edit2, Trash2, Settings, Paperclip, Image as ImageIcon, FileText } from 'lucide-react'
+import {
+  Send, Plus, X, Check, Edit2, Trash2, Settings, Paperclip,
+  Image as ImageIcon, FileText, MessageSquare, PanelLeftClose,
+  PanelLeftOpen, AlertTriangle,
+} from 'lucide-react'
 import { useSearch } from '../context/search'
 import { errorMessage } from '../lib/errorMessage'
 import { splitReasoningContent } from '../lib/splitReasoningContent'
@@ -168,7 +172,7 @@ export default function Chat() {
   const activeConv = conversations.find(c => c.id === activeConvId)
   const [editingConvId, setEditingConvId] = useState<number | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
-  const [showConvPanel, setShowConvPanel] = useState(true)
+  const [showConvPanel, setShowConvPanel] = useState(() => window.innerWidth > 900)
 
   // Per-conversation settings
   const [showConvSettings, setShowConvSettings] = useState(false)
@@ -444,7 +448,7 @@ export default function Chat() {
       setMessages(prev => [...prev, assistantMsg])
       // Backend handles conversation persistence + auto-title
     } else if (task?.status === 'failed') {
-      const errMsg = `⚠ TASK FAILED — ${task.error_message || 'UNKNOWN ERROR'}`
+      const errMsg = `⚠ TASK FAILED: ${task.error_message || 'UNKNOWN ERROR'}`
       setMessages(prev => [...prev, { role: 'assistant', content: errMsg, created_at: new Date().toISOString() }])
     } else {
       setMessages(prev => [...prev, { role: 'assistant', content: '⚠ TASK TIMED OUT', created_at: new Date().toISOString() }])
@@ -592,9 +596,9 @@ export default function Chat() {
           const updated = [...prev]
           const last = updated[updated.length - 1]
           if (last?.role === 'assistant' && !last.content) {
-            updated[updated.length - 1] = { ...last, content: `⚠ STREAM ERROR — ${errorMessage(e) || 'CONNECTION FAILED'}` }
+            updated[updated.length - 1] = { ...last, content: `⚠ STREAM ERROR: ${errorMessage(e) || 'CONNECTION FAILED'}` }
           } else {
-            updated.push({ role: 'assistant', content: `⚠ STREAM ERROR — ${errorMessage(e) || 'CONNECTION FAILED'}`, created_at: new Date().toISOString() })
+            updated.push({ role: 'assistant', content: `⚠ STREAM ERROR: ${errorMessage(e) || 'CONNECTION FAILED'}`, created_at: new Date().toISOString() })
           }
           return updated
         })
@@ -630,7 +634,7 @@ export default function Chat() {
 
         startPolling(taskId, 'PROCESSING...')
       } catch (e: unknown) {
-        setMessages(prev => [...prev, { role: 'assistant', content: `⚠ SYSTEM ERROR — ${errorMessage(e) || 'TRANSMISSION FAILURE'}`, created_at: new Date().toISOString() }])
+        setMessages(prev => [...prev, { role: 'assistant', content: `⚠ SYSTEM ERROR: ${errorMessage(e) || 'TRANSMISSION FAILURE'}`, created_at: new Date().toISOString() }])
         setLoading(false)
         setPollingStatus('')
       }
@@ -665,20 +669,17 @@ export default function Chat() {
   }
 
   return (
-    <div className="chat-page" style={{ display: 'flex', height: 'calc(100vh - var(--header-height) - 48px)', gap: 0 }}>
+    <div className="chat-page">
       {/* Conversation sidebar */}
       {showConvPanel && (
-        <div style={{
-          width: 240, flexShrink: 0, borderRight: '1px solid var(--border)',
+        <div className="chat-history-panel" style={{
+          flexShrink: 0, borderRight: '1px solid var(--border)',
           display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)',
         }}>
-          <div style={{ padding: '0 14px', height: 44, flexShrink: 0, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', fontFamily: 'var(--font-sans)', fontWeight: 600, textTransform: 'uppercase' }}>{t('chat.history').toUpperCase()}</span>
-            <button onClick={createConversation} style={{ padding: 4, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', borderRadius: 0 }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent-dim)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'none')}
-            >
-              <Plus size={14} />
+          <div className="chat-history-header">
+            <span>{t('chat.history')}</span>
+            <button onClick={createConversation} className="chat-history-add" aria-label={t('chat.newChat')} title={t('chat.newChat')}>
+              <Plus size={16} />
             </button>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: '6px 6px' }}>
@@ -743,25 +744,41 @@ export default function Chat() {
 
       {/* Main Chat Area */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        {/* Toolbar */}
+        <div className="chat-workspace-header">
+          <div className="chat-workspace-title">
+            <button
+              onClick={() => setShowConvPanel(p => !p)}
+              className="chat-panel-toggle"
+              aria-label={showConvPanel ? 'Hide conversation history' : 'Show conversation history'}
+              title={showConvPanel ? 'Hide conversation history' : 'Show conversation history'}
+            >
+              {showConvPanel ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}
+            </button>
+            <span className="chat-workspace-icon"><MessageSquare size={16} /></span>
+            <div>
+              <h1>{activeConv?.title || t('chat.newChat')}</h1>
+              <p>{t('chat.workspaceSubtitle')}</p>
+            </div>
+          </div>
+          {activeConvId && (
+            <div className="chat-workspace-actions">
+              <button
+                onClick={() => setShowConvSettings(s => !s)}
+                className={`chat-action-btn ${showConvSettings ? 'active' : ''}`}>
+                <Settings size={14} /> {t('chat.session')}
+              </button>
+              <button onClick={clearChat} className="chat-action-btn">
+                {t('chat.clear')}
+              </button>
+            </div>
+          )}
+        </div>
+
         <div className="chat-toolbar">
-          {/* Sidebar toggle */}
-          <button onClick={() => setShowConvPanel(p => !p)} style={{
-            padding: 5, color: showConvPanel ? 'var(--accent)' : 'var(--text-dim)',
-            background: 'none', border: 'none', cursor: 'pointer',
-            display: 'flex', alignItems: 'center',
-          }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/>
-            </svg>
-          </button>
-
-          <div className="chat-toolbar-separator" />
-
-          {/* MODE group */}
           <div className="chat-toolbar-group">
-            <span className="chat-toolbar-label">MODE</span>
+            <label className="chat-toolbar-label" htmlFor="chat-mode">{t('chat.mode')}</label>
             <select
+              id="chat-mode"
               value={chatMode}
               onChange={e => {
                 const m = e.target.value as 'normal' | 'fast' | 'expert'
@@ -778,32 +795,26 @@ export default function Chat() {
             </select>
           </div>
 
-          <div className="chat-toolbar-separator" />
-
-          {masterReady === false && !selectedAgentId && providerModel === 'auto' && <span role="status" style={{ color: 'var(--amber)', fontSize: 12 }}>{t('chat.masterSetupRequired')}</span>}
-          {/* MODEL group */}
           <div className="chat-toolbar-group">
-            <span className="chat-toolbar-label">MODEL</span>
+            <label className="chat-toolbar-label" htmlFor="chat-model">{t('chat.model')}</label>
             <select value={providerModel} onChange={e => { localStorage.setItem('lastProviderModel', e.target.value); setProviderModel(e.target.value) }}
+              id="chat-model"
               className="chat-settings-select"
               aria-label="Model"
               style={{ width: 'auto', minWidth: 140, maxWidth: 260, height: 30, fontSize: 12 }}
-              title={availableModels.length === 0 ? 'No verified models — go to Providers and click TEST' : undefined}
+              title={availableModels.length === 0 ? t('chat.noVerifiedModels') : undefined}
             >
               <option value="auto">{masterReady === false ? t('chat.autoUnconfigured') : 'AUTO (Master pair)'}</option>
               {availableModels.map(m => <option key={`${m.provider_id}:${m.model}`} value={`${m.provider_id}:${m.model}`}>{m.provider_name} / {m.model}</option>)}
             </select>
             {availableModels.length === 0 && (
-              <span style={{ fontSize: 10, color: 'var(--text-dim)', letterSpacing: '0.06em' }}>no verified models</span>
+              <span className="chat-model-status">{t('chat.noModelsShort')}</span>
             )}
           </div>
-
-          <div className="chat-toolbar-separator" />
-
-          {/* AGENT group */}
           <div className="chat-toolbar-group">
-            <span className="chat-toolbar-label">AGENT</span>
+            <label className="chat-toolbar-label" htmlFor="chat-agent">{t('chat.agent')}</label>
             <select
+              id="chat-agent"
               value={selectedAgentId}
               onChange={e => {
                 const v = e.target.value
@@ -826,27 +837,24 @@ export default function Chat() {
                 const suffix = isInternal ? 'INTERNAL' : (a.backend_type || 'CUSTOM').toUpperCase()
                 return (
                   <option key={a.id} value={a.id}>
-                    {a.agent_name} · {suffix}
+                    {a.agent_name} - {suffix}
                   </option>
                 )
               })}
             </select>
           </div>
 
-          {/* Spacer + Actions */}
-          {activeConvId && (
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-              <button
-                onClick={() => setShowConvSettings(s => !s)}
-                className={`chat-action-btn ${showConvSettings ? 'active' : ''}`}>
-                <Settings size={12} /> SESSION
-              </button>
-              <button onClick={clearChat} className="chat-action-btn">
-                CLEAR
-              </button>
-            </div>
-          )}
         </div>
+
+        {masterReady === false && !selectedAgentId && providerModel === 'auto' && (
+          <div className="chat-readiness-alert" role="status">
+            <AlertTriangle size={17} />
+            <div>
+              <strong>{t('chat.setupRequiredTitle')}</strong>
+              <span>{t('chat.masterSetupRequired')}</span>
+            </div>
+          </div>
+        )}
 
         {/* Session Settings Panel */}
         {showConvSettings && activeConvId && (
@@ -857,7 +865,7 @@ export default function Chat() {
                 value={convSettings.knowledge_base_id ?? ''}
                 onChange={e => setConvSettings(s => ({ ...s, knowledge_base_id: e.target.value ? Number(e.target.value) : null }))}
                 className="chat-settings-select">
-                <option value="">— None —</option>
+                <option value="">None</option>
                 {availableKBs.map(kb => <option key={kb.id} value={kb.id}>{kb.name}</option>)}
               </select>
             </div>
@@ -881,10 +889,10 @@ export default function Chat() {
                       setConvSettings(s => ({ ...s, system_prompt_override: tpl.content }))
                       e.target.value = ''
                     }}
-                    title={promptTemplates.length === 0 ? 'No templates — create one under Prompt Templates' : 'Pick a saved prompt template'}
+                    title={promptTemplates.length === 0 ? 'No templates. Create one under Prompt Templates.' : 'Pick a saved prompt template'}
                     className="chat-settings-select"
                     style={{ width: 'auto', minWidth: 180, height: 28, fontSize: 12 }}>
-                    <option value="">— Select template —</option>
+                    <option value="">Select template</option>
                     {promptTemplates.filter(t => t.category === 'system' || t.category === 'general').map(t => (
                       <option key={t.id} value={t.id}>{t.name}{t.category === 'general' ? ' (general)' : ''}</option>
                     ))}
@@ -962,8 +970,12 @@ export default function Chat() {
             </div>
           ) : messages.length === 0 ? (
             <div className="chat-empty">
-              <div style={{ fontSize: 36, opacity: 0.2, color: 'var(--accent)' }}>⬡</div>
-              <div className="chat-empty-text" style={{ opacity: 0.6 }}>READY — SEND A MESSAGE</div>
+              <div className="chat-empty-icon"><MessageSquare size={28} /></div>
+              <div className="chat-empty-copy">
+                <span className="sr-only">READY</span>
+                <div className="chat-empty-title">{t('chat.emptyTitle')}</div>
+                <div className="chat-empty-text">{t('chat.emptyBody')}</div>
+              </div>
             </div>
           ) : (
             messages.map((msg, i) => (

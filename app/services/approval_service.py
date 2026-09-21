@@ -9,7 +9,7 @@ import json
 import logging
 from datetime import timedelta
 from typing import Optional
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
@@ -22,8 +22,32 @@ _APPROVAL_CHANNEL_PREFIX = "approval:"
 _POLL_INTERVAL = 2.0  # seconds between DB poll fallback
 
 
+class ApprovalExpiredError(ValueError):
+    pass
+
+
+class SelfApprovalError(ValueError):
+    pass
+
+
 class ApprovalService:
     """Service for managing human-in-the-loop approval requests."""
+
+    @staticmethod
+    async def expire_pending(request_id: Optional[str] = None) -> int:
+        """Persist elapsed deadlines; the conditional update cannot undo decisions."""
+        query = update(ApprovalRequest).where(
+            ApprovalRequest.status == "pending",
+            ApprovalRequest.expires_at <= utc_now(),
+        ).values(status="expired").returning(ApprovalRequest.request_id)
+        if request_id is not None:
+            query = query.where(ApprovalRequest.request_id == request_id)
+        async with AsyncSessionLocal() as session:
+            expired = list((await session.execute(query)).scalars().all())
+            await session.commit()
+        for rid in expired:
+            await ApprovalService._publish(rid, "expired")
+        return len(expired)
 
     @staticmethod
     async def create_request(
@@ -151,7 +175,10 @@ class ApprovalService:
 
         if settings.AUTO_APPROVE:
             logger.info(f"[approval] AUTO_APPROVE — auto-approving request_id={request_id}")
-            await ApprovalService.decide(request_id, "approved", approver_id=0, comment="Auto-approved by system")
+            try:
+                await ApprovalService.decide(request_id, "approved", approver_id=0, comment="Auto-approved by system")
+            except ApprovalExpiredError:
+                return "expired", None
             return "approved", "Auto-approved by system"
 
         deadline = asyncio.get_event_loop().time() + timeout_seconds
@@ -170,9 +197,11 @@ class ApprovalService:
             while True:
                 remaining = deadline - asyncio.get_event_loop().time()
                 if remaining <= 0:
+                    await ApprovalService.expire_pending(request_id)
                     return "expired", None
 
                 # DB poll — authoritative source of truth
+                await ApprovalService.expire_pending(request_id)
                 async with AsyncSessionLocal() as session:
                     result = await session.execute(
                         select(ApprovalRequest).where(
@@ -181,7 +210,7 @@ class ApprovalService:
                     )
                     record = result.scalar_one_or_none()
 
-                if record and record.status in ("approved", "rejected"):
+                if record and record.status in ("approved", "rejected", "expired", "cancelled"):
                     return record.status, record.approver_comment
 
                 # Wait for pub/sub message or poll interval (whichever comes first)
@@ -219,7 +248,7 @@ class ApprovalService:
                 select(ApprovalRequest).where(
                     ApprovalRequest.request_id == request_id,
                     ApprovalRequest.status == "pending",
-                )
+                ).with_for_update()
             )
             record = result.scalar_one_or_none()
 
@@ -228,6 +257,17 @@ class ApprovalService:
 
             if decision not in ("approved", "rejected"):
                 raise ValueError(f"Invalid decision: {decision}. Must be 'approved' or 'rejected'.")
+
+            if record.user_id == approver_id:
+                raise SelfApprovalError(
+                    "Requester cannot approve or reject their own request"
+                )
+
+            if record.expires_at is not None and record.expires_at <= utc_now():
+                record.status = "expired"
+                await session.commit()
+                await ApprovalService._publish(request_id, "expired")
+                raise ApprovalExpiredError(f"Approval request {request_id} has expired")
 
             record.status = decision
             record.approver_id = approver_id
@@ -246,6 +286,7 @@ class ApprovalService:
     @staticmethod
     async def list_pending() -> list[ApprovalRequest]:
         """List all pending approval requests, newest first."""
+        await ApprovalService.expire_pending()
         async with AsyncSessionLocal() as session:
             result = await session.execute(
                 select(ApprovalRequest)
@@ -256,6 +297,7 @@ class ApprovalService:
 
     @staticmethod
     async def get_by_id(approval_id: int) -> Optional[ApprovalRequest]:
+        await ApprovalService.expire_pending()
         async with AsyncSessionLocal() as session:
             result = await session.execute(
                 select(ApprovalRequest).where(ApprovalRequest.id == approval_id)
@@ -264,6 +306,7 @@ class ApprovalService:
 
     @staticmethod
     async def get_by_request_id(request_id: str) -> Optional[ApprovalRequest]:
+        await ApprovalService.expire_pending(request_id)
         async with AsyncSessionLocal() as session:
             result = await session.execute(
                 select(ApprovalRequest).where(ApprovalRequest.request_id == request_id)

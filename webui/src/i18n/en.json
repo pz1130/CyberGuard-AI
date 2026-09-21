@@ -250,10 +250,10 @@
     "refresh": "Refresh",
     "customProvider": "CUSTOM PROVIDER",
     "searchPh": "Search providers…",
-    "configuredCount": "Configured · {count}",
+    "configuredCount": "Configured · {{count}}",
     "noMatch": "No matching providers",
     "groupId": "Group ID",
-    "groupIdHint": "Required for MiniMax CN embeddings (api.minimaxi.com). International (api.minimax.io) can leave this blank.",
+    "groupIdHint": "Required for MiniMax CN embeddings (api.minimax.cn). International (api.minimax.io) can leave this blank.",
     "minimaxEmbedHint": "Chat uses /v1/chat/completions. Embeddings use native embo-01 (not OpenAI /embeddings). Keep embo-01 typed as embedding.",
     "minimaxChatNotEmbed": "{{name}} is a MiniMax chat model and cannot produce embeddings. Use embo-01 with type embedding."
   },
@@ -475,6 +475,17 @@
   "chat": {
     "autoUnconfigured": "AUTO (setup required)",
     "masterSetupRequired": "AUTO requires a provider and model in Settings → Master Agent. You can also select a verified model here.",
+    "setupRequiredTitle": "Connect a model to start chatting",
+    "workspaceSubtitle": "Governed AI workspace",
+    "mode": "Mode",
+    "model": "Model",
+    "agent": "Agent",
+    "session": "Session",
+    "clear": "Clear",
+    "noVerifiedModels": "No verified models. Open AI Provider and test a model first.",
+    "noModelsShort": "No verified models",
+    "emptyTitle": "How can CyberGuard help?",
+    "emptyBody": "Ask about an alert, investigate evidence, or plan a controlled response.",
     "title": "Chat",
     "awaitingApproval": "AWAITING APPROVAL",
     "awaitingApprovalNotice": "⏸ This task triggered a high-risk action and is paused for human approval. Decide it on the Approvals page — the answer resumes automatically once approved.",
@@ -559,6 +570,7 @@
     "activeInChat": "Active (shown in Chat picker)"
   },
   "approvals": {
+    "viewDetails": "View approval details",
     "title": "Approvals",
     "proposedCode": "Proposed code",
     "proposedCodeHint": "This program will run in an isolated sandbox with no network access.",
@@ -609,6 +621,43 @@
     "aboutDesc": "Governed AI for security operations · MCP tool protocol · Knowledge base RAG · Full audit trail"
   },
   "govDash": {
+    "localScope": "Checks hashes in the current database snapshot. This does not prove authenticity or detect deletion of an unarchived tail.",
+    "auditCounts": "{{verified}} of {{total}} rows fully validated · Content mismatches: {{payload}} · Broken links: {{links}}",
+    "firstAnomaly": "First anomaly: record {{id}}",
+    "unverifiedCounts": "Unsigned: {{unsigned}} · Legacy: {{legacy}} · Unsupported version: {{unsupported}}",
+    "anomalyDetails": "Inspect {{count}} affected records",
+    "auditAction": "Action",
+    "auditReason": "Reason",
+    "truncatedIssues": "Showing the first 100 affected records. Counts cover the whole snapshot.",
+    "externalEvidence": "External immutable evidence",
+    "externalScope": "Checks stored versions, retained COMPLIANCE locks and archived content against the database. Only covered records are protected; use independently controlled storage for an independent trust boundary.",
+    "evidenceCounts": "Archived rows: {{archived}} · Unarchived rows: {{pending}} · Differences: {{mismatches}}",
+    "archiveAudit": "Archive verified records",
+    "archiveConfirm": "Archive verified records with 365 days of immutable retention? Retained object versions cannot be deleted during that period.",
+    "archiveFailed": "Archive blocked or storage could not be verified. Review the integrity and external evidence checks.",
+    "auditStatus": {
+        "verified": "Local hashes consistent",
+        "broken": "Audit anomalies detected",
+        "partial": "Only partially verifiable",
+        "empty": "No audit records",
+        "unavailable": "Audit check unavailable"
+    },
+    "auditReasons": {
+        "link_mismatch": "Previous-record link differs",
+        "payload_mismatch": "Record content differs from its stored hash"
+    },
+    "evidenceStatus": {
+        "checking": "Checking external evidence…",
+        "verified": "Archived records match and retention locks verified",
+        "not_configured": "External storage not configured",
+        "no_archives": "No immutable archives found",
+        "partial": "External verification incomplete",
+        "unprotected": "Immutable retention not confirmed",
+        "mismatch": "Archived evidence differs from the database",
+        "unavailable": "External evidence unavailable",
+        "bucket_missing": "Audit archive bucket not found",
+        "permission_denied": "Permission to read external evidence denied"
+    },
     "subtitle": "Runtime governance: metrics, kill switch, rollbacks, audit integrity",
     "pocMetrics": "POC Success Metrics",
     "allPass": "ALL PASS",
@@ -630,11 +679,11 @@
     "revert": "Revert",
     "confirmRollback": "Trigger this rollback now?",
     "metric": {
-      "governance_violation_rate": "Governance violations",
-      "human_override_rate": "Human override rate",
-      "kill_switch_response_seconds": "Kill-switch response",
-      "audit_completeness": "Audit completeness",
-      "rollback_success_rate": "Rollback success"
+        "governance_violation_rate": "Governance violations",
+        "human_override_rate": "Human override rate",
+        "kill_switch_response_seconds": "Kill-switch response",
+        "audit_completeness": "Local audit verification",
+        "rollback_success_rate": "Rollback success"
     }
-  }
+}
 }

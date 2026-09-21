@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '../api/client'
@@ -89,5 +89,30 @@ describe('Approvals row layout', () => {
 
     const buttons = screen.getByTitle('APPROVE').parentElement as HTMLElement
     expect(buttons.style.flexShrink).toBe('0')
+  })
+
+  it('disables decisions for elapsed pending requests', async () => {
+    const decide = vi.spyOn(api, 'decideApproval')
+    render(<Approvals />)
+    const approve = await screen.findByTitle('APPROVE') as HTMLButtonElement
+    expect(approve.disabled).toBe(true)
+    expect((screen.getByTitle('REJECT') as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText('EXPIRED')).toBeTruthy()
+    fireEvent.click(approve)
+    expect(decide).not.toHaveBeenCalled()
+  })
+
+  it('opens and closes the actual task payload through the details button', async () => {
+    vi.mocked(api.getApprovals).mockResolvedValue({ requests: [{ ...PENDING,
+      payload: { user_input: 'review this task', task_plan: ['inspect only'] },
+    }], total: 1 } as never)
+    render(<Approvals />)
+    await screen.findByText('AGENT_EXECUTION')
+    const toggle = screen.getAllByRole('button').find(b => b.hasAttribute('aria-expanded'))!
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('region').textContent).toContain('inspect only')
+    fireEvent.click(toggle)
+    expect(screen.queryByRole('region')).toBeNull()
   })
 })

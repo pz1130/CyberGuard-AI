@@ -104,6 +104,20 @@ async def test_decide_rejected_updates_record(cleanup_ids):
     assert updated.decided_at is not None
 
 
+@pytest.mark.parametrize("decision", ["approved", "rejected"])
+async def test_requester_cannot_decide_own_request(cleanup_ids, decision):
+    from app.services.approval_service import SelfApprovalError
+
+    rid, _ = await _create(cleanup_ids, user_id=7)
+    with pytest.raises(SelfApprovalError):
+        await ApprovalService.decide(rid, decision, approver_id=7)
+
+    record = await ApprovalService.get_by_request_id(rid)
+    assert record.status == "pending"
+    assert record.approver_id is None
+    assert record.decided_at is None
+
+
 async def test_decide_invalid_decision_raises(cleanup_ids):
     rid, _ = await _create(cleanup_ids)
     with pytest.raises(ValueError, match="Invalid decision"):
@@ -119,7 +133,7 @@ async def test_decide_unknown_request_raises():
 
 async def test_decide_twice_raises(cleanup_ids):
     rid, _ = await _create(cleanup_ids)
-    await ApprovalService.decide(rid, "approved", approver_id=1)
+    await ApprovalService.decide(rid, "approved", approver_id=7)
     # Second decision finds no *pending* row → ValueError
     with pytest.raises(ValueError, match="No pending approval request"):
         await ApprovalService.decide(rid, "rejected", approver_id=2)
@@ -135,3 +149,51 @@ async def test_wait_for_decision_auto_approves(cleanup_ids, monkeypatch):
     assert comment == "Auto-approved by system"
     # DB reflects the auto-decision
     assert (await ApprovalService.get_by_request_id(rid)).status == "approved"
+
+
+async def test_expired_request_cannot_be_decided_even_without_cleanup(cleanup_ids):
+    from app.services.approval_service import ApprovalExpiredError
+    rid, _ = await _create(cleanup_ids, expires_in_minutes=-1)
+    with pytest.raises(ApprovalExpiredError):
+        await ApprovalService.decide(rid, 'approved', approver_id=7)
+    record = await ApprovalService.get_by_request_id(rid)
+    assert record.status == 'expired'
+    assert record.approver_id is None and record.decided_at is None
+
+
+async def test_expiry_cleanup_keeps_live_and_decided_requests(cleanup_ids):
+    from datetime import timedelta
+    from sqlalchemy import update
+    from app.core.time import utc_now
+    old, _ = await _create(cleanup_ids, expires_in_minutes=-1)
+    live, _ = await _create(cleanup_ids)
+    indefinite, _ = await _create(cleanup_ids, expires_in_minutes=None)
+    decided, _ = await _create(cleanup_ids)
+    await ApprovalService.decide(decided, 'approved', approver_id=7)
+    async with AsyncSessionLocal() as session:
+        await session.execute(update(ApprovalRequest).where(
+            ApprovalRequest.request_id == decided).values(expires_at=utc_now()-timedelta(minutes=1)))
+        await session.commit()
+    await ApprovalService.expire_pending()
+    pending = {r.request_id for r in await ApprovalService.list_pending()}
+    assert old not in pending and live in pending and indefinite in pending
+    assert (await ApprovalService.get_by_request_id(decided)).status == 'approved'
+
+
+async def test_wait_returns_expired_without_waiting_full_timeout(cleanup_ids, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, 'AUTO_APPROVE', False)
+    rid, _ = await _create(cleanup_ids, expires_in_minutes=-1)
+    assert await ApprovalService.wait_for_decision(rid, timeout_seconds=30) == ('expired', None)
+
+
+async def test_two_concurrent_decisions_allow_only_one(cleanup_ids):
+    import asyncio
+    rid, _ = await _create(cleanup_ids)
+    results = await asyncio.gather(
+        ApprovalService.decide(rid, 'approved', approver_id=7),
+        ApprovalService.decide(rid, 'rejected', approver_id=8),
+        return_exceptions=True,
+    )
+    assert sum(isinstance(r, ApprovalRequest) for r in results) == 1
+    assert sum(isinstance(r, ValueError) for r in results) == 1

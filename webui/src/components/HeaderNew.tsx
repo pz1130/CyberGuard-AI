@@ -198,7 +198,7 @@ export default function HeaderNew({
       </div>
 
       {/* Search trigger (centered) */}
-      <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+      <div className="header-search" style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
         <button
           onClick={onSearchOpen}
           aria-label="Open search"

@@ -117,15 +117,12 @@ async def export_audit_logs_syslog(
     return {"sent": sent, "total": len(logs), "protocol": body.protocol}
 
 
-from app.core.audit import verify_chain
-
-
 @router.get("/audit/verify")
 async def audit_verify(
     _=Depends(require_permission(Permission.AUDIT_READ)),
 ):
-    ok, broken_at = await verify_chain()
-    return {"intact": ok, "first_broken_row_id": broken_at}
+    from app.services.audit_integrity import inspect_chain
+    return await inspect_chain()
 
 
 from app.services.audit_worm import export_new
@@ -133,10 +130,24 @@ from app.services.audit_worm import export_new
 
 @router.post("/audit/worm-export")
 async def audit_worm_export(
-    retain_days: int = 365,
-    _=Depends(require_permission(Permission.AUDIT_READ)),
+    retain_days: int = Query(365, ge=1, le=3650),
+    _=Depends(require_permission(Permission.SETTINGS_WRITE)),
 ):
-    return await export_new(retain_days=retain_days)
+    from app.services.audit_worm import AuditExportBlocked
+    try:
+        return await export_new(retain_days=retain_days)
+    except AuditExportBlocked as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("Audit WORM export failed")
+        raise HTTPException(status_code=503, detail="Audit archive storage could not be verified")
+
+
+@router.get("/audit/evidence")
+async def audit_evidence(_=Depends(require_permission(Permission.AUDIT_READ))):
+    from app.services.audit_worm import verify_external_evidence
+    return await verify_external_evidence()
 
 
 @router.get("/audit/conversation-search")

@@ -177,6 +177,7 @@ export default function App() {
         >
           <SidebarNew tab={allowedTab} setTab={handleSetTab} />
           <main
+            className="app-main"
             style={{
               flex: 1,
               overflowY: 'auto',

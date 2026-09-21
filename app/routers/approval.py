@@ -18,7 +18,11 @@ from app.schemas.approval import (
     ApprovalDecision,
     ApprovalListResponse,
 )
-from app.services.approval_service import ApprovalService
+from app.services.approval_service import (
+    ApprovalService,
+    ApprovalExpiredError,
+    SelfApprovalError,
+)
 
 router = APIRouter()
 
@@ -67,6 +71,7 @@ async def list_approvals(
     session: AsyncSession = Depends(get_db_session),
 ):
     """List approval requests (approval permission required). ?status_filter=pending|approved|rejected|all"""
+    await ApprovalService.expire_pending()
     query = select(ApprovalRequest).order_by(ApprovalRequest.created_at.desc())
     if status_filter != "all":
         query = query.where(ApprovalRequest.status == status_filter)
@@ -210,6 +215,22 @@ async def decide_approval(
             approver_id=current_user.user_id,
             comment=body.comment,
         )
+    except SelfApprovalError as e:
+        from app.core.audit import record_action
+        await record_action(
+            user_id=current_user.user_id,
+            action="approval.decide.denied",
+            human_reviewer=str(current_user.user_id),
+            risk_tier=record.risk_level,
+            input_data={
+                "request_id": record.request_id,
+                "decision": body.decision,
+            },
+            output_data={"status": "denied", "reason": "self_approval"},
+        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    except ApprovalExpiredError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
