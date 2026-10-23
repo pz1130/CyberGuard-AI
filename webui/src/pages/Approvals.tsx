@@ -47,8 +47,12 @@ const STATUS_COLOR: Record<string, string> = {
   cancelled: 'var(--text-dim)',
 }
 
+function utcDate(iso: string) {
+  return new Date(/(Z|[+-]\d{2}:\d{2})$/i.test(iso) ? iso : `${iso}Z`)
+}
+
 function fmt(iso: string) {
-  return new Date(iso).toLocaleString('en-US', {
+  return utcDate(iso).toLocaleString('en-US', {
     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   })
 }
@@ -62,6 +66,12 @@ export default function Approvals() {
   const [deciding, setDeciding] = useState<number | null>(null)
   const [comments, setComments] = useState<Record<number, string>>({})
   const [notice, setNotice] = useState<{ id: number; ok: boolean; msg: string } | null>(null)
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   const load = useCallback(async () => {
     try {
@@ -81,6 +91,7 @@ export default function Approvals() {
   }, [filter, load])
 
   const decide = async (item: ApprovalRequest, decision: 'approved' | 'rejected') => {
+    if (item.expires_at && utcDate(item.expires_at).getTime() <= now) return
     setDeciding(item.id)
     setNotice(null)
     try {
@@ -115,7 +126,7 @@ export default function Approvals() {
       />
 
       {/* Filter tabs */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
         {filters.map(f => (
           <button key={f} onClick={() => setFilter(f)} style={{
             padding: '4px 14px', fontSize: 11, letterSpacing: '0.12em',
@@ -144,11 +155,16 @@ export default function Approvals() {
           {filter === 'pending' ? 'NO PENDING APPROVALS' : 'NO RECORDS'}
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+        <div data-testid="approval-list" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {/* One request per full-width row. As a multi-column card grid, each
+              column was narrower than the row's fixed-width parts, so the title
+              was squeezed to nothing — and a wider window only added columns. */}
           {items.map(item => {
             const risk = item.risk_level as RiskLevel
             const isExpanded = expanded === item.id
             const isPending = item.status === 'pending'
+            const isExpired = isPending && !!item.expires_at && utcDate(item.expires_at).getTime() <= now
+            const displayStatus = isExpired ? 'expired' : item.status
             const isDeciding = deciding === item.id
             const itemNotice = notice?.id === item.id ? notice : null
 
@@ -162,9 +178,14 @@ export default function Approvals() {
                     padding: '12px 16px', cursor: 'pointer',
                   }}
                 >
-                  <span style={{ color: 'var(--text-dim)', flexShrink: 0 }}>
+                  <button type="button"
+                    aria-label={`${t('approvals.viewDetails')} ${item.id}`}
+                    aria-expanded={isExpanded}
+                    aria-controls={`approval-details-${item.id}`}
+                    onClick={e => { e.stopPropagation(); setExpanded(isExpanded ? null : item.id) }}
+                    style={{ color: 'var(--text-dim)', flexShrink: 0, background: 'transparent', border: 0, cursor: 'pointer', padding: 4 }}>
                     {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                  </span>
+                  </button>
                   <span className="item-card-pip" style={{ background: RISK_COLOR[risk] || 'var(--border)' }} />
 
                   {/* Risk badge */}
@@ -190,8 +211,17 @@ export default function Approvals() {
 
                   {/* Action info */}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.06em' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
+                      {/* Truncates like the description below it. Every other
+                          part of this row is flexShrink: 0, so an untruncated
+                          title was the one thing that could overflow — and a
+                          single long token cannot wrap, so it painted over the
+                          status badge and the decision buttons. */}
+                      <span style={{
+                        fontSize: 13, fontWeight: 600, color: 'var(--text-primary)',
+                        letterSpacing: '0.06em', minWidth: 0,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
                         {item.action_type.toUpperCase()}
                       </span>
                       {item.agent_name && (
@@ -212,8 +242,8 @@ export default function Approvals() {
 
                   {/* Status + time */}
                   <div style={{ flexShrink: 0, textAlign: 'right' }}>
-                    <div style={{ fontSize: 11, color: STATUS_COLOR[item.status] || 'var(--text-dim)', letterSpacing: '0.1em' }}>
-                      {item.status.toUpperCase()}
+                    <div style={{ fontSize: 11, color: STATUS_COLOR[displayStatus] || 'var(--text-dim)', letterSpacing: '0.1em' }}>
+                      {displayStatus.toUpperCase()}
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>
                       {fmt(item.created_at)}
@@ -225,7 +255,7 @@ export default function Approvals() {
                     <div style={{ display: 'flex', gap: 6, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
                       <button
                         onClick={() => decide(item, 'approved')}
-                        disabled={isDeciding}
+                        disabled={isDeciding || isExpired}
                         title="APPROVE"
                         style={{
                           width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -237,7 +267,7 @@ export default function Approvals() {
                       </button>
                       <button
                         onClick={() => decide(item, 'rejected')}
-                        disabled={isDeciding}
+                        disabled={isDeciding || isExpired}
                         title="REJECT"
                         style={{
                           width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -253,7 +283,7 @@ export default function Approvals() {
 
                 {/* Expanded detail panel */}
                 {isExpanded && (
-                  <div style={{
+                  <div id={`approval-details-${item.id}`} role="region" aria-label={`${t('approvals.viewDetails')} ${item.id}`} style={{
                     borderTop: '1px solid var(--border)',
                     padding: '14px 16px', background: 'var(--bg-base)',
                   }}>
@@ -328,7 +358,7 @@ export default function Approvals() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                           <button
                             onClick={() => decide(item, 'approved')}
-                            disabled={isDeciding}
+                            disabled={isDeciding || isExpired}
                             style={{
                               display: 'flex', alignItems: 'center', gap: 6,
                               padding: '0 14px', height: 32,
@@ -341,7 +371,7 @@ export default function Approvals() {
                           </button>
                           <button
                             onClick={() => decide(item, 'rejected')}
-                            disabled={isDeciding}
+                            disabled={isDeciding || isExpired}
                             style={{
                               display: 'flex', alignItems: 'center', gap: 6,
                               padding: '0 14px', height: 32,

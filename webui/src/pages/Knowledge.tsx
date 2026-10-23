@@ -1,3 +1,4 @@
+import { PermissionButton } from '../components/PermissionButton'
 import { useState, useEffect, useRef, useContext, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
@@ -125,7 +126,7 @@ function OcrSettingsModal({ open, onClose }: { open: boolean; onClose: () => voi
           <button onClick={onClose} className="btn btn-secondary">
             {t('knowledge.cancel', 'Cancel')}
           </button>
-          <button onClick={save} disabled={saving || loading || !cfg} className="btn btn-primary">
+          <PermissionButton permission="settings:write" onClick={save} disabled={saving || loading || !cfg} className="btn btn-primary">
             {saving ? (
               <>
                 <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
@@ -134,7 +135,7 @@ function OcrSettingsModal({ open, onClose }: { open: boolean; onClose: () => voi
             ) : (
               t('knowledge.save', 'Save')
             )}
-          </button>
+          </PermissionButton>
         </>
       }
     >
@@ -145,7 +146,7 @@ function OcrSettingsModal({ open, onClose }: { open: boolean; onClose: () => voi
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 0, border: '1px solid var(--border)' }}>
             <input
               id="ocr-enabled"
               type="checkbox"
@@ -318,7 +319,7 @@ export default function Knowledge() {
     return () => clearInterval(timer)
   }, [docs, selected, loadDocs])
 
-  const embeddingModels = providers.flatMap(p =>
+  const embeddingModels = providers.filter(providerHasEmbedding).flatMap(p =>
     (p.models || [])
       .filter((m: ModelInfo) => m.model_type === 'embedding')
       .map(m => ({ ...m, providerId: p.id, providerName: p.name })),
@@ -443,16 +444,16 @@ export default function Knowledge() {
               </select>
             </div>
 
-            <button
+            <PermissionButton permission="settings:write"
               onClick={() => setShowOcrModal(true)}
               className="btn btn-secondary"
               style={{ display: 'flex', alignItems: 'center', gap: 6, height: 34 }}
             >
               <Settings2 size={13} />
               {t('knowledge.ocrSettings')}
-            </button>
+            </PermissionButton>
 
-            <button
+            <PermissionButton permission="knowledge:write"
               onClick={() => {
                 const first = embeddingModels[0]
                 setKBForm(f => ({
@@ -468,7 +469,7 @@ export default function Knowledge() {
             >
               <Plus size={13} />
               {t('knowledge.newKb')}
-            </button>
+            </PermissionButton>
           </div>
         }
       />
@@ -488,9 +489,9 @@ export default function Knowledge() {
               <button onClick={() => setShowKBForm(false)} className="btn btn-secondary">
                 {t('knowledge.cancel')}
               </button>
-              <button onClick={submitKB} className="btn btn-primary">
+              <PermissionButton permission="knowledge:write" onClick={submitKB} className="btn btn-primary">
                 {t('knowledge.create')}
-              </button>
+              </PermissionButton>
             </>
           }
         >
@@ -573,7 +574,7 @@ export default function Knowledge() {
               <button onClick={() => setShowTextForm(false)} className="btn btn-secondary">
                 {t('knowledge.cancel')}
               </button>
-              <button onClick={ingestText} disabled={ingesting} className="btn btn-primary">
+              <PermissionButton permission="knowledge:write" onClick={ingestText} disabled={ingesting} className="btn btn-primary">
                 {ingesting ? (
                   <>
                     <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
@@ -582,7 +583,7 @@ export default function Knowledge() {
                 ) : (
                   t('knowledge.import')
                 )}
-              </button>
+              </PermissionButton>
             </>
           }
         >
@@ -643,7 +644,7 @@ export default function Knowledge() {
                       alignItems: 'center',
                       gap: 10,
                       padding: '10px 12px',
-                      borderRadius: 'var(--radius-md)',
+                      borderRadius: 0,
                       border: `1px solid ${isSelected ? 'var(--accent-border)' : 'var(--border)'}`,
                       background: isSelected ? 'var(--accent-dim)' : 'var(--bg-elevated)',
                       cursor: 'pointer',
@@ -686,14 +687,14 @@ export default function Knowledge() {
                         </div>
                       )}
                     </div>
-                    <button
+                    <PermissionButton permission="knowledge:write"
                       onClick={(e) => { e.stopPropagation(); deleteKB(k) }}
                       title={t('common.delete', 'Delete')}
                       className="item-card-icon-btn danger"
                       style={{ flexShrink: 0 }}
                     >
                       <Trash2 size={12} />
-                    </button>
+                    </PermissionButton>
                   </div>
                 )
               })}
@@ -719,7 +720,7 @@ export default function Knowledge() {
               <div style={{
                 width: 48,
                 height: 48,
-                borderRadius: 'var(--radius-lg)',
+                borderRadius: 0,
                 background: 'var(--bg-elevated)',
                 display: 'flex',
                 alignItems: 'center',
@@ -736,13 +737,13 @@ export default function Knowledge() {
                   {t('knowledge.selectKbSubhint')}
                 </div>
               </div>
-              <button
+              <PermissionButton permission="knowledge:write"
                 onClick={() => setShowKBForm(true)}
                 className="btn btn-primary"
                 style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}
               >
                 <Plus size={13} /> {t('knowledge.newKb')}
-              </button>
+              </PermissionButton>
             </div>
           ) : (
             <>
@@ -775,13 +776,13 @@ export default function Knowledge() {
                       </div>
                     )}
                   </div>
-                  <button
+                  <PermissionButton permission="knowledge:write"
                     onClick={() => deleteKB(selected)}
                     className="btn btn-secondary btn-sm"
                     style={{ color: 'var(--red)', borderColor: 'rgba(248, 113, 113, 0.3)', flexShrink: 0 }}
                   >
                     <Trash2 size={12} /> {t('common.delete', 'DELETE')}
-                  </button>
+                  </PermissionButton>
                 </div>
               </div>
 
@@ -846,7 +847,7 @@ export default function Knowledge() {
                           background: 'var(--bg-elevated)',
                           border: '1px solid var(--border)',
                           borderLeft: '3px solid var(--accent)',
-                          borderRadius: 'var(--radius-md)',
+                          borderRadius: 0,
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
@@ -893,21 +894,21 @@ export default function Knowledge() {
                       onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f) }}
                       style={{ display: 'none' }}
                     />
-                    <button
+                    <PermissionButton permission="knowledge:write"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={ingesting}
                       className="btn btn-secondary btn-sm"
                       style={{ display: 'flex', alignItems: 'center', gap: 6 }}
                     >
                       <Upload size={12} /> {t('knowledge.uploadFile')}
-                    </button>
-                    <button
+                    </PermissionButton>
+                    <PermissionButton permission="knowledge:write"
                       onClick={() => setShowTextForm(true)}
                       className="btn btn-primary btn-sm"
                       style={{ display: 'flex', alignItems: 'center', gap: 6 }}
                     >
                       <Plus size={12} /> {t('knowledge.pasteText')}
-                    </button>
+                    </PermissionButton>
                   </div>
                 </div>
 
@@ -922,68 +923,69 @@ export default function Knowledge() {
                     color: 'var(--text-dim)',
                     fontSize: 12,
                     border: '1px dashed var(--border)',
-                    borderRadius: 'var(--radius-md)',
+                    borderRadius: 0,
                     background: 'var(--bg-elevated)',
                   }}>
                     {t('knowledge.noDocs')}
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {docs.map(d => (
-                      <div
-                        key={d.id}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 12,
-                          padding: '12px 14px',
-                          background: 'var(--bg-elevated)',
-                          border: '1px solid var(--border)',
-                          borderRadius: 'var(--radius-md)',
-                          transition: 'border-color var(--transition-fast)',
-                        }}
-                      >
-                        <FileText size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
-                            <span style={{
-                              fontSize: 13,
-                              fontWeight: 500,
-                              color: 'var(--text-primary)',
-                              letterSpacing: '0.02em',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                            }}>
-                              {d.filename}
-                            </span>
-                            {d.status === 'processing' && (
-                              <span className="badge badge-warning" style={{ fontSize: 10, flexShrink: 0 }}>
-                                <Loader2 size={10} style={{ animation: 'spin 1s linear infinite', marginRight: 2 }} />
-                                {t('knowledge.ocrInProgress')}
-                              </span>
-                            )}
-                            {d.status === 'failed' && (
-                              <span title={d.status_detail || ''} className="badge badge-error" style={{ fontSize: 10, flexShrink: 0 }}>
-                                {t('knowledge.failed')}
-                              </span>
-                            )}
-                          </div>
-                          <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>
-                            {d.metadata_json?.chunk_count ?? 0} {t('knowledge.chunks')}
-                            {d.file_size != null && ` · ${(d.file_size / 1024).toFixed(1)} KB`}
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => deleteDoc(d)}
-                          title={t('common.delete', 'Delete')}
-                          className="item-card-icon-btn danger"
-                          style={{ flexShrink: 0 }}
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    ))}
+                  <div style={{ border: '1px solid var(--border-bright)', overflow: 'hidden' }}>
+                    <table className="data-table" style={{ width: '100%' }}>
+                      <thead>
+                        <tr>
+                          <th>{t('knowledge.filename', 'DOCUMENT').toUpperCase()}</th>
+                          <th style={{ textAlign: 'right' }}>{t('knowledge.chunks', 'CHUNKS').toUpperCase()}</th>
+                          <th style={{ textAlign: 'right' }}>{t('knowledge.fileSize', 'SIZE').toUpperCase()}</th>
+                          <th style={{ width: 60, textAlign: 'center' }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {docs.map(d => (
+                          <tr key={d.id}>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <FileText size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                                <span style={{
+                                  fontSize: 13,
+                                  fontWeight: 500,
+                                  color: 'var(--text-primary)',
+                                  letterSpacing: '0.02em',
+                                }}>
+                                  {d.filename}
+                                </span>
+                                {d.status === 'processing' && (
+                                  <span className="badge badge-warning" style={{ fontSize: 10, flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                    <Loader2 size={10} style={{ animation: 'spin 1s linear infinite' }} />
+                                    {t('knowledge.ocrInProgress')}
+                                  </span>
+                                )}
+                                {d.status === 'failed' && (
+                                  <span title={d.status_detail || ''} className="badge badge-error" style={{ fontSize: 10, flexShrink: 0 }}>
+                                    {t('knowledge.failed')}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+                              {d.metadata_json?.chunk_count ?? 0}
+                            </td>
+                            <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+                              {d.file_size != null ? `${(d.file_size / 1024).toFixed(1)} KB` : '—'}
+                            </td>
+                            <td style={{ textAlign: 'center' }}>
+                              <PermissionButton permission="knowledge:write"
+                                onClick={() => deleteDoc(d)}
+                                title={t('common.delete', 'Delete')}
+                                className="item-card-icon-btn danger"
+                                style={{ margin: '0 auto' }}
+                              >
+                                <Trash2 size={12} />
+                              </PermissionButton>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>

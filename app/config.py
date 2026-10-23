@@ -154,7 +154,14 @@ class Settings(BaseSettings):
         except json.JSONDecodeError:
             return []
 
-    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
+    # extra="ignore": .env is shared with docker-compose, which reads keys that
+    # configure *other* containers (API_PORT, POSTGRES_PORT, SKILL_RUNNER_TOKEN
+    # and so on). The default, "forbid", made `cp .env.example .env` — the
+    # documented setup step — raise on import with a dozen errors. The check
+    # that the shipped example contains nothing unexplained lives in
+    # tests/test_settings_env_file.py, where it costs an operator nothing.
+    model_config = SettingsConfigDict(
+        env_file=".env", case_sensitive=True, extra="ignore")
 
 
 settings = Settings()

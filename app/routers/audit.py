@@ -2,21 +2,23 @@
 from typing import Optional
 import json
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.dependencies import get_db, require_permission
+from app.core.auth import AuthenticatedUser
+from app.core.dependencies import get_current_user, get_db, require_permission
 from app.core.rbac import Permission
-from app.schemas.audit import AuditLogRead, AuditLogListResponse
+from app.schemas.audit import AuditLogRead, AuditLogListResponse, SyslogExportRequest
 from app.models.audit import AuditLog
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, or_, cast, String
 
 router = APIRouter()
 
 
 @router.get("/audit/logs", response_model=AuditLogListResponse)
 async def list_audit_logs(
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    q: Optional[str] = Query(None, max_length=200),
     user_id: Optional[int] = Query(None),
     agent_id: Optional[int] = Query(None),
     action: Optional[str] = Query(None),
@@ -32,11 +34,15 @@ async def list_audit_logs(
     if action:
         query = query.where(AuditLog.action == action)
 
-    total_result = await db.execute(select(func.count(AuditLog.id)).where(
-        (AuditLog.user_id == user_id if user_id else True) &
-        (AuditLog.agent_id == agent_id if agent_id else True) &
-        (AuditLog.action == action if action else True)
-    ))
+    if q:
+        # Literal substring matching; user input cannot introduce LIKE wildcards.
+        query = query.where(or_(
+            AuditLog.action.icontains(q, autoescape=True),
+            cast(AuditLog.user_id, String).contains(q, autoescape=True),
+        ))
+    total_result = await db.execute(
+        select(func.count()).select_from(query.subquery())
+    )
     total = total_result.scalar()
 
     query = query.order_by(desc(AuditLog.timestamp)).offset(skip).limit(limit)
@@ -89,15 +95,34 @@ async def export_audit_logs(
     }
 
 
-from app.core.audit import verify_chain
+@router.post("/audit/export/syslog")
+async def export_audit_logs_syslog(
+    body: SyslogExportRequest,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_permission(Permission.AUDIT_READ)),
+):
+    """Send the same latest 10,000 records as the local export."""
+    from app.services.audit_syslog import send_logs, SyslogExportError
+
+    result = await db.execute(
+        select(AuditLog).order_by(desc(AuditLog.timestamp), desc(AuditLog.id)).limit(10000))
+    logs = result.scalars().all()
+    try:
+        sent = await send_logs(logs, body)
+    except SyslogExportError as exc:
+        raise HTTPException(status_code=502, detail={
+            "message": "Syslog delivery failed; some records may already have been sent",
+            "sent": exc.sent, "total": len(logs),
+        }) from exc
+    return {"sent": sent, "total": len(logs), "protocol": body.protocol}
 
 
 @router.get("/audit/verify")
 async def audit_verify(
     _=Depends(require_permission(Permission.AUDIT_READ)),
 ):
-    ok, broken_at = await verify_chain()
-    return {"intact": ok, "first_broken_row_id": broken_at}
+    from app.services.audit_integrity import inspect_chain
+    return await inspect_chain()
 
 
 from app.services.audit_worm import export_new
@@ -105,7 +130,94 @@ from app.services.audit_worm import export_new
 
 @router.post("/audit/worm-export")
 async def audit_worm_export(
-    retain_days: int = 365,
+    retain_days: int = Query(365, ge=1, le=3650),
+    _=Depends(require_permission(Permission.SETTINGS_WRITE)),
+):
+    from app.services.audit_worm import AuditExportBlocked
+    try:
+        return await export_new(retain_days=retain_days)
+    except AuditExportBlocked as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("Audit WORM export failed")
+        raise HTTPException(status_code=503, detail="Audit archive storage could not be verified")
+
+
+@router.get("/audit/evidence")
+async def audit_evidence(_=Depends(require_permission(Permission.AUDIT_READ))):
+    from app.services.audit_worm import verify_external_evidence
+    return await verify_external_evidence()
+
+
+@router.get("/audit/conversation-search")
+async def auditor_conversation_search(
+    q: str = "",
+    user_id: Optional[int] = None,
+    limit: int = 20,
+    cursor: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     _=Depends(require_permission(Permission.AUDIT_READ)),
 ):
-    return await export_new(retain_days=retain_days)
+    """Search chat messages across users, for an investigation.
+
+    Separate from the self-service search on purpose: that endpoint takes the
+    owner from the token and accepts no user_id, so it cannot be turned into
+    this by passing a parameter. Omitting `user_id` searches everyone.
+
+    Sees what ordinary search hides — conversations a person deleted, and
+    internal agents' memory slices. A tombstone is the whole reason delete does
+    not delete, and a slice is where an agent's own reasoning lives.
+    """
+    from fastapi import HTTPException
+
+    from app.core.audit import record_action
+    from app.services.message_search import search_messages
+    from app.services.message_snippet import snippet
+
+    term = (q or "").strip()
+    if not term:
+        raise HTTPException(status_code=400, detail="q is required")
+
+    hits = await search_messages(
+        db, user_id=user_id, term=term, limit=limit, cursor=cursor,
+        include_hidden=True)
+
+    # Reading someone's private conversations is the act that needs a trace,
+    # or "who watches the watchers" has no answer here.
+    await record_action(
+        user_id=current_user.user_id,
+        action="audit.conversation_search",
+        action_category="observe",
+        risk_tier="medium",
+        rollback_possible=True,
+        input_data={"query": term, "scope_user_id": user_id},
+        output_data={"results": len(hits)},
+    )
+
+    return {
+        "results": [
+            {
+                "conversation_id": hit.conversation_id,
+                "conversation_title": hit.conversation_title,
+                "user_id": hit.user_id,
+                "username": hit.username,
+                "hits": hit.hits,
+                "matches": [
+                    {
+                        "message_id": m.message_id,
+                        "seq": m.seq,
+                        "role": m.role,
+                        "created_at": m.created_at.isoformat() if m.created_at else None,
+                        "snippet": snippet(m.content, term),
+                    }
+                    for m in hit.matches
+                ],
+            }
+            for hit in hits
+        ],
+        # The newest match of the last conversation on this page.
+        "next_cursor": (hits[-1].matches[0].message_id
+                        if hits and hits[-1].matches else None),
+    }

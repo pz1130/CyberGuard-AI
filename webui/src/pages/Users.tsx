@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
-import { Trash2, Edit2 } from 'lucide-react'
+import { UserX, UserCheck, Edit2, Plus } from 'lucide-react'
 import { errorMessage } from '../lib/errorMessage'
 
 interface User {
@@ -30,7 +30,7 @@ interface SsoMapping {
   priority?: number
 }
 
-const ROLES = ['admin', 'operator', 'viewer']
+const ROLES = ['admin', 'approver', 'operator', 'analyst', 'viewer', 'auditor']
 
 export default function Users() {
   const { t } = useTranslation()
@@ -92,9 +92,19 @@ export default function Users() {
     }
   }
 
-  const del = async (id: number) => {
-    if (!confirm('CONFIRM DELETION?')) return
-    await api.deleteUser(id); load()
+  // Not a deletion: the server deactivates. A user who has held a
+  // conversation cannot be deleted at all — conversations.user_id is NOT NULL
+  // behind a plain foreign key — and cascading would destroy the transcripts.
+  const deactivate = async (id: number) => {
+    if (!confirm(t('users.confirmDeactivate'))) return
+    try { await api.deleteUser(id); load() }
+    catch (e: unknown) { alert(errorMessage(e)) }
+  }
+
+  const reactivate = async (id: number) => {
+    if (!confirm(t('users.confirmReactivate'))) return
+    try { await api.updateUser(id, { is_active: true }); load() }
+    catch (e: unknown) { alert(errorMessage(e)) }
   }
 
   // SSO data loading & mutation
@@ -209,9 +219,9 @@ export default function Users() {
                 <div style={{ gridColumn: '1 / -1' }}><SsoInput label="REDIRECT URI" value={ssoCfg.redirect_uri || ''} onChange={v => saveSsoConfig({ redirect_uri: v || null })} placeholder="https://your-domain/api/v1/auth/sso/callback" /></div>
               </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>DEFAULT ROLE</label>
+                  <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>{t('users.defaultRole')}</label>
                   <select value={ssoCfg.default_role} onChange={e => saveSsoConfig({ default_role: e.target.value })} style={{ width: '100%', height: 36, padding: '0 10px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 13 }}>
-                    {['admin', 'operator', 'analyst', 'viewer', 'auditor'].map(r => <option key={r} value={r}>{r.toUpperCase()}</option>)}
+                    {ROLES.map(r => <option key={r} value={r}>{t(`users.roles.${r}`)}</option>)}
                   </select>
                 </div>
                 <SsoField label="JIT PROVISIONING" checked={!!ssoCfg.allow_jit} onChange={v => saveSsoConfig({ allow_jit: v })} saving={ssoSaving} />
@@ -219,13 +229,13 @@ export default function Users() {
             )}
           </div>
           <div style={{ padding: 24, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
-            <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: '0.1em', marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border)', color: 'var(--text-primary)' }}>AZURE GROUP → APP ROLE MAPPINGS</div>
+            <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: '0.1em', marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border)', color: 'var(--text-primary)' }}>{t('users.roleMappings')}</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 12, alignItems: 'end', marginBottom: 20 }}>
               <SsoInput label="AZURE KEY" value={newMapping.azure_key} onChange={v => setNewMapping(p => ({ ...p, azure_key: v }))} placeholder="00000000-0000-0000-0000-000000000000" />
               <div>
-                <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>APP ROLE</label>
+                <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>{t('users.appRole')}</label>
                 <select value={newMapping.app_role} onChange={e => setNewMapping(p => ({ ...p, app_role: e.target.value }))} style={{ height: 36, padding: '0 8px', background: 'var(--bg-base)', border: '1px solid var(--border-bright)', color: 'var(--text-primary)', fontSize: 13 }}>
-                  {['admin', 'operator', 'analyst', 'viewer', 'auditor'].map(r => <option key={r} value={r}>{r.toUpperCase()}</option>)}
+                  {ROLES.map(r => <option key={r} value={r}>{t(`users.roles.${r}`)}</option>)}
                 </select>
               </div>
               <div>
@@ -235,19 +245,19 @@ export default function Users() {
               <button onClick={addMapping} disabled={!newMapping.azure_key.trim()} style={{ height: 36, padding: '0 16px', background: newMapping.azure_key.trim() ? 'var(--accent)' : 'var(--bg-elevated)', border: '1px solid var(--accent-border)', color: newMapping.azure_key.trim() ? '#000' : 'var(--text-muted)', fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', cursor: 'pointer' }}>+ ADD</button>
             </div>
             {ssoMappings.length === 0 ? (
-              <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.06em' }}>NO MAPPINGS — AZURE USERS RECEIVE THE DEFAULT ROLE</div>
+              <div style={{ fontSize: 12, color: 'var(--text-dim)', letterSpacing: '0.06em' }}>{t('users.noRoleMappings')}</div>
             ) : (
               <table className="data-table">
                 <thead><tr>
-                  {['AZURE KEY', 'APP ROLE', 'PRIORITY', ''].map(h => <th key={h}>{h}</th>)}
+                  {['AZURE KEY', 'APP ROLE', 'PRIORITY', ''].map(h => <th key={h}>{h === 'APP ROLE' ? t('users.appRole') : h}</th>)}
                 </tr></thead>
                 <tbody>{ssoMappings.map(m => (
                   <tr key={m.id}>
                     <td className="font-mono" style={{ fontSize: 12 }}>{m.azure_key}</td>
-                    <td style={{ fontSize: 12, color: 'var(--accent)' }}>{m.app_role.toUpperCase()}</td>
+                    <td style={{ fontSize: 12, color: 'var(--accent)' }}>{t(`users.roles.${m.app_role}`)}</td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{m.priority}</td>
                     <td style={{ textAlign: 'right' }}>
-                      <button onClick={() => removeMapping(m.id)} style={{ background: 'none', border: '1px solid var(--red)', color: 'var(--red)', padding: '4px 10px', fontSize: 11, cursor: 'pointer', letterSpacing: '0.06em', borderRadius: 'var(--radius-sm)' }}>REMOVE</button>
+                      <button onClick={() => removeMapping(m.id)} style={{ background: 'none', border: '1px solid var(--red)', color: 'var(--red)', padding: '4px 10px', fontSize: 11, cursor: 'pointer', letterSpacing: '0.06em', borderRadius: 0 }}>REMOVE</button>
                     </td>
                   </tr>
                 ))}</tbody>
@@ -260,6 +270,14 @@ export default function Users() {
       {/* ── Users tab ── */}
       {activeTab === 'users' && (
         <div>
+          {!showForm && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+              <button onClick={() => openForm()} className="btn btn-primary"
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Plus size={12} /> {t('users.addUser').toUpperCase()}
+              </button>
+            </div>
+          )}
           {showForm && (
             <div style={{ marginBottom: 24, padding: 24, background: 'var(--bg-surface)', border: '1px solid var(--border-bright)' }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.1em', marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border)' }}>
@@ -267,31 +285,31 @@ export default function Users() {
               </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
-              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>USERNAME</label>
-              <input value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
+              <label htmlFor="user-username" style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>USERNAME</label>
+              <input id="user-username" value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
                 className="form-input" />
               <div style={{ fontSize: 11, color: form.username && form.username.trim().length >= 3 ? 'var(--green)' : 'var(--text-dim)', marginTop: 4, letterSpacing: '0.05em' }}>
                 {form.username ? (form.username.trim().length >= 3 ? '✓ At least 3 characters' : `✗ ${form.username.trim().length}/3 characters`) : 'Min 3 characters'}
               </div>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>EMAIL</label>
-              <input type="email" value={form.email || ''} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+              <label htmlFor="user-email" style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>EMAIL</label>
+              <input id="user-email" type="email" value={form.email || ''} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                 className="form-input" />
               <div style={{ fontSize: 11, color: form.email && form.email.includes('@') ? 'var(--green)' : 'var(--text-dim)', marginTop: 4, letterSpacing: '0.05em' }}>
                 {form.email ? (form.email.includes('@') ? '✓ Valid email' : '✗ Must contain @') : 'Must be a valid email'}
               </div>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>ROLE</label>
-              <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
+              <label htmlFor="user-role" style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>{t('users.role')}</label>
+              <select id="user-role" value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
                 className="form-input">
-                {ROLES.map(r => <option key={r} value={r}>{r.toUpperCase()}</option>)}
+                {ROLES.map(r => <option key={r} value={r}>{t(`users.roles.${r}`)}</option>)}
               </select>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>{editing ? 'NEW PASSWORD' : 'PASSWORD'}</label>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+              <label htmlFor="user-password" style={{ display: 'block', fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>{editing ? 'NEW PASSWORD' : 'PASSWORD'}</label>
+              <input id="user-password" type="password" value={password} onChange={e => setPassword(e.target.value)}
                 placeholder={editing ? 'LEAVE BLANK TO KEEP CURRENT' : ''}
                 className="form-input" />
               {editing ? (
@@ -330,7 +348,7 @@ export default function Users() {
           <thead>
             <tr>
               {['USERNAME', 'EMAIL', 'ROLE', 'STATUS', 'ACTIONS'].map((h, i) => (
-                <th key={i}>{h}</th>
+                <th key={i}>{h === 'ROLE' ? t('users.role') : h}</th>
               ))}
             </tr>
           </thead>
@@ -354,7 +372,7 @@ export default function Users() {
                     color: ROLE_COLORS[u.role] || 'var(--text-muted)',
                     fontSize: 11, letterSpacing: '0.06em', background: 'var(--bg-base)',
                   }}>
-                    {u.role.toUpperCase()}
+                    {t(`users.roles.${u.role}`)}
                   </span>
                 </td>
                 <td style={{ padding: '14px 16px' }}>
@@ -373,10 +391,19 @@ export default function Users() {
                     style={{ padding: 4, color: 'var(--text-muted)', cursor: 'pointer', background: 'none', border: 'none', marginRight: 8 }}>
                     <Edit2 size={12} />
                   </button>
-                  <button onClick={() => del(u.id!)}
-                    style={{ padding: 4, color: 'var(--red)', cursor: 'pointer', background: 'none', border: 'none' }}>
-                    <Trash2 size={12} />
-                  </button>
+                  {u.is_active !== false ? (
+                    <button onClick={() => deactivate(u.id!)}
+                      title={t('users.deactivate')} aria-label={t('users.deactivate')}
+                      style={{ padding: 4, color: 'var(--red)', cursor: 'pointer', background: 'none', border: 'none' }}>
+                      <UserX size={12} />
+                    </button>
+                  ) : (
+                    <button onClick={() => reactivate(u.id!)}
+                      title={t('users.reactivate')} aria-label={t('users.reactivate')}
+                      style={{ padding: 4, color: 'var(--green)', cursor: 'pointer', background: 'none', border: 'none' }}>
+                      <UserCheck size={12} />
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

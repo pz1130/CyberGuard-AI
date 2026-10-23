@@ -1,5 +1,7 @@
 """Pydantic schemas for authentication."""
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
+
+from app.schemas.email import InternalEmailStr
 from typing import Optional
 
 
@@ -35,7 +37,7 @@ class RefreshTokenRequest(BaseModel):
 class RegisterRequest(BaseModel):
     """User registration request schema."""
     username: str = Field(..., min_length=3, max_length=100)
-    email: EmailStr
+    email: InternalEmailStr
     password: str = Field(..., min_length=8)
     full_name: Optional[str] = None
     role: str = "viewer"
@@ -49,7 +51,7 @@ class PasswordChangeRequest(BaseModel):
 
 class PasswordResetRequest(BaseModel):
     """Password reset request schema."""
-    email: EmailStr
+    email: InternalEmailStr
 
 
 class SetPasswordRequest(BaseModel):

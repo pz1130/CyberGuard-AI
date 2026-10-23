@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TokenUsage from './TokenUsage'
 
@@ -40,10 +40,25 @@ describe('Token Usage', () => {
     render(<TokenUsage />)
 
     expect(await screen.findByRole('heading', { name: /token usage/i })).toBeInTheDocument()
-    expect(screen.getByText('12,000')).toBeInTheDocument()
+    expect(await screen.findByText('12,000')).toBeInTheDocument()
     expect(screen.getByText('3,400')).toBeInTheDocument()
     expect(screen.getAllByText('$0.1234').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('MiniMax-M3')).toBeInTheDocument()
     expect(screen.getByText('MiniMax/MiniMax-M3')).toBeInTheDocument()
   })
+  it('switches 7/90 day ranges using calendar dates and keeps the selector after failure', async () => {
+    render(<TokenUsage />)
+    await screen.findByText('12,000')
+    getTokenUsageSummary.mockRejectedValueOnce(new Error('Temporary failure'))
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '7' } })
+    await screen.findByRole('alert')
+    expect(screen.getByRole('combobox')).toHaveValue('7')
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }))
+    await screen.findByText('12,000')
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '90' } })
+    await waitFor(() => expect(getTokenUsageSummary).toHaveBeenCalledTimes(4))
+    for (const [start] of getTokenUsageSummary.mock.calls) expect(start).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    await screen.findByText('12,000')
+  })
+
 })

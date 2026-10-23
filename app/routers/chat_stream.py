@@ -60,6 +60,16 @@ async def stream_chat(
     """
     user_id = current_user.user_id
 
+    # The global kill switch is an execution boundary, not just a sub-agent
+    # control. Check it before loading history or constructing an LLM stream so
+    # an emergency stop cannot still produce direct MASTER/AUTO output.
+    from app.services.kill_switch import is_halted
+    if await is_halted():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Global kill switch is active; chat operations are suspended",
+        )
+
     # Guardrail check (sync, no LLM classifier in hot path)
     gr = check_prompt_sync(body.message)
     if gr.blocked:

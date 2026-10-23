@@ -91,6 +91,33 @@ async def log_audit(
     return entry
 
 
+async def _clear_deleted_actors(session, entries: list) -> None:
+    """Blank the actor on entries whose user no longer exists.
+
+    Persisted audit actors are protected by a restrictive foreign key. An entry
+    still sitting in the buffer had no such protection: the insert violated the
+    constraint, and because a failed flush re-queues its entries and re-raises
+    (INV-25/29, so that nothing is lost), the entry could never succeed and
+    every later flush failed with it. Three consecutive logins returning 500,
+    not recovering, was the observed result of deleting a user who had just
+    signed in.
+
+    A user without persisted audit references can still disappear before a
+    buffered entry is flushed. Clear that missing actor before signing so the
+    resulting entry remains valid; never change actors on persisted entries.
+    """
+    from app.models.user import User
+
+    actors = {e["user_id"] for e in entries if e.get("user_id") is not None}
+    if not actors:
+        return
+    alive = set((await session.execute(
+        select(User.id).where(User.id.in_(actors)))).scalars().all())
+    for entry in entries:
+        if entry.get("user_id") is not None and entry["user_id"] not in alive:
+            entry["user_id"] = None
+
+
 async def _flush_audit_buffer():
     """Flush buffered audit logs to database.
 
@@ -111,6 +138,10 @@ async def _flush_audit_buffer():
         async with _chain_lock:
             async with get_db_context() as session:
                 await session.execute(select(func.pg_advisory_xact_lock(0xA0D17)))
+                # Before the chain payload is built: the actor is part of the
+                # hash, so clearing it afterwards would store a row that does
+                # not match the hash stored beside it.
+                await _clear_deleted_actors(session, logs_to_write)
                 prev = (await session.execute(
                     select(AuditLog.entry_hash)
                     .where(AuditLog.entry_hash.is_not(None))
@@ -401,19 +432,7 @@ def record_action_sync(
 
 
 async def verify_chain() -> tuple[bool, int | None]:
-    """Recompute the chain; return (ok, first_broken_row_id or None)."""
-    from app.core.database import get_db_context
-    async with get_db_context() as session:
-        rows = (await session.execute(
-            select(AuditLog).where(AuditLog.entry_hash.is_not(None)).order_by(AuditLog.id.asc())
-        )).scalars().all()
-    prev = _GENESIS
-    for r in rows:
-        if r.prev_hash != prev:
-            return False, r.id
-        if r.chain_version == _CHAIN_VERSION:
-            expected = stamp_chain_hashes(_row_chain_payload(r), prev)["entry_hash"]
-            if r.entry_hash != expected:
-                return False, r.id
-        prev = r.entry_hash
-    return True, None
+    """Compatibility wrapper: only full v2 payload coverage passes."""
+    from app.services.audit_integrity import inspect_chain
+    report = await inspect_chain()
+    return report['fully_verified'], report['first_broken_row_id']

@@ -48,6 +48,8 @@ jobs:
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:ci-postgres-password@localhost:5432/cyberguard
           REDIS_URL: redis://:ci-redis-password@localhost:6379/0
+          ENVIRONMENT: testing
+          ALLOW_SMOKE_MUTATIONS: "true"
           SMOKE_USER: smoke_admin
           SMOKE_PASSWORD: ci-smoke-admin-password
           SMOKE_EMAIL: smoke-admin@example.test

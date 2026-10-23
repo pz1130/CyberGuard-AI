@@ -15,10 +15,15 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_minimax_preset_includes_native_embedding_model():
-    minimax = next(p for p in _PRESET_PROVIDERS if p.name == "MiniMax")
-    models = [(m.name, m.model_type) for m in minimax.models]
-    assert ("embo-01", "embedding") in models
-    assert any(name.startswith("MiniMax") and mtype == "chat" for name, mtype in models)
+    minimax_presets = [p for p in _PRESET_PROVIDERS if p.name.startswith("MiniMax")]
+    assert {(p.name, p.base_url) for p in minimax_presets} == {
+        ("MiniMax 国内版", "https://api.minimax.cn/v1"),
+        ("MiniMax 海外版", "https://api.minimax.io/v1"),
+    }
+    for minimax in minimax_presets:
+        models = [(m.name, m.model_type) for m in minimax.models]
+        assert ("embo-01", "embedding") in models
+        assert any(name.startswith("MiniMax") and mtype == "chat" for name, mtype in models)
 
 
 async def test_openai_preset_includes_embedding_models():
@@ -113,10 +118,51 @@ async def test_seed_presets_leaves_models_unverified():
                 )
                 assert m.get("last_tested_at") is None
                 assert m.get("test_error") is None
-        minimax = next(p for p in providers if p.name == "MiniMax")
-        embo = next((m for m in minimax.models if m.get("name") == "embo-01"), None)
-        assert embo is not None, "MiniMax preset must include native embedding model embo-01"
-        assert embo.get("model_type") == "embedding"
+        minimax_rows = [p for p in providers if p.name.startswith("MiniMax")]
+        assert len(minimax_rows) == 2
+        for minimax in minimax_rows:
+            embo = next((m for m in minimax.models if m.get("name") == "embo-01"), None)
+            assert embo is not None, "MiniMax preset must include native embedding model embo-01"
+            assert embo.get("model_type") == "embedding"
+
+
+async def test_seed_migrates_legacy_minimax_without_losing_credentials():
+    """The old one-size-fits-all preset becomes the China preset in place."""
+    from sqlalchemy import delete
+    from app.core.security import CredentialField, encrypt_data
+
+    minimax_names = ["MiniMax", "MiniMax 国内版", "MiniMax 海外版"]
+    encrypted_key = encrypt_data("domestic-key", CredentialField.PROVIDER_API_KEY)
+    async with AsyncSessionLocal() as db:
+        await db.execute(delete(Provider).where(Provider.name.in_(minimax_names)))
+        legacy = Provider(
+            name="MiniMax",
+            provider_type="openai",
+            base_url="https://api.minimax.cn/anthropic",
+            api_key_encrypted=encrypted_key,
+            models=[{"name": "MiniMax-M3", "model_type": "chat", "verified": True}],
+            is_active=True,
+        )
+        db.add(legacy)
+        await db.commit()
+        await db.refresh(legacy)
+        legacy_id = legacy.id
+
+        await _seed_presets(db)
+        result = await db.execute(
+            select(Provider).where(Provider.name.in_(minimax_names)).order_by(Provider.name)
+        )
+        rows = result.scalars().all()
+
+        assert {row.name for row in rows} == {"MiniMax 国内版", "MiniMax 海外版"}
+        domestic = next(row for row in rows if row.name == "MiniMax 国内版")
+        assert domestic.id == legacy_id
+        assert domestic.base_url == "https://api.minimax.cn/v1"
+        assert domestic.api_key_encrypted == encrypted_key
+        assert any(m.get("name") == "MiniMax-M3" and m.get("verified") is True for m in domestic.models)
+
+        await db.execute(delete(Provider).where(Provider.name.in_(minimax_names)))
+        await db.commit()
 
 
 async def test_stamp_then_reload_roundtrip():

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { Save, RotateCcw } from 'lucide-react'
 import { errorMessage } from '../lib/errorMessage'
+import EmailSettings from './EmailSettings'
 import { unwrapList } from '../lib/unwrapList'
 
 interface MasterConfig {
@@ -115,7 +116,7 @@ export default function Settings() {
     loadModels()
   }, [])
   const [saved, setSaved] = useState(false)
-  const [activeTab, setActiveTab] = useState<'master' | 'branding' | 'about'>('master')
+  const [activeTab, setActiveTab] = useState<'master' | 'branding' | 'email' | 'about'>('master')
 
   useEffect(() => {
     api.getMasterConfig().then((data: unknown) => {
@@ -210,7 +211,7 @@ export default function Settings() {
           <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>{t('settings.systemConfig')}</div>
           <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-primary)' }}>{t('settings.title').toUpperCase()}</h1>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: activeTab === 'email' ? 'none' : 'flex', gap: 8 }}>
           <button onClick={reset} style={{
             display: 'flex', alignItems: 'center', gap: 6,
             padding: '0 14px', height: 36,
@@ -233,7 +234,7 @@ export default function Settings() {
 
       {/* Tab switcher */}
       <div style={{ display: 'flex', gap: 0, marginBottom: 24, borderBottom: '1px solid var(--border)' }}>
-        {(['master', 'branding', 'about'] as const).map(tab => (
+        {(['master', 'branding', 'email', 'about'] as const).map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)} style={{
             padding: '8px 20px', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid var(--accent)' : '2px solid transparent',
             color: activeTab === tab ? 'var(--accent)' : 'var(--text-muted)', fontSize: 13, letterSpacing: '0.1em',
@@ -242,7 +243,7 @@ export default function Settings() {
         ))}
       </div>
 
-      {loading ? (
+      {activeTab === 'email' ? <EmailSettings /> : loading ? (
         <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: 13, letterSpacing: '0.1em' }}>LOADING...</div>
       ) : activeTab === 'master' ? (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>

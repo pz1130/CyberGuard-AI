@@ -346,7 +346,7 @@ async def startup_probe():
 # Routers (imported here to avoid circular imports)
 # ---------------------------------------------------------------------------
 from app.routers import auth, users, agents, skills, knowledge, chat, tasks, audit, backup, config, providers, mcp, envvars, approval, token_usage, master_config, conversations, prompt_templates, security, kill_switch, governance_config, governance_rollback, governance_metrics
-from app.routers import chat_stream, gateway, sso
+from app.routers import chat_stream, gateway, sso, email_config
 
 app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
 app.include_router(users.router, prefix="/api/v1", tags=["Users"])
@@ -367,6 +367,7 @@ app.include_router(config.router, prefix="/api/v1", tags=["Configuration"])
 app.include_router(providers.router, prefix="/api/v1", tags=["AI Providers"])
 app.include_router(mcp.router, prefix="/api/v1", tags=["MCP"])
 app.include_router(envvars.router, prefix="/api/v1", tags=["Environment Variables"])
+app.include_router(email_config.router, prefix="/api/v1", tags=["Email"])
 app.include_router(approval.router, prefix="/api/v1", tags=["Approvals"])
 app.include_router(token_usage.router, prefix="/api/v1", tags=["Token Usage"])
 app.include_router(master_config.router, prefix="/api/v1", tags=["Master Agent Config"])

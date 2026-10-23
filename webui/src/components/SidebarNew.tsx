@@ -11,6 +11,8 @@ import {
   Settings, Shield, Coins, Database, FileText, UserCog,
   ScrollText, ShieldCheck, ShieldAlert,
 } from 'lucide-react'
+import { useContext } from 'react'
+import { RoleContext, canAccessTab } from '../context/permissions'
 import { useTranslation } from 'react-i18next'
 
 export type Tab =
@@ -82,6 +84,7 @@ interface Props {
 
 export default function SidebarNew({ tab, setTab }: Props) {
   const { t } = useTranslation()
+  const role = useContext(RoleContext)
 
   return (
     <aside
@@ -108,9 +111,10 @@ export default function SidebarNew({ tab, setTab }: Props) {
           padding: '8px 8px 16px',
         }}
       >
-        {NAV_GROUPS.map((group) => (
+        {NAV_GROUPS.filter(g => g.items.some(i => canAccessTab(role, i.key))).map((group) => (
           <div key={group.id} style={{ marginTop: 12 }}>
             <div
+              className="sidebar-group-label"
               style={{
                 padding: '4px 10px 6px',
                 fontSize: 11,
@@ -124,7 +128,7 @@ export default function SidebarNew({ tab, setTab }: Props) {
               {t(group.labelKey)}
             </div>
 
-            {group.items.map((item) => {
+            {group.items.filter(item => canAccessTab(role, item.key)).map((item) => {
               const isActive = tab === item.key
               return (
                 <button
@@ -141,7 +145,7 @@ export default function SidebarNew({ tab, setTab }: Props) {
                     marginBottom: 1,
                     background: isActive ? undefined : 'transparent',
                     border: isActive ? undefined : 'none',
-                    borderRadius: 'var(--radius-md)',
+                    borderRadius: 0,
                     color: isActive ? 'var(--accent)' : 'var(--text-muted)',
                     fontSize: 13,
                     fontWeight: isActive ? 500 : 400,
@@ -172,7 +176,7 @@ export default function SidebarNew({ tab, setTab }: Props) {
                   >
                     {item.icon}
                   </span>
-                  <span style={{ flex: 1, minWidth: 0 }} className="truncate">
+                  <span style={{ flex: 1, minWidth: 0 }} className="truncate sidebar-item-label">
                     {t(item.labelKey)}
                   </span>
                 </button>
@@ -184,6 +188,7 @@ export default function SidebarNew({ tab, setTab }: Props) {
       </nav>
 
       <div
+        className="sidebar-footer"
         style={{
           padding: '10px 14px',
           borderTop: '1px solid var(--border)',

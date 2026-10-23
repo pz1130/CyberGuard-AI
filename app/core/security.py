@@ -132,6 +132,8 @@ class CredentialField(str, Enum):
     If a column is ever renamed, the AAD keeps the old value.
     """
 
+    EMAIL_SMTP_PASSWORD = "email_config.smtp_password_encrypted"
+    EMAIL_OAUTH_SECRET = "email_config.oauth_client_secret_encrypted"
     PROVIDER_API_KEY = "providers.api_key_encrypted"
     MCP_ENV_VARS = "mcp_servers.env_vars_encrypted"
     MCP_AUTH_TOKEN = "mcp_servers.auth_token_encrypted"

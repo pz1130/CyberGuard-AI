@@ -70,9 +70,9 @@ async def _kill_switch_response(window_days: int) -> float:
 
 
 async def _audit_completeness(window_days: int) -> float:
-    from app.core.audit import verify_chain
-    ok, _ = await verify_chain()
-    return 1.0 if ok else 0.0
+    from app.services.audit_integrity import inspect_chain
+    report = await inspect_chain()
+    return 1.0 if report["fully_verified"] else 0.0
 
 
 async def _rollback_success_rate(window_days: int) -> float:

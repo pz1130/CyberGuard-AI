@@ -4,6 +4,13 @@ import pytest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from app.services import audit_worm as aw
+from app.core.audit import _chain_payload, stamp_chain_hashes
+from datetime import datetime
+
+def signed_row(id=5):
+    payload = stamp_chain_hashes(_chain_payload(action="x", user_id=1, timestamp=datetime(2026, 9, 18)), "0" * 64)
+    payload["timestamp"] = datetime(2026, 9, 18)
+    return SimpleNamespace(id=id, **payload)
 
 
 def test_serialize_jsonl_includes_chain_fields():
@@ -20,11 +27,9 @@ def test_serialize_jsonl_includes_chain_fields():
 
 @pytest.mark.asyncio
 async def test_export_advances_marker_and_uploads():
-    rows = [SimpleNamespace(id=5, action="x", entry_hash="e5", prev_hash="e4",
-                            input_hash="i", output_hash="o", timestamp=None, agent_name=None,
-                            action_category=None, confidence=None, human_reviewer=None,
-                            rollback_possible=None, risk_tier=None, request_id="r", user_id=1, agent_id=None)]
-    with patch.object(aw, "_last_exported_id", AsyncMock(return_value=0)), \
+    rows = [signed_row()]
+    with patch("app.services.audit_integrity.inspect_chain", AsyncMock(return_value={"fully_verified": True, "status": "verified"})), \
+         patch.object(aw, "verify_external_evidence", AsyncMock(return_value={"status": "no_archives"})), \
          patch.object(aw, "_fetch_rows_after", AsyncMock(return_value=rows)), \
          patch.object(aw, "_put_worm_object", AsyncMock(return_value="audit/worm/1-5.jsonl")), \
          patch.object(aw, "_record_marker", AsyncMock()) as marker:
@@ -35,7 +40,8 @@ async def test_export_advances_marker_and_uploads():
 
 @pytest.mark.asyncio
 async def test_export_noop_when_nothing_new():
-    with patch.object(aw, "_last_exported_id", AsyncMock(return_value=10)), \
+    with patch("app.services.audit_integrity.inspect_chain", AsyncMock(return_value={"fully_verified": True, "status": "verified"})), \
+         patch.object(aw, "verify_external_evidence", AsyncMock(return_value={"status": "verified", "last_archived_row_id": 10})), \
          patch.object(aw, "_fetch_rows_after", AsyncMock(return_value=[])):
         summary = await aw.export_new()
     assert summary["rows"] == 0 and summary.get("object_key") is None

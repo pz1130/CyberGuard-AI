@@ -442,6 +442,9 @@ class InternalAgentRunner:
             tool_row = pool[name]
             return {"action_category": getattr(tool_row, "action_category", None),
                     "risk_tier": getattr(tool_row, "risk_tier", None),
+                    "has_rollback": bool(
+                        getattr(tool_row, "rollback_command_template", None)
+                    ),
                     "transport": "pool"}
         if name == "run_python":
             # The one built-in that executes caller-authored code. Grouping it
@@ -513,6 +516,7 @@ class InternalAgentRunner:
                 # A human already signed off on this dispatch. Spend the
                 # approval on this one call so the next gated tool still stops.
                 self._pre_approved = False
+                ctx.metadata["approved"] = True
                 await record_action(
                     user_id=getattr(self, "_user_id", None) or None,
                     agent_id=self.agent_id, agent_name=self.agent_name,
@@ -693,6 +697,7 @@ class InternalAgentRunner:
             if getattr(self, "_pool_tools_by_name", None) and name in self._pool_tools_by_name:
                 tool_row = self._pool_tools_by_name[name]
                 res = await execute_tool(tool_row, bound_args, user_id=getattr(self, "_user_id", 0),
+                                         approved=bool(_ctx.metadata.get("approved")),
                                          governance=None, confidence=None)
                 if res.get("status") == "completed":
                     return res.get("stdout", "") or "(no output)"

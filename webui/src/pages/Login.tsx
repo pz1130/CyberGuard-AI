@@ -11,6 +11,7 @@ export default function Login() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(() => {
+    if (sessionStorage.getItem('sessionExpired')) return i18n.t('login.sessionExpired')
     const err = new URLSearchParams(window.location.search).get('error')
     return err ? (tLogin(`login.${err}`) || tLogin('login.ssoError')) : ''
   })
@@ -36,6 +37,7 @@ export default function Login() {
     try {
       const data = await api.login({ username, password }) as { access_token: string }
       localStorage.setItem('token', data.access_token)
+      sessionStorage.removeItem('sessionExpired')
       window.location.reload()
     } catch {
       setError(tLogin('login.authFailed'))

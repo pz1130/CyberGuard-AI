@@ -18,6 +18,17 @@ from app.models.agent import AgentExecution
 router = APIRouter()
 
 
+@router.get("/chat/readiness")
+async def chat_readiness(
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_permission(Permission.TASK_EXECUTE)),
+):
+    """Expose binding readiness without disclosing the master's prompts."""
+    from app.services.master_config import get_master_config
+    config = await get_master_config(db)
+    return {"master_ready": bool(config.llm_provider_id and config.llm_model)}
+
+
 @router.post("/chat", response_model=ChatResponse, status_code=status.HTTP_202_ACCEPTED)
 async def chat(
     body: ChatRequest,

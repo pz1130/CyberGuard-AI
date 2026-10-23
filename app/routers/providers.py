@@ -131,17 +131,31 @@ _PRESET_PROVIDERS: list[ProviderCreate] = [
             ModelInfo(name="text-embedding-v3", model_type="embedding"),
         ],
     ),
-    # MiniMax — use the OpenAI-compatible endpoint (/v1), NOT the Anthropic
-    # endpoint (/anthropic) the MiniMax quickstart suggests: this platform speaks
-    # the OpenAI wire protocol (AsyncOpenAI -> /chat/completions) for chat.
-    # International users can swap the host for https://api.minimax.io/v1.
+    # MiniMax — the China and international platforms issue region-specific keys,
+    # so expose both OpenAI-compatible endpoints instead of asking users to edit
+    # one ambiguous preset. The domains come from MiniMax's regional SDK docs.
     # Embeddings are NOT OpenAI-compatible: use native embo-01 ({texts, type}
     # body, vectors in the response). LLMRouter.embed() routes MiniMax hosts
     # through that adapter.
     ProviderCreate(
-        name="MiniMax",
+        name="MiniMax 国内版",
         provider_type="openai",
-        base_url="https://api.minimaxi.com/v1",
+        base_url="https://api.minimax.cn/v1",
+        api_key="",
+        models=[
+            ModelInfo(name="MiniMax-M3", model_type="chat"),
+            ModelInfo(name="MiniMax-M2.7", model_type="chat"),
+            ModelInfo(name="MiniMax-M2.5", model_type="chat"),
+            ModelInfo(name="MiniMax-M2.1", model_type="chat"),
+            ModelInfo(name="MiniMax-M2", model_type="chat"),
+            ModelInfo(name="MiniMax-Text-01", model_type="chat"),
+            ModelInfo(name="embo-01", model_type="embedding"),
+        ],
+    ),
+    ProviderCreate(
+        name="MiniMax 海外版",
+        provider_type="openai",
+        base_url="https://api.minimax.io/v1",
         api_key="",
         models=[
             ModelInfo(name="MiniMax-M3", model_type="chat"),
@@ -237,6 +251,16 @@ def _model_type_of(models: list, model_name: str) -> str:
     return classify_model_type(model_name)
 
 
+def _minimax_preset_region(base_url: str) -> str | None:
+    # Exact built-in endpoints only: custom gateways and paths belong to users.
+    url = (base_url or "").rstrip("/")
+    for host, region in (("api.minimaxi.com", "国内版"),
+                         ("api.minimax.cn", "国内版"), ("api.minimax.io", "海外版")):
+        if url in (f"https://{host}/v1", f"https://{host}/anthropic"):
+            return region
+    return None
+
+
 async def _seed_presets(db: AsyncSession):
     """Seed preset providers (idempotent — only seeds if name doesn't exist).
 
@@ -252,6 +276,50 @@ async def _seed_presets(db: AsyncSession):
     the user explicitly hits TEST or PROBE on the Providers page.
     """
     from sqlalchemy.exc import IntegrityError
+
+    # Migrate the former single MiniMax preset in place so an existing API key,
+    # model verification state and provider id are preserved. Older releases
+    # also used api.minimaxi.com; MiniMax's current China OpenAI SDK docs use
+    # api.minimax.cn instead.
+    legacy_result = await db.execute(select(Provider).where(Provider.name == "MiniMax"))
+    legacy = legacy_result.scalar_one_or_none()
+    if legacy is not None and _minimax_preset_region(legacy.base_url):
+        is_international = _minimax_preset_region(legacy.base_url) == "海外版"
+        target_name = "MiniMax 海外版" if is_international else "MiniMax 国内版"
+        target_url = "https://api.minimax.io/v1" if is_international else "https://api.minimax.cn/v1"
+        target_result = await db.execute(select(Provider).where(Provider.name == target_name))
+        if target_result.scalar_one_or_none() is None:
+            legacy.name = target_name
+            legacy.base_url = target_url
+            try:
+                await db.commit()
+            except IntegrityError:
+                await db.rollback()
+
+    # Also repair built-in regional presets that still point at the retired
+    # China host or an Anthropic path. Non-MiniMax custom hosts are untouched.
+    domestic_result = await db.execute(
+        select(Provider).where(Provider.name == "MiniMax 国内版")
+    )
+    domestic = domestic_result.scalar_one_or_none()
+    if domestic is not None and (
+        _minimax_preset_region(domestic.base_url) == "国内版"
+    ) and domestic.base_url != "https://api.minimax.cn/v1":
+        domestic.base_url = "https://api.minimax.cn/v1"
+        await db.commit()
+
+    international_result = await db.execute(
+        select(Provider).where(Provider.name == "MiniMax 海外版")
+    )
+    international = international_result.scalar_one_or_none()
+    if (
+        international is not None
+        and _minimax_preset_region(international.base_url) == "海外版"
+        and international.base_url != "https://api.minimax.io/v1"
+    ):
+        international.base_url = "https://api.minimax.io/v1"
+        await db.commit()
+
     for preset in _PRESET_PROVIDERS:
         existing = await db.execute(select(Provider).where(Provider.name == preset.name))
         if existing.scalar_one_or_none():

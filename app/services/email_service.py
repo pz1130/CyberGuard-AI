@@ -1,6 +1,6 @@
 """Async email notification service.
 
-Configuration via environment variables:
+Mailbox settings are persisted by /email/config. Legacy environment fallback:
     SMTP_HOST          — SMTP server hostname (default: localhost)
     SMTP_PORT          — SMTP port (default: 587)
     SMTP_USERNAME      — SMTP auth username (optional)
@@ -67,55 +67,64 @@ def _build_message(
     return msg
 
 
-def _send_sync(to: str, subject: str, body_html: str, body_text: str) -> bool:
-    """Blocking SMTP send — called from asyncio.to_thread."""
-    host = _cfg("SMTP_HOST", "localhost")
-    port = int(_cfg("SMTP_PORT", "587"))
-    username = _cfg("SMTP_USERNAME")
-    password = _cfg("SMTP_PASSWORD")
-    from_addr = _cfg("SMTP_FROM_EMAIL", "cyberguard@localhost")
-    use_tls = _cfg("SMTP_USE_TLS", "true").lower() not in ("false", "0", "no")
-
-    msg = _build_message(to, subject, body_html, body_text, from_addr)
-
+def _send_sync(to: str, subject: str, body_html: str, body_text: str, cfg: dict | None = None) -> bool:
+    """Blocking SMTP delivery with STARTTLS, implicit TLS, or plain relay."""
+    from app.services.email_config import legacy_config
+    cfg = cfg or legacy_config()
+    msg = _build_message(to, subject, body_html, body_text, cfg["from_email"])
     try:
-        if use_tls:
-            context = ssl.create_default_context()
-            with smtplib.SMTP(host, port, timeout=15) as server:
-                server.starttls(context=context)
-                if username:
-                    server.login(username, password)
-                server.sendmail(from_addr, [to], msg.as_bytes())
+        security = cfg["smtp_security"]
+        context = ssl.create_default_context()
+        if security == "ssl":
+            connection = smtplib.SMTP_SSL(cfg["smtp_host"], cfg["smtp_port"], timeout=15, context=context)
         else:
-            with smtplib.SMTP(host, port, timeout=15) as server:
-                if username:
-                    server.login(username, password)
-                server.sendmail(from_addr, [to], msg.as_bytes())
-        return True
-    except Exception as e:
-        logger.error(f"[email] Failed to send to {to!r}: {e}")
+            connection = smtplib.SMTP(cfg["smtp_host"], cfg["smtp_port"], timeout=15)
+        with connection as server:
+            if security == "starttls":
+                server.starttls(context=context)
+            if cfg.get("smtp_username"):
+                server.login(cfg["smtp_username"], cfg.get("smtp_password", ""))
+            refused = server.sendmail(cfg["from_email"], [to], msg.as_bytes())
+            return not bool(refused)
+    except Exception as exc:
+        logger.warning("[email] SMTP delivery failed (%s)", type(exc).__name__)
         return False
 
 
-async def send_email(
-    to: str,
-    subject: str,
-    body_html: str,
-    body_text: Optional[str] = None,
-) -> bool:
-    """Send an email asynchronously (non-blocking).
+async def _send_oauth(to: str, subject: str, body_html: str, cfg: dict) -> bool:
+    """Microsoft 365 app-only OAuth via Graph Mail.Send."""
+    import httpx
+    from urllib.parse import quote
+    async with httpx.AsyncClient(timeout=15) as client:
+        token = await client.post(
+            f"https://login.microsoftonline.com/{cfg['oauth_tenant_id']}/oauth2/v2.0/token",
+            data={"client_id": cfg["oauth_client_id"], "client_secret": cfg["oauth_client_secret"],
+                  "scope": "https://graph.microsoft.com/.default", "grant_type": "client_credentials"})
+        token.raise_for_status()
+        response = await client.post(
+            f"https://graph.microsoft.com/v1.0/users/{quote(cfg['from_email'], safe='')}/sendMail",
+            headers={"Authorization": f"Bearer {token.json()['access_token']}"},
+            json={"message": {"subject": subject, "body": {"contentType": "HTML", "content": body_html},
+                              "toRecipients": [{"emailAddress": {"address": to}}]}, "saveToSentItems": True})
+        response.raise_for_status()
+        return response.status_code == 202
 
-    Returns True on success, False on failure or when SMTP is not configured.
-    Never raises — all errors are logged and swallowed.
-    """
-    if not _is_email_configured():
-        logger.warning(
-            "[email] SMTP not configured — skipping email to %r: %s (%s)",
-            to, subject, smtp_status()["reason"],
-        )
+
+async def send_email(to: str, subject: str, body_html: str,
+                     body_text: Optional[str] = None, *, config: dict | None = None) -> bool:
+    """Best-effort async delivery; never log credentials or token responses."""
+    from app.services.email_config import load_email_config, config_status
+    try:
+        cfg = config if config is not None else await load_email_config()
+        if not config_status(cfg)["configured"]:
+            return False
+        if cfg["method"] == "oauth":
+            return await _send_oauth(to, subject, body_html, cfg)
+        return await asyncio.to_thread(_send_sync, to, subject, body_html,
+                                       body_text or _html_to_text(body_html), cfg)
+    except Exception as exc:
+        logger.warning("[email] Delivery failed (%s)", type(exc).__name__)
         return False
-    plain = body_text or _html_to_text(body_html)
-    return await asyncio.to_thread(_send_sync, to, subject, body_html, plain)
 
 
 def _html_to_text(html: str) -> str:
@@ -135,21 +144,18 @@ async def notify_approval_created(
     user_id: int,
 ) -> None:
     """Notify admin that a new Human-in-the-Loop approval request is waiting."""
-    admin_email = _cfg("SMTP_ADMIN_EMAIL")
-    if not admin_email:
+    from app.services.email_config import load_email_config, approval_recipients, config_status
+    cfg = await load_email_config()
+    if not cfg.get("notify_created", True) or not config_status(cfg)["configured"]:
         return
-    subject = f"[CyberGuard] 🔔 审批请求待处理 — 风险: {risk_level.upper()}"
-    html = f"""
-<h2>CyberGuard — 新审批请求</h2>
-<table>
-  <tr><th>请求 ID</th><td><code>{request_id}</code></td></tr>
-  <tr><th>操作描述</th><td>{action_description}</td></tr>
-  <tr><th>风险等级</th><td><strong>{risk_level.upper()}</strong></td></tr>
-  <tr><th>发起用户 ID</th><td>{user_id}</td></tr>
-</table>
-<p>请登录 CyberGuard 管理界面处理此请求（有效期 1 小时）。</p>
-"""
-    await send_email(admin_email, subject, html)
+    recipients = await approval_recipients(cfg)
+    from app.core.email_templates import render_notification
+    subject, html = render_notification(cfg, "created", {
+        "request_id": request_id, "action_description": action_description,
+        "risk_level": risk_level.upper(), "user_id": user_id,
+    })
+    for recipient in recipients:
+        await send_email(recipient, subject, html, config=cfg)
 
 
 async def notify_approval_decided(
@@ -161,14 +167,12 @@ async def notify_approval_decided(
     """Notify the requester of an approval decision."""
     if not to_email:
         return
-    icon = "✅" if decision == "approved" else "❌"
-    subject = f"[CyberGuard] {icon} 审批结果: {decision.upper()}"
-    html = f"""
-<h2>CyberGuard — 审批结果通知</h2>
-<table>
-  <tr><th>请求 ID</th><td><code>{request_id}</code></td></tr>
-  <tr><th>决定</th><td><strong>{decision.upper()}</strong></td></tr>
-  <tr><th>备注</th><td>{comment or '（无备注）'}</td></tr>
-</table>
-"""
-    await send_email(to_email, subject, html)
+    from app.services.email_config import load_email_config
+    cfg = await load_email_config()
+    if not cfg.get("notify_decided", True):
+        return
+    from app.core.email_templates import render_notification
+    subject, html = render_notification(cfg, "decided", {
+        "request_id": request_id, "decision": decision.upper(), "comment": comment or "（无备注）",
+    })
+    await send_email(to_email, subject, html, config=cfg)

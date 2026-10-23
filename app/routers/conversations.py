@@ -18,6 +18,8 @@ from app.services.conversation_messages import (
     fetch_messages,
     to_message_dict,
 )
+from app.services.message_search import DEFAULT_SEARCH_LIMIT, search_messages
+from app.services.message_snippet import snippet
 
 
 class MessageModel(BaseModel):
@@ -37,6 +39,9 @@ class ConversationResponse(BaseModel):
     # GET /conversations/{id}/messages, a page at a time.
     message_count: int = 0
     last_message_preview: Optional[str] = None
+    # True once retention has disposed of the messages. The row survives so the
+    # person sees an archived conversation rather than an empty one.
+    archived: bool = False
     created_at: datetime
     updated_at: datetime
     # Per-conversation config overrides
@@ -110,6 +115,10 @@ async def list_conversations(
         .where(
             Conversation.user_id == current_user.user_id,
             Conversation.deleted_at.is_(None),
+            # An internal agent's memory is stored as a conversations row owned
+            # by the person (internal_agent.py:181). It is not a conversation
+            # they had.
+            Conversation.agent_id.is_(None),
         )
         .order_by(desc(Conversation.updated_at))
         .limit(50)
@@ -139,6 +148,7 @@ async def list_conversations(
     for conv in conversations:
         payload = ConversationResponse.model_validate(conv)
         payload.message_count = counts.get(conv.id, 0)
+        payload.archived = conv.purged_at is not None
         preview = previews.get(conv.id)
         payload.last_message_preview = preview[:200] if preview else None
         responses.append(payload)
@@ -169,6 +179,57 @@ async def create_conversation(
     await db.commit()
     await db.refresh(conv)
     return ConversationResponse.model_validate(conv)
+
+
+# Declared before /conversations/{conv_id}: FastAPI matches in declaration
+# order, and "search" would otherwise bind to conv_id and fail int parsing.
+@router.get("/conversations/search")
+async def search_conversation_messages(
+    q: str = "",
+    limit: int = DEFAULT_SEARCH_LIMIT,
+    cursor: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(
+        require_permission(Permission.TASK_EXECUTE)
+    ),
+):
+    """Search your own chat messages.
+
+    The owner comes from the token and is never accepted as a parameter; a
+    user_id here would make this an admin endpoint wearing a self-service name.
+    """
+    term = (q or "").strip()
+    if not term:
+        raise HTTPException(status_code=400, detail="q is required")
+
+    hits = await search_messages(
+        db, user_id=current_user.user_id, term=term, limit=limit, cursor=cursor)
+
+    return {
+        "results": [
+            {
+                "conversation_id": hit.conversation_id,
+                "conversation_title": hit.conversation_title,
+                "user_id": hit.user_id,
+                "username": hit.username,
+                "hits": hit.hits,
+                "matches": [
+                    {
+                        "message_id": m.message_id,
+                        "seq": m.seq,
+                        "role": m.role,
+                        "created_at": m.created_at.isoformat() if m.created_at else None,
+                        "snippet": snippet(m.content, term),
+                    }
+                    for m in hit.matches
+                ],
+            }
+            for hit in hits
+        ],
+        # The newest match of the last conversation on this page.
+        "next_cursor": (hits[-1].matches[0].message_id
+                        if hits and hits[-1].matches else None),
+    }
 
 
 @router.get("/conversations/{conv_id}", response_model=ConversationResponse)
@@ -297,7 +358,60 @@ async def append_message(
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
+    if conv.purged_at is not None:
+        # A second chain starting at seq 0 would collide with the one already
+        # exported, and the history it belongs to no longer lives here. Raised
+        # before the commit below, so nothing is written.
+        raise HTTPException(
+            status_code=409,
+            detail="This conversation has been archived and cannot be continued.")
+
     await db.commit()
     await db.refresh(conv)
 
     return {"status": "ok", "message_count": count}
+
+
+@router.post("/conversations/export")
+async def export_conversations(
+    older_than_days: int = 0,
+    retain_days: int = 365,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_permission(Permission.AUDIT_READ)),
+):
+    """Mirror conversations to write-once storage.
+
+    older_than_days=0 exports everything; retention disposes of nothing that
+    has not been through here first.
+    """
+    from app.services.conversation_export import export_eligible
+
+    try:
+        summary = await export_eligible(
+            db, older_than_days=older_than_days, retain_days=retain_days)
+    except RuntimeError as exc:
+        # Object storage is not configured. An uncaught RuntimeError becomes a
+        # bare "Internal server error", leaving the operator guessing at the
+        # one thing that blocks retention entirely — purge finding nothing
+        # eligible is the downstream symptom of exactly this.
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    await db.commit()
+    return summary
+
+
+@router.post("/conversations/purge")
+async def purge_conversations(
+    older_than_days: int = 365,
+    confirm: bool = False,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_permission(Permission.AUDIT_READ)),
+):
+    """Dispose of archived conversations older than the cutoff.
+
+    Dry runs unless `confirm` is true. This is the one irreversible operation
+    in the product; it should not be a typo away.
+    """
+    from app.services.conversation_purge import purge_eligible
+
+    return await purge_eligible(
+        db, older_than_days=older_than_days, confirm=confirm)

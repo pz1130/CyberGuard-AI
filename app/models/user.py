@@ -27,7 +27,7 @@ class User(Base):
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
     # Relationships
-    audit_logs = relationship("AuditLog", back_populates="user")
+    audit_logs = relationship("AuditLog", back_populates="user", passive_deletes="all")
 
     def __repr__(self):
         return f"<User {self.username} ({self.role})>"

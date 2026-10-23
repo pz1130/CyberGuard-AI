@@ -5,6 +5,7 @@ import pytest_asyncio
 
 from app.core.database import AsyncSessionLocal
 from app.models.agent import AgentConfig
+from app.models.audit import AuditLog
 from app.models.conversation import Conversation
 from app.models.user import User
 from app.services.internal_agent import InternalAgentRunner
@@ -37,6 +38,8 @@ async def parent_conv_and_internal_agent():
         # Cleanup
         await s.execute(Conversation.__table__.delete().where(Conversation.user_id == u.id))
         await s.execute(AgentConfig.__table__.delete().where(AgentConfig.id == ag.id))
+        # audit_logs.user_id is ON DELETE RESTRICT (migration 047).
+        await s.execute(AuditLog.__table__.delete().where(AuditLog.user_id == u.id))
         await s.execute(User.__table__.delete().where(User.id == u.id))
         await s.commit()
 

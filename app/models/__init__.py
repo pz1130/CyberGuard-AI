@@ -1,4 +1,5 @@
 """Models module initialization."""
+from app.models.email_config import EmailConfig
 from app.models.user import User, RoleModel
 from app.models.agent import AgentConfig, AgentExecution
 from app.models.skill import Skill, SkillFile, Tool
@@ -17,10 +18,12 @@ from app.models.ocr import OcrConfig
 from app.models.episode import AgentEpisode
 from app.models.master_config import MasterAgentConfig
 from app.models.sso import SsoConfig, SsoRoleMapping
+from app.models.conversation_export import ConversationExport
 from app.models.conversation_message import ConversationMessage
 from app.models.run_event import AgentRunEvent
 
 __all__ = [
+    "EmailConfig",
     "User", "RoleModel",
     "AgentConfig", "AgentExecution",
     "Skill", "SkillFile", "Tool",
@@ -40,5 +43,6 @@ __all__ = [
     "MasterAgentConfig",
     "SsoConfig", "SsoRoleMapping",
     "AgentRunEvent",
+    "ConversationExport",
     "ConversationMessage",
 ]

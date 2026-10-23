@@ -9,6 +9,7 @@ import { Sun, Moon, Globe, Search, Bell, ChevronDown, LogOut, Shield, Terminal }
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
+import ChangePasswordDialog from './ChangePasswordDialog'
 
 interface HeaderProps {
   dark: boolean
@@ -35,6 +36,7 @@ export default function HeaderNew({
   const [username, setUsername] = useState('Admin')
   const [role, setRole] = useState('Administrator')
   const [menuOpen, setMenuOpen] = useState(false)
+  const [showChangePassword, setShowChangePassword] = useState(false)
   const [sysStatus, setSysStatus] = useState<SysStatus>('online')
   const [branding, setBranding] = useState<{ branding_logo?: string | null; branding_company_name?: string | null }>({})
 
@@ -92,7 +94,7 @@ export default function HeaderNew({
     width: 32,
     height: 32,
     border: '1px solid var(--border)',
-    borderRadius: 'var(--radius-md)',
+    borderRadius: 0,
     background: 'transparent',
     color: 'var(--text-muted)',
     cursor: 'pointer',
@@ -102,6 +104,7 @@ export default function HeaderNew({
   })
 
   return (
+    <>
     <header
       className="header-shell"
       style={{
@@ -184,7 +187,7 @@ export default function HeaderNew({
             color: STATUS_COLOR[sysStatus],
             background: 'var(--bg-elevated)',
             border: `1px solid ${sysStatus === 'online' ? 'var(--accent-border)' : 'var(--border)'}`,
-            borderRadius: 'var(--radius-md)',
+            borderRadius: 0,
             boxShadow: sysStatus === 'online' ? 'var(--accent-glow)' : undefined,
           }}
         >
@@ -195,7 +198,7 @@ export default function HeaderNew({
       </div>
 
       {/* Search trigger (centered) */}
-      <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+      <div className="header-search" style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
         <button
           onClick={onSearchOpen}
           aria-label="Open search"
@@ -209,7 +212,7 @@ export default function HeaderNew({
             padding: '0 10px',
             background: 'var(--bg-elevated)',
             border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-md)',
+            borderRadius: 0,
             color: 'var(--text-dim)',
             fontSize: 13,
             cursor: 'pointer',
@@ -231,7 +234,7 @@ export default function HeaderNew({
               fontSize: 10,
               padding: '2px 6px',
               border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-sm)',
+              borderRadius: 0,
               color: 'var(--text-muted)',
               background: 'var(--bg-surface)',
             }}
@@ -316,7 +319,7 @@ export default function HeaderNew({
               border: menuOpen
                 ? '1px solid var(--accent-border)'
                 : '1px solid var(--border)',
-              borderRadius: 'var(--radius-md)',
+              borderRadius: 0,
               color: 'var(--text-primary)',
               cursor: 'pointer',
               transition: 'border-color var(--transition-fast)',
@@ -400,6 +403,25 @@ export default function HeaderNew({
                 </div>
                 <button
                   role="menuitem"
+                  onClick={() => { setMenuOpen(false); setShowChangePassword(true) }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    width: '100%',
+                    padding: '8px 12px',
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    fontSize: 13,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  {t('header.changePassword')}
+                </button>
+                <button
+                  role="menuitem"
                   onClick={logout}
                   style={{
                     display: 'flex',
@@ -430,5 +452,9 @@ export default function HeaderNew({
         </div>
       </div>
     </header>
+    {showChangePassword && (
+      <ChangePasswordDialog onClose={() => setShowChangePassword(false)} />
+    )}
+    </>
   )
 }

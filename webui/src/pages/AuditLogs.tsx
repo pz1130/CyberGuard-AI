@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
+import ChatEvidence from './ChatEvidence'
 import { Download, Search, Loader2 } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import { errorMessage } from '../lib/errorMessage'
@@ -18,18 +19,36 @@ interface Log {
 
 export default function AuditLogs() {
   const { t } = useTranslation()
+  const [showSyslog, setShowSyslog] = useState(false)
+  const [syslog, setSyslog] = useState({ host: '', port: 514, protocol: 'tcp' as 'udp' | 'tcp', facility: 16 })
+  const [sending, setSending] = useState(false)
+  const [syslogResult, setSyslogResult] = useState('')
+  const [syslogError, setSyslogError] = useState('')
   const [logs, setLogs] = useState<Log[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('')
   const [limit, setLimit] = useState(50)
+  const [tab, setTab] = useState<'logs' | 'evidence'>('logs')
 
-  const load = useCallback(async () => {
-    try {
-      const data = await api.getAuditLogs({ limit }) as Log[] | { logs?: Log[] }
-      setLogs(Array.isArray(data) ? data : data?.logs || [])
-    } catch { setLogs([]) } finally { setLoading(false) }
-  }, [limit])
-  useEffect(() => { void Promise.resolve().then(() => load()) }, [load])
+  const [refresh, setRefresh] = useState(0)
+  const requestId = useRef(0)
+  useEffect(() => {
+    const id = ++requestId.current
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      setLoading(true)
+      try {
+        const data = await api.getAuditLogs({ limit, q: filter }) as Log[] | { logs?: Log[] }
+        if (!cancelled && id === requestId.current) setLogs(Array.isArray(data) ? data : data?.logs || [])
+      } catch {
+        if (!cancelled && id === requestId.current) setLogs([])
+      } finally {
+        if (!cancelled && id === requestId.current) setLoading(false)
+      }
+    }, 200)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [limit, filter, refresh])
+
 
   const exportLogs = async () => {
     try {
@@ -42,10 +61,17 @@ export default function AuditLogs() {
     } catch (e: unknown) { alert(errorMessage(e)) }
   }
 
-  const filtered = logs.filter(l =>
-    !filter || l.action?.toLowerCase().includes(filter.toLowerCase()) ||
-    String(l.user_id)?.includes(filter)
-  )
+  const exportSyslog = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setSending(true); setSyslogResult(''); setSyslogError('')
+    try {
+      const result = await api.exportAuditLogsSyslog(syslog) as { sent: number }
+      setSyslogResult(t('audit.syslogSent', { count: result.sent }))
+    } catch (e: unknown) { setSyslogError(errorMessage(e)) }
+    finally { setSending(false) }
+  }
+
+  const filtered = logs
 
   return (
     <div>
@@ -54,6 +80,8 @@ export default function AuditLogs() {
         eyebrow="COMPLETE OPERATION RECORDS · SIEM EXPORT"
         title={t('audit.title').toUpperCase()}
         actions={
+          <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={() => setShowSyslog(!showSyslog)} aria-expanded={showSyslog}>SYSLOG</button>
           <button
             onClick={exportLogs}
             className="btn btn-primary"
@@ -61,9 +89,56 @@ export default function AuditLogs() {
           >
             <Download size={13} /> EXPORT
           </button>
+          </div>
         }
       />
 
+      {showSyslog && <form onSubmit={exportSyslog} style={{ padding: 20, marginBottom: 20, border: '1px solid var(--border-bright)' }}>
+        <p style={{ marginTop: 0 }}>{t('audit.syslogDescription')}</p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'end' }}>
+          <label style={{ display: 'grid', gap: 6 }}>{t('audit.syslogHost')}<input required maxLength={253} value={syslog.host} placeholder="syslog.example.com"
+            disabled={sending} onChange={e => setSyslog({ ...syslog, host: e.target.value })} /></label>
+          <label style={{ display: 'grid', gap: 6 }}>{t('audit.syslogPort')}<input required type="number" min={1} max={65535} value={syslog.port}
+            disabled={sending} onChange={e => setSyslog({ ...syslog, port: Number(e.target.value) })} /></label>
+          <label style={{ display: 'grid', gap: 6 }}>{t('audit.syslogProtocol')}<select value={syslog.protocol} disabled={sending}
+            onChange={e => setSyslog({ ...syslog, protocol: e.target.value as 'udp' | 'tcp' })}>
+            <option value="tcp">TCP</option><option value="udp">UDP</option>
+          </select></label>
+          <label style={{ display: 'grid', gap: 6 }}>Facility<select value={syslog.facility} disabled={sending}
+            onChange={e => setSyslog({ ...syslog, facility: Number(e.target.value) })}>
+            {Array.from({ length: 8 }, (_, i) => <option key={i} value={16 + i}>local{i}</option>)}
+          </select></label>
+          <button className="btn btn-primary" type="submit" disabled={sending}>
+            {sending ? t('audit.syslogSending') : t('audit.syslogSend')}
+          </button>
+        </div>
+        {syslogResult && <p role="status">{syslogResult}</p>}
+        {syslogError && <p role="alert" style={{ color: 'var(--red)' }}>{syslogError}</p>}
+      </form>}
+
+      {/* Tabs — both halves of the auditor's job: what the system did, and
+          what was said. Same permission, same person. */}
+      <div style={{ display: 'flex', border: '1px solid var(--border-bright)',
+                    width: 'fit-content', marginBottom: 20 }}>
+        {([['logs', t('audit.tabLogs')], ['evidence', t('audit.tabEvidence')]] as const)
+          .map(([key, label]) => (
+            <button key={key} onClick={() => setTab(key)} role="tab"
+              aria-selected={tab === key}
+              style={{
+                padding: '8px 20px', fontSize: 12, letterSpacing: '0.08em',
+                fontWeight: 600, cursor: 'pointer', border: 'none',
+                background: tab === key ? 'var(--accent)' : 'var(--bg-surface)',
+                color: tab === key ? '#000' : 'var(--text-muted)',
+                borderRight: key === 'logs' ? '1px solid var(--border-bright)' : 'none',
+              }}>
+              {label.toUpperCase()}
+            </button>
+          ))}
+      </div>
+
+      {tab === 'evidence' && <ChatEvidence />}
+
+      {tab === 'logs' && (<>
       {/* Filters */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
         <div style={{ flex: 1, position: 'relative' }}>
@@ -87,7 +162,7 @@ export default function AuditLogs() {
           <option value={100}>100 RECORDS</option>
           <option value={500}>500 RECORDS</option>
         </select>
-        <button onClick={load}
+        <button onClick={() => setRefresh(n => n + 1)}
           style={{
             height: 36, padding: '0 14px',
             border: '1px solid var(--border-bright)', background: 'transparent',
@@ -133,6 +208,7 @@ export default function AuditLogs() {
           </tbody>
         </table>
       </div>
+      </>)}
     </div>
   )
 }

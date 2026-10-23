@@ -461,14 +461,13 @@ async def import_config(
             existing = await db.execute(select(SecuritySettings))
             if existing.scalar_one_or_none():
                 continue
+            # Every one of the names this used to pass — aes_key_rotation_days,
+            # audit_enabled, rate_limit_per_minute and three more — was absent
+            # from the model, so this raised TypeError for anyone who used
+            # config import. Only the two enforced settings exist.
             ss = SecuritySettings(
-                aes_key_rotation_days=ss_data.get("aes_key_rotation_days", 90),
-                rbac_enabled=ss_data.get("rbac_enabled", True),
-                audit_enabled=ss_data.get("audit_enabled", True),
-                rate_limit_per_minute=ss_data.get("rate_limit_per_minute", 30),
-                rate_limit_per_hour=ss_data.get("rate_limit_per_hour", 500),
-                burst_limit=ss_data.get("burst_limit", 5),
-                max_concurrent_requests=ss_data.get("max_concurrent_requests", 5),
+                max_login_attempts=ss_data.get("max_login_attempts", 5),
+                session_timeout_minutes=ss_data.get("session_timeout_minutes", 30),
             )
             db.add(ss)
             imported["security_settings"] += 1

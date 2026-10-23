@@ -1,5 +1,6 @@
+import { RoleContext, canAccessTab } from '../context/permissions'
 // webui/src/components/GlobalSearch.tsx
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useContext } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../api/client'
 import { useSearch } from '../context/search'
@@ -36,8 +37,15 @@ const TAB_LABELS: Record<string, string> = {
 }
 
 export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Props) {
+  const role = useContext(RoleContext)
   const [query, setQuery] = useState('')
   const [allItems, setAllItems] = useState<SearchItem[]>([])
+  // Keyed by the term they answer, so results from a previous query are simply
+  // not used rather than cleared — clearing synchronously inside the effect
+  // cascades renders, and leaving them unkeyed showed stale hits while the next
+  // response was in flight.
+  const [messageHits, setMessageHits] =
+    useState<{ term: string; items: SearchItem[] }>({ term: '', items: [] })
   const [catalogReady, setCatalogReady] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [prevOpen, setPrevOpen] = useState(open)
@@ -69,9 +77,9 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
       api.getProviders(),
       api.getSkills(),
       api.getTools(),
-      api.getKnowledgeBases(),
+      canAccessTab(role, 'knowledge') ? api.getKnowledgeBases() : Promise.resolve([]),
       api.getMCPServers(),
-      api.getPromptTemplates(),
+      canAccessTab(role, 'prompts') ? api.getPromptTemplates() : Promise.resolve([]),
       api.getConversations(),
     ]).then(([agents, providers, skills, tools, knowledge, mcp, prompts, convos]) => {
       const items: SearchItem[] = []
@@ -175,23 +183,66 @@ export default function GlobalSearch({ open, onClose, setTab, recentTabs }: Prop
         }
       }
 
-      setAllItems(items)
+      setAllItems(items.filter(item => canAccessTab(role, item.tab)))
       setCatalogReady(true)
       loadedAtRef.current = Date.now()
     })
-  }, [open])
+  }, [open, role])
 
   useEffect(() => {
     if (open) {
       const timer = setTimeout(() => inputRef.current?.focus(), 30)
       return () => clearTimeout(timer)
     }
-  }, [open])
+  }, [open, role])
+
+  // Message search runs on the server: the conversation list no longer carries
+  // transcripts, and the browser only ever held the 50 most recent anyway.
+  useEffect(() => {
+    const term = query.trim()
+    if (!open || !term) return
+
+    let cancelled = false
+    const timer = setTimeout(() => {
+      void api.searchConversationMessages(term)
+        .then(res => {
+          if (cancelled) return
+          const rows = (res as { results?: Array<{
+            conversation_id: number; conversation_title?: string | null
+            hits?: number
+            matches?: Array<{ message_id: number; snippet?: string }>
+          }> }).results || []
+          setMessageHits({
+            term,
+            items: rows.map(r => ({
+              id: `msg-${r.conversation_id}`,
+              name: r.conversation_title || `Conversation #${r.conversation_id}`,
+              // One row per conversation; the count is what the reader would
+              // otherwise have had to gather from repeated rows.
+              subtitle: (r.hits ?? 1) > 1 ? `${r.hits} MATCHES` : 'MATCH',
+              tab: 'chat' as Tab,
+              category: 'CONVERSATIONS',
+              icon: '◉',
+              // The palette shows one line; the evidence panel shows them all.
+              preview: r.matches?.[0]?.snippet || '',
+            })),
+          })
+        })
+        .catch(() => { if (!cancelled) setMessageHits({ term, items: [] }) })
+    }, 250)
+
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [query, open])
 
   // Filter and group by category
   const q = query.toLowerCase().trim()
+  // Server-side message hits are already matched; only the catalog needs
+  // filtering. Titles still match locally, so a title hit needs no round trip.
+  const hits = messageHits.term === q ? messageHits.items : []
   const filtered = q
-    ? allItems.filter(item => {
+    ? [...hits, ...allItems].filter(item => {
+        if (!canAccessTab(role, item.tab)) return false
+        if (item.id.toString().startsWith('msg-')) return true
         if (item.name.toLowerCase().includes(q) || item.subtitle.toLowerCase().includes(q)) return true
         // Also search inside conversation preview text
         if (item.category === 'CONVERSATIONS' && item.preview) {

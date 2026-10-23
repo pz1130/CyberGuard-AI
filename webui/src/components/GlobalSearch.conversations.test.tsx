@@ -1,3 +1,4 @@
+import { RoleContext } from '../context/permissions'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
@@ -45,7 +46,7 @@ describe('GlobalSearch conversations', () => {
         last_message_preview: 'three open ports' },
     ] as never)
 
-    render(<GlobalSearch open onClose={() => {}} setTab={() => {}} recentTabs={[]} />)
+    render(<RoleContext.Provider value="admin"><GlobalSearch open onClose={() => {}} setTab={() => {}} recentTabs={[]} /></RoleContext.Provider>)
     await _search('port')
 
     await waitFor(() => expect(_rendered('Port scan triage')).toBeTruthy())
@@ -58,7 +59,7 @@ describe('GlobalSearch conversations', () => {
       { id: 5, title: 'Empty', message_count: 0, last_message_preview: null },
     ] as never)
 
-    render(<GlobalSearch open onClose={() => {}} setTab={() => {}} recentTabs={[]} />)
+    render(<RoleContext.Provider value="admin"><GlobalSearch open onClose={() => {}} setTab={() => {}} recentTabs={[]} /></RoleContext.Provider>)
     await _search('empty')
 
     await waitFor(() => expect(_rendered('Empty')).toBeTruthy())
