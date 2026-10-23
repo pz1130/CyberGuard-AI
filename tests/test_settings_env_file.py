@@ -71,13 +71,14 @@ def test_every_key_in_the_example_file_is_either_a_setting_or_infrastructure(tmp
         "CYBERGUARD_ENV_FILE",
     }
     # Read straight from os.environ by a service instead of via Settings —
-    # see app/services/email_service.py::_cfg. Worth knowing, because a value
-    # placed only in .env never reaches os.environ: pydantic-settings parses
-    # that file without exporting it. These work in the containers, where
+    # see app/services/email_service.py::_cfg and app/services/audit_worm.py.
+    # Worth knowing, because a value placed only in .env never reaches
+    # os.environ: pydantic-settings parses that file without exporting it. These work in the containers, where
     # compose's env_file injects real environment variables.
     READ_FROM_ENVIRON = {
         "SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD",
         "SMTP_FROM_EMAIL", "SMTP_USE_TLS", "SMTP_ADMIN_EMAIL",
+        "AUDIT_WORM_BUCKET", "AUDIT_WORM_AUTO_EXPORT", "AUDIT_WORM_RETAIN_DAYS",
     }
     declared = set(Settings.model_fields)
     keys = set(re.findall(r'^([A-Z][A-Z0-9_]*)=',

@@ -126,6 +126,7 @@ async def test_a_disabled_idle_window_still_indexes_the_session(redis):
 async def test_a_user_can_change_their_own_password(redis):
     from app.core.auth import AuthenticatedUser, get_password_hash, verify_password
     from app.core.database import AsyncSessionLocal
+    from app.models.audit import AuditLog
     from app.models.user import User
     from app.routers.auth import change_password
     from app.schemas.auth import PasswordChangeRequest
@@ -149,6 +150,8 @@ async def test_a_user_can_change_their_own_password(redis):
             assert verify_password("Replaced-Pass-2", user.hashed_password)
             assert not verify_password("Original-Pass-1", user.hashed_password)
         finally:
+            # The change is audited, and audit_logs.user_id is ON DELETE RESTRICT.
+            await db.execute(AuditLog.__table__.delete().where(AuditLog.user_id == uid))
             await db.execute(User.__table__.delete().where(User.id == uid))
             await db.commit()
 

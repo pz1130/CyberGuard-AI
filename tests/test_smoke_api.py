@@ -38,7 +38,17 @@ def _request(method: str, path: str, body: dict | None = None, token: str | None
         return exc.code, (json.loads(raw) if raw else None)
 
 
+def _require_disposable_smoke_environment():
+    from app.config import settings
+    if (os.getenv("ALLOW_SMOKE_MUTATIONS") != "true"
+            or settings.ENVIRONMENT != "testing"):
+        raise RuntimeError(
+            "Smoke fixtures require ALLOW_SMOKE_MUTATIONS=true and ENVIRONMENT=testing "
+            "against a disposable deployment.")
+
+
 async def _ensure_smoke_fixtures() -> int:
+    _require_disposable_smoke_environment()
     hashed = bcrypt.hashpw(SMOKE_PASSWORD.encode(), bcrypt.gensalt()).decode()
     async with get_db_context() as session:
         result = await session.execute(select(User).where(User.username == SMOKE_USER))

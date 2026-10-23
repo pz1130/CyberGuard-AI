@@ -349,6 +349,9 @@ class TestApprovalService(unittest.IsolatedAsyncioTestCase):
         mock_record = MagicMock()
         mock_record.status = "approved"
         mock_record.approver_comment = "looks good"
+        # decide() refuses self-approval and expired requests before deciding.
+        mock_record.user_id = 2
+        mock_record.expires_at = None
 
         with (
             patch.object(ApprovalService, "_publish", new_callable=AsyncMock) as mock_pub,

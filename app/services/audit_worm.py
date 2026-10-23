@@ -9,7 +9,6 @@ import json
 import os
 import hashlib
 import base64
-import time
 import uuid
 from types import SimpleNamespace
 from datetime import timezone
@@ -140,58 +139,53 @@ async def export_new(retain_days: int = 365) -> dict:
             "retain_until": retain_until.isoformat()}
 
 
-_MAX_OBJECTS = 1000
-_MAX_BYTES = 64 * 1024 * 1024
+def _iter_external_archives():
+    """Read every version page, retaining only one object's payload at a time."""
+    client, bucket = _s3_client()
+    markers = {}
+    while True:
+        listing = client.list_object_versions(
+            Bucket=bucket, Prefix='audit/worm/', MaxKeys=1000, **markers)
+        for item in listing.get('Versions', []):
+            key, version = item['Key'], item.get('VersionId')
+            if not version:
+                raise RuntimeError('Versioned immutable archive storage is required')
+            retention = client.get_object_retention(
+                Bucket=bucket, Key=key, VersionId=version).get('Retention', {})
+            obj = client.get_object(Bucket=bucket, Key=key, VersionId=version)
+            try:
+                body = obj['Body'].read()
+            finally:
+                obj['Body'].close()
+            records = [json.loads(line) for line in body.decode().splitlines() if line.strip()]
+            yield {'key': key, 'version_id': version,
+                   'locked': _retention_valid(retention), 'records': records,
+                   'sha256': hashlib.sha256(body).hexdigest()}
+        if not listing.get('IsTruncated'):
+            break
+        next_markers = {'KeyMarker': listing['NextKeyMarker'],
+                        'VersionIdMarker': listing['NextVersionIdMarker']}
+        if next_markers == markers:
+            raise RuntimeError('Archive pagination did not advance')
+        markers = next_markers
 
 
 def _read_external_archives():
-    """Discover storage objects independently of mutable DB export markers."""
-    client, bucket = _s3_client()
-    listing = client.list_object_versions(Bucket=bucket, Prefix='audit/worm/', MaxKeys=min(1000, _MAX_OBJECTS + 1))
-    objects = listing.get('Versions', [])
-    partial = bool(listing.get('IsTruncated')) or len(objects) > _MAX_OBJECTS
-    archives = []
-    total_bytes = 0
-    deadline = time.monotonic() + 20
-    for item in objects[:_MAX_OBJECTS]:
-        if time.monotonic() > deadline or total_bytes + item['Size'] > _MAX_BYTES:
-            partial = True
-            break
-        key = item['Key']
-        version = item.get('VersionId')
-        if not version:
-            raise RuntimeError('Versioned immutable archive storage is required')
-        retention = client.get_object_retention(Bucket=bucket, Key=key, VersionId=version).get('Retention', {})
-        locked = _retention_valid(retention)
-        obj = client.get_object(Bucket=bucket, Key=key, VersionId=version)
-        try:
-            body = obj['Body'].read(_MAX_BYTES - total_bytes + 1)
-        finally:
-            obj['Body'].close()
-        total_bytes += len(body)
-        if total_bytes > _MAX_BYTES:
-            partial = True
-            break
-        records = [json.loads(line) for line in body.decode().splitlines() if line.strip()]
-        archives.append({'key': key, 'version_id': version, 'locked': locked, 'records': records,
-                         'sha256': hashlib.sha256(body).hexdigest()})
-    return archives, partial
+    """Compatibility helper for callers needing a materialized inventory."""
+    return list(_iter_external_archives()), False
 
 
 async def verify_external_evidence():
     if not (os.environ.get('S3_ENDPOINT') or os.environ.get('OSS_ENDPOINT')) or not os.environ.get('S3_ACCESS_KEY'):
         return {'status': 'not_configured', 'verified': False}
     try:
-        archives, partial = await asyncio.to_thread(_read_external_archives)
-        if not archives:
-            return {'status': 'partial' if partial else 'no_archives', 'verified': False}
         from sqlalchemy import select
         from app.core.database import get_db_context
         from app.models.audit import AuditLog
         async with get_db_context() as session:
             rows = (await session.execute(select(AuditLog).order_by(AuditLog.id))).scalars().all()
         current = {r.id: json.loads(_serialize_jsonl([r])) for r in rows}
-        return compare_archives(archives, current, partial=partial)
+        return await asyncio.to_thread(lambda: compare_archives(_iter_external_archives(), current))
     except Exception as exc:
         import logging
         logging.getLogger(__name__).exception('External audit evidence check failed')
@@ -208,7 +202,9 @@ def compare_archives(archives, current, *, partial=False):
     incomplete = 0
     objects = []
     required = set(_FIELDS) | {'timestamp'}
+    archive_count = 0
     for archive in archives:
+        archive_count += 1
         records = archive['records']
         if not archive['locked']:
             unprotected += 1
@@ -230,13 +226,15 @@ def compare_archives(archives, current, *, partial=False):
         objects.append({'object_key': archive['key'], 'sha256': archive['sha256'], 'version_id': archive.get('version_id'),
                         'first_row_id': ids[0], 'last_row_id': ids[-1],
                         'retention_locked': archive['locked']})
+    if not archive_count:
+        return {'status': 'partial' if partial else 'no_archives', 'verified': False}
     last = max(covered) if covered else None
     coverage_gap = last is not None and any(rid <= last and rid not in covered for rid in current)
     status = ('mismatch' if mismatches else 'unprotected' if unprotected else
               'partial' if partial or incomplete or coverage_gap else 'verified')
     return {'status': status, 'verified': status == 'verified',
             'archived_rows': len(covered), 'mismatch_count': len(mismatches),
-            'mismatch_row_ids': sorted(mismatches)[:100], 'objects_checked': len(archives),
+            'mismatch_row_ids': sorted(mismatches)[:100], 'objects_checked': archive_count,
             'unprotected_objects': unprotected, 'incomplete_objects': incomplete,
             'last_archived_row_id': last,
             'unarchived_rows': sum(rid not in covered for rid in current),

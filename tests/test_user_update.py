@@ -19,6 +19,7 @@ from pydantic import ValidationError
 
 from app.core.auth import AuthenticatedUser, verify_password
 from app.core.database import AsyncSessionLocal
+from app.models.audit import AuditLog
 from app.models.user import User
 from app.routers.users import update_user
 from app.schemas.user import UserUpdate
@@ -57,6 +58,9 @@ async def target():
         ids = (user.id, actor.id, actor.username, actor.email)
     yield ids
     async with AsyncSessionLocal() as db:
+        # audit_logs.user_id is ON DELETE RESTRICT (migration 047), so the
+        # audit rows these edits wrote have to go first.
+        await db.execute(AuditLog.__table__.delete().where(AuditLog.user_id.in_([ids[0], ids[1]])))
         await db.execute(User.__table__.delete().where(User.id.in_([ids[0], ids[1]])))
         await db.commit()
 

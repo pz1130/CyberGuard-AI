@@ -251,6 +251,16 @@ def _model_type_of(models: list, model_name: str) -> str:
     return classify_model_type(model_name)
 
 
+def _minimax_preset_region(base_url: str) -> str | None:
+    # Exact built-in endpoints only: custom gateways and paths belong to users.
+    url = (base_url or "").rstrip("/")
+    for host, region in (("api.minimaxi.com", "国内版"),
+                         ("api.minimax.cn", "国内版"), ("api.minimax.io", "海外版")):
+        if url in (f"https://{host}/v1", f"https://{host}/anthropic"):
+            return region
+    return None
+
+
 async def _seed_presets(db: AsyncSession):
     """Seed preset providers (idempotent — only seeds if name doesn't exist).
 
@@ -273,8 +283,8 @@ async def _seed_presets(db: AsyncSession):
     # api.minimax.cn instead.
     legacy_result = await db.execute(select(Provider).where(Provider.name == "MiniMax"))
     legacy = legacy_result.scalar_one_or_none()
-    if legacy is not None:
-        is_international = "api.minimax.io" in (legacy.base_url or "").lower()
+    if legacy is not None and _minimax_preset_region(legacy.base_url):
+        is_international = _minimax_preset_region(legacy.base_url) == "海外版"
         target_name = "MiniMax 海外版" if is_international else "MiniMax 国内版"
         target_url = "https://api.minimax.io/v1" if is_international else "https://api.minimax.cn/v1"
         target_result = await db.execute(select(Provider).where(Provider.name == target_name))
@@ -292,9 +302,8 @@ async def _seed_presets(db: AsyncSession):
         select(Provider).where(Provider.name == "MiniMax 国内版")
     )
     domestic = domestic_result.scalar_one_or_none()
-    domestic_host = (domestic.base_url or "").lower() if domestic is not None else ""
     if domestic is not None and (
-        "api.minimaxi.com" in domestic_host or "api.minimax.cn" in domestic_host
+        _minimax_preset_region(domestic.base_url) == "国内版"
     ) and domestic.base_url != "https://api.minimax.cn/v1":
         domestic.base_url = "https://api.minimax.cn/v1"
         await db.commit()
@@ -303,12 +312,9 @@ async def _seed_presets(db: AsyncSession):
         select(Provider).where(Provider.name == "MiniMax 海外版")
     )
     international = international_result.scalar_one_or_none()
-    international_host = (
-        (international.base_url or "").lower() if international is not None else ""
-    )
     if (
         international is not None
-        and "api.minimax.io" in international_host
+        and _minimax_preset_region(international.base_url) == "海外版"
         and international.base_url != "https://api.minimax.io/v1"
     ):
         international.base_url = "https://api.minimax.io/v1"
