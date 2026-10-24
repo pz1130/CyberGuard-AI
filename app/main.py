@@ -348,6 +348,8 @@ async def startup_probe():
 from app.routers import auth, users, agents, skills, knowledge, chat, tasks, audit, backup, config, providers, mcp, envvars, approval, token_usage, master_config, conversations, prompt_templates, security, kill_switch, governance_config, governance_rollback, governance_metrics
 from app.routers import chat_stream, gateway, sso, email_config
 
+from app.routers import findings
+app.include_router(findings.router, prefix="/api/v1", tags=["Findings"])
 app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
 app.include_router(users.router, prefix="/api/v1", tags=["Users"])
 # Kill-switch static paths must be registered before /agents/{agent_id}.

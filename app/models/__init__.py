@@ -1,4 +1,5 @@
 """Models module initialization."""
+from app.models.finding import Finding, FindingEvent
 from app.models.email_config import EmailConfig
 from app.models.user import User, RoleModel
 from app.models.agent import AgentConfig, AgentExecution
@@ -23,6 +24,7 @@ from app.models.conversation_message import ConversationMessage
 from app.models.run_event import AgentRunEvent
 
 __all__ = [
+    "Finding", "FindingEvent",
     "EmailConfig",
     "User", "RoleModel",
     "AgentConfig", "AgentExecution",

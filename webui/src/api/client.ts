@@ -29,6 +29,18 @@ async function request(path: string, options: RequestInit = {}): Promise<unknown
 }
 
 export const api = {
+  getFindings: (status = '', offset = 0) => request(`/findings?offset=${offset}${status ? `&status=${encodeURIComponent(status)}` : ''}`),
+  getFinding: (id: number) => request(`/findings/${id}`),
+  createFinding: (body: JsonBody) => request('/findings', { method: 'POST', body: JSON.stringify(body) }),
+  changeFinding: (id: number, body: JsonBody) => request(`/findings/${id}/actions`, { method: 'POST', body: JSON.stringify(body) }),
+  getFindingAssignees: () => request('/findings/assignees'),
+  downloadFindingReport: async (id: number) => {
+    const res = await fetch(`${BASE}/findings/${id}/report`, { headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` } })
+    checkAuthentication(res)
+    if (!res.ok) throw new Error(await res.text())
+    return res.blob()
+  },
+
   // Real user activity. Deliberately its own endpoint: the UI polls on timers,
   // and an idle window that any request extended would never close.
   heartbeat: () => request('/auth/heartbeat', { method: 'POST' }),

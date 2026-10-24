@@ -158,3 +158,13 @@ async def test_preapproved_pool_tool_keeps_rollback_and_spends_approval_once(mon
     assert r._pre_approved is False
     executed.assert_awaited_once()
     assert executed.await_args.kwargs["approved"] is True
+
+
+@pytest.mark.asyncio
+async def test_finding_submit_is_refused_when_the_kill_switch_is_engaged(halted, monkeypatch):
+    r = _runner()
+    submitted = AsyncMock()
+    monkeypatch.setattr('app.services.finding_tools.submit_from_agent', submitted)
+    result = await r._dispatch(_call('finding_submit', title='Observation'))
+    submitted.assert_not_awaited()
+    assert _is_refusal(result), result

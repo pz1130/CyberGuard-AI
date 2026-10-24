@@ -72,6 +72,7 @@
     "required": "Required"
   },
   "nav": {
+    "findings": "Findings",
     "core": "Core",
     "features": "Features",
     "ops": "Ops",
@@ -685,5 +686,62 @@
         "audit_completeness": "Local audit verification",
         "rollback_success_rate": "Rollback success"
     }
-}
+},
+  "findings": {
+    "title": "Findings",
+    "subtitle": "Record evidence, review findings and verify remediation.",
+    "new": "New finding",
+    "filter": "Status filter",
+    "all": "All statuses",
+    "loading": "Loading findings…",
+    "titleField": "Title",
+    "severity": "Severity",
+    "state": "Status",
+    "empty": "No findings yet.",
+    "previous": "Previous",
+    "next": "Next",
+    "total": "Total: {{count}}",
+    "target": "Target",
+    "description": "Description",
+    "remediation": "Remediation",
+    "evidence": "Original evidence / retest evidence",
+    "submit": "Submit for review",
+    "export": "Export Markdown",
+    "source": "Source",
+    "owner": "Remediation owner",
+    "unassigned": "Unassigned",
+    "independent": "An independent reviewer must confirm and retest this finding.",
+    "note": "Review / progress note",
+    "chooseOwner": "Choose an owner",
+    "timeline": "Evidence and review history",
+    "status": {
+      "pending": "Pending review",
+      "confirmed": "Confirmed",
+      "in_progress": "In progress",
+      "ready_for_retest": "Ready for retest",
+      "resolved": "Resolved",
+      "rejected": "Rejected"
+    },
+    "actions": {
+      "submit": "Submitted",
+      "confirm": "Confirm",
+      "reject": "Reject",
+      "assign": "Assign owner",
+      "ready": "Request retest",
+      "resolve": "Retest passed",
+      "reopen": "Reopen",
+      "evidence": "Append evidence"
+    },
+    "severities": {
+      "info": "Info",
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "critical": "Critical"
+    },
+    "sources": {
+      "human": "Human",
+      "agent": "Agent"
+    }
+  }
 }

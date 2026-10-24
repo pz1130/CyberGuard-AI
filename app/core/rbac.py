@@ -46,6 +46,11 @@ class Permission(str, Enum):
     TASK_WRITE = "task:write"
     TASK_EXECUTE = "task:execute"
 
+    FINDING_READ = "finding:read"
+    FINDING_SUBMIT = "finding:submit"
+    FINDING_MANAGE = "finding:manage"
+    FINDING_REVIEW = "finding:review"
+
     # Audit
     AUDIT_READ = "audit:read"
     APPROVAL_READ = "approval:read"
@@ -62,6 +67,7 @@ class Permission(str, Enum):
 # Role-permission mapping
 ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
     Role.ADMIN: {
+        Permission.FINDING_READ, Permission.FINDING_SUBMIT, Permission.FINDING_MANAGE, Permission.FINDING_REVIEW,
         Permission.USER_READ, Permission.USER_WRITE, Permission.USER_DELETE,
         Permission.AGENT_READ, Permission.AGENT_WRITE, Permission.AGENT_DELETE, Permission.AGENT_EXECUTE,
         Permission.SKILL_READ, Permission.SKILL_WRITE, Permission.SKILL_SCRIPT_APPROVE,
@@ -72,12 +78,14 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.ADMIN_ALL,
     },
     Role.OPERATOR: {
+        Permission.FINDING_READ, Permission.FINDING_SUBMIT, Permission.FINDING_MANAGE,
         Permission.AGENT_READ, Permission.AGENT_EXECUTE,
         Permission.SKILL_READ,
         Permission.KNOWLEDGE_READ,
         Permission.TASK_READ, Permission.TASK_WRITE, Permission.TASK_EXECUTE,
     },
     Role.ANALYST: {
+        Permission.FINDING_READ, Permission.FINDING_SUBMIT, Permission.FINDING_MANAGE, Permission.FINDING_REVIEW,
         Permission.AGENT_READ,
         Permission.SKILL_READ,
         Permission.KNOWLEDGE_READ,
@@ -88,8 +96,9 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.SKILL_READ,
         Permission.TASK_READ,
     },
-    Role.APPROVER: {Permission.APPROVAL_READ, Permission.APPROVAL_DECIDE},
+    Role.APPROVER: {Permission.FINDING_READ, Permission.FINDING_REVIEW, Permission.APPROVAL_READ, Permission.APPROVAL_DECIDE},
     Role.AUDITOR: {
+        Permission.FINDING_READ,
         Permission.AUDIT_READ,
         Permission.TASK_READ,
     },

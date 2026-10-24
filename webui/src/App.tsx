@@ -12,6 +12,7 @@ import { applyTheme, readStoredDark } from './theme'
 import { useIdleLogout } from './hooks/useIdleLogout'
 
 const PAGES: Record<Tab, { labelKey: string; component: LazyExoticComponent<ComponentType> }> = {
+  findings: { labelKey: 'nav.findings', component: lazy(() => import('./pages/Findings')) },
   chat: { labelKey: 'nav.chat', component: lazy(() => import('./pages/Chat')) },
   agents: { labelKey: 'nav.agents', component: lazy(() => import('./pages/Agents')) },
   providers: { labelKey: 'nav.providers', component: lazy(() => import('./pages/Providers')) },

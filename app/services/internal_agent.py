@@ -419,6 +419,14 @@ class InternalAgentRunner:
                     },
                 },
             })
+        # Only expose submission to an active user with the corresponding grant.
+        from app.services.finding_tools import submission_tool
+        finding_tool = await submission_tool(getattr(self, "_user_id", None))
+        tools = [t for t in tools if t["function"]["name"] != "finding_submit"]
+        if finding_tool:
+            getattr(self, "_mcp_by_name", {}).pop("finding_submit", None)
+            self._pool_tools_by_name.pop("finding_submit", None)
+            tools.append(finding_tool)
         return tools
 
     # -------- Tool governance (INV-28 before_tool_call) --------
@@ -432,6 +440,8 @@ class InternalAgentRunner:
         tagged — the kill switch and the audit trail apply either way, which is
         the part that was missing.
         """
+        if name == "finding_submit":
+            return {"action_category": "annotate", "risk_tier": "low", "transport": "builtin"}
         if name in (getattr(self, "_mcp_by_name", None) or {}):
             tool_row, _server = self._mcp_by_name[name]
             return {"action_category": getattr(tool_row, "action_category", None),
@@ -632,6 +642,10 @@ class InternalAgentRunner:
             args = {}
 
         async def _execute(_ctx, bound_args: dict) -> str:
+            if name == "finding_submit":
+                from app.services.finding_tools import submit_from_agent
+                return await submit_from_agent(
+                    getattr(self, "_user_id", None), self.agent_id, bound_args)
             # 1. MCP tool lookup
             if hasattr(self, "_mcp_by_name") and name in self._mcp_by_name:
                 from app.services.mcp_executor import execute_mcp_tool

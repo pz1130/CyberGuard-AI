@@ -72,6 +72,7 @@
     "required": "必填"
   },
   "nav": {
+    "findings": "安全发现",
     "core": "核心",
     "features": "功能",
     "ops": "运维",
@@ -685,5 +686,62 @@
         "audit_completeness": "本地审计验证",
         "rollback_success_rate": "回滚成功率"
     }
-}
+},
+  "findings": {
+    "title": "安全发现",
+    "subtitle": "保留原始证据，确认问题并验证修复结果。",
+    "new": "新增发现",
+    "filter": "状态筛选",
+    "all": "全部状态",
+    "loading": "正在加载…",
+    "titleField": "标题",
+    "severity": "严重程度",
+    "state": "状态",
+    "empty": "暂无安全发现。",
+    "previous": "上一页",
+    "next": "下一页",
+    "total": "共 {{count}} 条",
+    "target": "目标",
+    "description": "问题描述",
+    "remediation": "修复建议",
+    "evidence": "原始证据 / 复测证据",
+    "submit": "提交审核",
+    "export": "导出 Markdown",
+    "source": "来源",
+    "owner": "修复负责人",
+    "unassigned": "尚未分配",
+    "independent": "需要由独立审核人确认问题和复测结果。",
+    "note": "审核 / 处理备注",
+    "chooseOwner": "选择负责人",
+    "timeline": "证据与处理记录",
+    "status": {
+      "pending": "待确认",
+      "confirmed": "已确认",
+      "in_progress": "修复中",
+      "ready_for_retest": "待复测",
+      "resolved": "已解决",
+      "rejected": "已驳回"
+    },
+    "actions": {
+      "submit": "提交发现",
+      "confirm": "确认问题",
+      "reject": "驳回",
+      "assign": "分配负责人",
+      "ready": "申请复测",
+      "resolve": "复测通过",
+      "reopen": "重新打开",
+      "evidence": "补充证据"
+    },
+    "severities": {
+      "info": "提示",
+      "low": "低",
+      "medium": "中",
+      "high": "高",
+      "critical": "严重"
+    },
+    "sources": {
+      "human": "人工",
+      "agent": "Agent"
+    }
+  }
 }

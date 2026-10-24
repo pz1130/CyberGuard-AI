@@ -1585,3 +1585,16 @@ button {
   box-shadow: 0 0 0 1px var(--accent-border), 0 0 0 5px var(--accent-dim);
   transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
 }
+
+.findings-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 16px 0; }
+.findings-layout { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(360px, 1.3fr); gap: 24px; margin-top: 20px; }
+.findings-panel { border: 1px solid var(--border); background: var(--bg-surface); padding: 20px; min-width: 0; }
+.findings-page label { display: block; margin: 12px 0; }
+.findings-panel input, .findings-panel textarea, .findings-panel select { display: block; width: 100%; margin-top: 6px; }
+.findings-page pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.findings-table { width: 100%; border-collapse: collapse; }
+.findings-table th, .findings-table td { text-align: left; padding: 10px 6px; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.findings-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.findings-event { border-top: 1px solid var(--border); padding: 14px 0; }
+.findings-event small { overflow-wrap: anywhere; }
+@media (max-width: 1000px) { .findings-layout { grid-template-columns: 1fr; } }

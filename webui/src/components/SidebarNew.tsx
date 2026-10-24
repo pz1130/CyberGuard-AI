@@ -19,7 +19,7 @@ export type Tab =
   | 'chat' | 'agents' | 'providers' | 'skills' | 'tools'
   | 'knowledge' | 'mcp' | 'envvars'
   | 'security' | 'token' | 'backup' | 'audit' | 'approvals'
-  | 'users' | 'settings' | 'prompts' | 'govDashboard'
+  | 'findings' | 'users' | 'settings' | 'prompts' | 'govDashboard'
 
 type NavItem = {
   key: Tab
@@ -38,6 +38,7 @@ const NAV_GROUPS: NavGroup[] = [
     id: 'core',
     labelKey: 'nav.core',
     items: [
+      { key: 'findings', labelKey: 'nav.findings', icon: <ShieldAlert size={16} /> },
       { key: 'chat', labelKey: 'nav.chat', icon: <MessageSquare size={16} /> },
     ],
   },
