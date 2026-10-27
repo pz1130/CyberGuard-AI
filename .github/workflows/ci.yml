@@ -3,7 +3,7 @@ name: release-gate
 on:
   pull_request:
   push:
-    branches: [main, "codex/release-candidate"]
+    branches: [main]
 
 permissions:
   contents: read
