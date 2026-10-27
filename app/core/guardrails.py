@@ -8,9 +8,9 @@ Rule-based only — there is no model-based classifier. Strategies:
   4. Structural anomaly scoring (entropy + repetition flags)
 
 Critical risk is always blocked; medium and high pass through flagged unless
-block=True. Callers screen only the text a user types: attachment text,
-knowledge-base context, conversation history and tool/MCP output are added
-later and are never screened. See docs/delivery/ARCHITECTURE_AND_SECURITY.md.
+block=True. Rules cover English and Chinese. Callers screen only the text a
+user types: attachment text, knowledge-base context, conversation history and
+tool/MCP output are added later and are never screened. See docs/delivery/ARCHITECTURE_AND_SECURITY.md.
 """
 
 from __future__ import annotations
@@ -82,7 +82,7 @@ _INJECTION_PATTERNS: list[tuple[str, re.Pattern, str]] = [
     (
         "direct_instruction_override",
         re.compile(
-            r'^(ignore|forget|disregard|discard)\s+(all?\s+)?(previous|prior|above|'
+            r'^\s*(ignore|forget|disregard|discard)\s+(all?\s+)?(previous|prior|above|'
             r'instructions?|rules?|guidelines?|system)\b',
             re.IGNORECASE,
         ),
@@ -92,7 +92,7 @@ _INJECTION_PATTERNS: list[tuple[str, re.Pattern, str]] = [
     (
         "jailbreak_prefix",
         re.compile(
-            r'^(you\s+are\s+now|pretend\s+you\s+are|switch\s+to\s+being|'
+            r'^\s*(you\s+are\s+now|pretend\s+you\s+are|switch\s+to\s+being|'
             r'act\s+as\s+if\s+you\s+are|imagine\s+you\s+are|'
             r'disregard\s+.*?\s+and\s+be|forget.*?and\s+become)\b',
             re.IGNORECASE,
@@ -115,6 +115,47 @@ _INJECTION_PATTERNS: list[tuple[str, re.Pattern, str]] = [
 ]
 
 
+# Chinese equivalents of the start-anchored override and jailbreak rules.
+# Analysts paste attacker content for analysis, so these stay anchored to the
+# start and need an explicit target or restriction-removal intent
+# ("忽略告警规则中的误报" must pass). They run against _zh_head(), which has no
+# whitespace, so the patterns contain no \s: adjacent \s* around optional
+# characters backtrack quadratically on long whitespace runs.
+_ZH_START_PATTERNS: list[tuple[str, re.Pattern, str]] = [
+    (
+        "direct_instruction_override_zh",
+        re.compile(
+            r'^请?(忽略|无视|忘记|忘掉|不要理会|别管|抛开|丢弃|放弃|不要遵守|不用遵守|停止遵守)掉?你?'
+            r'(?:(?:之前|以上|上面|前面|先前|此前|原来|原有|原先|所有|全部|一切)的?'
+            r'(?:(?:所有|全部|一切)的?)?(?:系统)?|系统)'
+            r'(指令|指示|命令|规则|设定|提示词|提示|要求|约束|限制|准则)'
+        ),
+        "Input begins with a Chinese instruction-override attempt",
+    ),
+    (
+        "jailbreak_prefix_zh",
+        re.compile(
+            r'^(?:'
+            # Bare 你是 only after 从现在开始: "你是否能…" is an ordinary question.
+            r'(?:从现在(?:开始|起)[，,]?你是|(?:从现在(?:开始|起)[，,]?)?'
+            r'(?:你现在是|你现在就是|你将是|你将成为|假装你是|假设你是|扮演|你来扮演))'
+            r'[^。]{0,20}?(?:没有|不受|无|解除了?|摆脱了?|绕过|不再有)(?:任何)?的?(?:限制|约束|审查|过滤|规则|道德)'
+            r'|请?(?:进入|开启|启用|切换到|切换为)(?:越狱|DAN|无限制|无审查|无约束)模式'
+            r')',
+            re.IGNORECASE,
+        ),
+        "Input begins with a Chinese jailbreak or restriction-removal attempt",
+    ),
+]
+
+_ZH_HEAD_CHARS = 200
+
+
+def _zh_head(text: str) -> str:
+    """Start of the input with all whitespace removed (Chinese uses none)."""
+    return re.sub(r"\s+", "", text)[:_ZH_HEAD_CHARS]
+
+
 def _check_injection_patterns(text: str) -> tuple[list[str], list[str]]:
     """
     Run all direct injection patterns.
@@ -124,6 +165,11 @@ def _check_injection_patterns(text: str) -> tuple[list[str], list[str]]:
     messages: list[str] = []
     for name, pattern, msg in _INJECTION_PATTERNS:
         if pattern.search(text):
+            triggered.append(name)
+            messages.append(msg)
+    head = _zh_head(text)
+    for name, pattern, msg in _ZH_START_PATTERNS:
+        if pattern.match(head):
             triggered.append(name)
             messages.append(msg)
     return triggered, messages
@@ -186,7 +232,7 @@ _SOFT_REJECT_PATTERNS: list[tuple[str, re.Pattern, str]] = [
     (
         "role_play_attempt",
         re.compile(
-            r'^(you\s+are\s+|you\s+act\s+as\s+|as\s+a\s+|as\s+an\s+)',
+            r'^\s*(you\s+are\s+|you\s+act\s+as\s+|as\s+a\s+|as\s+an\s+)',
             re.IGNORECASE,
         ),
         "Input begins with a role-play directive",
@@ -371,6 +417,8 @@ _CRITICAL_FLAGS = frozenset({
     "jailbreak_prefix",
     "recursive_injection",
     "direct_instruction_override",
+    "direct_instruction_override_zh",
+    "jailbreak_prefix_zh",
 })
 
 
