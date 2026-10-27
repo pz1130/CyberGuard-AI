@@ -46,7 +46,7 @@ async def chat(
     """
     user_id = current_user.user_id
 
-    # P1-4: Prompt injection guardrail (synchronous, no LLM classifier in REST path)
+    # P1-4: Prompt injection guardrail (rule-based; screens only the typed message)
     guardrail_result: GuardrailResult = check_prompt_sync(body.message)
     if guardrail_result.blocked:
         raise HTTPException(
@@ -149,7 +149,8 @@ async def chat_attachments(
             }
         )
 
-    # P1-4: Prompt injection guardrail
+    # P1-4: Prompt injection guardrail. Screens the typed message only; the
+    # attachment text is extracted later in the worker and is not screened.
     guardrail_result: GuardrailResult = check_prompt_sync(message)
     if guardrail_result.blocked:
         raise HTTPException(
