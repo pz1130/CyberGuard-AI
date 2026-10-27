@@ -70,7 +70,7 @@ async def stream_chat(
             detail="Global kill switch is active; chat operations are suspended",
         )
 
-    # Guardrail check (sync, no LLM classifier in hot path)
+    # Guardrail check (rule-based; screens only the typed message)
     gr = check_prompt_sync(body.message)
     if gr.blocked:
         raise HTTPException(

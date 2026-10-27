@@ -15,7 +15,8 @@ covered by deployment-specific allowlists and data-handling decisions.
 
 - Password hashing and optional Entra ID SSO
 - AES-256-GCM authenticated encryption for stored credentials
-- Prompt-injection detection and input sanitisation
+- Rule-based prompt-injection screening of typed user input (scope and limits
+  below)
 - PII redaction/blocking and secrets detection
 - Structured risk categories, confidence gates, and human approval
 - Cross-agent privilege inheritance and fan-out limits
@@ -31,6 +32,43 @@ Encrypted credentials do not protect a running process that is already
 compromised. Approval reduces agent error but is only separation of duties when
 the approver is organisationally independent. A deployment must supply TLS,
 host hardening, monitoring, backup custody, and provider governance.
+
+## Prompt-injection screening
+
+Screening is rule-based: regular expressions and structural scoring in
+`app/core/guardrails.py`. There is no model-based classifier.
+
+**What is screened.** Only the text a user types, at `POST /api/v1/chat`,
+`/chat/attachments`, `/chat/stream`, `/agents/{id}/execute` and
+`/agents/{id}/execute/stream`, and again when the worker picks up a chat task.
+
+**What happens.**
+
+- *Critical* risk is rejected — HTTP 400 at the API, a failed execution in the
+  worker. Critical means a leading jailbreak or role-play prefix, fake system
+  tags such as `<system>`, an instruction override such as "ignore previous
+  instructions" at the start of the input, or a combined score of 0.7 or more.
+- *Medium* and *high* risk pass. On `POST /chat` only, a sanitised copy (tags,
+  impersonation markers and delimiter tricks removed) is forwarded instead and
+  the substitution is logged; the other entry points forward the original text.
+
+**What is not screened (indirect injection).** Text extracted from attachments
+(PDF, Office, OCR), knowledge-base retrieval results, conversation history,
+per-conversation prompt overrides, and tool, MCP, web-search and sub-agent
+output all reach the model unscreened. An instruction planted in a document or
+a tool result is therefore not detected.
+
+**What the patterns miss.** They are English-only and mostly anchored to the
+start of the input. Measured against the current rules: an instruction override
+written in Chinese, the same English instruction placed mid-sentence, and a
+base64-encoded copy are all scored *low* and pass.
+
+**What still applies.** Tool risk categories and confidence gates, human
+approval for higher-risk actions, the kill switch, egress controls and the
+audit trail apply whatever the source of an instruction. They limit what an
+injected instruction can make an agent *do*; they do not stop it shaping what
+an agent *says*. Treat summaries of untrusted documents and tool output as
+untrusted.
 
 ## Container runtime hardening
 
