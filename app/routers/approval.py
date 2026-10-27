@@ -21,6 +21,7 @@ from app.schemas.approval import (
 from app.services.approval_service import (
     ApprovalService,
     ApprovalExpiredError,
+    InsufficientApproverRoleError,
     SelfApprovalError,
 )
 
@@ -213,10 +214,12 @@ async def decide_approval(
             request_id=record.request_id,
             decision=body.decision,
             approver_id=current_user.user_id,
+            approver_role=current_user.role,
             comment=body.comment,
         )
-    except SelfApprovalError as e:
+    except (SelfApprovalError, InsufficientApproverRoleError) as e:
         from app.core.audit import record_action
+        reason = "self_approval" if isinstance(e, SelfApprovalError) else "insufficient_role"
         await record_action(
             user_id=current_user.user_id,
             action="approval.decide.denied",
@@ -226,7 +229,7 @@ async def decide_approval(
                 "request_id": record.request_id,
                 "decision": body.decision,
             },
-            output_data={"status": "denied", "reason": "self_approval"},
+            output_data={"status": "denied", "reason": reason},
         )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except ApprovalExpiredError as e:

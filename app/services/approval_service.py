@@ -30,6 +30,10 @@ class SelfApprovalError(ValueError):
     pass
 
 
+class InsufficientApproverRoleError(ValueError):
+    pass
+
+
 class ApprovalService:
     """Service for managing human-in-the-loop approval requests."""
 
@@ -176,7 +180,9 @@ class ApprovalService:
         if settings.AUTO_APPROVE:
             logger.info(f"[approval] AUTO_APPROVE — auto-approving request_id={request_id}")
             try:
-                await ApprovalService.decide(request_id, "approved", approver_id=0, comment="Auto-approved by system")
+                # AUTO_APPROVE is development-only and bypasses every gate by design.
+                await ApprovalService.decide(request_id, "approved", approver_id=0,
+                                             approver_role="admin", comment="Auto-approved by system")
             except ApprovalExpiredError:
                 return "expired", None
             return "approved", "Auto-approved by system"
@@ -240,9 +246,15 @@ class ApprovalService:
         request_id: str,
         decision: str,
         approver_id: int,
+        *,
+        approver_role: str,
         comment: Optional[str] = None,
     ) -> ApprovalRequest:
-        """Record an approval/rejection decision and notify waiting workers via Redis."""
+        """Record an approval/rejection decision and notify waiting workers via Redis.
+
+        ``approver_role`` is required so no caller can skip the risk routing
+        recorded on the request when it was created.
+        """
         async with AsyncSessionLocal() as session:
             result = await session.execute(
                 select(ApprovalRequest).where(
@@ -261,6 +273,14 @@ class ApprovalService:
             if record.user_id == approver_id:
                 raise SelfApprovalError(
                     "Requester cannot approve or reject their own request"
+                )
+
+            from app.services.governance_config import approver_for_risk, role_meets
+            # Rows from before migration 027 have no stored role; route by risk.
+            min_role = record.required_approver_role or approver_for_risk(record.risk_level)["min_role"]
+            if not role_meets(approver_role, min_role):
+                raise InsufficientApproverRoleError(
+                    f"A {record.risk_level}-risk request must be decided by {min_role} or above"
                 )
 
             if record.expires_at is not None and record.expires_at <= utc_now():
