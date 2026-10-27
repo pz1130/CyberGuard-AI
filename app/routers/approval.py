@@ -160,7 +160,7 @@ async def approval_sse_events(
             if pubsub:
                 try:
                     await pubsub.unsubscribe(admin_channel)
-                    await pubsub.close()
+                    await pubsub.aclose()
                 except Exception:
                     pass
 

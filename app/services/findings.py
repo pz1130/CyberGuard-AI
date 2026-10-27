@@ -3,7 +3,7 @@ import re
 import hashlib
 import uuid
 from fastapi import HTTPException
-from sqlalchemy import select, func
+from sqlalchemy import select
 
 from app.core.rbac import Permission, Role, has_permission
 from app.core.time import utc_now
@@ -30,9 +30,8 @@ def serialize(row):
     return {c.name: getattr(row, c.name) for c in row.__table__.columns}
 
 
-async def append_event(db, row, actor, action, note, evidence):
-    from app.core.audit import _chain_payload, _hash_data, _GENESIS, stamp_chain_hashes
-    from app.models.audit import AuditLog
+async def append_event(db, row, actor, action, note, evidence, *, agent_id=None):
+    from app.core.audit import append_chained_audit
 
     request_id = str(uuid.uuid4())
     snapshot = {"status": row.status, "assignee_id": row.assignee_id, "version": row.version}
@@ -40,19 +39,12 @@ async def append_event(db, row, actor, action, note, evidence):
     event_data = dict(finding_id=row.id, actor_id=actor.user_id, action=action,
                       note=note, evidence=evidence, evidence_hash=digest, snapshot=snapshot)
     db.add(FindingEvent(**event_data, audit_request_id=request_id))
-    # Same advisory lock as record_action(), but in the finding transaction:
-    # neither an unlogged state change nor a phantom successful audit can commit.
-    await db.execute(select(func.pg_advisory_xact_lock(0xA0D17)))
-    previous = (await db.execute(select(AuditLog.entry_hash)
-        .where(AuditLog.entry_hash.is_not(None)).order_by(AuditLog.id.desc()).limit(1))).scalar_one_or_none()
-    payload = _chain_payload(user_id=actor.user_id, action=f"finding.{action}",
-        action_category="annotate", timestamp=utc_now(), request_id=request_id,
-        input_hash=_hash_data(event_data),
-        output_hash=_hash_data({k: str(v) for k, v in serialize(row).items()}))
-    signed = stamp_chain_hashes(payload, previous or _GENESIS)
-    from datetime import datetime
-    signed["timestamp"] = datetime.fromisoformat(signed["timestamp"])
-    db.add(AuditLog(**signed))
+    # In the finding transaction: neither an unlogged state change nor a
+    # phantom successful audit can commit.
+    await append_chained_audit(
+        db, user_id=actor.user_id, agent_id=agent_id, action=f"finding.{action}",
+        action_category="annotate", request_id=request_id, input_data=event_data,
+        output_data={k: str(v) for k, v in serialize(row).items()})
 
 
 async def remediation_parties(db, row):
@@ -78,7 +70,7 @@ async def create_finding(db, body, actor, *, agent_id=None):
                   status="pending", version=1)
     db.add(row)
     await db.flush()
-    await append_event(db, row, actor, "submit", row.description, body.evidence)
+    await append_event(db, row, actor, "submit", row.description, body.evidence, agent_id=agent_id)
     await db.commit()
     return row
 

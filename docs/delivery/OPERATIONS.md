@@ -29,6 +29,11 @@ docker compose logs --since=15m api celery_worker tool-runner webui
 curl --fail http://localhost:8000/health/ready
 ```
 
+The API port binds to `127.0.0.1` by default, so run that health check on the
+Docker host. Users reach the API through the WebUI (`WEBUI_PORT`), which
+proxies `/api/` and `/ws/`. Set `API_BIND=0.0.0.0` only for a client that must
+call the API directly, and put TLS and a network policy in front of it.
+
 ## Restart recovery
 
 PostgreSQL and Redis use `restart: unless-stopped`, matching API, Celery,
