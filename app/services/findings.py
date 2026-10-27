@@ -55,6 +55,22 @@ async def append_event(db, row, actor, action, note, evidence):
     db.add(AuditLog(**signed))
 
 
+async def remediation_parties(db, row):
+    """Everyone who has owned the fix or claimed it ready, not only the current owner.
+
+    Otherwise an owner could reassign the finding away and then sign off their own fix.
+    """
+    events = (await db.execute(select(FindingEvent.action, FindingEvent.actor_id, FindingEvent.snapshot)
+        .where(FindingEvent.finding_id == row.id))).all()
+    parties = {row.assignee_id}
+    for action, actor_id, snapshot in events:
+        parties.add((snapshot or {}).get("assignee_id"))
+        if action == "ready":
+            parties.add(actor_id)
+    parties.discard(None)
+    return parties
+
+
 async def create_finding(db, body, actor, *, agent_id=None):
     require(actor, Permission.FINDING_SUBMIT)
     row = Finding(**body.model_dump(exclude={"evidence"}), created_by=actor.user_id,
@@ -75,8 +91,9 @@ async def change_finding(db, finding_id, body, actor):
         raise HTTPException(404, "Finding not found")
     if body.version != row.version:
         raise HTTPException(409, "Finding changed; reload before submitting")
-    if body.action in REVIEW_ACTIONS and actor.user_id in (row.created_by, row.assignee_id):
-        raise HTTPException(403, "The submitter or remediation owner cannot review their own finding")
+    if body.action in REVIEW_ACTIONS and (
+            actor.user_id == row.created_by or actor.user_id in await remediation_parties(db, row)):
+        raise HTTPException(403, "The submitter or a remediation owner cannot review their own finding")
     if body.action == "evidence":
         if not body.evidence.strip():
             raise HTTPException(422, "Evidence is required")

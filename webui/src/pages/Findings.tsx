@@ -11,7 +11,7 @@ type Finding = {
   version: number; source: string
 }
 type Event = { id: number; actor_id: number; action: string; note: string; evidence: string; evidence_hash: string; created_at: string }
-type Detail = Finding & { events: Event[] }
+type Detail = Finding & { events: Event[]; independent_reviewer: boolean }
 const statuses = ['pending', 'confirmed', 'in_progress', 'ready_for_retest', 'resolved', 'rejected']
 const empty = { title: '', target: '', severity: 'medium', description: '', remediation: '', evidence: '' }
 
@@ -85,7 +85,8 @@ export default function Findings() {
       setTimeout(() => URL.revokeObjectURL(url), 1000)
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
-  const independent = userId !== null && detail && userId !== detail.created_by && userId !== detail.assignee_id
+  // The server applies the full rule, including former owners.
+  const independent = detail?.independent_reviewer === true
   const actions: string[] = []
   if (detail) {
     if (canReview && independent) {

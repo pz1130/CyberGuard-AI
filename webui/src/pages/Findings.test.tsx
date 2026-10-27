@@ -6,6 +6,7 @@ import Findings from './Findings'
 
 const finding = { id: 7, title: 'Response encoding', target: 'test.example', severity: 'high', status: 'pending',
   description: 'Raw input reflected', remediation: 'Encode input', created_by: 1, assignee_id: null, version: 1, source: 'agent',
+  independent_reviewer: true,
   events: [{ id: 1, actor_id: 1, action: 'submit', note: 'Observation', evidence: '<script>alert(1)</script>', evidence_hash: 'abc', created_at: '2026-10-24T00:00:00' }] }
 
 beforeEach(() => {
@@ -40,7 +41,7 @@ it('keeps audit readers read-only', async () => {
 })
 
 it('does not show self-review controls', async () => {
-  vi.spyOn(api, 'getAuthMe').mockResolvedValue({ user_id: 1 })
+  vi.spyOn(api, 'getFinding').mockResolvedValue({ ...finding, independent_reviewer: false })
   render(<RoleContext.Provider value="analyst"><Findings /></RoleContext.Provider>)
   fireEvent.click(await screen.findByRole('button', { name: '#7 Response encoding' }))
   await screen.findByText('An independent reviewer must confirm and retest this finding.')
@@ -58,4 +59,13 @@ it('requires retest evidence and reports a conflict without claiming success', a
   fireEvent.change(screen.getByLabelText('Original evidence / retest evidence'), { target: { value: 'Encoded response' } })
   fireEvent.click(resolve)
   expect(await screen.findByRole('alert')).toHaveTextContent('Finding changed')
+})
+
+it('hides retest sign-off from a former owner the server marks as not independent', async () => {
+  // user 2 is neither creator nor current owner, but owned the fix earlier.
+  vi.spyOn(api, 'getFinding').mockResolvedValue({ ...finding, status: 'ready_for_retest', assignee_id: 3, independent_reviewer: false })
+  render(<RoleContext.Provider value="analyst"><Findings /></RoleContext.Provider>)
+  fireEvent.click(await screen.findByRole('button', { name: '#7 Response encoding' }))
+  await screen.findByText('An independent reviewer must confirm and retest this finding.')
+  expect(screen.queryByRole('button', { name: 'Retest passed' })).toBeNull()
 })

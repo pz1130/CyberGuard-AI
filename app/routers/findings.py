@@ -8,7 +8,8 @@ from app.core.rbac import Permission, Role, has_permission
 from app.models.finding import Finding, FindingEvent
 from app.models.user import User
 from app.schemas.finding import FindingCreate, FindingChange, FindingStatus
-from app.services.findings import create_finding, change_finding, serialize, report_markdown
+from app.services.findings import (create_finding, change_finding, serialize, report_markdown,
+                                   remediation_parties)
 
 router = APIRouter(prefix="/findings")
 
@@ -52,7 +53,9 @@ async def load_detail(db, finding_id):
 async def detail(finding_id: int, db: AsyncSession = Depends(get_db),
                  actor=Depends(require_permission(Permission.FINDING_READ))):
     row, events = await load_detail(db, finding_id)
-    return {**serialize(row), "events": [serialize(e) for e in events]}
+    # Same rule change_finding() enforces, so the UI never offers a review it would refuse.
+    independent = actor.user_id != row.created_by and actor.user_id not in await remediation_parties(db, row)
+    return {**serialize(row), "independent_reviewer": independent, "events": [serialize(e) for e in events]}
 
 
 @router.post("/{finding_id}/actions")
