@@ -525,7 +525,7 @@ class AgentExecutor:
             if pubsub:
                 try:
                     await pubsub.unsubscribe(channel)
-                    await pubsub.close()
+                    await pubsub.aclose()
                 except Exception:
                     pass
 
