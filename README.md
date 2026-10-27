@@ -143,7 +143,7 @@ Additional checks:
 make rc-check
 ```
 
-The full RC gate also validates Compose, builds the three images, rejects
+The full RC gate also validates Compose, builds all five images, rejects
 known fixed High/Critical vulnerabilities, and writes CycloneDX SBOMs under
 `artifacts/`. The GitHub release gate additionally starts the source-built
 stack on AMD64 and runs authenticated API smoke tests.

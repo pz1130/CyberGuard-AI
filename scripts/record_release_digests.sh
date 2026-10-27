@@ -7,6 +7,8 @@ IMAGES=(
   cyberguard-api:1.0.0-rc.1
   cyberguard-tool-runner:1.0.0-rc.1
   cyberguard-webui:1.0.0-rc.1
+  cyberguard-skill-runner:1.0.0-rc.1
+  cyberguard-egress-proxy:1.0.0-rc.1
 )
 
 mkdir -p "$(dirname "$OUT")"

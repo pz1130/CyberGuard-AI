@@ -1,5 +1,11 @@
 FROM python:3.11-slim@sha256:9534e5a8e315485d4061ed659af0fd78a284c015f9b73661b41d6bab25604534
 
+# Same as the api and tool-runner images: the pinned base predates fixes for
+# its own OpenSSL, perl and gzip packages, and the release scan rejects those.
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY skill-runner/requirements.lock ./requirements.lock

@@ -3,8 +3,9 @@
 The workgroup distributes a source archive. Operators build the images inside
 their controlled environment; publishing them to a registry is optional.
 Locally built images are versioned as `cyberguard-api:1.0.0-rc.1`,
-`cyberguard-tool-runner:1.0.0-rc.1`, and
-`cyberguard-webui:1.0.0-rc.1`.
+`cyberguard-tool-runner:1.0.0-rc.1`, `cyberguard-webui:1.0.0-rc.1`,
+`cyberguard-skill-runner:1.0.0-rc.1` (also used by `skill-runner-net`), and
+`cyberguard-egress-proxy:1.0.0-rc.1`.
 
 ## Start and migrate
 
@@ -93,7 +94,8 @@ digests and deploy by `image@sha256:...`, not a moving tag. The optional
 
 ```bash
 REGISTRY=<approved-registry>/
-for image in cyberguard-api:1.0.0-rc.1 cyberguard-tool-runner:1.0.0-rc.1 cyberguard-webui:1.0.0-rc.1; do
+for image in cyberguard-api:1.0.0-rc.1 cyberguard-tool-runner:1.0.0-rc.1 cyberguard-webui:1.0.0-rc.1 \
+             cyberguard-skill-runner:1.0.0-rc.1 cyberguard-egress-proxy:1.0.0-rc.1; do
   docker tag "$image" "${REGISTRY}${image}"
   docker push "${REGISTRY}${image}"
   docker buildx imagetools inspect "${REGISTRY}${image}" --format '{{json .Manifest.Digest}}'
