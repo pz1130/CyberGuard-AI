@@ -66,7 +66,7 @@ def test_every_key_in_the_example_file_is_either_a_setting_or_infrastructure(tmp
 
     # Read by docker-compose to configure containers other than the API.
     INFRASTRUCTURE = {
-        "POSTGRES_PASSWORD", "POSTGRES_PORT", "REDIS_PORT", "API_PORT",
+        "POSTGRES_PASSWORD", "POSTGRES_PORT", "REDIS_PORT", "API_BIND", "API_PORT",
         "WEBUI_PORT", "RUNNER_TOKEN", "SKILL_RUNNER_TOKEN", "EGRESS_PROXY_TOKEN",
         "CYBERGUARD_ENV_FILE",
     }
