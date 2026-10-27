@@ -169,3 +169,21 @@ async def test_former_owner_cannot_review_after_handing_off(actors):
         assert (await client.get(f'/findings/{finding_id}')).json()['independent_reviewer'] is False
         current['actor'] = approver
         assert (await client.get(f'/findings/{finding_id}')).json()['independent_reviewer'] is True
+
+
+async def test_agent_submission_audit_names_the_agent(actors):
+    """The signed audit row must say an agent submitted it, not only which user ran the agent."""
+    from app.core.audit import stamp_chain_hashes, _row_chain_payload
+    submitter, reviewer, _, _ = actors
+    async with AsyncSessionLocal() as db:
+        row = await create_finding(db, submission(), submitter, agent_id=123)
+        await apply(db, row, reviewer, 'confirm')
+        events = (await db.execute(select(FindingEvent).where(FindingEvent.finding_id == row.id)
+                                   .order_by(FindingEvent.id))).scalars().all()
+        audits = {a.request_id: a for a in (await db.execute(select(AuditLog).where(
+            AuditLog.request_id.in_([e.audit_request_id for e in events])))).scalars().all()}
+    submit, confirm = (audits[e.audit_request_id] for e in events)
+    assert submit.action == 'finding.submit' and submit.agent_id == '123'
+    assert confirm.action == 'finding.confirm' and confirm.agent_id is None
+    assert all(stamp_chain_hashes(_row_chain_payload(a), a.prev_hash)['entry_hash'] == a.entry_hash
+               for a in (submit, confirm))

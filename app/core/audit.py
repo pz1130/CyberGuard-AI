@@ -327,6 +327,50 @@ def _row_chain_payload(row: AuditLog) -> dict:
     )
 
 
+async def append_chained_audit(
+    session, *, user_id, action, agent_name=None, action_category=None,
+    risk_tier=None, confidence=None, human_reviewer=None,
+    rollback_possible=None, input_data=None, output_data=None,
+    agent_id=None, request_id=None,
+) -> dict:
+    """Add a chained audit row to the caller's transaction; the caller commits.
+
+    Use this when the audit entry must commit or roll back together with the
+    change it records. The advisory lock is held until that commit.
+    """
+    timestamp = datetime.now(timezone.utc).replace(tzinfo=None)
+    payload = _chain_payload(
+        user_id=user_id, agent_id=agent_id, agent_name=agent_name, action=action,
+        action_category=action_category,
+        confidence=None if confidence is None else f"{float(confidence):.4f}",
+        human_reviewer=human_reviewer, rollback_possible=rollback_possible,
+        risk_tier=risk_tier, input_hash=_hash_data(input_data),
+        output_hash=_hash_data(output_data), request_id=request_id or _generate_request_id(),
+        timestamp=timestamp,
+    )
+
+    await session.execute(select(func.pg_advisory_xact_lock(0xA0D17)))
+    prev = (await session.execute(
+        select(AuditLog.entry_hash)
+        .where(AuditLog.entry_hash.is_not(None))
+        .order_by(AuditLog.id.desc())
+        .limit(1)
+    )).scalar_one_or_none()
+    prev_hash = prev or _GENESIS
+    payload = stamp_chain_hashes(payload, prev_hash)
+
+    session.add(AuditLog(
+        user_id=user_id, agent_id=payload["agent_id"],
+        agent_name=agent_name, action=action, action_category=action_category,
+        confidence=payload["confidence"], human_reviewer=human_reviewer,
+        rollback_possible=rollback_possible, risk_tier=risk_tier,
+        input_hash=payload["input_hash"], output_hash=payload["output_hash"],
+        request_id=payload["request_id"], prev_hash=prev_hash, entry_hash=payload["entry_hash"],
+        timestamp=timestamp, chain_version=_CHAIN_VERSION,
+    ))
+    return payload
+
+
 async def record_action(
     *, user_id, action, agent_name=None, action_category=None,
     risk_tier=None, confidence=None, human_reviewer=None,
@@ -339,39 +383,15 @@ async def record_action(
     """
     from app.core.database import get_db_context
 
-    timestamp = datetime.now(timezone.utc).replace(tzinfo=None)
-    payload = _chain_payload(
-        user_id=user_id, agent_id=agent_id, agent_name=agent_name, action=action,
-        action_category=action_category,
-        confidence=None if confidence is None else f"{float(confidence):.4f}",
-        human_reviewer=human_reviewer, rollback_possible=rollback_possible,
-        risk_tier=risk_tier, input_hash=_hash_data(input_data),
-        output_hash=_hash_data(output_data), request_id=request_id or _generate_request_id(),
-        timestamp=timestamp,
-    )
-
     async with _chain_lock:
         async with get_db_context() as session:
-            await session.execute(select(func.pg_advisory_xact_lock(0xA0D17)))
-            prev = (await session.execute(
-                select(AuditLog.entry_hash)
-                .where(AuditLog.entry_hash.is_not(None))
-                .order_by(AuditLog.id.desc())
-                .limit(1)
-            )).scalar_one_or_none()
-            prev_hash = prev or _GENESIS
-            payload = stamp_chain_hashes(payload, prev_hash)
-            entry_hash = payload["entry_hash"]
-
-            session.add(AuditLog(
-                user_id=user_id, agent_id=(str(agent_id) if agent_id is not None else None),
-                agent_name=agent_name, action=action, action_category=action_category,
-                confidence=payload["confidence"], human_reviewer=human_reviewer,
-                rollback_possible=rollback_possible, risk_tier=risk_tier,
-                input_hash=payload["input_hash"], output_hash=payload["output_hash"],
-                request_id=payload["request_id"], prev_hash=prev_hash, entry_hash=entry_hash,
-                timestamp=timestamp, chain_version=_CHAIN_VERSION,
-            ))
+            payload = await append_chained_audit(
+                session, user_id=user_id, action=action, agent_name=agent_name,
+                action_category=action_category, risk_tier=risk_tier,
+                confidence=confidence, human_reviewer=human_reviewer,
+                rollback_possible=rollback_possible, input_data=input_data,
+                output_data=output_data, agent_id=agent_id, request_id=request_id,
+            )
             await session.commit()
     return payload
 
