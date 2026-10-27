@@ -13,11 +13,13 @@ DEFAULT_ALLOWED = ["observe", "annotate", "notify", "contain_soft"]
 
 _RISK_APPROVER = {
     "critical": {"label": "Security Director + Legal", "min_role": "admin",   "needs_approval": True},
-    "high":     {"label": "SOC Manager",               "min_role": "admin",   "needs_approval": True},
+    "high":     {"label": "SOC Manager",               "min_role": "approver", "needs_approval": True},
     "medium":   {"label": "Senior SOC Analyst",        "min_role": "analyst", "needs_approval": True},
     "low":      {"label": "Agent operator (logged)",   "min_role": None,      "needs_approval": False},
 }
-_ROLE_RANK = {"viewer": 0, "auditor": 0, "analyst": 1, "operator": 2, "admin": 3}
+# Only approver and admin hold approval:decide; the lower ranks matter only
+# for ordering. approver sits below admin so critical stays admin-only.
+_ROLE_RANK = {"viewer": 0, "auditor": 0, "analyst": 1, "operator": 2, "approver": 3, "admin": 4}
 
 
 def _get(obj, name, default=None):

@@ -352,6 +352,7 @@ class TestApprovalService(unittest.IsolatedAsyncioTestCase):
         # decide() refuses self-approval and expired requests before deciding.
         mock_record.user_id = 2
         mock_record.expires_at = None
+        mock_record.required_approver_role = "admin"
 
         with (
             patch.object(ApprovalService, "_publish", new_callable=AsyncMock) as mock_pub,
@@ -369,7 +370,7 @@ class TestApprovalService(unittest.IsolatedAsyncioTestCase):
 
             mock_record.status = "pending"
 
-            await ApprovalService.decide("req-123", "approved", approver_id=1, comment="ok")
+            await ApprovalService.decide("req-123", "approved", approver_id=1, approver_role="admin", comment="ok")
 
         # Should have published to the per-request channel
         mock_pub.assert_awaited_once_with("req-123", "approved")

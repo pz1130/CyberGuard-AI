@@ -58,3 +58,13 @@ def test_approver_for_risk_mapping():
     assert gc.approver_for_risk("critical")["min_role"] == "admin"
     assert gc.approver_for_risk("medium")["min_role"] == "analyst"
     assert gc.approver_for_risk("low")["needs_approval"] is False
+
+
+def test_approver_role_routing():
+    """approver decides up to high; critical stays admin-only."""
+    assert gc.approver_for_risk("high")["min_role"] == "approver"
+    assert gc.role_meets("approver", "approver")
+    assert gc.role_meets("approver", "analyst")
+    assert not gc.role_meets("approver", "admin")
+    assert gc.role_meets("admin", "approver")
+    assert not gc.role_meets("operator", "approver")

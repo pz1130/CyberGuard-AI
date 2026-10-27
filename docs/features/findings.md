@@ -21,8 +21,10 @@ file uploads, URL fetching and automated remediation are outside this first vers
 6. Readers can download a Markdown report containing the original submission,
    current state, all evidence, notes, actors, UTC times and audit references.
 
-Reviewers cannot confirm/reject/retest their own submission or a finding they
-own for remediation. Admins follow the same independence rule. A single-user
+Reviewers cannot confirm/reject/retest their own submission, or a finding they
+own or have ever owned for remediation, or for which they requested the retest;
+reassigning a finding away does not make its former owner independent. Admins
+follow the same independence rule. A single-user
 installation therefore needs a second reviewer account to complete this workflow.
 
 | Role | Read/export | Submit | Assign/add evidence/request retest* | Review |

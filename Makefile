@@ -7,7 +7,9 @@ export PYTHONPATH := packages:$(CURDIR)
 
 .PHONY: help check rc-check test test-env-up test-env-down invariants web-typecheck web-lint web-audit web-test web deps docker-config docker-build security-scan sbom release-digests source-package clean
 
-RELEASE_IMAGES := cyberguard-api:1.0.0-rc.1 cyberguard-tool-runner:1.0.0-rc.1 cyberguard-webui:1.0.0-rc.1
+# Every image docker-compose.yml builds. skill-runner-net reuses the skill-runner image.
+RELEASE_IMAGES := cyberguard-api:1.0.0-rc.1 cyberguard-tool-runner:1.0.0-rc.1 cyberguard-webui:1.0.0-rc.1 \
+	cyberguard-skill-runner:1.0.0-rc.1 cyberguard-egress-proxy:1.0.0-rc.1
 VERSION ?= 1.0.0-rc.1
 REF ?= HEAD
 
@@ -70,7 +72,7 @@ docker-config: ## Validate the Docker Compose release definition
 	$(COMPOSE_CHECK_ENV) docker compose config --quiet
 
 docker-build: ## Build all release images
-	$(COMPOSE_CHECK_ENV) docker compose build api tool-runner webui
+	$(COMPOSE_CHECK_ENV) docker compose build api tool-runner webui skill-runner egress-proxy
 
 security-scan: ## Fail on known, fixed High or Critical vulnerabilities in release images
 	@for image in $(RELEASE_IMAGES); do \

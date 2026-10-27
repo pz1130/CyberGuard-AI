@@ -80,7 +80,7 @@ async def test_list_pending_includes_new_request(cleanup_ids):
 async def test_decide_approved_updates_record(cleanup_ids):
     rid, record = await _create(cleanup_ids)
     updated = await ApprovalService.decide(
-        rid, "approved", approver_id=7, comment="looks fine"
+        rid, "approved", approver_id=7, approver_role="admin", comment="looks fine"
     )
     assert updated.status == "approved"
     assert updated.approver_id == 7
@@ -98,7 +98,7 @@ async def test_decide_approved_updates_record(cleanup_ids):
 
 async def test_decide_rejected_updates_record(cleanup_ids):
     rid, _ = await _create(cleanup_ids)
-    updated = await ApprovalService.decide(rid, "rejected", approver_id=3)
+    updated = await ApprovalService.decide(rid, "rejected", approver_id=3, approver_role="admin")
     assert updated.status == "rejected"
     assert updated.approver_id == 3
     assert updated.decided_at is not None
@@ -110,7 +110,7 @@ async def test_requester_cannot_decide_own_request(cleanup_ids, decision):
 
     rid, _ = await _create(cleanup_ids, user_id=7)
     with pytest.raises(SelfApprovalError):
-        await ApprovalService.decide(rid, decision, approver_id=7)
+        await ApprovalService.decide(rid, decision, approver_id=7, approver_role="admin")
 
     record = await ApprovalService.get_by_request_id(rid)
     assert record.status == "pending"
@@ -121,22 +121,22 @@ async def test_requester_cannot_decide_own_request(cleanup_ids, decision):
 async def test_decide_invalid_decision_raises(cleanup_ids):
     rid, _ = await _create(cleanup_ids)
     with pytest.raises(ValueError, match="Invalid decision"):
-        await ApprovalService.decide(rid, "maybe", approver_id=1)
+        await ApprovalService.decide(rid, "maybe", approver_id=1, approver_role="admin")
     # Untouched — still pending
     assert (await ApprovalService.get_by_request_id(rid)).status == "pending"
 
 
 async def test_decide_unknown_request_raises():
     with pytest.raises(ValueError, match="No pending approval request"):
-        await ApprovalService.decide(f"missing-{uuid.uuid4()}", "approved", approver_id=1)
+        await ApprovalService.decide(f"missing-{uuid.uuid4()}", "approved", approver_id=1, approver_role="admin")
 
 
 async def test_decide_twice_raises(cleanup_ids):
     rid, _ = await _create(cleanup_ids)
-    await ApprovalService.decide(rid, "approved", approver_id=7)
+    await ApprovalService.decide(rid, "approved", approver_id=7, approver_role="admin")
     # Second decision finds no *pending* row → ValueError
     with pytest.raises(ValueError, match="No pending approval request"):
-        await ApprovalService.decide(rid, "rejected", approver_id=2)
+        await ApprovalService.decide(rid, "rejected", approver_id=2, approver_role="admin")
 
 
 async def test_wait_for_decision_auto_approves(cleanup_ids, monkeypatch):
@@ -155,7 +155,7 @@ async def test_expired_request_cannot_be_decided_even_without_cleanup(cleanup_id
     from app.services.approval_service import ApprovalExpiredError
     rid, _ = await _create(cleanup_ids, expires_in_minutes=-1)
     with pytest.raises(ApprovalExpiredError):
-        await ApprovalService.decide(rid, 'approved', approver_id=7)
+        await ApprovalService.decide(rid, 'approved', approver_id=7, approver_role="admin")
     record = await ApprovalService.get_by_request_id(rid)
     assert record.status == 'expired'
     assert record.approver_id is None and record.decided_at is None
@@ -169,7 +169,7 @@ async def test_expiry_cleanup_keeps_live_and_decided_requests(cleanup_ids):
     live, _ = await _create(cleanup_ids)
     indefinite, _ = await _create(cleanup_ids, expires_in_minutes=None)
     decided, _ = await _create(cleanup_ids)
-    await ApprovalService.decide(decided, 'approved', approver_id=7)
+    await ApprovalService.decide(decided, 'approved', approver_id=7, approver_role="admin")
     async with AsyncSessionLocal() as session:
         await session.execute(update(ApprovalRequest).where(
             ApprovalRequest.request_id == decided).values(expires_at=utc_now()-timedelta(minutes=1)))
@@ -191,9 +191,41 @@ async def test_two_concurrent_decisions_allow_only_one(cleanup_ids):
     import asyncio
     rid, _ = await _create(cleanup_ids)
     results = await asyncio.gather(
-        ApprovalService.decide(rid, 'approved', approver_id=7),
-        ApprovalService.decide(rid, 'rejected', approver_id=8),
+        ApprovalService.decide(rid, 'approved', approver_id=7, approver_role="admin"),
+        ApprovalService.decide(rid, 'rejected', approver_id=8, approver_role="admin"),
         return_exceptions=True,
     )
     assert sum(isinstance(r, ApprovalRequest) for r in results) == 1
     assert sum(isinstance(r, ValueError) for r in results) == 1
+
+
+# required_approver_role is written on create; decide() must enforce it.
+@pytest.mark.parametrize("risk_level,role,allowed", [
+    ("critical", "approver", False),
+    ("critical", "admin", True),
+    ("high", "approver", True),
+    ("high", "analyst", False),
+    ("medium", "approver", True),
+])
+async def test_decide_enforces_required_approver_role(cleanup_ids, risk_level, role, allowed):
+    from app.services.approval_service import InsufficientApproverRoleError
+
+    rid, record = await _create(cleanup_ids, risk_level=risk_level)
+    if allowed:
+        updated = await ApprovalService.decide(rid, "approved", approver_id=7, approver_role=role)
+        assert updated.status == "approved"
+        return
+    with pytest.raises(InsufficientApproverRoleError, match=record.required_approver_role):
+        await ApprovalService.decide(rid, "approved", approver_id=7, approver_role=role)
+    record = await ApprovalService.get_by_request_id(rid)
+    assert record.status == "pending"
+    assert record.approver_id is None
+
+
+async def test_rejection_needs_the_same_role_as_approval(cleanup_ids):
+    """Rejecting also ends the request, so it is gated the same way."""
+    from app.services.approval_service import InsufficientApproverRoleError
+
+    rid, _ = await _create(cleanup_ids, risk_level="critical")
+    with pytest.raises(InsufficientApproverRoleError):
+        await ApprovalService.decide(rid, "rejected", approver_id=7, approver_role="approver")

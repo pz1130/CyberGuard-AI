@@ -9,7 +9,9 @@ COPY . .
 RUN npm run build
 
 FROM nginx:alpine@sha256:72ba65eb42c10344912a84ff42408db7d34f2feb642204570ab8fc5ffd29f1d3
-RUN apk add --no-cache --upgrade libuuid \
+# Upgrade every package, not a hand-picked one: the pinned base predates fixes
+# the release scan rejects (the same reason the Debian images run apt-get upgrade).
+RUN apk upgrade --no-cache \
     && sed -i '/^user /d' /etc/nginx/nginx.conf \
     && sed -i 's|pid        /run/nginx.pid;|pid        /tmp/nginx.pid;|' /etc/nginx/nginx.conf \
     && chown -R 101:101 /usr/share/nginx/html /var/cache/nginx /var/log/nginx

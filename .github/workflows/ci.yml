@@ -3,7 +3,7 @@ name: release-gate
 on:
   pull_request:
   push:
-    branches: [main, "codex/release-candidate"]
+    branches: [main]
 
 permissions:
   contents: read
@@ -56,9 +56,9 @@ jobs:
         run: |
           test "$(uname -m)" = "x86_64"
           docker compose up -d --wait
-          test "$(docker image inspect cyberguard-api:1.0.0-rc.1 --format '{{.Architecture}}')" = "amd64"
-          test "$(docker image inspect cyberguard-tool-runner:1.0.0-rc.1 --format '{{.Architecture}}')" = "amd64"
-          test "$(docker image inspect cyberguard-webui:1.0.0-rc.1 --format '{{.Architecture}}')" = "amd64"
+          for image in api tool-runner webui skill-runner egress-proxy; do
+            test "$(docker image inspect "cyberguard-$image:1.0.0-rc.1" --format '{{.Architecture}}')" = "amd64"
+          done
           curl --fail --silent --show-error http://localhost:8000/health/ready
           curl --fail --silent --show-error http://localhost:3000/ >/dev/null
           .venv/bin/python -m pytest -q tests/test_smoke_api.py

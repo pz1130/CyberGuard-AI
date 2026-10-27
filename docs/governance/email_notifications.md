@@ -3,7 +3,11 @@
 Administrators can assign the **Approver / 审批员** role in Users, including
 SSO role mappings. It grants `approval:read` and `approval:decide`: reviewing,
 approving, and rejecting requests, without user administration, agent execution,
-or system settings access. Administrators retain both permissions. Other roles
+or system settings access. Administrators retain both permissions. Each request
+also records the minimum role its risk level needs, and a decision below it is
+refused with 403 and an `approval.decide.denied` audit event (reason
+`insufficient_role`): approvers decide low, medium and high requests; critical
+requests need an administrator. Rejecting is gated the same way. Other roles
 cannot use approval list, detail, decision, status or SSE endpoints. Decisions
 record an `approval.decide` audit event whose `human_reviewer` is the deciding
 user's ID. Like every audit event, it stores the request ID and decision only as

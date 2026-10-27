@@ -1044,7 +1044,7 @@ class MasterAgent:
 
             if settings.AUTO_APPROVE:
                 await ApprovalService.decide(
-                    request_id, "approved", approver_id=0,
+                    request_id, "approved", approver_id=0, approver_role="admin",
                     comment="Auto-approved by system",
                 )
                 state["approval_status"] = "approved"

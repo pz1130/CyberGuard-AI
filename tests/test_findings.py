@@ -143,3 +143,29 @@ async def test_agent_cannot_submit_confirmation_or_impersonate_user(actors):
     assert response['status'] == 'error'
     response = json.loads(await submit_from_agent(actors[0].user_id, 12, submission().model_dump()))
     assert response['status'] == 'pending' and response['requires_human_review']
+
+
+async def test_former_owner_cannot_review_after_handing_off(actors):
+    """Reassigning away must not let the person who did the fix sign it off."""
+    submitter, reviewer, approver, _ = actors
+    async with AsyncSessionLocal() as db:
+        row = await create_finding(db, submission(), submitter)
+        await apply(db, row, approver, 'confirm')
+        await apply(db, row, reviewer, 'assign', assignee_id=reviewer.user_id)
+        await apply(db, row, reviewer, 'assign', assignee_id=submitter.user_id)
+        await apply(db, row, submitter, 'ready')
+        with pytest.raises(HTTPException) as error:
+            await apply(db, row, reviewer, 'resolve', evidence='self review after hand-off')
+        assert error.value.status_code == 403
+        assert row.status == 'ready_for_retest'
+        await apply(db, row, approver, 'resolve', evidence='Independent retest')
+        assert row.status == 'resolved'
+        finding_id = row.id
+
+    app = FastAPI(); app.include_router(router)
+    current = {'actor': reviewer}
+    app.dependency_overrides[get_current_user] = lambda: current['actor']
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+        assert (await client.get(f'/findings/{finding_id}')).json()['independent_reviewer'] is False
+        current['actor'] = approver
+        assert (await client.get(f'/findings/{finding_id}')).json()['independent_reviewer'] is True
