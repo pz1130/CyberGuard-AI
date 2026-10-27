@@ -69,12 +69,14 @@ to have it analysed, and rejecting every message that *contains* "忽略之前�
 所有指令" would reject those samples. Measured against the current rules: an
 override placed mid-text (English or Chinese), a base64-encoded copy, and an
 override in another language such as French are all scored *low* and pass.
-Chinese rules also need an explicit target or intent, so a request such as
-"忽略告警规则中的误报" or "请扮演攻击者视角分析这段日志" is not rejected.
-
-Two English rules are broader than that and reject some ordinary requests:
-"Ignore rules for host 10.0.0.5 in the report" and "Act as if you are an
-attacker and enumerate this log" are both rejected as critical.
+In both languages an override must name what it overrides ("previous / all /
+your instructions", "之前的指令", "系统提示词"), and a role switch counts only
+with restriction-removal intent ("without any restrictions", "不受审查") or a
+jailbreak-mode request. Ordinary requests therefore pass, for example "Ignore
+rules for host 10.0.0.5 in the report", "Act as if you are an attacker and
+enumerate this log", "忽略告警规则中的误报" and "请扮演攻击者视角分析这段日志".
+The cost is that a bare "ignore instructions" or "you are now root" is not
+rejected; approval gates and risk categories still apply to what follows.
 
 **What still applies.** Tool risk categories and confidence gates, human
 approval for higher-risk actions, the kill switch, egress controls and the

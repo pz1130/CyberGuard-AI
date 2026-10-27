@@ -78,26 +78,40 @@ _INJECTION_PATTERNS: list[tuple[str, re.Pattern, str]] = [
         ),
         "Input contains a structural context-break pattern",
     ),
-    # Direct instruction override attempts
+    # Direct instruction override attempts. The target must be explicit
+    # (previous / all / your ... instructions): "Ignore rules for host X" and
+    # "Ignore system noise" are ordinary analyst requests.
     (
         "direct_instruction_override",
         re.compile(
-            r'^\s*(ignore|forget|disregard|discard)\s+(all?\s+)?(previous|prior|above|'
-            r'instructions?|rules?|guidelines?|system)\b',
+            r'^\s*(?:ignore|forget|disregard|discard)\s+(?:'
+            r'(?:(?:all|any)\s+(?:of\s+)?)?(?:(?:the|your|my)\s+)?'
+            r'(?:previous|prior|above|earlier|preceding|original|existing|system)\s+(?:system\s+)?'
+            r'|(?:all|any)\s+(?:of\s+)?(?:(?:the|your|my)\s+)?'
+            r'|(?:your|my)\s+(?:system\s+)?'
+            r')(?:instructions?|rules?|guidelines?|directives?|prompts?|constraints?|restrictions?)\b',
             re.IGNORECASE,
         ),
         "Input contains a direct instruction-override attempt",
     ),
-    # "You are now a different system" jailbreak prefix
+    # Role switch with restriction-removal intent, or a jailbreak-mode request.
+    # A bare role switch passes: "Act as if you are an attacker and enumerate
+    # this log" is red-team analysis, not a jailbreak.
     (
         "jailbreak_prefix",
         re.compile(
-            r'^\s*(you\s+are\s+now|pretend\s+you\s+are|switch\s+to\s+being|'
-            r'act\s+as\s+if\s+you\s+are|imagine\s+you\s+are|'
-            r'disregard\s+.*?\s+and\s+be|forget.*?and\s+become)\b',
+            r'^\s*(?:'
+            r'(?:(?:from\s+now\s+on,?\s+)?you\s+are\s+now|from\s+now\s+on,?\s+you\s+are|'
+            r'you\s+will\s+now\s+be|pretend\s+(?:that\s+)?you\s+are|act\s+as\s+if\s+you\s+(?:are|were)|'
+            r'imagine\s+you\s+are|switch\s+to\s+being)'
+            r'\b[^.\n]{0,40}?\b(?:unrestricted|uncensored|unfiltered|unlimited|jailbroken|unbound|'
+            r'(?:no\s+|without\s+(?:any\s+)?|free\s+(?:of|from)\s+(?:all\s+|any\s+)?)'
+            r'(?:restrictions|rules|limits|limitations|filters|guidelines|censorship|boundaries))'
+            r'|(?:enable|enter|activate|switch\s+to|turn\s+on)\s+(?:dan|jailbreak|unrestricted|god)\s+mode'
+            r')',
             re.IGNORECASE,
         ),
-        "Input begins with a jailbreak role-play attempt",
+        "Input begins with a jailbreak or restriction-removal attempt",
     ),
     # Recursive prompt injection (user wrapping their input as system-level)
     (
